@@ -11,7 +11,6 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
-	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
@@ -40,23 +39,32 @@ type application struct {
 	permissionWaiters map[string]chan string
 	preferences       fyne.Preferences
 
-	status               *widget.Label
-	list                 *widget.List
-	chat                 *widget.RichText
-	composer             *widget.Entry
-	send                 *widget.Button
-	stop                 *widget.Button
-	permissionInbox      *widget.Button
-	permissionPanel      *fyne.Container
-	permissionTitle      *widget.Label
-	permissionDetail     *widget.Label
-	permissionActions    *fyne.Container
-	modelProvider        *widget.Entry
-	modelID              *widget.Entry
-	applyModel           *widget.Button
-	reasoningSelect      *widget.Select
-	lowSelect            *widget.Select
-	runtimeSync          bool
+	status          *widget.Label
+	list            *widget.List
+	chat            *widget.RichText
+	composer        *widget.Entry
+	send            *widget.Button
+	stop            *widget.Button
+	sessionTitle    *widget.Label
+	sessionMeta     *widget.Label
+	contextToggle   *widget.Button
+	contextDrawer   *fyne.Container
+	contextContent  *widget.RichText
+	runtimeSummary  *widget.Button
+	runtimePanel    *fyne.Container
+	permissionInbox *widget.Button
+	permissionPanel *fyne.Container
+	permissionTitle *widget.Label
+	permissionDetail *widget.Label
+	permissionActions *fyne.Container
+
+	modelProvider   *widget.Entry
+	modelID         *widget.Entry
+	applyModel      *widget.Button
+	reasoningSelect *widget.Select
+	lowSelect       *widget.Select
+	runtimeSync     bool
+
 	integrationButton    *widget.Button
 	integrationPanel     *fyne.Container
 	integrationSummary   *widget.Label
@@ -72,156 +80,23 @@ type application struct {
 // Run starts Protonman Desktop. The desktop is deliberately a thin ACP client;
 // the Protonman CLI remains the single runtime for sessions, tools and models.
 func Run(ctx context.Context) error {
-	a := app.NewWithID("ai.protonman.desktop")
-	a.Settings().SetTheme(theme.DarkTheme())
-	w := a.NewWindow("Protonman")
-	w.Resize(fyne.NewSize(1220, 780))
+	desktopApp := app.NewWithID("ai.protonman.desktop")
+	desktopApp.Settings().SetTheme(theme.DarkTheme())
+	window := desktopApp.NewWindow("Protonman")
+	window.Resize(fyne.NewSize(1220, 780))
 
 	ui := &application{
 		ctx:               ctx,
-		desktopApp:        a,
+		desktopApp:        desktopApp,
 		transcripts:       make(map[string]*strings.Builder),
 		permissionWaiters: make(map[string]chan string),
-		preferences:       a.Preferences(),
+		preferences:       desktopApp.Preferences(),
 	}
-	ui.status = widget.NewLabel("Connecting to Protonman…")
-	ui.chat = widget.NewRichTextFromMarkdown("")
-	ui.composer = widget.NewEntry()
-	ui.composer.SetPlaceHolder("Message protonMAN…")
-	ui.send = widget.NewButton("Send", ui.sendPrompt)
-	ui.stop = widget.NewButtonWithIcon("", theme.MediaStopIcon(), ui.cancelPrompt)
-	ui.permissionInbox = widget.NewButton("Permissions 0", ui.selectNextPermission)
-	ui.permissionTitle = widget.NewLabelWithStyle("Permission required", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
-	ui.permissionDetail = widget.NewLabel("")
-	ui.permissionDetail.Wrapping = fyne.TextWrapWord
-	ui.permissionActions = container.NewHBox()
-	ui.permissionPanel = container.NewVBox(
-		widget.NewSeparator(),
-		ui.permissionTitle,
-		ui.permissionDetail,
-		ui.permissionActions,
-		widget.NewSeparator(),
-	)
-	ui.permissionPanel.Hide()
-	ui.send.Disable()
-	ui.stop.Disable()
-	ui.modelProvider = widget.NewEntry()
-	ui.modelProvider.SetPlaceHolder("provider")
-	ui.modelID = widget.NewEntry()
-	ui.modelID.SetPlaceHolder("model")
-	ui.applyModel = widget.NewButton("Apply", ui.setRuntimeModel)
-	ui.reasoningSelect = widget.NewSelect([]string{"auto", "none", "minimal", "low", "medium", "high", "xhigh", "max"}, func(value string) {
-		if !ui.runtimeSync {
-			ui.setRuntimeReasoning(value)
-		}
-	})
-	ui.lowSelect = widget.NewSelect([]string{"auto", "on", "off"}, func(value string) {
-		if !ui.runtimeSync {
-			ui.setRuntimeLowConcurrency(value)
-		}
-	})
-	ui.initIntegrationControls()
-
-	ui.list = widget.NewList(
-		func() int {
-			ui.mu.Lock()
-			defer ui.mu.Unlock()
-			return len(ui.sidebarRows)
-		},
-		func() fyne.CanvasObject {
-			title := newNerdIconText(iconSession, "Session", fyne.TextStyle{}, false)
-			subtitle := newNerdIconText(iconReady, "ready", fyne.TextStyle{}, true)
-			return container.NewVBox(title, subtitle)
-		},
-		func(id widget.ListItemID, object fyne.CanvasObject) {
-			ui.mu.Lock()
-			if id < 0 || id >= len(ui.sidebarRows) {
-				ui.mu.Unlock()
-				return
-			}
-			row := ui.sidebarRows[id]
-			var session desktopstate.SessionState
-			if row.Kind == sidebarSessionRow {
-				for _, candidate := range ui.state.Sessions {
-					if candidate.ID == row.SessionID {
-						session = candidate
-						break
-					}
-				}
-			}
-			ui.mu.Unlock()
-
-			box := object.(*fyne.Container)
-			title := box.Objects[0].(*fyne.Container)
-			subtitle := box.Objects[1].(*fyne.Container)
-			if row.Kind == sidebarWorkspaceRow {
-				setNerdIconText(title, iconFolder, row.WorkspaceName)
-				setNerdIconText(subtitle, iconSession, fmt.Sprintf("%d sessions", row.SessionCount))
-				return
-			}
-			if strings.TrimSpace(session.Title) == "" {
-				setNerdIconText(title, iconSession, "Session "+shortID(session.ID))
-			} else {
-				setNerdIconText(title, iconSession, session.Title)
-			}
-			status := "ready"
-			if session.Status != desktopstate.TaskIdle {
-				status = string(session.Status)
-			}
-			setNerdIconText(subtitle, taskStatusIcon(session.Status), status)
-		},
-	)
-	ui.list.OnSelected = func(id widget.ListItemID) {
-		ui.mu.Lock()
-		if id < 0 || id >= len(ui.sidebarRows) {
-			ui.mu.Unlock()
-			return
-		}
-		row := ui.sidebarRows[id]
-		if row.Kind != sidebarSessionRow {
-			activeIndex := sidebarRowIndexForSession(ui.sidebarRows, ui.state.ActiveSessionID)
-			ui.mu.Unlock()
-			if activeIndex >= 0 {
-				fyne.Do(func() { ui.list.Select(widget.ListItemID(activeIndex)) })
-			}
-			return
-		}
-		ui.state = desktopstate.Reduce(ui.state, desktopstate.Event{Kind: desktopstate.EventSessionSelected, SessionID: row.SessionID})
-		ui.mu.Unlock()
-		ui.refreshActiveView()
-		ui.refreshPermissionView()
-	}
-
-	search := widget.NewEntry()
-	search.SetPlaceHolder("Search")
-	newTask := widget.NewButtonWithIcon("", theme.ContentAddIcon(), ui.newSession)
-	sidebarHeader := container.NewBorder(nil, nil, nil, newTask, newNerdIconText(iconRocket, "protonMAN", fyne.TextStyle{Bold: true}, false))
-	sidebar := container.NewBorder(
-		container.NewVBox(sidebarHeader, search),
-		container.NewVBox(widget.NewSeparator(), ui.integrationButton, ui.integrationPanel, ui.permissionInbox, widget.NewLabel("Desktop via ACP")),
-		nil,
-		nil,
-		ui.list,
-	)
-
-	runtimeControls := container.NewHBox(ui.modelProvider, ui.modelID, ui.applyModel, widget.NewLabel("Reasoning"), ui.reasoningSelect, widget.NewLabel("Low"), ui.lowSelect)
-	headerActions := container.NewHBox(ui.stop, ui.status)
-	header := container.NewBorder(runtimeControls, nil, nil, headerActions,
-		container.NewVBox(
-			newNerdIconText(iconRocket, "protonMAN", fyne.TextStyle{Bold: true}, false),
-			widget.NewLabel("Coding agent · ACP"),
-		),
-	)
-	composer := container.NewBorder(nil, nil, nil, ui.send, ui.composer)
-	conversationBody := container.NewBorder(ui.permissionPanel, nil, nil, nil, container.NewVScroll(ui.chat))
-	conversation := container.NewBorder(header, composer, nil, nil, conversationBody)
-
-	split := container.NewHSplit(sidebar, conversation)
-	split.Offset = 0.29
-	w.SetContent(container.NewPadded(split))
+	ui.initDesktopControls()
+	window.SetContent(ui.buildDesktopShell())
 
 	go ui.connect()
-	w.ShowAndRun()
+	window.ShowAndRun()
 	if client := ui.currentClient(); client != nil {
 		_ = client.Close()
 	}
