@@ -20,6 +20,9 @@ func validateProfile(profile Profile) error {
 	if err := validateCompactionPolicy(profile.Compaction); err != nil {
 		return err
 	}
+	if err := validateVisionPolicy(profile.VisionPolicy); err != nil {
+		return err
+	}
 	effectiveCompaction := EffectiveCompactionPolicy(Resolved{
 		ContextWindow: profile.ContextWindow, MaxInputTokens: profile.MaxInputTokens, Compaction: profile.Compaction,
 	})
