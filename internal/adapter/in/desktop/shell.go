@@ -15,9 +15,10 @@ import (
 )
 
 const (
-	sidebarTitleMaxRunes = 38
-	sidebarMetaMaxRunes  = 28
-	contextDrawerWidth   = 320
+	sidebarTitleMaxRunes      = 38
+	sidebarMetaMaxRunes       = 28
+	contextDrawerWidth        = 320
+	conversationTailThreshold = 64
 )
 
 func (a *application) initDesktopControls() {
@@ -217,12 +218,12 @@ func (a *application) buildDesktopShell() fyne.CanvasObject {
 }
 
 func (a *application) buildSidebar() fyne.CanvasObject {
-	search := widget.NewEntry()
-	search.SetPlaceHolder("Search sessions")
-	search.OnChanged = a.applySidebarQuery
+	a.sessionSearch = widget.NewEntry()
+	a.sessionSearch.SetPlaceHolder("Search sessions")
+	a.sessionSearch.OnChanged = a.applySidebarQuery
 	newTask := widget.NewButtonWithIcon("", theme.ContentAddIcon(), func() {
-		if search.Text != "" {
-			search.SetText("")
+		if a.sessionSearch.Text != "" {
+			a.sessionSearch.SetText("")
 		}
 		a.newSession()
 	})
@@ -236,7 +237,7 @@ func (a *application) buildSidebar() fyne.CanvasObject {
 		a.integrationPanel,
 	)
 	return container.NewBorder(
-		container.NewVBox(sidebarHeader, search),
+		container.NewVBox(sidebarHeader, a.sessionSearch),
 		secondary,
 		nil,
 		nil,
@@ -254,8 +255,9 @@ func (a *application) buildConversationSurface() fyne.CanvasObject {
 		container.NewVBox(a.sessionTitle, a.sessionMeta),
 	)
 
-	conversationScroll := container.NewVScroll(a.chat)
-	conversationBody := container.NewBorder(a.permissionPanel, nil, nil, a.contextDrawer, conversationScroll)
+	scroll := container.NewVScroll(a.chat)
+	a.conversationScroll = scroll
+	conversationBody := container.NewBorder(a.permissionPanel, nil, nil, a.contextDrawer, scroll)
 
 	composer := container.NewBorder(nil, nil, nil, a.send, a.composer)
 	footer := container.NewVBox(composer, a.status)
@@ -267,6 +269,28 @@ func (a *application) buildConversationSurface() fyne.CanvasObject {
 		nil,
 		conversationBody,
 	)
+}
+
+func (a *application) shouldFollowConversationTail() bool {
+	scroll, ok := a.conversationScroll.(*container.Scroll)
+	if !ok || scroll == nil || scroll.Content == nil {
+		return true
+	}
+	viewportHeight := scroll.Size().Height
+	contentHeight := scroll.Content.MinSize().Height
+	if viewportHeight <= 0 || contentHeight <= viewportHeight {
+		return true
+	}
+	maxOffset := contentHeight - viewportHeight
+	return maxOffset-scroll.Offset.Y <= conversationTailThreshold
+}
+
+func (a *application) scrollConversationToBottom() {
+	scroll, ok := a.conversationScroll.(*container.Scroll)
+	if !ok || scroll == nil || scroll.Content == nil {
+		return
+	}
+	scroll.ScrollToBottom()
 }
 
 func (a *application) toggleRuntimePanel() {
