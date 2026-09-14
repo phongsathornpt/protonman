@@ -31,6 +31,7 @@ type HeaderInput struct {
 	Denied      bool
 	FailureCode tool.ErrorCode
 	Spinner     string
+	Icons       tuistyle.IconSet
 }
 
 // Header is the normalized primary-line model for a tool call.
@@ -44,13 +45,14 @@ type Header struct {
 
 // ProjectHeader applies one precedence and wording policy for tool call headers.
 func ProjectHeader(input HeaderInput) Header {
+	icons := tuistyle.OrUnicodeIcons(input.Icons)
 	label := strings.TrimSpace(input.Label)
 	if label == "" {
 		label = tool.DisplayName(input.Name)
 	}
 	header := Header{
 		State:  HeaderSuccess,
-		Glyph:  tuistyle.GlyphToolSuccess,
+		Glyph:  icons.ToolSuccess,
 		Label:  label,
 		Target: strings.TrimSpace(input.Target),
 		Meta:   strings.TrimSpace(input.Summary),
@@ -58,18 +60,18 @@ func ProjectHeader(input HeaderInput) Header {
 	switch {
 	case input.Running:
 		header.State = HeaderRunning
-		header.Glyph = KindGlyph(input.Kind, input.Name)
+		header.Glyph = KindGlyphWithIcons(icons, input.Kind, input.Name)
 		header.Meta = strings.TrimSpace(input.Spinner)
 		if header.Meta == "" {
 			header.Meta = "…"
 		}
 	case input.Denied:
 		header.State = HeaderDenied
-		header.Glyph = tuistyle.GlyphToolDenied
+		header.Glyph = icons.ToolDenied
 		header.Meta = "denied"
 	case input.FailureCode != "":
 		header.State = HeaderFailure
-		header.Glyph = tuistyle.GlyphToolError
+		header.Glyph = icons.ToolError
 		header.Meta = FailureLabel(input.Name, input.Kind, input.FailureCode)
 	}
 	return header
