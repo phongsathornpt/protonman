@@ -85,6 +85,7 @@ type turnModelState struct {
 	turnProgress    turnProgress
 	activeTurnOwner string
 	busy            bool
+	imagePreparing  bool
 	activity        string
 	pendingActivity string
 	busyStarted     time.Time
