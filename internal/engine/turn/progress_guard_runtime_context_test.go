@@ -26,7 +26,7 @@ func (*stagedProgressRuntimeContext) Await(context.Context) ([]model.Message, er
 	return nil, nil
 }
 
-func (*stagedProgressRuntimeContext) Active(context.Context) bool { return false }
+func (*stagedProgressRuntimeContext) Active(context.Context) bool  { return false }
 func (*stagedProgressRuntimeContext) Pending(context.Context) bool { return false }
 func (*stagedProgressRuntimeContext) Finalize(context.Context)     {}
 
