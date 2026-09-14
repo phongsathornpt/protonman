@@ -37,6 +37,9 @@ func (s *Server) loadOrCreateSession(ctx context.Context, sessionID string, cwd 
 		if sessionIsActive(existing) {
 			return nil, fmt.Errorf("session %q has an active prompt; workspace roots cannot change", sessionID)
 		}
+		if _, err := s.agents.ForSession(sessionID).CancelSessionAndWait(ctx); err != nil {
+			return nil, fmt.Errorf("cancel session subagents before workspace reconfiguration %q: %w", sessionID, err)
+		}
 		if err := existing.Close(); err != nil {
 			return nil, fmt.Errorf("close session %q before workspace reconfiguration: %w", sessionID, err)
 		}
@@ -46,7 +49,7 @@ func (s *Server) loadOrCreateSession(ctx context.Context, sessionID string, cwd 
 		s.mu.Unlock()
 	}
 
-	sess, err := s.newSession(ctx, sessionID, cwd, additionalDirectories, mcpServers)
+	sess, err := s.newSession(ctx, sessionID, cwd, mcpServers, additionalDirectories)
 	if err != nil {
 		return nil, err
 	}
@@ -95,7 +98,14 @@ func (s *Server) loadOrCreateSession(ctx context.Context, sessionID string, cwd 
 	return sess, nil
 }
 
-func (s *Server) newSession(ctx context.Context, sessionID string, cwd string, additionalDirectories []string, mcpServers []MCPServerConfig) (*Session, error) {
+// newSession retains the historic four-argument call shape used by package
+// tests while allowing ACP directory roots to be supplied as one optional fifth
+// argument. New production call sites should always provide the root list.
+func (s *Server) newSession(ctx context.Context, sessionID string, cwd string, mcpServers []MCPServerConfig, directorySets ...[]string) (*Session, error) {
+	var additionalDirectories []string
+	if len(directorySets) > 0 {
+		additionalDirectories = cloneDirectories(directorySets[0])
+	}
 	registry := s.registry
 	var mcpResource io.Closer
 	if s.sessionRegistryFactory != nil {
