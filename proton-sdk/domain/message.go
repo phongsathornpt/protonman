@@ -2,8 +2,10 @@ package domain
 
 import (
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -30,6 +32,31 @@ type ContentPart struct {
 	Text     string          `json:"text,omitempty"`
 	MIMEType string          `json:"mime_type,omitempty"`
 	Data     string          `json:"data,omitempty"`
+}
+
+func (p ContentPart) Validate() error {
+	switch p.Type {
+	case ContentPartText:
+		if p.MIMEType != "" || p.Data != "" {
+			return fmt.Errorf("%w: text content part cannot carry image metadata", ErrInvalidRequest)
+		}
+		return nil
+	case ContentPartImage:
+		mime := strings.ToLower(strings.TrimSpace(p.MIMEType))
+		if !strings.HasPrefix(mime, "image/") || len(mime) <= len("image/") {
+			return fmt.Errorf("%w: image content part requires an image MIME type", ErrInvalidRequest)
+		}
+		if strings.TrimSpace(p.Data) == "" {
+			return fmt.Errorf("%w: image content part requires base64 data", ErrInvalidRequest)
+		}
+		decoder := base64.NewDecoder(base64.StdEncoding, strings.NewReader(p.Data))
+		if _, err := io.Copy(io.Discard, decoder); err != nil {
+			return fmt.Errorf("%w: image content part has invalid base64 data: %v", ErrInvalidRequest, err)
+		}
+		return nil
+	default:
+		return fmt.Errorf("%w: unsupported content part type %q", ErrInvalidRequest, p.Type)
+	}
 }
 
 // ReasoningEffort is the provider-neutral reasoning intensity requested from a model.
@@ -125,6 +152,11 @@ func (m Message) Validate() error {
 	}
 	if m.Role == RoleTool && strings.TrimSpace(m.ToolCallID) == "" {
 		return fmt.Errorf("%w: tool message requires tool_call_id", ErrInvalidRequest)
+	}
+	for _, part := range m.Parts {
+		if err := part.Validate(); err != nil {
+			return err
+		}
 	}
 	for _, call := range m.ToolCalls {
 		if err := validateToolCall(call, ErrInvalidRequest); err != nil {
