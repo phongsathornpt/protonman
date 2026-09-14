@@ -39,23 +39,23 @@ type application struct {
 	permissionWaiters map[string]chan string
 	preferences       fyne.Preferences
 
-	status          *widget.Label
-	list            *widget.List
-	chat            *widget.RichText
-	composer        *widget.Entry
-	send            *widget.Button
-	stop            *widget.Button
-	sessionTitle    *widget.Label
-	sessionMeta     *widget.Label
-	contextToggle   *widget.Button
-	contextDrawer   *fyne.Container
-	contextContent  *widget.RichText
-	runtimeSummary  *widget.Button
-	runtimePanel    *fyne.Container
-	permissionInbox *widget.Button
-	permissionPanel *fyne.Container
-	permissionTitle *widget.Label
-	permissionDetail *widget.Label
+	status            *widget.Label
+	list              *widget.List
+	chat              *widget.RichText
+	composer          *widget.Entry
+	send              *widget.Button
+	stop              *widget.Button
+	sessionTitle      *widget.Label
+	sessionMeta       *widget.Label
+	contextToggle     *widget.Button
+	contextDrawer     *fyne.Container
+	contextContent    *widget.RichText
+	runtimeSummary    *widget.Button
+	runtimePanel      *fyne.Container
+	permissionInbox   *widget.Button
+	permissionPanel   *fyne.Container
+	permissionTitle   *widget.Label
+	permissionDetail  *widget.Label
 	permissionActions *fyne.Container
 
 	modelProvider   *widget.Entry
