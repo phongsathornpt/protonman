@@ -41,7 +41,7 @@ var StableV1Coverage = []StableFeature{
 	{Name: "session/resume", Supported: true, Advertised: true},
 	{Name: "session/list", Supported: true, Advertised: true},
 	{Name: "session/delete", Supported: true, Advertised: true},
-	{Name: "session/close", Supported: false, Advertised: false},
+	{Name: "session/close", Supported: true, Advertised: true},
 	{Name: "session/configuration", Supported: false, Advertised: false},
 	{Name: "session/usage", Supported: false, Advertised: false},
 	{Name: "session/info_update", Supported: false, Advertised: false},
