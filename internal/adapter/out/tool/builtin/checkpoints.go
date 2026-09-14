@@ -34,7 +34,7 @@ type restoreCheckpointHandler struct {
 }
 
 type restoreCheckpointInput struct {
-	CheckpointID string `json:"checkpoint_id"`
+	CheckpointID string `json:"checkpointId"`
 }
 
 // NewCheckpointRestore returns the permission-gated checkpoint restore adapter.
@@ -49,13 +49,13 @@ func (restoreCheckpointHandler) Definition() tool.Definition {
 		Kind:                tool.KindEdit,
 		Mutability:          tool.MutabilityMutating,
 		Safety:              tool.SafetyContract{MutationDomain: tool.MutationDomainWorkspace, MutationSafety: tool.MutationSafetyWholeFile, CheckpointPolicy: tool.CheckpointPolicyNone, Boundary: tool.BoundaryPolicyWorkspaceWrite},
-		PermissionDetailKey: "checkpoint_id",
+		PermissionDetailKey: "checkpointId",
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
-				"checkpoint_id": map[string]any{"type": "string"},
+				"checkpointId": map[string]any{"type": "string"},
 			},
-			"required":             []string{"checkpoint_id"},
+			"required":             []string{"checkpointId"},
 			"additionalProperties": false,
 		},
 	}
@@ -68,7 +68,7 @@ func (h restoreCheckpointHandler) Execute(ctx context.Context, call tool.Call) (
 	}
 	input.CheckpointID = strings.TrimSpace(input.CheckpointID)
 	if input.CheckpointID == "" {
-		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "edit restore checkpoint_id is required")
+		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "edit restore checkpointId is required")
 	}
 	if err := h.checkpoints.Restore(ctx, input.CheckpointID); err != nil {
 		return tool.Result{}, fmt.Errorf("restore checkpoint %q: %w", input.CheckpointID, err)

@@ -49,7 +49,7 @@ func TestE2ESubagentDependsOnGatesExecution(t *testing.T) {
 	}
 
 	downstreamSpawn := callAgentToolContext(t, ctx, service, "spawn-downstream", "subagent", map[string]any{
-		"action": "spawn", "profile": "agility", "task": "downstream", "depends_on": []string{upstream.AgentID},
+		"action": "spawn", "profile": "agility", "task": "downstream", "dependsOn": []string{upstream.AgentID},
 	})
 	var downstream struct {
 		AgentID string `json:"agent_id"`

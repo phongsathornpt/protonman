@@ -20,14 +20,30 @@ type editHandler struct {
 
 type editInput struct {
 	Action         string `json:"action"`
-	FilePath       string `json:"file_path,omitempty"`
+	FilePath       string `json:"filePath,omitempty"`
 	Content        string `json:"content,omitempty"`
-	ExpectedSHA256 string `json:"expected_sha256,omitempty"`
-	OldString      string `json:"old_string,omitempty"`
-	NewString      string `json:"new_string,omitempty"`
-	ReplaceAll     bool   `json:"replace_all,omitempty"`
+	ExpectedSHA256 string `json:"expectedSha256,omitempty"`
+	OldString      string `json:"oldString,omitempty"`
+	NewString      string `json:"newString,omitempty"`
+	ReplaceAll     bool   `json:"replaceAll,omitempty"`
 	Patch          string `json:"patch,omitempty"`
-	CheckpointID   string `json:"checkpoint_id,omitempty"`
+	CheckpointID   string `json:"checkpointId,omitempty"`
+}
+
+func (in *editInput) UnmarshalJSON(data []byte) error {
+	type alias editInput
+	var aux struct {
+		alias
+		PathAlias string `json:"path"`
+	}
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	*in = editInput(aux.alias)
+	if in.FilePath == "" {
+		in.FilePath = aux.PathAlias
+	}
+	return nil
 }
 
 func NewEdit(workspaceRoot *workspace.Workspace, store checkpoint.Store) tool.Handler {
@@ -47,18 +63,22 @@ func (h editHandler) Definition() tool.Definition {
 		Mutability:  tool.MutabilityMutating,
 		Safety:      tool.SafetyContract{MutationDomain: tool.MutationDomainWorkspace, MutationSafety: tool.MutationSafetyDynamic, CheckpointPolicy: tool.CheckpointPolicyWhenKnown, Boundary: tool.BoundaryPolicyWorkspaceWrite},
 		Semantics:   h.callSemantics,
+		InputAliases: map[string][]string{
+			"filePath":       {"path", "filepath"},
+			"expectedSha256": {"sha256"},
+		},
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
-				"action":          map[string]any{"type": "string", "enum": []string{"write", "replace", "patch", "restore"}, "description": "Edit operation to perform"},
-				"file_path":       map[string]any{"type": "string", "description": "Workspace-relative file path for write or replace"},
-				"content":         map[string]any{"type": "string", "description": "Complete UTF-8 file content for write"},
-				"expected_sha256": map[string]any{"type": "string", "description": "SHA-256 from a complete read result when overwriting an existing file"},
-				"old_string":      map[string]any{"type": "string", "description": "Exact text to replace"},
-				"new_string":      map[string]any{"type": "string", "description": "Replacement text"},
-				"replace_all":     map[string]any{"type": "boolean", "description": "Replace all exact matches"},
-				"patch":           map[string]any{"type": "string", "description": "Patch enclosed by *** Begin Patch and *** End Patch"},
-				"checkpoint_id":   map[string]any{"type": "string", "description": "Checkpoint identifier to restore"},
+				"action":         map[string]any{"type": "string", "enum": []string{"write", "replace", "patch", "restore"}, "description": "Edit operation to perform"},
+				"filePath":       map[string]any{"type": "string", "description": "Workspace-relative file path for write or replace"},
+				"content":        map[string]any{"type": "string", "description": "Complete UTF-8 file content for write"},
+				"expectedSha256": map[string]any{"type": "string", "description": "SHA-256 from a complete read result when overwriting an existing file"},
+				"oldString":      map[string]any{"type": "string", "description": "Exact text to replace"},
+				"newString":      map[string]any{"type": "string", "description": "Replacement text"},
+				"replaceAll":     map[string]any{"type": "boolean", "description": "Replace all exact matches"},
+				"patch":          map[string]any{"type": "string", "description": "Patch enclosed by *** Begin Patch and *** End Patch"},
+				"checkpointId":   map[string]any{"type": "string", "description": "Checkpoint identifier to restore"},
 			},
 			"required":             []string{"action"},
 			"additionalProperties": false,

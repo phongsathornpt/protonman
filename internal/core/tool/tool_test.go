@@ -384,6 +384,148 @@ func TestNormalizeArgumentsCanonicalizesInputAliases(t *testing.T) {
 	}
 }
 
+// A tool whose handler dispatches case-insensitively must not publish a schema
+// that rejects the case variant the handler would have accepted.
+func TestNormalizeArgumentsFoldsRootEnumCase(t *testing.T) {
+	definition := Definition{
+		Name: "edit", Description: "edit", Kind: KindEdit,
+		InputSchema: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"action":    map[string]any{"type": "string", "enum": []string{"write", "replace"}},
+				"file_path": map[string]any{"type": "string"},
+			},
+			"required": []any{"action"}, "additionalProperties": false,
+		},
+	}
+	for raw, want := range map[string]string{
+		`{"action":"WRITE","file_path":"a.go"}`: `"action":"write"`,
+		`{"action":"Replace"}`:                  `"action":"replace"`,
+		`{"action":"  write  "}`:                `"action":"write"`,
+	} {
+		got := string(NormalizeArguments(definition, json.RawMessage(raw)))
+		if !strings.Contains(got, want) {
+			t.Fatalf("NormalizeArguments(%s) = %s, want %s", raw, got, want)
+		}
+	}
+	// A misspelling is not silently repaired; the schema still reports it.
+	for _, raw := range []string{`{"action":"wrote"}`, `{"action":"WRITE!"}`, `{"action":1}`} {
+		if got := string(NormalizeArguments(definition, json.RawMessage(raw))); got != raw {
+			t.Fatalf("NormalizeArguments(%s) = %s, want unchanged for schema rejection", raw, got)
+		}
+	}
+}
+
+// Folding must be scoped to enum fields: free-form string arguments such as a
+// grep pattern or file path keep their exact case.
+func TestNormalizeArgumentsLeavesFreeFormStringsAlone(t *testing.T) {
+	definition := Definition{
+		Name: "grep", Description: "grep", Kind: KindGrep,
+		InputSchema: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"action":  map[string]any{"type": "string", "enum": []string{"search"}},
+				"pattern": map[string]any{"type": "string"},
+				"path":    map[string]any{"type": "string"},
+			},
+			"required": []any{"action"}, "additionalProperties": false,
+		},
+	}
+	raw := `{"action":"SEARCH","pattern":"TODO: FixMe","path":"Src/PKG"}`
+	got := string(NormalizeArguments(definition, json.RawMessage(raw)))
+	if !strings.Contains(got, `"action":"search"`) {
+		t.Fatalf("action was not folded: %s", got)
+	}
+	if !strings.Contains(got, "TODO: FixMe") || !strings.Contains(got, "Src/PKG") {
+		t.Fatalf("free-form strings lost case: %s", got)
+	}
+}
+
+// Enums that are not lowercase-simple are skipped entirely, so unexpected
+// vocabulary is never case-folded.
+func TestNormalizeArgumentsSkipsNonSimpleEnums(t *testing.T) {
+	for name, enum := range map[string]any{
+		"mixed case":  []string{"ReadOnly", "readwrite"},
+		"non-string":  []any{1, 2},
+		"empty entry": []string{""},
+	} {
+		definition := Definition{
+			Name: "custom", Description: "custom", Kind: KindRead,
+			InputSchema: map[string]any{
+				"type":       "object",
+				"properties": map[string]any{"action": map[string]any{"type": "string", "enum": enum}},
+			},
+		}
+		raw := `{"action":"READONLY"}`
+		if got := string(NormalizeArguments(definition, json.RawMessage(raw))); got != raw {
+			t.Fatalf("%s: NormalizeArguments(%s) = %s, want unchanged", name, raw, got)
+		}
+	}
+}
+
+// JSON Schema accepts 3.0 and 1e2 as integers, but encoding/json cannot decode
+// either into a Go int, so a schema-valid call would fail inside the handler.
+func TestNormalizeArgumentsCanonicalizesIntegralNumbers(t *testing.T) {
+	definition := Definition{
+		Name: "ls", Description: "list", Kind: KindRead,
+		InputSchema: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"limit":  map[string]any{"type": "integer", "minimum": 0},
+				"offset": map[string]any{"type": "integer", "minimum": 0},
+				"path":   map[string]any{"type": "string"},
+			},
+			"additionalProperties": false,
+		},
+	}
+	for raw, want := range map[string]string{
+		`{"limit":3.0}`:              `"limit":3`,
+		`{"limit":100.00}`:           `"limit":100`,
+		`{"limit":1e2}`:              `"limit":100`,
+		`{"limit":-5.0}`:             `"limit":-5`,
+		`{"offset":0.0}`:             `"offset":0`,
+		`{"limit":3.0,"offset":2.0}`: `"limit":3`,
+	} {
+		got := string(NormalizeArguments(definition, json.RawMessage(raw)))
+		if !strings.Contains(got, want) {
+			t.Fatalf("NormalizeArguments(%s) = %s, want it to contain %s", raw, got, want)
+		}
+	}
+	// Already-integral and genuinely wrong values keep their spelling so the
+	// schema can judge them.
+	for _, raw := range []string{
+		`{"limit":3}`,
+		`{"limit":3.5}`,
+		`{"limit":"3"}`,
+		`{"limit":true}`,
+		`{"path":"a.go"}`,
+	} {
+		if got := string(NormalizeArguments(definition, json.RawMessage(raw))); got != raw {
+			t.Fatalf("NormalizeArguments(%s) = %s, want unchanged", raw, got)
+		}
+	}
+}
+
+// Numeric folding is scoped to integer fields; a float-typed or string-typed
+// field must not be rewritten.
+func TestNormalizeArgumentsLeavesNonIntegerFieldsAlone(t *testing.T) {
+	definition := Definition{
+		Name: "threshold", Description: "threshold", Kind: KindRead,
+		InputSchema: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"ratio": map[string]any{"type": "number"},
+				"name":  map[string]any{"type": "string"},
+			},
+			"additionalProperties": false,
+		},
+	}
+	raw := `{"ratio":3.0,"name":"a"}`
+	if got := string(NormalizeArguments(definition, json.RawMessage(raw))); got != raw {
+		t.Fatalf("NormalizeArguments(%s) = %s, want unchanged", raw, got)
+	}
+}
+
 func TestNewCallNormalizesBlankArguments(t *testing.T) {
 	for _, raw := range []string{"", "   ", "\n\t"} {
 		call, err := NewCall("call-1", "todo", []byte(raw))
@@ -466,6 +608,36 @@ func TestFailureFromErrorPreservesExplicitDiagnostic(t *testing.T) {
 	}
 	if strings.Contains(failure.Diagnostic, "execute todo") {
 		t.Fatalf("failure diagnostic leaked wrapper: %q", failure.Diagnostic)
+	}
+}
+
+// A handler's decode failure names no defect on its own ("decode ls arguments").
+// The wrapped cause must be surfaced so the model can see which field was wrong.
+func TestFailureFromErrorSurfacesInvalidArgumentCause(t *testing.T) {
+	cause := errors.New("json: cannot unmarshal string into Go struct field listDirInput.limit of type int")
+	err := WrapToolError(ErrorCodeInvalidArguments, "decode ls arguments", cause)
+	failure := FailureFromError(err)
+	if failure == nil {
+		t.Fatal("FailureFromError() = nil")
+	}
+	if failure.Message != "decode ls arguments" {
+		t.Fatalf("failure message = %q", failure.Message)
+	}
+	if failure.Diagnostic != cause.Error() {
+		t.Fatalf("failure diagnostic = %q, want the wrapped cause", failure.Diagnostic)
+	}
+}
+
+// An explicit diagnostic still wins over the wrapped cause, and non-caller-fixable
+// codes are left alone.
+func TestFailureFromErrorDiagnosticPrecedence(t *testing.T) {
+	explicit := WrapToolError(ErrorCodeInvalidArguments, "msg", errors.New("cause")).WithDiagnostic("explicit detail")
+	if got := FailureFromError(explicit).Diagnostic; got != "explicit detail" {
+		t.Fatalf("diagnostic = %q, want explicit detail", got)
+	}
+	execution := WrapToolError(ErrorCodeExecution, "run command", errors.New("exit status 1"))
+	if got := FailureFromError(execution).Diagnostic; got != "" {
+		t.Fatalf("execution diagnostic = %q, want empty", got)
 	}
 }
 

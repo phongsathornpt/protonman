@@ -27,7 +27,7 @@ func TestReadSchemaKeepsArtifactContractCompact(t *testing.T) {
 	if view["default"] != "auto" {
 		t.Fatalf("view default = %#v, want auto", view["default"])
 	}
-	for _, field := range []string{"offset", "limit", "continuation", "start_line", "end_line", "line_numbers"} {
+	for _, field := range []string{"offset", "limit", "continuation", "startLine", "endLine", "lineNumbers"} {
 		schema, _ := properties[field].(map[string]any)
 		description, _ := schema["description"].(string)
 		if !strings.Contains(strings.ToLower(description), "text-only") {
@@ -43,7 +43,7 @@ func TestReadFileSupportsLineRangesAndNumbers(t *testing.T) {
 		t.Fatal(err)
 	}
 	result, err := New(ws).Execute(context.Background(), newJSONCall(t, "read-lines", "read", map[string]any{
-		"path": "lines.txt", "start_line": 2, "end_line": 3, "line_numbers": true,
+		"path": "lines.txt", "startLine": 2, "endLine": 3, "lineNumbers": true,
 	}))
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
@@ -62,7 +62,7 @@ func TestReadFileLineRangeCanReadFromStartThroughEndLine(t *testing.T) {
 		t.Fatal(err)
 	}
 	result, err := New(ws).Execute(context.Background(), newJSONCall(t, "read-lines-end", "read", map[string]any{
-		"path": "lines.txt", "end_line": 2,
+		"path": "lines.txt", "endLine": 2,
 	}))
 	if err != nil {
 		t.Fatal(err)
@@ -78,7 +78,7 @@ func TestReadFileLineSelectionTakesPrecedenceOverBytePagination(t *testing.T) {
 		t.Fatal(err)
 	}
 	result, err := New(ws).Execute(context.Background(), newJSONCall(t, "read-lines-mixed", "read", map[string]any{
-		"path": "lines.txt", "offset": 1, "continuation": "stale-page-token", "start_line": 2, "end_line": 2,
+		"path": "lines.txt", "offset": 1, "continuation": "stale-page-token", "startLine": 2, "endLine": 2,
 	}))
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
@@ -122,7 +122,7 @@ func TestReadFileLineRangeHonorsOutputLimit(t *testing.T) {
 		t.Fatal(err)
 	}
 	result, err := New(ws).Execute(context.Background(), newJSONCall(t, "read-lines-limit", "read", map[string]any{
-		"path": "lines.txt", "start_line": 1, "end_line": 3, "limit": 7,
+		"path": "lines.txt", "startLine": 1, "endLine": 3, "limit": 7,
 	}))
 	if err != nil {
 		t.Fatal(err)
@@ -157,7 +157,7 @@ func TestReadFileLineRangeRejectsBinaryNUL(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err := New(ws).Execute(context.Background(), newJSONCall(t, "read-lines-nul", "read", map[string]any{
-		"path": "binary-lines.dat", "start_line": 2, "end_line": 2,
+		"path": "binary-lines.dat", "startLine": 2, "endLine": 2,
 	}))
 	if err == nil || !strings.Contains(err.Error(), "contains NUL bytes") {
 		t.Fatalf("Execute() error = %v, want binary NUL rejection", err)
@@ -170,7 +170,7 @@ func TestReadFileLineRangeRejectsInvalidUTF8(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err := New(ws).Execute(context.Background(), newJSONCall(t, "read-lines-utf8", "read", map[string]any{
-		"path": "invalid.txt", "start_line": 2, "end_line": 2,
+		"path": "invalid.txt", "startLine": 2, "endLine": 2,
 	}))
 	if err == nil || !strings.Contains(err.Error(), "not valid UTF-8") {
 		t.Fatalf("Execute() error = %v, want UTF-8 rejection", err)
@@ -201,7 +201,7 @@ func TestReadFileLineRangePreservesFinalLineWithoutNewline(t *testing.T) {
 		t.Fatal(err)
 	}
 	result, err := New(ws).Execute(context.Background(), newJSONCall(t, "read-lines-final", "read", map[string]any{
-		"path": "lines.txt", "start_line": 2, "end_line": 2,
+		"path": "lines.txt", "startLine": 2, "endLine": 2,
 	}))
 	if err != nil {
 		t.Fatal(err)

@@ -37,7 +37,7 @@ type bashHandler struct {
 type bashInput struct {
 	Command        string `json:"command"`
 	Cwd            string `json:"cwd,omitempty"`
-	TimeoutSeconds int64  `json:"timeout_seconds,omitempty"`
+	TimeoutSeconds int64  `json:"timeoutSeconds,omitempty"`
 }
 
 // NewBash returns the permission-gated shell command adapter.
@@ -74,7 +74,7 @@ func (bashHandler) Definition() tool.Definition {
 					"type":        "string",
 					"description": "Optional workspace-relative working directory",
 				},
-				"timeout_seconds": map[string]any{
+				"timeoutSeconds": map[string]any{
 					"type": "integer", "minimum": 0,
 					"description": "Optional shorter execution timeout in seconds; cannot extend the caller deadline",
 				},
@@ -123,7 +123,7 @@ func (h bashHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, 
 		return tool.Result{}, err
 	}
 	if input.TimeoutSeconds < 0 {
-		err := tool.NewToolError(tool.ErrorCodeInvalidArguments, "bash timeout_seconds cannot be negative")
+		err := tool.NewToolError(tool.ErrorCodeInvalidArguments, "bash timeoutSeconds cannot be negative")
 		logBashFailure(ctx, call, startedAt, "arguments", err)
 		return tool.Result{}, err
 	}
@@ -285,7 +285,7 @@ func (h bashHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, 
 		if errors.Is(ctxErr, context.DeadlineExceeded) {
 			message := "bash command deadline exceeded"
 			if requestedTimeout && parentCtx.Err() == nil {
-				message = "bash timeout_seconds exceeded"
+				message = "bash timeoutSeconds exceeded"
 			}
 			return result, tool.WrapToolError(tool.ErrorCodeDeadlineExceeded, message, ctxErr)
 		}

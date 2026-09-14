@@ -35,7 +35,7 @@ func TestE2EBashStructuredExecution(t *testing.T) {
 	t.Run("timeout", func(t *testing.T) {
 		started := time.Now()
 		res := runProton(t, runOptions{
-			args: []string{"-y", "-p", `/call bash {"command":"printf before; sleep 5","timeout_seconds":1}`},
+			args: []string{"-y", "-p", `/call bash {"command":"printf before; sleep 5","timeoutSeconds":1}`},
 			dir:  ws, env: env, timeout: 4 * time.Second,
 		})
 		if res.exitCode == 0 {

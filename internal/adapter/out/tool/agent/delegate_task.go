@@ -18,12 +18,12 @@ type delegateTaskHandler struct {
 
 type delegateTaskInput struct {
 	Task           string   `json:"task"`
-	TaskID         string   `json:"task_id,omitempty"`
+	TaskID         string   `json:"taskId,omitempty"`
 	Profile        string   `json:"profile"`
 	Context        string   `json:"context,omitempty"`
-	DependsOn      []string `json:"depends_on,omitempty"`
+	DependsOn      []string `json:"dependsOn,omitempty"`
 	Optional       bool     `json:"optional,omitempty"`
-	TimeoutSeconds int64    `json:"timeout_seconds,omitempty"`
+	TimeoutSeconds int64    `json:"timeoutSeconds,omitempty"`
 }
 
 // NewDelegateTask creates a tool.Handler that delegates a task to a specialized subagent.
@@ -38,7 +38,7 @@ func NewDelegateTask(coordinator *agent.Coordinator, parentIDs ...string) tool.H
 func (delegateTaskHandler) Definition() tool.Definition {
 	return tool.Definition{
 		Name:                   tool.NameSubagent,
-		Description:            "Spawn a specialized subagent asynchronously and return its agent_id immediately. Results required for the parent are delivered automatically. Use depends_on to gate a child on already-spawned children from the same parent turn. Set optional=true only for speculative work that must not block parent completion.",
+		Description:            "Spawn a specialized subagent asynchronously and return its agentId immediately. Results required for the parent are delivered automatically. Use dependsOn to gate a child on already-spawned children from the same parent turn. Set optional=true only for speculative work that must not block parent completion.",
 		Kind:                   tool.KindAgent,
 		Mutability:             tool.MutabilityMutating,
 		Safety:                 tool.SafetyContract{MutationDomain: tool.MutationDomainAgentState, MutationSafety: tool.MutationSafetyNone, CheckpointPolicy: tool.CheckpointPolicyNone, Boundary: tool.BoundaryPolicyNone},
@@ -52,7 +52,7 @@ func (delegateTaskHandler) Definition() tool.Definition {
 					"type":        "string",
 					"description": "Clear description of what the subagent should investigate or do.",
 				},
-				"task_id": map[string]any{
+				"taskId": map[string]any{
 					"type": "string", "pattern": `^[A-Za-z0-9._:-]{1,128}$`,
 					"description": "Optional ID from the current TODO plan. When present, runtime lifecycle events own that task's execution status.",
 				},
@@ -65,7 +65,7 @@ func (delegateTaskHandler) Definition() tool.Definition {
 					"type":        "string",
 					"description": "Optional background information, hints, or specific file paths to focus on.",
 				},
-				"depends_on": map[string]any{
+				"dependsOn": map[string]any{
 					"type": "array", "maxItems": agent.MaxAgentDependencies, "items": map[string]any{"type": "string"},
 					"description": "Agent IDs already spawned by this parent turn that must complete successfully before this child starts.",
 				},
@@ -73,7 +73,7 @@ func (delegateTaskHandler) Definition() tool.Definition {
 					"type":        "boolean",
 					"description": "Speculative work that may be integrated if ready but does not block the parent final response and is canceled when the parent completes.",
 				},
-				"timeout_seconds": map[string]any{
+				"timeoutSeconds": map[string]any{
 					"type":        "integer",
 					"minimum":     0,
 					"maximum":     86400,
@@ -123,7 +123,7 @@ func (h delegateTaskHandler) Execute(ctx context.Context, call tool.Call) (tool.
 	}
 
 	if input.TimeoutSeconds < 0 || input.TimeoutSeconds > 86400 {
-		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "timeout_seconds must be between 1 and 86400 when provided")
+		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "timeoutSeconds must be between 1 and 86400 when provided")
 	}
 
 	profile, err := agent.ParseSubagentProfile(input.Profile)
@@ -154,10 +154,12 @@ func (h delegateTaskHandler) Execute(ctx context.Context, call tool.Call) (tool.
 		return tool.Result{}, tool.WrapToolError(tool.ErrorCodeExecution, "spawn subagent", err)
 	}
 	payload, err := json.Marshal(map[string]any{
+		"agentId":  handle.ID,
 		"agent_id": handle.ID,
 		"profile":  handle.Profile,
 		"status":   agent.StateQueued,
 		"optional": input.Optional,
+		"taskId":   strings.TrimSpace(input.TaskID),
 		"task_id":  strings.TrimSpace(input.TaskID),
 	})
 	if err != nil {

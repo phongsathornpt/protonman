@@ -104,14 +104,14 @@ func TestE2EAsyncSubagentWaitDoesNotCancel(t *testing.T) {
 	}
 
 	close(release)
-	wait = callAgentTool(t, service, "wait-2", "subagent", map[string]any{"action": "wait", "timeout_seconds": 10})
+	wait = callAgentTool(t, service, "wait-2", "subagent", map[string]any{"action": "wait", "timeoutSeconds": 10})
 	if !strings.Contains(string(wait.StructuredOutput), `"timed_out":false`) || !strings.Contains(string(wait.StructuredOutput), handle.AgentID) {
 		t.Fatalf("completed wait=%s structured=%s", wait.Output, wait.StructuredOutput)
 	}
 	if strings.Contains(string(wait.StructuredOutput), "persistent result") {
 		t.Fatalf("lifecycle wait leaked retained child result: %s", wait.StructuredOutput)
 	}
-	get := callAgentTool(t, service, "get", "subagent", map[string]any{"action": "get", "agent_id": handle.AgentID})
+	get := callAgentTool(t, service, "get", "subagent", map[string]any{"action": "get", "agentId": handle.AgentID})
 	if !strings.Contains(string(get.StructuredOutput), `"state":"completed"`) || !strings.Contains(string(get.StructuredOutput), "persistent result") {
 		t.Fatalf("get=%s", get.Output)
 	}
@@ -134,8 +134,8 @@ func TestE2EAsyncSubagentExplicitCancel(t *testing.T) {
 		AgentID string `json:"agent_id"`
 	}
 	_ = json.Unmarshal(spawn.StructuredOutput, &handle)
-	callAgentTool(t, service, "cancel", "subagent", map[string]any{"action": "cancel", "agent_id": handle.AgentID})
-	wait := callAgentTool(t, service, "wait", "subagent", map[string]any{"action": "wait", "timeout_seconds": 10})
+	callAgentTool(t, service, "cancel", "subagent", map[string]any{"action": "cancel", "agentId": handle.AgentID})
+	wait := callAgentTool(t, service, "wait", "subagent", map[string]any{"action": "wait", "timeoutSeconds": 10})
 	if !strings.Contains(string(wait.StructuredOutput), `"agent_failed"`) || !strings.Contains(string(wait.StructuredOutput), handle.AgentID) {
 		t.Fatalf("wait after cancel=%s structured=%s", wait.Output, wait.StructuredOutput)
 	}

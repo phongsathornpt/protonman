@@ -90,6 +90,9 @@ func (m *bubbleModel) reconfigureRunner() {
 	if sessID == "" && m.workDir != "" {
 		sessID = "workspace-" + m.workDir
 	}
+	// Keep root durable-memory retrieval/extraction bound to the session that is
+	// actually active. A no-op when the app factory does not own root memory.
+	app.BindRootMemory(m.application.ModelFactory, m.sessionID, m.workspaceKey)
 	var remote *model.RemoteModel
 	if resolved, ok := m.activeRemoteModel(); ok {
 		remote = &resolved

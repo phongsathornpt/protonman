@@ -13,11 +13,11 @@ import (
 )
 
 type agentIDInput struct {
-	AgentID string `json:"agent_id"`
+	AgentID string `json:"agentId"`
 }
 
 type waitAgentInput struct {
-	TimeoutSeconds int64 `json:"timeout_seconds,omitempty"`
+	TimeoutSeconds int64 `json:"timeoutSeconds,omitempty"`
 }
 
 type agentLifecycleHandler struct {
@@ -49,13 +49,13 @@ func (h agentLifecycleHandler) Definition() tool.Definition {
 		def.Mutability = tool.MutabilityReadOnly
 		def.Safety = tool.SafetyContract{MutationDomain: tool.MutationDomainNone, MutationSafety: tool.MutationSafetyNone, CheckpointPolicy: tool.CheckpointPolicyNone, Boundary: tool.BoundaryPolicyNone}
 		def.InputSchema = map[string]any{"type": "object", "properties": map[string]any{
-			"timeout_seconds": map[string]any{"type": "integer", "minimum": 0, "maximum": 3600},
+			"timeoutSeconds": map[string]any{"type": "integer", "minimum": 0, "maximum": 3600},
 		}, "additionalProperties": false}
 	case subagentActionGet:
 		def.Description = "Diagnostically inspect one retained subagent and its terminal result when available; normal result collection is automatic."
 		def.Mutability = tool.MutabilityReadOnly
 		def.Safety = tool.SafetyContract{MutationDomain: tool.MutationDomainNone, MutationSafety: tool.MutationSafetyNone, CheckpointPolicy: tool.CheckpointPolicyNone, Boundary: tool.BoundaryPolicyNone}
-		def.PermissionDetailKey = "agent_id"
+		def.PermissionDetailKey = "agentId"
 		def.InputSchema = agentIDSchema()
 	case subagentActionList:
 		def.Description = "Diagnostically list retained subagents and their lifecycle states; normal orchestration does not require polling this list."
@@ -66,13 +66,13 @@ func (h agentLifecycleHandler) Definition() tool.Definition {
 		def.Description = "Explicitly restart an interrupted retained subagent as a fresh child after re-checking current workspace state."
 		def.Mutability = tool.MutabilityMutating
 		def.Safety = tool.SafetyContract{MutationDomain: tool.MutationDomainAgentState, MutationSafety: tool.MutationSafetyNone, CheckpointPolicy: tool.CheckpointPolicyNone, Boundary: tool.BoundaryPolicyNone}
-		def.PermissionDetailKey = "agent_id"
+		def.PermissionDetailKey = "agentId"
 		def.InputSchema = agentIDSchema()
 	case subagentActionCancel:
 		def.Description = "Explicitly cancel a queued or running subagent."
 		def.Mutability = tool.MutabilityMutating
 		def.Safety = tool.SafetyContract{MutationDomain: tool.MutationDomainAgentState, MutationSafety: tool.MutationSafetyNone, CheckpointPolicy: tool.CheckpointPolicyNone, Boundary: tool.BoundaryPolicyNone}
-		def.PermissionDetailKey = "agent_id"
+		def.PermissionDetailKey = "agentId"
 		def.InputSchema = agentIDSchema()
 	}
 	def.OutputSchema = agentLifecycleOutputSchema(h.action)
@@ -81,8 +81,8 @@ func (h agentLifecycleHandler) Definition() tool.Definition {
 
 func agentIDSchema() map[string]any {
 	return map[string]any{"type": "object", "properties": map[string]any{
-		"agent_id": map[string]any{"type": "string"},
-	}, "required": []string{"agent_id"}, "additionalProperties": false}
+		"agentId": map[string]any{"type": "string"},
+	}, "required": []string{"agentId"}, "additionalProperties": false}
 }
 
 func (h agentLifecycleHandler) Execute(ctx context.Context, call tool.Call) (tool.Result, error) {
@@ -111,7 +111,7 @@ func (h agentLifecycleHandler) wait(ctx context.Context, call tool.Call) (tool.R
 		return tool.Result{}, invalidArgs("decode subagent wait arguments", err)
 	}
 	if in.TimeoutSeconds < 0 || in.TimeoutSeconds > 3600 {
-		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "timeout_seconds must be between 0 and 3600 when provided")
+		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "timeoutSeconds must be between 0 and 3600 when provided")
 	}
 	var timeout time.Duration
 	if in.TimeoutSeconds > 0 {
@@ -164,7 +164,7 @@ func (h agentLifecycleHandler) resume(ctx context.Context, call tool.Call) (tool
 	}
 	status, _ := h.coordinator.GetRef(agent.AgentRef{SessionID: turnRef.SessionID, AgentID: handle.ID})
 	return agentJSONResult(call, fmt.Sprintf("resumed %s as %s", id, handle.ID), map[string]any{
-		"resumed_from": id, "agent_id": handle.ID, "profile": handle.Profile, "status": status.State,
+		"resumedFrom": id, "resumed_from": id, "agentId": handle.ID, "agent_id": handle.ID, "profile": handle.Profile, "status": status.State,
 	})
 }
 
@@ -187,7 +187,7 @@ func decodeAgentID(call tool.Call) (string, error) {
 	}
 	id := strings.TrimSpace(in.AgentID)
 	if id == "" {
-		return "", tool.NewToolError(tool.ErrorCodeInvalidArguments, "agent_id is required")
+		return "", tool.NewToolError(tool.ErrorCodeInvalidArguments, "agentId is required")
 	}
 	return id, nil
 }

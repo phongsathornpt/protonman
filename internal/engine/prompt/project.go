@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/phongsathornpt/protonman/internal/core/workspace"
 )
@@ -64,6 +65,9 @@ func readBoundedInstructionFile(ctx context.Context, policy *workspace.Workspace
 	truncated := len(data) > MaxProjectInstructionsBytes
 	if truncated {
 		data = data[:MaxProjectInstructionsBytes]
+		for len(data) > 0 && !utf8.Valid(data) {
+			data = data[:len(data)-1]
+		}
 	}
 	text := strings.TrimSpace(strings.ToValidUTF8(string(data), "�"))
 	if truncated {

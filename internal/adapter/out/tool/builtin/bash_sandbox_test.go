@@ -121,9 +121,9 @@ func TestBashUsesCallerBoundedExecutionTimeout(t *testing.T) {
 	if definition.ExecutionTimeoutPolicy != tool.ExecutionTimeoutCallerBounded {
 		t.Fatalf("ExecutionTimeoutPolicy = %q, want caller bounded", definition.ExecutionTimeoutPolicy)
 	}
-	timeoutSchema := definition.InputSchema["properties"].(map[string]any)["timeout_seconds"].(map[string]any)
+	timeoutSchema := definition.InputSchema["properties"].(map[string]any)["timeoutSeconds"].(map[string]any)
 	if _, ok := timeoutSchema["maximum"]; ok {
-		t.Fatalf("timeout_seconds schema unexpectedly has a hard maximum: %#v", timeoutSchema)
+		t.Fatalf("timeoutSeconds schema unexpectedly has a hard maximum: %#v", timeoutSchema)
 	}
 }
 
@@ -131,8 +131,8 @@ func TestBashAcceptsTimeoutLongerThanLegacyLimit(t *testing.T) {
 	workspaceRoot := newTestWorkspace(t, nil)
 	handler := NewBash(workspaceRoot, &recordingLauncher{})
 	_, err := handler.Execute(context.Background(), newJSONCall(t, "bash-long-timeout", "bash", map[string]any{
-		"command":         "true",
-		"timeout_seconds": 121,
+		"command":        "true",
+		"timeoutSeconds": 121,
 	}))
 	if err != nil {
 		t.Fatalf("Execute() error = %v, want timeout above legacy 120s accepted", err)
@@ -246,13 +246,13 @@ func TestBashPerCallTimeoutCannotRunPastRequestedBudget(t *testing.T) {
 	handler := NewBash(workspaceRoot, sandbox.NewOSLauncher(profile))
 	started := time.Now()
 	_, err = handler.Execute(context.Background(), newJSONCall(t, "bash-timeout", "bash", map[string]any{
-		"command":         "sleep 5",
-		"timeout_seconds": 1,
+		"command":        "sleep 5",
+		"timeoutSeconds": 1,
 	}))
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("Execute() error = %v, want deadline exceeded", err)
 	}
-	if !strings.Contains(err.Error(), "bash timeout_seconds exceeded") {
+	if !strings.Contains(err.Error(), "bash timeoutSeconds exceeded") {
 		t.Fatalf("Execute() error = %q, want per-call timeout provenance", err)
 	}
 	if elapsed := time.Since(started); elapsed > 2*time.Second {
@@ -270,13 +270,13 @@ func TestBashParentDeadlineWinsOverRequestedTimeout(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
 	defer cancel()
 	_, err = handler.Execute(ctx, newJSONCall(t, "bash-parent-timeout", "bash", map[string]any{
-		"command":         "sleep 5",
-		"timeout_seconds": 10,
+		"command":        "sleep 5",
+		"timeoutSeconds": 10,
 	}))
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("Execute() error = %v, want deadline exceeded", err)
 	}
-	if !strings.Contains(err.Error(), "bash command deadline exceeded") || strings.Contains(err.Error(), "timeout_seconds exceeded") {
+	if !strings.Contains(err.Error(), "bash command deadline exceeded") || strings.Contains(err.Error(), "timeoutSeconds exceeded") {
 		t.Fatalf("Execute() error = %q, want parent deadline provenance", err)
 	}
 }

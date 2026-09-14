@@ -24,7 +24,7 @@ func TestE2EFileAndProcessTools(t *testing.T) {
 
 	// 2. edit action=write
 	writeRes := runProton(t, runOptions{
-		args: []string{"-y", "-p", `/call edit {"action":"write", "file_path":"created.txt", "content":"Brand New Content"}`},
+		args: []string{"-y", "-p", `/call edit {"action":"write", "filePath":"created.txt", "content":"Brand New Content"}`},
 		dir:  ws,
 		env:  env,
 	})
@@ -41,7 +41,7 @@ func TestE2EFileAndProcessTools(t *testing.T) {
 
 	// 3. edit action=replace
 	srRes := runProton(t, runOptions{
-		args: []string{"-y", "-p", `/call edit {"action":"replace", "file_path":"created.txt", "old_string":"Brand New", "new_string":"Updated"}`},
+		args: []string{"-y", "-p", `/call edit {"action":"replace", "filePath":"created.txt", "oldString":"Brand New", "newString":"Updated"}`},
 		dir:  ws,
 		env:  env,
 	})

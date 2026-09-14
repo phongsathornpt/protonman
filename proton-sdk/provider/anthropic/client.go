@@ -1,11 +1,9 @@
 package anthropic
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -23,66 +21,36 @@ func (m *LanguageModel) Stream(ctx context.Context, request sdk.Request) (sdk.St
 	if err != nil {
 		return nil, fmt.Errorf("marshal anthropic request: %w", err)
 	}
-	endpoint := messagesEndpoint(m.provider.options.BaseURL)
-	policy := sdk.RetryPolicy{
-		BaseBackoff:       m.provider.options.RetryBackoff,
-		PostFirstRetryGap: m.provider.options.RetryPostFirstGap,
-		MaxBackoff:        m.provider.options.MaxRetryBackoff,
-		MaxRetryAfter:     m.provider.options.MaxRetryAfter,
-		RetryDelays:       m.provider.options.RetryDelays,
-	}
-	var lastErr error
-	for attempt := 0; ; attempt++ {
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(encoded))
-		if err != nil {
-			return nil, fmt.Errorf("create anthropic request: %w", err)
-		}
-		for key, values := range m.provider.options.Headers {
-			for _, value := range values {
-				req.Header.Add(key, value)
+	base := m.provider.options.BaseConfig()
+	endpoint := messagesEndpoint(base.BaseURL)
+	return providerutil.ExecuteStream(ctx, providerutil.StreamRequest{
+		ProviderName: m.Provider(),
+		ModelID:      m.modelID,
+		Endpoint:     endpoint,
+		Payload:      encoded,
+		Headers:      base.Headers,
+		SessionID:    request.Metadata.SessionID,
+		HTTPClient:   base.HTTPClient,
+		MaxRetries:   base.MaxRetries,
+		RetryPolicy:  base.RetryPolicy(),
+		PrepareRequest: func(httpReq *http.Request) {
+			httpReq.Header.Set("anthropic-version", m.provider.options.APIVersion)
+			if base.APIKey != "" {
+				httpReq.Header.Set("x-api-key", base.APIKey)
 			}
-		}
-		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("Accept", "text/event-stream")
-		req.Header.Set("anthropic-version", m.provider.options.APIVersion)
-		if m.provider.options.APIKey != "" {
-			req.Header.Set("x-api-key", m.provider.options.APIKey)
-		}
-		if m.provider.options.UserAgent != "" {
-			req.Header.Set("User-Agent", m.provider.options.UserAgent)
-		}
-		providerutil.ApplySessionID(req.Header, request.Metadata.SessionID)
-		resp, err := m.provider.options.HTTPClient.Do(req)
-		if err != nil {
-			if ctx.Err() != nil {
-				return nil, ctx.Err()
+			if base.UserAgent != "" {
+				httpReq.Header.Set("User-Agent", base.UserAgent)
 			}
-			lastErr = sdk.NewTransportError("anthropic", err)
-		} else {
-			if resp.StatusCode == http.StatusOK {
-				return newStream(resp.Body, anthropicResponseMetadata(resp.Header), request.Options.IncludeRawChunks), nil
-			}
-			data, _ := io.ReadAll(io.LimitReader(resp.Body, 64*1024))
-			resp.Body.Close()
-			providerErr := anthropicHTTPError(resp.StatusCode, data)
-			providerErr.RateLimit = sdk.ParseRateLimitHeaders(resp.Header, time.Now())
-			lastErr = providerErr
-		}
-		if attempt >= m.provider.options.MaxRetries {
-			return nil, lastErr
-		}
-		decision := sdk.DecideRetry(lastErr, attempt+1, policy)
-		if !decision.Retry {
-			return nil, lastErr
-		}
-		sdk.ObserveRetry(ctx, sdk.RetryEvent{
-			Provider: m.Provider(), ModelID: m.modelID, Reason: string(decision.Reason),
-			Attempt: attempt + 1, MaxRetries: m.provider.options.MaxRetries, Delay: decision.Delay,
-		})
-		if err := sdk.WaitForRetry(ctx, decision.Delay); err != nil {
-			return nil, err
-		}
-	}
+		},
+		ParseError: func(status int, body []byte, headers http.Header) *sdk.ProviderError {
+			err := anthropicHTTPError(status, body)
+			err.RateLimit = sdk.ParseRateLimitHeaders(headers, time.Now())
+			return err
+		},
+		OnSuccess: func(resp *http.Response) (sdk.Stream, error) {
+			return newStream(resp.Body, anthropicResponseMetadata(resp.Header), request.Options.IncludeRawChunks), nil
+		},
+	})
 }
 
 func anthropicResponseMetadata(headers http.Header) sdk.ProviderMetadata {
@@ -116,22 +84,4 @@ func messagesEndpoint(baseURL string) string {
 		return baseURL + "/messages"
 	}
 	return baseURL + "/v1/messages"
-}
-
-func anthropicHTTPError(status int, body []byte) *sdk.ProviderError {
-	var payload struct {
-		Error struct {
-			Type    string `json:"type"`
-			Message string `json:"message"`
-		} `json:"error"`
-	}
-	message := strings.TrimSpace(string(body))
-	code := ""
-	if json.Unmarshal(body, &payload) == nil {
-		code = payload.Error.Type
-		if strings.TrimSpace(payload.Error.Message) != "" {
-			message = payload.Error.Message
-		}
-	}
-	return sdk.NewProviderError("anthropic", status, code, message)
 }

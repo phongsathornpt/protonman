@@ -89,6 +89,109 @@ func assertBuiltinContract(t *testing.T, registry *Registry, definition tool.Def
 	if len(definition.OutputSchema) > 0 && output == nil {
 		t.Errorf("%s output validator = nil", definition.Name)
 	}
+	assertEnumsSurviveNormalization(t, definition)
+	assertIntegerFieldsSurviveNormalization(t, definition)
+}
+
+// assertIntegerFieldsSurviveNormalization guards the invariant that an integer
+// input field accepts every JSON spelling its schema accepts. JSON Schema treats
+// 3.0 and 1e2 as integers, so the validator admits them, but encoding/json cannot
+// decode either into a Go int; without canonicalization the call would pass
+// validation and then fail inside the handler with no schema diagnostic.
+func assertIntegerFieldsSurviveNormalization(t *testing.T, definition tool.Definition) {
+	t.Helper()
+	properties, ok := definition.InputSchema["properties"].(map[string]any)
+	if !ok {
+		return
+	}
+	for name, raw := range properties {
+		field, ok := raw.(map[string]any)
+		if !ok || field["type"] != "integer" {
+			continue
+		}
+		for _, spelling := range []string{"3.0", "1e2", "100.00"} {
+			payload, err := json.Marshal(map[string]any{name: json.RawMessage(spelling)})
+			if err != nil {
+				t.Fatalf("%s encode probe: %v", definition.Name, err)
+			}
+			normalized := tool.NormalizeArguments(definition, payload)
+			var decoded map[string]json.RawMessage
+			if err := json.Unmarshal(normalized, &decoded); err != nil {
+				t.Errorf("%s normalized %s probe is not JSON: %v", definition.Name, name, err)
+				continue
+			}
+			value := strings.TrimSpace(string(decoded[name]))
+			if strings.ContainsAny(value, ".eE") {
+				t.Errorf("%s field %s: integral spelling %s normalized to %s, want integer form",
+					definition.Name, name, spelling, value)
+			}
+		}
+	}
+}
+
+// assertEnumsSurviveNormalization guards the invariant that a published input
+// enum is never stricter than the normalization pipeline. A case-variant of an
+// enum value must normalize to the canonical entry, otherwise the schema
+// rejects a call the handler's case-insensitive dispatch would have accepted.
+func assertEnumsSurviveNormalization(t *testing.T, definition tool.Definition) {
+	t.Helper()
+	properties, ok := definition.InputSchema["properties"].(map[string]any)
+	if !ok {
+		return
+	}
+	for name, raw := range properties {
+		field, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		if typeName, _ := field["type"].(string); typeName != "" && typeName != "string" {
+			continue
+		}
+		values := enumValueStrings(field["enum"])
+		if len(values) == 0 {
+			continue
+		}
+		for _, value := range values {
+			payload, err := json.Marshal(map[string]any{name: strings.ToUpper(value)})
+			if err != nil {
+				t.Fatalf("%s encode probe: %v", definition.Name, err)
+			}
+			normalized := tool.NormalizeArguments(definition, payload)
+			var decoded map[string]any
+			if err := json.Unmarshal(normalized, &decoded); err != nil {
+				t.Errorf("%s normalized %s probe is not JSON: %v", definition.Name, name, err)
+				continue
+			}
+			if decoded[name] != value {
+				t.Errorf("%s field %s: uppercase %q normalized to %#v, want %q",
+					definition.Name, name, value, decoded[name], value)
+			}
+		}
+	}
+}
+
+// enumValueStrings returns the string entries of an enum that survived the
+// registry's JSON round-trip, which stores them as []any.
+func enumValueStrings(raw any) []string {
+	var entries []any
+	switch values := raw.(type) {
+	case []any:
+		entries = values
+	case []string:
+		entries = make([]any, 0, len(values))
+		for _, value := range values {
+			entries = append(entries, value)
+		}
+	default:
+		return nil
+	}
+	out := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		if text, ok := entry.(string); ok {
+			out = append(out, text)
+		}
+	}
+	return out
 }
 func TestOptionalZeroNumericArgumentsMatchOmittedSemantics(t *testing.T) {
 	workspaceRoot := newTestWorkspace(t, nil)
@@ -107,9 +210,9 @@ func TestOptionalZeroNumericArgumentsMatchOmittedSemantics(t *testing.T) {
 		{"read", map[string]any{"path": "x", "limit": 0}, map[string]any{"path": "x", "limit": -1}},
 		{"ls", map[string]any{"limit": 0}, map[string]any{"limit": -1}},
 		{"grep", map[string]any{"pattern": "x", "limit": 0}, map[string]any{"pattern": "x", "limit": -1}},
-		{"bash", map[string]any{"command": "true", "timeout_seconds": 0}, map[string]any{"command": "true", "timeout_seconds": -1}},
-		{"subagent_spawn", map[string]any{"action": "spawn", "task": "inspect", "profile": "agility", "timeout_seconds": 0}, map[string]any{"action": "spawn", "task": "inspect", "profile": "agility", "timeout_seconds": -1}},
-		{"subagent_wait", map[string]any{"action": "wait", "timeout_seconds": 0}, map[string]any{"action": "wait", "timeout_seconds": -1}},
+		{"bash", map[string]any{"command": "true", "timeoutSeconds": 0}, map[string]any{"command": "true", "timeoutSeconds": -1}},
+		{"subagent_spawn", map[string]any{"action": "spawn", "task": "inspect", "profile": "agility", "timeoutSeconds": 0}, map[string]any{"action": "spawn", "task": "inspect", "profile": "agility", "timeoutSeconds": -1}},
+		{"subagent_wait", map[string]any{"action": "wait", "timeoutSeconds": 0}, map[string]any{"action": "wait", "timeoutSeconds": -1}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

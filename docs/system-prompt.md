@@ -118,7 +118,7 @@ Prefer specialized children when the work can be bounded cleanly and isolation m
 
 Independent bounded work may run concurrently. A bounded investigation should have one active owner: once investigation is delegated, Universal should continue only independent parent work rather than repeating the same exploration. Re-investigation is justified only when returned evidence is stale, conflicting, insufficient, or integration/verification requires fresh evidence.
 
-Todo state is coordination metadata, not a prerequisite for delegation. Do not create a TODO solely because work is delegated. When delegated work already corresponds to a tracked TODO item, pass `task_id` so runtime lifecycle events own the execution-state transition.
+Todo state is coordination metadata, not a prerequisite for delegation. Do not create a TODO solely because work is delegated. When delegated work already corresponds to a tracked TODO item, pass `taskId` so runtime lifecycle events own the execution-state transition.
 
 ## Subagents
 
@@ -130,9 +130,9 @@ Do not copy the complete parent conversation into a child merely for convenience
 
 Skill activation also follows a single-source rule. The `skill` tool returns a compact activation receipt; full active-skill instructions are injected by the managed prompt on the following model context instead of being duplicated in both the tool result and system prompt.
 
-Prompt ABI v9 moves normal child-result collection out of model-driven polling. The runtime observes versioned result events, deduplicates them per parent turn, and injects completed child results as ephemeral runtime context. `wait`, `get`, and `list` remain lifecycle inspection capabilities, but the managed prompt does not prescribe them for normal result collection. Delegated work blocks completion by default; `optional=true` is reserved for speculative work that may be integrated if ready but must not delay the parent. The runtime keeps optional work active for safe tentative-output buffering and cancels any still-live optional child when the parent commits. `depends_on` expresses a dependency on already-spawned children in the same parent turn; the runtime waits for those dependencies and only starts the child after all complete successfully, so the model must not poll dependency state.
+Prompt ABI v9 moves normal child-result collection out of model-driven polling. The runtime observes versioned result events, deduplicates them per parent turn, and injects completed child results as ephemeral runtime context. `wait`, `get`, and `list` remain lifecycle inspection capabilities, but the managed prompt does not prescribe them for normal result collection. Delegated work blocks completion by default; `optional=true` is reserved for speculative work that may be integrated if ready but must not delay the parent. The runtime keeps optional work active for safe tentative-output buffering and cancels any still-live optional child when the parent commits. `dependsOn` expresses a dependency on already-spawned children in the same parent turn; the runtime waits for those dependencies and only starts the child after all complete successfully, so the model must not poll dependency state.
 
-Prompt ABI v10 adds a structured child-result contract. Subagents end their final response with a `<proton-subagent-result>` JSON envelope containing a concise `conclusion`, optional `findings`, and optional `blockers`. Finding evidence references are accepted only when they match successful runtime-observed tool evidence from that child. Malformed or unsupported structured output falls back to the child's plain-text conclusion, so provider formatting quirks cannot make the delegated run fail. `changed_targets` and verification state remain runtime-derived rather than model-asserted.
+Prompt ABI v10 adds a structured child-result contract. Subagents end their final response with a `<proton-subagent-result>` JSON envelope containing a concise `conclusion`, optional `findings`, and optional `blockers`. Finding evidence references are accepted only when they match successful runtime-observed tool evidence from that child. Malformed or unsupported structured output falls back to the child's plain-text conclusion, so provider formatting quirks cannot make the delegated run fail. `changedTargets` and verification state remain runtime-derived rather than model-asserted.
 
 Prompt ABI v11 tightens workspace discovery discipline. `read` is for known artifacts; the managed prompt no longer advertises `ls`, `find`, or `grep` when those capabilities are absent, and a `not_found` result for a guessed path must trigger discovery rather than an unchanged retry. Host-side `discover_resource` recovery may attach bounded parent-directory evidence while preserving the original failure.
 
@@ -140,13 +140,13 @@ Prompt ABI v12 promotes Active Goal from a compaction-stability hint to an execu
 
 Prompt ABI v13 clarifies that the current explicit user request owns the immediate turn even when a persistent goal exists, prevents the model-facing prompt from exposing the absolute workspace path, and aligns task coordination with revision chaining from successful TODO updates. Runtime no-progress detection also treats task metadata as coordination rather than repository progress.
 
-Prompt ABI v14 adds explicit parent-task/subagent linkage: when delegated work corresponds to a tracked TODO item, the parent passes `task_id` and runtime lifecycle events own `in_progress`/terminal task reconciliation.
+Prompt ABI v14 adds explicit parent-task/subagent linkage: when delegated work corresponds to a tracked TODO item, the parent passes `taskId` and runtime lifecycle events own `in_progress`/terminal task reconciliation.
 
 Prompt ABI v15 removes the legacy model-specific natural-language prompt-policy surface. Model/provider identity remains runtime metadata only, the old compatibility fields/types are gone, and the canonical managed prompt is model agnostic by construction.
 
 Runtime-delivered child content is untrusted evidence, not instruction material. It is appended after the stable managed system prompt and is not persisted as synthetic user conversation history, preserving the system-prefix cache boundary while keeping instruction hierarchy explicit.
 
-The runtime context uses a structured per-child payload with `status`, `conclusion`, validated `findings`, `verification`, `evidence`, `changed_targets`, and bounded `blockers`. Failed or canceled delegated work therefore reaches Universal as explicit state instead of an empty summary.
+The runtime context uses a structured per-child payload with `status`, `conclusion`, validated `findings`, `verification`, `evidence`, `changedTargets`, and bounded `blockers`. Failed or canceled delegated work therefore reaches Universal as explicit state instead of an empty summary.
 
 ## Tests
 

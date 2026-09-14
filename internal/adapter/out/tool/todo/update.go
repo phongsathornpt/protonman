@@ -19,7 +19,7 @@ type updateTodoHandler struct {
 }
 
 type updateTodoInput struct {
-	ExpectedRevision *uint64                `json:"expected_revision"`
+	ExpectedRevision *uint64                `json:"expectedRevision"`
 	Operations       []tododomain.Operation `json:"operations"`
 }
 
@@ -63,7 +63,7 @@ func (h updateTodoHandler) Execute(ctx context.Context, call tool.Call) (tool.Re
 		return tool.Result{}, tool.WrapToolError(tool.ErrorCodeInvalidArguments, "decode todo update arguments", err)
 	}
 	if input.ExpectedRevision == nil {
-		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "expected_revision is required; call todo with action=get first")
+		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "expectedRevision is required; call todo with action=get first")
 	}
 	if len(input.Operations) == 0 {
 		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "operations must contain at least one explicit todo patch")
@@ -140,10 +140,11 @@ func encodeTodoUpdateResult(call tool.Call, before []tododomain.Item, snapshot t
 	changes := todoChanges(before, snapshot.Items)
 	payloadValue := map[string]any{
 		"revision": snapshot.Revision, "total": len(snapshot.Items),
-		"pending": counts[tododomain.StatusPending], "in_progress": counts[tododomain.StatusInProgress],
+		"pending": counts[tododomain.StatusPending], "inProgress": counts[tododomain.StatusInProgress], "in_progress": counts[tododomain.StatusInProgress],
 		"completed": counts[tododomain.StatusCompleted], "changes": changes,
 	}
 	if sessionID != "" {
+		payloadValue["sessionId"] = sessionID
 		payloadValue["session_id"] = sessionID
 	}
 	payload, err := json.Marshal(payloadValue)

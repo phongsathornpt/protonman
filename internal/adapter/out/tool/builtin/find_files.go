@@ -24,7 +24,7 @@ type findFilesInput struct {
 	Pattern      string `json:"pattern,omitempty"`
 	Path         string `json:"path,omitempty"`
 	Type         string `json:"type,omitempty"`
-	MaxDepth     int    `json:"max_depth,omitempty"`
+	MaxDepth     int    `json:"maxDepth,omitempty"`
 	Offset       int    `json:"offset,omitempty"`
 	Limit        int    `json:"limit,omitempty"`
 	Continuation string `json:"continuation,omitempty"`
@@ -49,9 +49,9 @@ func (findFilesHandler) Definition() tool.Definition {
 				"pattern":      map[string]any{"type": "string", "description": "Glob matched against workspace-relative path and basename; defaults to *"},
 				"path":         map[string]any{"type": "string", "default": ".", "description": "Workspace-relative directory to search recursively; use . or omit path for the workspace root. Absolute paths are outside the workspace"},
 				"type":         map[string]any{"type": "string", "enum": []string{"any", "file", "dir"}, "description": "Path type filter; defaults to file"},
-				"max_depth":    map[string]any{"type": "integer", "minimum": 0, "description": "Maximum depth below path; 0 means unlimited"},
-				"offset":       map[string]any{"type": "integer", "minimum": 0, "description": "Match offset to skip; use next_offset from a truncated result"},
-				"continuation": map[string]any{"type": "string", "description": "Snapshot token from a truncated result; send it with next_offset to detect tree changes"},
+				"maxDepth":     map[string]any{"type": "integer", "minimum": 0, "description": "Maximum depth below path; 0 means unlimited"},
+				"offset":       map[string]any{"type": "integer", "minimum": 0, "description": "Match offset to skip; use nextOffset from a truncated result"},
+				"continuation": map[string]any{"type": "string", "description": "Snapshot token from a truncated result; send it with nextOffset to detect tree changes"},
 				"limit":        map[string]any{"type": "integer", "minimum": 0, "maximum": maxFindFilesResults, "description": "Maximum paths to return; defaults to 1000"},
 			},
 			"additionalProperties": false,
@@ -94,7 +94,7 @@ func (h findFilesHandler) Execute(ctx context.Context, call tool.Call) (tool.Res
 		Pattern  string `json:"pattern"`
 		Path     string `json:"path"`
 		Type     string `json:"type"`
-		MaxDepth int    `json:"max_depth"`
+		MaxDepth int    `json:"maxDepth"`
 	}{input.Pattern, input.Path, input.Type, input.MaxDepth}
 
 	token, err := support.ContinuationToken("find", query, "")
@@ -217,7 +217,7 @@ func normalizeFindFilesInput(input *findFilesInput) error {
 		return tool.NewToolError(tool.ErrorCodeInvalidArguments, "find type must be any, file, or dir")
 	}
 	if input.MaxDepth < 0 || input.Offset < 0 || input.Limit < 0 || input.Limit > maxFindFilesResults {
-		return tool.NewToolError(tool.ErrorCodeInvalidArguments, "find max_depth/offset must be non-negative and limit must be between 1 and 1000")
+		return tool.NewToolError(tool.ErrorCodeInvalidArguments, "find maxDepth/offset must be non-negative and limit must be between 1 and 1000")
 	}
 	if input.Limit == 0 {
 		input.Limit = maxFindFilesResults

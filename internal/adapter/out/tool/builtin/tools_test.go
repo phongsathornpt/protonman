@@ -33,27 +33,27 @@ func TestWriteFileAndSearchReplace(t *testing.T) {
 	replaceHandler := NewSearchReplace(workspaceRoot, &recordingCheckpointStore{id: "test"})
 
 	result := executeJSON(t, writeHandler, "write-1", map[string]any{
-		"file_path": "notes.txt",
-		"content":   "hello\nhello\n",
+		"filePath": "notes.txt",
+		"content":  "hello\nhello\n",
 	})
 	if !strings.Contains(result.Output, "Wrote file successfully") {
 		t.Fatalf("write output = %q", result.Output)
 	}
 
 	_, err := replaceHandler.Execute(context.Background(), newJSONCall(t, "replace-1", "edit", map[string]any{
-		"file_path":  "notes.txt",
-		"old_string": "hello",
-		"new_string": "goodbye",
+		"filePath":  "notes.txt",
+		"oldString": "hello",
+		"newString": "goodbye",
 	}))
-	if err == nil || !strings.Contains(err.Error(), "replace_all") {
-		t.Fatalf("multiple replacement error = %v, want replace_all guidance", err)
+	if err == nil || !strings.Contains(err.Error(), "replaceAll") {
+		t.Fatalf("multiple replacement error = %v, want replaceAll guidance", err)
 	}
 
 	executeJSON(t, replaceHandler, "replace-2", map[string]any{
-		"file_path":   "notes.txt",
-		"old_string":  "hello",
-		"new_string":  "goodbye",
-		"replace_all": true,
+		"filePath":   "notes.txt",
+		"oldString":  "hello",
+		"newString":  "goodbye",
+		"replaceAll": true,
 	})
 	contents, err := os.ReadFile(filepath.Join(workspaceRoot.Root(), "notes.txt"))
 	if err != nil {
@@ -106,9 +106,9 @@ func TestFileToolsRejectTraversalAndProtectedPaths(t *testing.T) {
 			_, err := test.handler.Execute(
 				context.Background(),
 				newJSONCall(t, test.name, test.handler.Definition().Name, map[string]any{
-					"file_path": test.path,
-					"path":      test.path,
-					"content":   "should not be written",
+					"filePath": test.path,
+					"path":     test.path,
+					"content":  "should not be written",
 				}),
 			)
 			if !errors.Is(err, test.wantErr) {
@@ -365,8 +365,8 @@ func TestWriteFilePublishesCheckpointID(t *testing.T) {
 	workspaceRoot := newTestWorkspace(t, nil)
 	checkpointStore := &recordingCheckpointStore{id: "checkpoint-test"}
 	result := executeJSON(t, NewWriteFile(workspaceRoot, checkpointStore), "write-checkpoint", map[string]any{
-		"file_path": "checkpointed.txt",
-		"content":   "checkpoint me\n",
+		"filePath": "checkpointed.txt",
+		"content":  "checkpoint me\n",
 	})
 	if result.CheckpointID != checkpointStore.id {
 		t.Fatalf("checkpoint ID = %q, want %q", result.CheckpointID, checkpointStore.id)
@@ -383,7 +383,7 @@ func TestWriteFilePublishesCheckpointID(t *testing.T) {
 	}
 
 	restoreResult := executeJSON(t, NewCheckpointRestore(checkpointStore), "restore-checkpoint", map[string]any{
-		"checkpoint_id": checkpointStore.id,
+		"checkpointId": checkpointStore.id,
 	})
 	if !strings.Contains(restoreResult.Output, checkpointStore.id) {
 		t.Fatalf("restore output = %q, want checkpoint ID", restoreResult.Output)
@@ -524,8 +524,8 @@ func TestWriteWithoutCheckpointFailsClosed(t *testing.T) {
 	_, err := NewWriteFile(workspaceRoot).Execute(
 		context.Background(),
 		newJSONCall(t, "write-nostore", "edit", map[string]any{
-			"file_path": "nostore.txt",
-			"content":   "should not be written",
+			"filePath": "nostore.txt",
+			"content":  "should not be written",
 		}),
 	)
 	if err == nil {
@@ -672,9 +672,9 @@ func TestPermissionDetailProviders(t *testing.T) {
 	if !ok {
 		t.Fatal("ls does not implement tool.DetailProvider")
 	}
-	argsDir, _ := json.Marshal(map[string]any{"dir_path": "src/lib"})
+	argsDir, _ := json.Marshal(map[string]any{"directory": "src/lib"})
 	if detail := detailedList.PermissionDetail(argsDir); detail != "src/lib" {
-		t.Fatalf("ls with dir_path PermissionDetail = %q, want src/lib", detail)
+		t.Fatalf("ls with directory PermissionDetail = %q, want src/lib", detail)
 	}
 	argsEmpty, _ := json.Marshal(map[string]any{})
 	if detail := detailedList.PermissionDetail(argsEmpty); detail != "." {

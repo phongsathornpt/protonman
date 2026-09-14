@@ -56,7 +56,7 @@ func TestDelegateTaskExecute(t *testing.T) {
 		args, _ := json.Marshal(map[string]any{
 			"profile": "agility",
 			"task":    "search for auth middleware",
-			"task_id": "inspect-auth",
+			"taskId":  "inspect-auth",
 		})
 		call, err := tool.NewCall("call-1", "subagent", args)
 		if err != nil {
@@ -221,9 +221,13 @@ func TestDelegateTaskExecute(t *testing.T) {
 		if optional, ok := props["optional"].(map[string]any); !ok || optional["type"] != "boolean" {
 			t.Fatalf("optional schema = %#v, want boolean", props["optional"])
 		}
-		dependsOn, ok := props["depends_on"].(map[string]any)
+		dependsOn, ok := props["dependsOn"].(map[string]any)
 		if !ok || dependsOn["type"] != "array" || dependsOn["maxItems"] != agent.MaxAgentDependencies {
-			t.Fatalf("depends_on schema = %#v", props["depends_on"])
+			t.Fatalf("dependsOn schema = %#v", props["dependsOn"])
+		}
+		taskId, ok := props["taskId"].(map[string]any)
+		if !ok || taskId["type"] != "string" {
+			t.Fatalf("taskId schema = %#v", props["taskId"])
 		}
 		enums, ok := profileProp["enum"].([]string)
 		if !ok {
@@ -281,7 +285,7 @@ func TestDelegateTaskAppliesRequestedShorterTimeout(t *testing.T) {
 	)
 	defer coord.Close()
 	handler := NewDelegateTask(coord)
-	args, _ := json.Marshal(map[string]any{"profile": "agility", "task": "short", "timeout_seconds": 1})
+	args, _ := json.Marshal(map[string]any{"profile": "agility", "task": "short", "timeoutSeconds": 1})
 	call, _ := tool.NewCall("short-timeout", "subagent", args)
 	if _, err := handler.Execute(context.Background(), call); err != nil {
 		t.Fatalf("Execute() error = %v", err)
@@ -294,9 +298,9 @@ func TestDelegateTaskAppliesRequestedShorterTimeout(t *testing.T) {
 
 func TestDelegateTaskRejectsExcessiveTimeoutSeconds(t *testing.T) {
 	handler := NewDelegateTask(agent.NewCoordinator(nil, nil, nil, nil))
-	args, _ := json.Marshal(map[string]any{"profile": "agility", "task": "too long", "timeout_seconds": 86401})
+	args, _ := json.Marshal(map[string]any{"profile": "agility", "task": "too long", "timeoutSeconds": 86401})
 	call, _ := tool.NewCall("bad-timeout", "subagent", args)
-	if _, err := handler.Execute(context.Background(), call); err == nil || !strings.Contains(err.Error(), "timeout_seconds") {
+	if _, err := handler.Execute(context.Background(), call); err == nil || !strings.Contains(err.Error(), "timeoutSeconds") {
 		t.Fatalf("Execute() error = %v, want timeout validation error", err)
 	}
 }
@@ -349,5 +353,18 @@ func TestSubagentDefinitionDescribesEventDrivenResultDelivery(t *testing.T) {
 		if !strings.Contains(description, want) {
 			t.Fatalf("subagent action description missing %q: %q", want, description)
 		}
+	}
+	for _, requiredCamelKey := range []string{"taskId", "dependsOn", "timeoutSeconds", "agentId"} {
+		if _, exists := props[requiredCamelKey]; !exists {
+			t.Fatalf("subagent input schema missing camelCase property %q", requiredCamelKey)
+		}
+	}
+	normalized := tool.NormalizeArguments(def, json.RawMessage(`{"action":"spawn","task":"search","taskId":"todo-1","dependsOn":["agent-1"],"timeoutSeconds":60}`))
+	var parsed map[string]any
+	if err := json.Unmarshal(normalized, &parsed); err != nil {
+		t.Fatalf("unmarshal normalized subagent args: %v", err)
+	}
+	if parsed["taskId"] != "todo-1" || parsed["timeoutSeconds"] != float64(60) {
+		t.Fatalf("unexpected normalized subagent args: %s", normalized)
 	}
 }

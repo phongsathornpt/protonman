@@ -7,37 +7,128 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 	"time"
 
+	"github.com/phongsathornpt/protonman/internal/base/runtimepolicy"
 	"github.com/phongsathornpt/protonman/internal/core/memory"
 )
 
 const lockStaleAfter = 2 * time.Minute
 
-func (s *FileStore) loadUnlocked(dir string, scope memory.Scope, workspaceKey string) ([]memory.Entry, error) {
+func (s *FileStore) loadUnlocked(dir string, scope memory.Scope, workspaceKey string) ([]memory.Entry, []string, error) {
 	file, err := os.Open(filepath.Join(dir, "index.json"))
 	if errors.Is(err, os.ErrNotExist) {
-		return []memory.Entry{}, nil
+		return []memory.Entry{}, nil, nil
 	}
 	if err != nil {
-		return nil, fmt.Errorf("open memory index: %w", err)
+		return nil, nil, fmt.Errorf("open memory index: %w", err)
 	}
 	var index indexFile
 	decodeErr := json.NewDecoder(file).Decode(&index)
 	closeErr := file.Close()
 	if decodeErr != nil {
-		return nil, fmt.Errorf("decode memory index: %w", decodeErr)
+		return nil, nil, fmt.Errorf("decode memory index: %w", decodeErr)
 	}
 	if closeErr != nil {
-		return nil, fmt.Errorf("close memory index: %w", closeErr)
+		return nil, nil, fmt.Errorf("close memory index: %w", closeErr)
 	}
 	if index.Version != schemaVersion {
-		return nil, fmt.Errorf("unsupported memory index version %d", index.Version)
+		return nil, nil, fmt.Errorf("unsupported memory index version %d", index.Version)
 	}
-	return validateEntries(scope, workspaceKey, index.Entries)
+	entries, err := validateEntries(scope, workspaceKey, index.Entries)
+	if err != nil {
+		return nil, nil, err
+	}
+	return entries, normalizeForgotten(index.Forgotten), nil
 }
 
-func (s *FileStore) writeUnlocked(ctx context.Context, dir string, entries []memory.Entry) (writeErr error) {
+// normalizeForgotten returns the tombstone set de-duplicated in insertion order.
+// Order is preserved (not sorted) so that when the set exceeds its bound the
+// oldest forgets are evicted first rather than an arbitrary ID.
+func normalizeForgotten(ids []string) []string {
+	if len(ids) == 0 {
+		return nil
+	}
+	seen := make(map[string]struct{}, len(ids))
+	out := make([]string, 0, len(ids))
+	for _, id := range ids {
+		id = strings.TrimSpace(id)
+		if id == "" {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		out = append(out, id)
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func forgottenSet(ids []string) map[string]struct{} {
+	if len(ids) == 0 {
+		return nil
+	}
+	set := make(map[string]struct{}, len(ids))
+	for _, id := range ids {
+		set[id] = struct{}{}
+	}
+	return set
+}
+
+// filterForgotten drops entries whose ID is tombstoned.
+func filterForgotten(entries []memory.Entry, set map[string]struct{}) []memory.Entry {
+	if len(set) == 0 {
+		return entries
+	}
+	kept := make([]memory.Entry, 0, len(entries))
+	for _, entry := range entries {
+		if _, drop := set[entry.ID]; drop {
+			continue
+		}
+		kept = append(kept, entry)
+	}
+	return kept
+}
+
+// mergeForgotten appends newly forgotten IDs to the existing ordered tombstone
+// set and bounds the result. The oldest tombstones are evicted first, matching
+// the codebase's retention discipline of keeping the newest records.
+func mergeForgotten(existing []string, added map[string]struct{}) []string {
+	unique := normalizeForgotten(existing)
+	if len(added) == 0 {
+		return unique
+	}
+	present := make(map[string]struct{}, len(unique))
+	for _, id := range unique {
+		present[id] = struct{}{}
+	}
+	// Sort the additions for determinism, then append.
+	newIDs := make([]string, 0, len(added))
+	for id := range added {
+		newIDs = append(newIDs, id)
+	}
+	sort.Strings(newIDs)
+	for _, id := range newIDs {
+		if _, ok := present[id]; ok {
+			continue
+		}
+		present[id] = struct{}{}
+		unique = append(unique, id)
+	}
+	limit := runtimepolicy.DurableMemory().MaxForgottenEntries
+	if limit > 0 && len(unique) > limit {
+		unique = unique[len(unique)-limit:]
+	}
+	return unique
+}
+
+func (s *FileStore) writeUnlocked(ctx context.Context, dir string, entries []memory.Entry, forgotten []string) (writeErr error) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return fmt.Errorf("create memory directory: %w", err)
 	}
@@ -65,7 +156,7 @@ func (s *FileStore) writeUnlocked(ctx context.Context, dir string, entries []mem
 	}
 	encoder := json.NewEncoder(file)
 	encoder.SetIndent("", "  ")
-	if err := encoder.Encode(indexFile{Version: schemaVersion, Entries: entries}); err != nil {
+	if err := encoder.Encode(indexFile{Version: schemaVersion, Entries: entries, Forgotten: normalizeForgotten(forgotten)}); err != nil {
 		return fmt.Errorf("encode memory index: %w", err)
 	}
 	if err := file.Sync(); err != nil {
@@ -81,6 +172,9 @@ func (s *FileStore) writeUnlocked(ctx context.Context, dir string, entries []mem
 	if err := os.Rename(temporaryPath, filepath.Join(dir, "index.json")); err != nil {
 		return fmt.Errorf("install memory index: %w", err)
 	}
+	// Publish a new revision only after the write is durable, so a consumer that
+	// observes the change is guaranteed to read the committed index.
+	s.revision.Add(1)
 	return nil
 }
 

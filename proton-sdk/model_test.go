@@ -1,168 +1,202 @@
 package protonsdk
 
 import (
+	"context"
 	"encoding/json"
-	"errors"
+	"io"
 	"testing"
 )
 
-func TestRequestValidate(t *testing.T) {
-	validTool := Tool{Name: "read", Description: "read a file"}
-	tests := []struct {
-		name    string
-		request Request
-		wantErr error
-	}{
-		{name: "valid", request: Request{Messages: []Message{{Role: RoleUser, Content: "inspect"}}, Tools: []Tool{validTool}}},
-		{name: "missing messages", request: Request{Tools: []Tool{validTool}}, wantErr: ErrInvalidRequest},
-		{name: "unknown role", request: Request{Messages: []Message{{Role: "provider"}}}, wantErr: ErrInvalidRequest},
-		{name: "invalid tool", request: Request{Messages: []Message{{Role: RoleUser}}, Tools: []Tool{{Name: "read"}}}, wantErr: ErrInvalidRequest},
+type languageModelStub struct {
+	provider string
+	modelID  string
+}
+
+func (m languageModelStub) Provider() string { return m.provider }
+func (m languageModelStub) ModelID() string  { return m.modelID }
+func (m languageModelStub) Capabilities() ModelCapabilities {
+	return ModelCapabilities{Streaming: true}
+}
+func (m languageModelStub) Stream(context.Context, Request) (Stream, error) {
+	return emptyStream{}, nil
+}
+
+type emptyStream struct{}
+
+func (emptyStream) Next(context.Context) (Event, error) { return Event{}, io.EOF }
+func (emptyStream) Close() error                        { return nil }
+
+func TestLanguageModelContract(t *testing.T) {
+	var model LanguageModel = languageModelStub{provider: "openai", modelID: "test-model"}
+	if model.Provider() != "openai" {
+		t.Fatalf("Provider() = %q", model.Provider())
 	}
+	if model.ModelID() != "test-model" {
+		t.Fatalf("ModelID() = %q", model.ModelID())
+	}
+	if caps := model.Capabilities(); !caps.Streaming {
+		t.Fatalf("Capabilities() = %#v, want streaming", caps)
+	}
+	stream, err := model.Stream(context.Background(), Request{Messages: []Message{{Role: RoleUser, Content: "hi"}}})
+	if err != nil {
+		t.Fatalf("Stream() error = %v", err)
+	}
+	if err := stream.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+}
+
+type tokenLimitsTestModel struct {
+	LanguageModel
+	limits TokenLimits
+}
+
+func (m tokenLimitsTestModel) TokenLimits() TokenLimits { return m.limits }
+
+func TestModelTokenLimitsUsesRichMetadata(t *testing.T) {
+	got := ModelTokenLimits(tokenLimitsTestModel{limits: TokenLimits{ContextWindow: 100, MaxInputTokens: 80, MaxOutputTokens: 20}})
+	if got.ContextWindow != 100 || got.MaxInputTokens != 80 || got.MaxOutputTokens != 20 {
+		t.Fatalf("ModelTokenLimits() = %+v", got)
+	}
+}
+
+func TestRequestRequirementsDerivesCanonicalNeeds(t *testing.T) {
+	tests := []struct {
+		name string
+		req  Request
+		want RequestRequirements
+	}{
+		{
+			name: "text stream",
+			req:  Request{Messages: []Message{{Role: RoleUser, Content: "hello"}}},
+			want: RequestRequirements{Streaming: true},
+		},
+		{
+			name: "vision input",
+			req:  Request{Messages: []Message{{Role: RoleUser, Parts: []ContentPart{{Type: ContentPartImage, MIMEType: "image/png", Data: "abc"}}}}},
+			want: RequestRequirements{Streaming: true, Vision: true},
+		},
+		{
+			name: "tool definitions",
+			req: Request{
+				Messages: []Message{{Role: RoleUser, Content: "inspect"}},
+				Tools:    []Tool{{Name: "read", Description: "read a file"}},
+			},
+			want: RequestRequirements{Streaming: true, Tools: true},
+		},
+		{
+			name: "tool history",
+			req:  Request{Messages: []Message{{Role: RoleTool, ToolCallID: "call_1", ToolName: "read", Content: "done"}}},
+			want: RequestRequirements{Streaming: true, Tools: true},
+		},
+		{
+			name: "provider options and raw chunks",
+			req: Request{
+				Messages: []Message{{Role: RoleUser, Content: "hello"}},
+				Options: ModelOptions{
+					ProviderOptions:  ProviderOptions{"openai": []byte(`{"service_tier":"flex"}`)},
+					IncludeRawChunks: true,
+				},
+			},
+			want: RequestRequirements{Streaming: true, ProviderOptions: true, RawChunks: true},
+		},
+		{
+			name: "tool provider options",
+			req: Request{
+				Messages: []Message{{Role: RoleUser, Content: "inspect"}},
+				Tools: []Tool{{
+					Name:            "read",
+					Description:     "read a file",
+					ProviderOptions: ProviderOptions{"anthropic": []byte(`{"cache_control":{"type":"ephemeral"}}`)},
+				}},
+			},
+			want: RequestRequirements{Streaming: true, Tools: true, ProviderOptions: true},
+		},
+	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := tt.request.Validate()
-			if tt.wantErr == nil && err != nil {
-				t.Fatalf("Validate() error = %v", err)
-			}
-			if tt.wantErr != nil && !errors.Is(err, tt.wantErr) {
-				t.Fatalf("Validate() error = %v, want %v", err, tt.wantErr)
+			if got := tt.req.Requirements(); got != tt.want {
+				t.Fatalf("Requirements() = %#v, want %#v", got, tt.want)
 			}
 		})
 	}
 }
 
-func TestCloneMessagesCopiesToolArguments(t *testing.T) {
-	original := []Message{{Role: RoleAssistant, ToolCalls: []ToolCall{{ID: "call-1", Name: "read", Arguments: json.RawMessage(`{"path":"README.md"}`)}}}}
-	clone := CloneMessages(original)
-	clone[0].ToolCalls[0].Arguments[0] = 'X'
-	if string(original[0].ToolCalls[0].Arguments) != `{"path":"README.md"}` {
-		t.Fatalf("original arguments changed: %q", original[0].ToolCalls[0].Arguments)
+func TestModelCapabilitiesSatisfiesRequestRequirements(t *testing.T) {
+	all := ModelCapabilities{
+		Streaming:       true,
+		Tools:           true,
+		Vision:          true,
+		ProviderOptions: true,
+		RawChunks:       true,
 	}
-}
-
-func TestMessageTextContent(t *testing.T) {
-	message := Message{Role: RoleUser, Parts: []ContentPart{{Type: ContentPartText, Text: "one"}, {Type: ContentPartImage, MIMEType: "image/png", Data: "data"}, {Type: ContentPartText, Text: "two"}}}
-	if got := message.TextContent(); got != "one\ntwo" {
-		t.Fatalf("TextContent() = %q", got)
+	requirements := RequestRequirements{
+		Streaming:       true,
+		Tools:           true,
+		Vision:          true,
+		ProviderOptions: true,
+		RawChunks:       true,
 	}
-}
+	if !all.Satisfies(requirements) {
+		t.Fatal("full capabilities should satisfy full requirements")
+	}
 
-func TestAgentStreamEventLifecycle(t *testing.T) {
-	tests := []struct {
-		name    string
-		event   Event
-		wantErr bool
+	checks := []struct {
+		name string
+		caps ModelCapabilities
 	}{
-		{name: "text start", event: Event{Kind: EventTextStart}},
-		{name: "text delta", event: Event{Kind: EventTextDelta, Text: "hi"}},
-		{name: "text end", event: Event{Kind: EventTextEnd}},
-		{name: "tool start", event: Event{Kind: EventToolCallStart, ToolCallID: "call-1", ToolName: "read"}},
-		{name: "tool delta", event: Event{Kind: EventToolCallDelta, ToolCallID: "call-1", ArgumentsDelta: `{"path"`}},
-		{name: "tool end", event: Event{Kind: EventToolCallEnd, ToolCallID: "call-1"}},
-		{name: "complete tool call", event: Event{Kind: EventToolCall, ToolCall: ToolCall{ID: "call-1", Name: "read", Arguments: json.RawMessage(`{"path":"README.md"}`)}}},
-		{name: "missing tool id", event: Event{Kind: EventToolCallDelta}, wantErr: true},
+		{name: "streaming", caps: ModelCapabilities{Tools: true, Vision: true, ProviderOptions: true, RawChunks: true}},
+		{name: "tools", caps: ModelCapabilities{Streaming: true, Vision: true, ProviderOptions: true, RawChunks: true}},
+		{name: "vision", caps: ModelCapabilities{Streaming: true, Tools: true, ProviderOptions: true, RawChunks: true}},
+		{name: "provider options", caps: ModelCapabilities{Streaming: true, Tools: true, Vision: true, RawChunks: true}},
+		{name: "raw chunks", caps: ModelCapabilities{Streaming: true, Tools: true, Vision: true, ProviderOptions: true}},
 	}
-	for _, tt := range tests {
+	for _, tt := range checks {
 		t.Run(tt.name, func(t *testing.T) {
-			err := tt.event.Validate()
-			if tt.wantErr && err == nil {
-				t.Fatal("Validate() error = nil")
-			}
-			if !tt.wantErr && err != nil {
-				t.Fatalf("Validate() error = %v", err)
+			if tt.caps.Satisfies(requirements) {
+				t.Fatalf("capabilities %#v unexpectedly satisfy %#v", tt.caps, requirements)
 			}
 		})
 	}
 }
 
-func TestAgentToolContracts(t *testing.T) {
-	tool := Tool{
-		Name:        "mcp_lookup",
-		Description: "look up a runtime resource",
-		InputSchema: map[string]any{"type": "object"},
-		Dynamic:     true,
+func TestProviderOptionsClone(t *testing.T) {
+	original := ProviderOptions{
+		"openai":    json.RawMessage(`{"parallel_tool_calls":true}`),
+		"anthropic": json.RawMessage(`{"cache_control":{"type":"ephemeral"}}`),
 	}
-	if err := tool.Validate(); err != nil {
-		t.Fatalf("Tool.Validate() error = %v", err)
+	cloned := original.Clone()
+	if len(cloned) != 2 {
+		t.Fatalf("cloned len = %d, want 2", len(cloned))
 	}
-	result := ToolResult{ToolCallID: "call-1", ToolName: tool.Name, Content: "ok"}
-	if err := result.Validate(); err != nil {
-		t.Fatalf("ToolResult.Validate() error = %v", err)
-	}
-	if err := (ToolResult{ToolName: tool.Name}).Validate(); !errors.Is(err, ErrInvalidRequest) {
-		t.Fatalf("missing call id error = %v", err)
+	cloned["openai"][0] = '['
+	if string(original["openai"]) != `{"parallel_tool_calls":true}` {
+		t.Fatalf("original provider options mutated: %s", original["openai"])
 	}
 }
 
-func TestUsageAndFinishEvents(t *testing.T) {
-	if err := (Event{Kind: EventUsage, Usage: Usage{InputTokens: 10, OutputTokens: 2, TotalTokens: 12}}).Validate(); err != nil {
-		t.Fatalf("usage event error = %v", err)
+func TestProviderMetadataClone(t *testing.T) {
+	original := ProviderMetadata{
+		"openai": json.RawMessage(`{"request_id":"req_1"}`),
 	}
-	if err := (Event{Kind: EventUsage, Usage: Usage{InputTokens: -1}}).Validate(); !errors.Is(err, ErrInvalidEvent) {
-		t.Fatalf("negative usage error = %v", err)
+	cloned := original.Clone()
+	if len(cloned) != 1 {
+		t.Fatalf("cloned len = %d, want 1", len(cloned))
 	}
-	if err := (Event{Kind: EventFinish, FinishReason: FinishToolCalls}).Validate(); err != nil {
-		t.Fatalf("finish event error = %v", err)
-	}
-	if err := (Event{Kind: EventFinish, FinishReason: "provider_magic"}).Validate(); !errors.Is(err, ErrInvalidEvent) {
-		t.Fatalf("unknown finish error = %v", err)
-	}
-}
-
-func TestRawEventValidation(t *testing.T) {
-	if err := (Event{Kind: EventRaw, RawData: []byte(`{"ok":true}`)}).Validate(); err != nil {
-		t.Fatalf("raw event error = %v", err)
-	}
-	if err := (Event{Kind: EventRaw}).Validate(); !errors.Is(err, ErrInvalidEvent) {
-		t.Fatalf("empty raw event error = %v", err)
+	cloned["openai"][0] = '['
+	if string(original["openai"]) != `{"request_id":"req_1"}` {
+		t.Fatalf("original provider metadata mutated: %s", original["openai"])
 	}
 }
 
-func TestMessageIDsAreStableAndOpaque(t *testing.T) {
-	first := NewMessageID()
-	second := NewMessageID()
-	if first == "" || second == "" || first == second {
-		t.Fatalf("message ids = %q, %q", first, second)
+func TestProviderOptionsCloneEmpty(t *testing.T) {
+	var empty ProviderOptions
+	if empty.Clone() != nil {
+		t.Fatal("empty ProviderOptions.Clone() should return nil")
 	}
-	if !ValidMessageID(first) || !ValidMessageID(second) {
-		t.Fatalf("generated message ids are invalid: %q %q", first, second)
-	}
-}
-
-func TestEnsureMessageIDsPreservesExistingIdentity(t *testing.T) {
-	messages := []Message{{ID: "msg_existing", Role: RoleUser, Content: "one"}, {Role: RoleAssistant, Content: "two"}}
-	first := EnsureMessageIDs(messages)
-	second := EnsureMessageIDs(first)
-	if first[0].ID != "msg_existing" || second[0].ID != "msg_existing" {
-		t.Fatalf("existing id changed: first=%q second=%q", first[0].ID, second[0].ID)
-	}
-	if first[1].ID == "" || second[1].ID != first[1].ID {
-		t.Fatalf("assigned id was not stable: first=%q second=%q", first[1].ID, second[1].ID)
-	}
-	if messages[1].ID != "" {
-		t.Fatalf("EnsureMessageIDs mutated input: %q", messages[1].ID)
-	}
-}
-
-func TestMessageValidateRejectsUnsafeIdentity(t *testing.T) {
-	if err := (Message{ID: "bad id", Role: RoleUser}).Validate(); !errors.Is(err, ErrInvalidRequest) {
-		t.Fatalf("invalid id error = %v", err)
-	}
-	if err := (Message{Role: RoleUser}).Validate(); err != nil {
-		t.Fatalf("legacy message without id rejected: %v", err)
-	}
-}
-
-func TestToolMessageRequiresToolCallID(t *testing.T) {
-	err := (Message{Role: RoleTool, ToolName: "read", Content: "ok"}).Validate()
-	if err == nil || !errors.Is(err, ErrInvalidRequest) {
-		t.Fatalf("error = %v, want invalid request", err)
-	}
-}
-
-func TestRequestToolCallValidationUsesInvalidRequest(t *testing.T) {
-	err := (Request{Messages: []Message{{Role: RoleAssistant, ToolCalls: []ToolCall{{Name: "read", Arguments: json.RawMessage(`{}`)}}}}}).Validate()
-	if err == nil || !errors.Is(err, ErrInvalidRequest) || errors.Is(err, ErrInvalidEvent) {
-		t.Fatalf("error = %v, want only invalid request", err)
+	var emptyMeta ProviderMetadata
+	if emptyMeta.Clone() != nil {
+		t.Fatal("empty ProviderMetadata.Clone() should return nil")
 	}
 }

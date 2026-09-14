@@ -46,7 +46,7 @@ func TestE2EFullBuiltinTools(t *testing.T) {
 
 	// 3. edit action=write creating nested directories
 	res = runProton(t, runOptions{
-		args: []string{"-y", "-p", `/call edit {"action":"write", "file_path":"nested/deep/dir/file.txt","content":"deeply nested content"}`},
+		args: []string{"-y", "-p", `/call edit {"action":"write", "filePath":"nested/deep/dir/file.txt","content":"deeply nested content"}`},
 		dir:  ws,
 		env:  env,
 	})
@@ -60,7 +60,7 @@ func TestE2EFullBuiltinTools(t *testing.T) {
 
 	// 4. edit action=replace error on missing string
 	res = runProton(t, runOptions{
-		args: []string{"-y", "-p", `/call edit {"action":"replace", "file_path":"hello.txt","old_string":"NonExistentTextXYZ","new_string":"replacement"}`},
+		args: []string{"-y", "-p", `/call edit {"action":"replace", "filePath":"hello.txt","oldString":"NonExistentTextXYZ","newString":"replacement"}`},
 		dir:  ws,
 		env:  env,
 	})

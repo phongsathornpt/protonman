@@ -32,7 +32,7 @@ func TestDelegationProtocolKeepsRuntimeOwnedLifecycle(t *testing.T) {
 	for _, want := range []string{
 		"subagent action=spawn",
 		"optional=true",
-		"depends_on",
+		"dependsOn",
 		"delivered automatically by the runtime",
 		"Do not poll child state",
 		"runtime owns lifecycle observation",
