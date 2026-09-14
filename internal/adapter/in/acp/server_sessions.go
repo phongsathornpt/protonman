@@ -19,7 +19,11 @@ func (s *Server) lookupSession(sessionID string) (*Session, bool) {
 	return sess, ok
 }
 
-func (s *Server) loadOrCreateSession(ctx context.Context, sessionID string, cwd string, additionalDirectories []string, mcpServers []MCPServerConfig) (*Session, error) {
+func (s *Server) loadOrCreateSession(ctx context.Context, sessionID string, cwd string, additionalDirectories []string, mcpSets ...[]MCPServerConfig) (*Session, error) {
+	var mcpServers []MCPServerConfig
+	if len(mcpSets) > 0 {
+		mcpServers = mcpSets[0]
+	}
 	s.mu.Lock()
 	existing, ok := s.sessions[sessionID]
 	currentDirectories := cloneDirectories(s.sessionDirectories[sessionID])
