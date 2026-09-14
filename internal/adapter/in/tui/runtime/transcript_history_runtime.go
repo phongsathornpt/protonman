@@ -67,7 +67,7 @@ func (m *bubbleModel) appendToolCall(call tool.Call) {
 		action := extractStringArg(call.Arguments, "action")
 		if action == "spawn" {
 			m.rememberAgentRun(call)
-			state.StartToolCell(&tuihistory.AgentToolCell{CallID: call.ID, Name: call.Name, Target: target, Running: true})
+			state.StartToolCell(&tuihistory.AgentToolCell{CallID: call.ID, Name: call.Name, Target: target, Running: true, Icons: m.icons})
 		} else {
 			m.touchAgentOperation(call.Name, call)
 		}
@@ -86,7 +86,7 @@ func (m *bubbleModel) appendToolCall(call tool.Call) {
 			return
 		}
 		summary, paths := transcriptutil.EditPresentation(call)
-		state.StartToolCell(&tuihistory.PatchCell{CallID: call.ID, Name: call.Name, Summary: summary, Paths: paths, Running: true})
+		state.StartToolCell(&tuihistory.PatchCell{CallID: call.ID, Name: call.Name, Summary: summary, Paths: paths, Running: true, Icons: m.icons})
 	default:
 		state.StartToolCell(&tuihistory.ToolCell{CallID: call.ID, Name: call.Name, Target: target, ToolKind: resolvedKind, Running: true, Icons: m.icons})
 	}
