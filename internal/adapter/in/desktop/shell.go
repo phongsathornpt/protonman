@@ -46,6 +46,7 @@ func (a *application) initDesktopControls() {
 
 func (a *application) initPermissionControls() {
 	a.permissionInbox = widget.NewButton("Permissions 0", a.selectNextPermission)
+	a.permissionInbox.Disable()
 	a.permissionTitle = widget.NewLabelWithStyle("Permission required", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
 	a.permissionDetail = widget.NewLabel("")
 	a.permissionDetail.Wrapping = fyne.TextWrapWord
@@ -233,7 +234,7 @@ func (a *application) buildSidebar() fyne.CanvasObject {
 
 	secondary := container.NewVBox(
 		widget.NewSeparator(),
-		container.NewGridWithColumns(2, a.integrationButton, a.permissionInbox),
+		container.NewHBox(a.integrationButton, a.permissionInbox),
 		a.integrationPanel,
 	)
 	return container.NewBorder(
@@ -298,6 +299,9 @@ func (a *application) toggleRuntimePanel() {
 		a.runtimePanel.Hide()
 		return
 	}
+	if a.contextDrawer.Visible() {
+		a.contextDrawer.Hide()
+	}
 	a.runtimePanel.Show()
 }
 
@@ -305,6 +309,9 @@ func (a *application) toggleContextDrawer() {
 	if a.contextDrawer.Visible() {
 		a.contextDrawer.Hide()
 		return
+	}
+	if a.runtimePanel.Visible() {
+		a.runtimePanel.Hide()
 	}
 	a.contextDrawer.Show()
 }
