@@ -1,7 +1,6 @@
 package acp
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -11,6 +10,7 @@ import (
 
 	"github.com/phongsathornpt/protonman/internal/base/buildinfo"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
+	"github.com/phongsathornpt/protonman/internal/core/session"
 )
 
 func (s *Server) advertisedSessionCapabilities() SessionCapabilities {
@@ -53,7 +53,7 @@ func (s *Server) dispatch(ctx context.Context, request RPCRequest, output io.Wri
 		if err := validateMCPServerConfigs(params.MCPServers); err != nil {
 			return nil, nil, fmt.Errorf("session/new MCP servers: %w", err)
 		}
-		sessionID := newSessionID(cwd)
+		sessionID := session.NewID(cwd)
 		sess, err := s.newSession(ctx, sessionID, cwd, directories, params.MCPServers)
 		if err != nil {
 			return nil, nil, err
@@ -209,13 +209,3 @@ func (s *Server) dispatch(ctx context.Context, request RPCRequest, output io.Wri
 		return nil, nil, fmt.Errorf("method %q is not supported", request.Method)
 	}
 }
-
-func newSessionID(cwd string) string {
-	// Kept behind a local seam so dispatch owns protocol routing rather than the
-	// persistence package's identifier construction detail.
-	return sessionIDForWorkspace(cwd)
-}
-
-// Compile-time use keeps bytes available to tests that pass an in-memory output
-// to dispatch without forcing server.go to own dispatch-only imports.
-var _ io.Writer = (*bytes.Buffer)(nil)
