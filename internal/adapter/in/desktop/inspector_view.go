@@ -11,6 +11,11 @@ import (
 	desktopstate "github.com/phongsathornpt/protonman/internal/feature/desktop"
 )
 
+const (
+	headerTitleMaxRunes = 72
+	headerMetaMaxRunes  = 56
+)
+
 func (a *application) renderSessionChrome() {
 	a.mu.Lock()
 	activeID := a.state.ActiveSessionID
@@ -47,7 +52,7 @@ func (a *application) renderSessionChrome() {
 
 func sessionDisplayTitle(session desktopstate.SessionState) string {
 	if title := strings.TrimSpace(session.Title); title != "" {
-		return title
+		return compactText(title, headerTitleMaxRunes)
 	}
 	return "Session " + shortID(session.ID)
 }
@@ -57,6 +62,7 @@ func sessionDisplayMeta(session desktopstate.SessionState) string {
 	if workspace == "" {
 		workspace = "workspace"
 	}
+	workspace = compactText(workspace, headerMetaMaxRunes)
 	if session.Status == desktopstate.TaskIdle {
 		return workspace
 	}
@@ -83,4 +89,19 @@ func contextSummaryLabel(session desktopstate.SessionState) string {
 		return "Context"
 	}
 	return fmt.Sprintf("Context %d", count)
+}
+
+func compactText(value string, maxRunes int) string {
+	value = strings.TrimSpace(value)
+	if value == "" || maxRunes <= 0 {
+		return ""
+	}
+	runes := []rune(value)
+	if len(runes) <= maxRunes {
+		return value
+	}
+	if maxRunes == 1 {
+		return "…"
+	}
+	return strings.TrimSpace(string(runes[:maxRunes-1])) + "…"
 }
