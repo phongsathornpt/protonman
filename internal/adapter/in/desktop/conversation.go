@@ -153,6 +153,8 @@ func (a *application) renderActiveView() {
 	a.mu.Lock()
 	activeID := a.state.ActiveSessionID
 	busy := a.sessionBusyLocked(activeID)
+	sessionChanged := activeID != a.conversationSessionID
+	a.conversationSessionID = activeID
 	transcript := ""
 	if current := a.transcripts[activeID]; current != nil {
 		transcript = current.String()
@@ -167,8 +169,12 @@ func (a *application) renderActiveView() {
 	a.mu.Unlock()
 
 	fyne.Do(func() {
+		followTail := sessionChanged || a.shouldFollowConversationTail()
 		a.chat.ParseMarkdown(markdown)
 		a.chat.Refresh()
+		if followTail {
+			a.scrollConversationToBottom()
+		}
 		if activeID == "" || busy {
 			a.send.Disable()
 		} else {
