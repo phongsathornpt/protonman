@@ -159,6 +159,8 @@ func (a *application) renderRuntimeControls() {
 		}
 	}
 	a.mu.Unlock()
+	summary := runtimeSummaryText(runtime)
+
 	fyne.Do(func() {
 		a.runtimeSync = true
 		a.modelProvider.SetText(runtime.Provider)
@@ -169,6 +171,7 @@ func (a *application) renderRuntimeControls() {
 		if runtime.LowConcurrency != "" {
 			a.lowSelect.SetSelected(runtime.LowConcurrency)
 		}
+		a.runtimeSummary.SetText(summary)
 		a.runtimeSync = false
 		if activeID == "" || busy {
 			a.modelProvider.Disable()
@@ -184,4 +187,21 @@ func (a *application) renderRuntimeControls() {
 			a.lowSelect.Enable()
 		}
 	})
+}
+
+func runtimeSummaryText(runtime desktopstate.RuntimeSettingsState) string {
+	summary := strings.TrimSpace(runtime.Model)
+	if summary == "" {
+		summary = strings.TrimSpace(runtime.Provider)
+	}
+	if summary == "" {
+		summary = "Model"
+	}
+	if reasoning := strings.TrimSpace(runtime.Reasoning); reasoning != "" && reasoning != "auto" {
+		summary += " · " + reasoning
+	}
+	if low := strings.TrimSpace(runtime.LowConcurrency); low == "on" {
+		summary += " · low"
+	}
+	return summary
 }
