@@ -132,7 +132,7 @@ func (a *application) appendTranscript(sessionID, text string) {
 	active := a.state.ActiveSessionID == sessionID
 	a.mu.Unlock()
 	if active {
-		a.refreshActiveView()
+		a.scheduleTranscriptRender()
 	}
 }
 
