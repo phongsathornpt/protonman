@@ -7,6 +7,7 @@ import (
 	"time"
 
 	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	"github.com/phongsathornpt/protonman/proton-sdk/internal/providerutil"
 )
 
 const DefaultBaseURL = "https://api.openai.com/v1"
@@ -27,6 +28,37 @@ type Config struct {
 	RetryDelays       []time.Duration
 }
 
+// BaseConfig extracts common provider configuration.
+func (c Config) BaseConfig() providerutil.BaseConfig {
+	return providerutil.BaseConfig{
+		BaseURL:           c.BaseURL,
+		APIKey:            c.APIKey,
+		HTTPClient:        c.HTTPClient,
+		UserAgent:         c.UserAgent,
+		Headers:           c.Headers,
+		MaxRetries:        c.MaxRetries,
+		RetryBackoff:      c.RetryBackoff,
+		RetryPostFirstGap: c.RetryPostFirstGap,
+		MaxRetryBackoff:   c.MaxRetryBackoff,
+		MaxRetryAfter:     c.MaxRetryAfter,
+		RetryDelays:       c.RetryDelays,
+	}
+}
+
+func (c *Config) applyBaseConfig(base providerutil.BaseConfig) {
+	c.BaseURL = base.BaseURL
+	c.APIKey = base.APIKey
+	c.HTTPClient = base.HTTPClient
+	c.UserAgent = base.UserAgent
+	c.Headers = base.Headers
+	c.MaxRetries = base.MaxRetries
+	c.RetryBackoff = base.RetryBackoff
+	c.RetryPostFirstGap = base.RetryPostFirstGap
+	c.MaxRetryBackoff = base.MaxRetryBackoff
+	c.MaxRetryAfter = base.MaxRetryAfter
+	c.RetryDelays = base.RetryDelays
+}
+
 // ProviderOptions is retained as a compatibility alias.
 // Deprecated: use Config.
 type ProviderOptions = Config
@@ -40,27 +72,9 @@ func NewProvider(options Config) *Provider {
 	if options.ProviderName == "" {
 		options.ProviderName = "openai"
 	}
-	options.BaseURL = strings.TrimRight(strings.TrimSpace(options.BaseURL), "/")
-	if options.BaseURL == "" {
-		options.BaseURL = DefaultBaseURL
-	}
-	if options.HTTPClient == nil {
-		options.HTTPClient = &http.Client{}
-	}
-	if options.MaxRetries < 0 {
-		options.MaxRetries = 0
-	}
-	if options.RetryBackoff <= 0 {
-		options.RetryBackoff = sdk.DefaultRetryBaseBackoff
-	}
-	if options.MaxRetryBackoff <= 0 {
-		options.MaxRetryBackoff = sdk.DefaultRetryMaxBackoff
-	}
-	if options.MaxRetryAfter <= 0 {
-		options.MaxRetryAfter = sdk.DefaultRetryMaxAfter
-	}
-	options.Headers = options.Headers.Clone()
-	options.RetryDelays = append([]time.Duration(nil), options.RetryDelays...)
+	base := options.BaseConfig()
+	base.Normalize(DefaultBaseURL)
+	options.applyBaseConfig(base)
 	return &Provider{options: options}
 }
 

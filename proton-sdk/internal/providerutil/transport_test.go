@@ -11,13 +11,14 @@ import (
 	"testing"
 	"time"
 
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	"github.com/phongsathornpt/protonman/proton-sdk/domain"
+	"github.com/phongsathornpt/protonman/proton-sdk/port"
 )
 
 type dummyStream struct{}
 
-func (dummyStream) Next(context.Context) (sdk.Event, error) { return sdk.Event{}, io.EOF }
-func (dummyStream) Close() error                            { return nil }
+func (dummyStream) Next(context.Context) (domain.Event, error) { return domain.Event{}, io.EOF }
+func (dummyStream) Close() error                              { return nil }
 
 func TestExecuteStreamSuccessOnFirstAttempt(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -40,7 +41,7 @@ func TestExecuteStreamSuccessOnFirstAttempt(t *testing.T) {
 		Headers:      http.Header{"X-Custom": []string{"val"}},
 		SessionID:    "sess_123",
 		HTTPClient:   server.Client(),
-		OnSuccess: func(resp *http.Response) (sdk.Stream, error) {
+		OnSuccess: func(resp *http.Response) (port.Stream, error) {
 			resp.Body.Close()
 			return dummyStream{}, nil
 		},
@@ -68,7 +69,7 @@ func TestExecuteStreamRetriesOnTransientError(t *testing.T) {
 	defer server.Close()
 
 	var observedRetries int
-	ctx := sdk.WithRetryObserver(context.Background(), func(ctx context.Context, event sdk.RetryEvent) {
+	ctx := domain.WithRetryObserver(context.Background(), func(ctx context.Context, event domain.RetryEvent) {
 		observedRetries++
 	})
 
@@ -79,13 +80,13 @@ func TestExecuteStreamRetriesOnTransientError(t *testing.T) {
 		Payload:      []byte(`{}`),
 		HTTPClient:   server.Client(),
 		MaxRetries:   2,
-		RetryPolicy: sdk.RetryPolicy{
+		RetryPolicy: domain.RetryPolicy{
 			RetryDelays: []time.Duration{time.Millisecond},
 		},
-		ParseError: func(status int, body []byte, headers http.Header) *sdk.ProviderError {
-			return sdk.NewProviderError("test-provider", status, "rate_limit", string(body))
+		ParseError: func(status int, body []byte, headers http.Header) *domain.ProviderError {
+			return domain.NewProviderError("test-provider", status, "rate_limit", string(body))
 		},
-		OnSuccess: func(resp *http.Response) (sdk.Stream, error) {
+		OnSuccess: func(resp *http.Response) (port.Stream, error) {
 			resp.Body.Close()
 			return dummyStream{}, nil
 		},
@@ -120,7 +121,7 @@ func TestExecuteStreamAbortsOnContextCancellation(t *testing.T) {
 		Endpoint:     server.URL,
 		HTTPClient:   server.Client(),
 		MaxRetries:   3,
-		RetryPolicy: sdk.RetryPolicy{
+		RetryPolicy: domain.RetryPolicy{
 			RetryDelays: []time.Duration{time.Second},
 		},
 	})
@@ -142,14 +143,14 @@ func TestExecuteStreamReturnsErrorWhenRetriesExhausted(t *testing.T) {
 		Endpoint:     server.URL,
 		HTTPClient:   server.Client(),
 		MaxRetries:   1,
-		RetryPolicy: sdk.RetryPolicy{
+		RetryPolicy: domain.RetryPolicy{
 			RetryDelays: []time.Duration{time.Millisecond},
 		},
-		ParseError: func(status int, body []byte, headers http.Header) *sdk.ProviderError {
-			return sdk.NewProviderError("test-provider", status, "rate_limit", string(body))
+		ParseError: func(status int, body []byte, headers http.Header) *domain.ProviderError {
+			return domain.NewProviderError("test-provider", status, "rate_limit", string(body))
 		},
 	})
-	var providerErr *sdk.ProviderError
+	var providerErr *domain.ProviderError
 	if !errors.As(err, &providerErr) {
 		t.Fatalf("expected ProviderError, got %T: %v", err, err)
 	}

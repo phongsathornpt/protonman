@@ -23,28 +23,23 @@ func (m *LanguageModel) Stream(ctx context.Context, request sdk.Request) (sdk.St
 	if err != nil {
 		return nil, err
 	}
+	base := m.provider.options.BaseConfig()
 	return providerutil.ExecuteStream(ctx, providerutil.StreamRequest{
 		ProviderName: m.Provider(),
 		ModelID:      m.modelID,
 		Endpoint:     endpoint,
 		Payload:      encoded,
-		Headers:      m.provider.options.Headers,
+		Headers:      base.Headers,
 		SessionID:    request.Metadata.SessionID,
-		HTTPClient:   m.provider.options.HTTPClient,
-		MaxRetries:   m.provider.options.MaxRetries,
-		RetryPolicy: sdk.RetryPolicy{
-			BaseBackoff:       m.provider.options.RetryBackoff,
-			PostFirstRetryGap: m.provider.options.RetryPostFirstGap,
-			MaxBackoff:        m.provider.options.MaxRetryBackoff,
-			MaxRetryAfter:     m.provider.options.MaxRetryAfter,
-			RetryDelays:       m.provider.options.RetryDelays,
-		},
+		HTTPClient:   base.HTTPClient,
+		MaxRetries:   base.MaxRetries,
+		RetryPolicy:  base.RetryPolicy(),
 		PrepareRequest: func(httpReq *http.Request) {
-			if m.provider.options.APIKey != "" {
-				httpReq.Header.Set("Authorization", "Bearer "+m.provider.options.APIKey)
+			if base.APIKey != "" {
+				httpReq.Header.Set("Authorization", "Bearer "+base.APIKey)
 			}
-			if m.provider.options.UserAgent != "" {
-				httpReq.Header.Set("User-Agent", m.provider.options.UserAgent)
+			if base.UserAgent != "" {
+				httpReq.Header.Set("User-Agent", base.UserAgent)
 			}
 		},
 		ParseError: func(status int, body []byte, headers http.Header) *sdk.ProviderError {
