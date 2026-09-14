@@ -43,11 +43,13 @@ func (a *application) initDesktopControls() {
 	a.initRuntimeControls()
 	a.initInspectorControls()
 	a.initIntegrationControls()
+	a.integrationButton.OnTapped = a.toggleIntegrationPanel
 	a.initSessionList()
 }
 
 func (a *application) initPermissionControls() {
 	a.permissionInbox = widget.NewButton("Permissions 0", a.selectNextPermission)
+	a.permissionInbox.Disable()
 	a.permissionTitle = widget.NewLabelWithStyle("Permission required", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
 	a.permissionDetail = widget.NewLabel("")
 	a.permissionDetail.Wrapping = fyne.TextWrapWord
@@ -239,7 +241,6 @@ func (a *application) buildSidebar() fyne.CanvasObject {
 	secondary := container.NewVBox(
 		widget.NewSeparator(),
 		container.NewHBox(a.integrationButton, a.permissionInbox),
-		a.integrationPanel,
 	)
 	return container.NewBorder(
 		container.NewVBox(sidebarHeader, a.sessionSearch),
@@ -268,7 +269,7 @@ func (a *application) buildConversationSurface() fyne.CanvasObject {
 	footer := container.NewVBox(composer, a.status)
 
 	return container.NewBorder(
-		container.NewVBox(header, a.runtimePanel, widget.NewSeparator()),
+		container.NewVBox(header, a.runtimePanel, a.integrationPanel, widget.NewSeparator()),
 		footer,
 		nil,
 		nil,
@@ -328,9 +329,8 @@ func (a *application) toggleRuntimePanel() {
 		a.runtimePanel.Hide()
 		return
 	}
-	if a.contextDrawer.Visible() {
-		a.contextDrawer.Hide()
-	}
+	a.contextDrawer.Hide()
+	a.integrationPanel.Hide()
 	a.runtimePanel.Show()
 }
 
@@ -339,10 +339,19 @@ func (a *application) toggleContextDrawer() {
 		a.contextDrawer.Hide()
 		return
 	}
-	if a.runtimePanel.Visible() {
-		a.runtimePanel.Hide()
-	}
+	a.runtimePanel.Hide()
+	a.integrationPanel.Hide()
 	a.contextDrawer.Layout = fixedWidthLayout{width: contextDrawerWidthFor(a.desktopWindowWidth())}
 	a.contextDrawer.Refresh()
 	a.contextDrawer.Show()
+}
+
+func (a *application) toggleIntegrationPanel() {
+	if a.integrationPanel.Visible() {
+		a.integrationPanel.Hide()
+		return
+	}
+	a.runtimePanel.Hide()
+	a.contextDrawer.Hide()
+	a.integrationPanel.Show()
 }
