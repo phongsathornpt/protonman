@@ -5,26 +5,26 @@ import (
 )
 
 const (
-	GlyphPrompt      = "› "
-	GlyphMark        = "› "
-	GlyphTool        = "$ "
+	GlyphPrompt      = UnicodePrompt
+	GlyphMark        = UnicodeMark
+	GlyphTool        = UnicodeTool
 	GlyphSep         = " · "
-	GlyphToolSuccess = "✓ "
-	GlyphToolError   = "× "
-	GlyphToolDenied  = "! "
-	GlyphWeb         = "↗ "
-	GlyphRead        = "≡ "
-	GlyphDir         = "▸ "
-	GlyphSearch      = "? "
-	GlyphExec        = "$ "
-	GlyphEdit        = "+ "
-	GlyphSkill       = "* "
-	GlyphAgent       = "→ "
-	GlyphGeneric     = "· "
-	GlyphTodoPending = "○ "
-	GlyphTodoActive  = "● "
+	GlyphToolSuccess = UnicodeToolSuccess
+	GlyphToolError   = UnicodeToolError
+	GlyphToolDenied  = UnicodeToolDenied
+	GlyphWeb         = UnicodeWeb
+	GlyphRead        = UnicodeRead
+	GlyphDir         = UnicodeDir
+	GlyphSearch      = UnicodeSearch
+	GlyphExec        = UnicodeExec
+	GlyphEdit        = UnicodeEdit
+	GlyphSkill       = UnicodeSkill
+	GlyphAgent       = UnicodeAgent
+	GlyphGeneric     = UnicodeGeneric
+	GlyphTodoPending = UnicodeTodoPending
+	GlyphTodoActive  = UnicodeTodoActive
 	// GlyphBrand is the compact Protonman terminal mark.
-	GlyphBrand = "◆"
+	GlyphBrand = UnicodeBrand
 )
 
 // MeasureProse caps prose line length so long model output stays readable on

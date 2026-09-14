@@ -24,10 +24,12 @@ type PatchCell struct {
 	Denied      bool
 	FailureCode tool.ErrorCode
 	Spinner     string
+	Icons       tuistyle.IconSet
 }
 
 func (PatchCell) Kind() HistoryCellKind { return HistoryCellTool }
 func (c PatchCell) RenderWidth(width int) []string {
+	icons := tuistyle.OrUnicodeIcons(c.Icons)
 	title := tool.DisplayName(c.Name)
 	if strings.TrimSpace(c.Summary) != "" {
 		title += " · " + c.Summary
@@ -39,16 +41,16 @@ func (c PatchCell) RenderWidth(width int) []string {
 		if c.Spinner != "" {
 			indicator = " " + c.Spinner
 		}
-		header = tuistyle.GlyphEdit + title + indicator
+		header = icons.Edit + title + indicator
 		headerStyle = tuistyle.PlanStyle
 	} else if c.Denied {
-		header = tuistyle.GlyphToolDenied + title + tuistyle.GlyphSep + "denied"
+		header = icons.ToolDenied + title + tuistyle.GlyphSep + "denied"
 		headerStyle = tuistyle.WarningStyle
 	} else if c.FailureCode != "" {
-		header = tuistyle.GlyphToolError + title + tuistyle.GlyphSep + string(c.FailureCode)
+		header = icons.ToolError + title + tuistyle.GlyphSep + string(c.FailureCode)
 		headerStyle = tuistyle.ErrorStyle
 	} else {
-		header = tuistyle.GlyphToolSuccess + title
+		header = icons.ToolSuccess + title
 		headerStyle = tuistyle.SuccessStyle
 	}
 	visiblePaths := c.Paths

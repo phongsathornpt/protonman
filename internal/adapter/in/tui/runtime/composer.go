@@ -6,6 +6,7 @@ import (
 	"charm.land/bubbles/v2/textarea"
 	"charm.land/bubbles/v2/viewport"
 	"charm.land/lipgloss/v2"
+	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/style"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 )
 
@@ -45,11 +46,16 @@ type paneState struct {
 type bottomPane struct {
 	composer composerState
 	views    []bottomPaneView
+	icons    tuistyle.IconSet
 }
 
 func newBottomPane(hasRunner bool, reducedMotion bool) *bottomPane {
 	input := newPrompt(hasRunner, reducedMotion)
-	return &bottomPane{composer: composerState{input: input, history: make([]string, 0), historyPos: 0}, views: make([]bottomPaneView, 0)}
+	return &bottomPane{
+		composer: composerState{input: input, history: make([]string, 0), historyPos: 0},
+		views:    make([]bottomPaneView, 0),
+		icons:    tuistyle.UnicodeIcons,
+	}
 }
 
 func (p *bottomPane) top() bottomPaneView {
@@ -114,12 +120,20 @@ func (p *bottomPane) prompt() *textarea.Model {
 	return &p.composer.input
 }
 
+func (p *bottomPane) setIcons(icons tuistyle.IconSet) {
+	if p == nil {
+		return
+	}
+	p.icons = tuistyle.OrUnicodeIcons(icons)
+	applyPromptChrome(&p.composer.input, p.composer.bashMode, p.icons)
+}
+
 func (p *bottomPane) setBashMode(on bool) {
 	if p == nil {
 		return
 	}
 	p.composer.bashMode = on
-	applyPromptChrome(&p.composer.input, on)
+	applyPromptChrome(&p.composer.input, on, p.icons)
 }
 
 func (p *bottomPane) setHasRunner(hasRunner bool) {
@@ -220,15 +234,18 @@ func newPrompt(hasRunner bool, reducedMotion bool) textarea.Model {
 		styles.Cursor.Blink = false
 	}
 	prompt.SetStyles(styles)
-	applyPromptChrome(&prompt, false)
+	applyPromptChrome(&prompt, false, tuistyle.UnicodeIcons)
 	_ = prompt.Focus()
 	return prompt
 }
 
-func applyPromptChrome(prompt *textarea.Model, bash bool) {
-	prefix := "> "
+func applyPromptChrome(prompt *textarea.Model, bash bool, icons tuistyle.IconSet) {
+	icons = tuistyle.OrUnicodeIcons(icons)
+	prefix := icons.Composer
 	accent := accentAssistant
 	if bash {
+		// Preserve the existing shell-mode affordance independently from the
+		// terminal font profile; only the normal assistant prompt is semantic.
 		prefix = "! "
 		accent = commandColor
 	}

@@ -31,10 +31,12 @@ type ExecCell struct {
 	Spinner         string
 	StartedAt       time.Time
 	Duration        time.Duration
+	Icons           tuistyle.IconSet
 }
 
 func (ExecCell) Kind() HistoryCellKind { return HistoryCellTool }
 func (c ExecCell) RenderWidth(width int) []string {
+	icons := tuistyle.OrUnicodeIcons(c.Icons)
 	command := strings.TrimSpace(c.Command)
 	if command == "" {
 		command = c.Name
@@ -52,7 +54,7 @@ func (c ExecCell) RenderWidth(width int) []string {
 		if c.Spinner != "" {
 			indicator = " " + c.Spinner
 		}
-		header := tuistyle.CommandStyle.Render(sanitizeBubbleText(presentation.Title + indicator))
+		header := tuistyle.ToolStyle.Render(icons.Exec) + tuistyle.CommandStyle.Render(sanitizeBubbleText(presentation.Title+indicator))
 		out = append(out, wrapStyledLines(header, width)...)
 	} else {
 		title := sanitizeBubbleText(presentation.Title)
@@ -62,11 +64,11 @@ func (c ExecCell) RenderWidth(width int) []string {
 		var glyph string
 		switch {
 		case c.Denied:
-			glyph = tuistyle.WarningStyle.Render(tuistyle.GlyphToolDenied)
+			glyph = tuistyle.WarningStyle.Render(icons.ToolDenied)
 		case failed:
-			glyph = tuistyle.ErrorStyle.Render(tuistyle.GlyphToolError)
+			glyph = tuistyle.ErrorStyle.Render(icons.ToolError)
 		default:
-			glyph = tuistyle.SuccessStyle.Render(tuistyle.GlyphToolSuccess)
+			glyph = tuistyle.SuccessStyle.Render(icons.ToolSuccess)
 		}
 		header := glyph + tuistyle.CommandStyle.Render(title)
 		summary := presentation.Summary

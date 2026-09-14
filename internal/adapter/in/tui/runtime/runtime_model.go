@@ -16,6 +16,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/permissionbridge"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/state/agentui"
 	tuihistory "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/history"
+	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/style"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/app"
@@ -144,6 +145,7 @@ type presentationModelState struct {
 	keys               bubbleKeyMap
 	planMode           bool
 	reducedMotion      bool
+	icons              tuistyle.IconSet
 	panes              paneState
 	nextID             uint64
 	layout             layoutState
@@ -190,11 +192,17 @@ func newBubbleModel(ctx context.Context, service *toolcall.Service, registry too
 	spin.Spinner = spinner.Dot
 	spin.Style = brandStyle
 	reducedMotion := envconfig.Bool(envconfig.ReducedMotion)
+	iconMode, err := tuistyle.ParseIconMode(envconfig.Value(envconfig.Icons))
+	if err != nil {
+		iconMode = tuistyle.IconModeAuto
+	}
+	icons := tuistyle.ResolveIcons(iconMode, true)
 	pane := viewport.New(viewport.WithWidth(defaultBubbleWidth), viewport.WithHeight(defaultBubbleHeight-6))
 	disableViewportKeys(&pane)
 	transcriptPane := viewport.New(viewport.WithWidth(defaultBubbleWidth-8), viewport.WithHeight(defaultBubbleHeight-8))
 	disableViewportKeys(&transcriptPane)
 	bottom := newBottomPane(runner != nil, reducedMotion)
+	bottom.setIcons(icons)
 	helpView := help.New()
 	helpView.SetWidth(defaultBubbleWidth - 2)
 	helpView.ShortSeparator = glyphSep
@@ -215,6 +223,7 @@ func newBubbleModel(ctx context.Context, service *toolcall.Service, registry too
 			keys:          newBubbleKeyMap(),
 			panes:         paneState{bottom: bottom, transcript: transcriptPane},
 			reducedMotion: reducedMotion,
+			icons:         icons,
 			layout:        layoutState{width: defaultBubbleWidth, height: defaultBubbleHeight},
 		},
 		conversationModelState: conversationModelState{

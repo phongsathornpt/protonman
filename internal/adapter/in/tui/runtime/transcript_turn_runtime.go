@@ -171,7 +171,7 @@ func (m *bubbleModel) loadInitialMessages(messages []model.Message) {
 					}
 				}
 				summary := toolview.SummarizeOutput(message.ToolName, kind, target, message.Content, nil, false)
-				state.Append(&tuihistory.ToolCell{CallID: message.ToolCallID, Name: message.ToolName, Body: message.Content, Target: target, ToolKind: kind, Summary: summary, ShowDetail: tuipresentation.MinimalPolicy().ToolDetail(kind, false, false) != tuipresentation.DetailSummary})
+				state.Append(&tuihistory.ToolCell{CallID: message.ToolCallID, Name: message.ToolName, Body: message.Content, Target: target, ToolKind: kind, Summary: summary, ShowDetail: tuipresentation.MinimalPolicy().ToolDetail(kind, false, false) != tuipresentation.DetailSummary, Icons: m.icons})
 			}
 		case model.RoleSystem:
 			if text != "" {

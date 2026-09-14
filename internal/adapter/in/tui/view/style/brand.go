@@ -35,16 +35,22 @@ func CompactLogoWidth() int {
 	return maxWidth
 }
 
-// CompactBrand renders Protonman's single-line compact brand identity,
-// showing the single-cell mark glyph and product name when space permits,
-// or falling back to the truncated product name on cramped widths.
+// CompactBrand renders the compatibility Unicode compact brand identity.
 func CompactBrand(width int) string {
+	return CompactBrandWithIcons(width, UnicodeIcons)
+}
+
+// CompactBrandWithIcons renders Protonman's single-line compact brand identity
+// with the supplied terminal capability profile. The full four-line ASCII logo
+// remains unchanged because it does not depend on a patched font.
+func CompactBrandWithIcons(width int, icons IconSet) string {
 	if width <= 0 {
 		return ""
 	}
-	minGlyphWidth := ansi.StringWidth(GlyphBrand + " " + ProductName)
+	icons = OrUnicodeIcons(icons)
+	minGlyphWidth := ansi.StringWidth(icons.Brand + " " + ProductName)
 	if width >= minGlyphWidth {
-		return BrandMarkStyle.Render(GlyphBrand) + " " + BrandStyle.Render(ProductName)
+		return BrandMarkStyle.Render(icons.Brand) + " " + BrandStyle.Render(ProductName)
 	}
 	return BrandStyle.Render(ansi.Truncate(ProductName, width, ""))
 }

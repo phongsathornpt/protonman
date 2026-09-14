@@ -48,7 +48,7 @@ func (m *bubbleModel) appendMuted(text string) {
 }
 
 func (m *bubbleModel) appendToolRunning(name string) {
-	m.ensureHistoryState().StartTool(name)
+	m.ensureHistoryState().StartToolCell(&tuihistory.ToolCell{Name: name, Running: true, Icons: m.icons})
 }
 
 func (m *bubbleModel) appendToolCall(call tool.Call) {
@@ -67,7 +67,7 @@ func (m *bubbleModel) appendToolCall(call tool.Call) {
 		action := extractStringArg(call.Arguments, "action")
 		if action == "spawn" {
 			m.rememberAgentRun(call)
-			state.StartToolCell(&tuihistory.AgentToolCell{CallID: call.ID, Name: call.Name, Target: target, Running: true})
+			state.StartToolCell(&tuihistory.AgentToolCell{CallID: call.ID, Name: call.Name, Target: target, Running: true, Icons: m.icons})
 		} else {
 			m.touchAgentOperation(call.Name, call)
 		}
@@ -79,15 +79,15 @@ func (m *bubbleModel) appendToolCall(call tool.Call) {
 		if cmd == "" {
 			cmd = extractStringArg(call.Arguments, "command")
 		}
-		state.StartToolCell(&tuihistory.ExecCell{CallID: call.ID, Name: call.Name, Command: cmd, Running: true, StartedAt: time.Now()})
+		state.StartToolCell(&tuihistory.ExecCell{CallID: call.ID, Name: call.Name, Command: cmd, Running: true, StartedAt: time.Now(), Icons: m.icons})
 	case tool.KindEdit:
 		if call.Name == "edit" && strings.EqualFold(extractStringArg(call.Arguments, "action"), "restore") {
-			state.StartToolCell(&tuihistory.ToolCell{CallID: call.ID, Name: call.Name, Target: target, ToolKind: resolvedKind, Running: true})
+			state.StartToolCell(&tuihistory.ToolCell{CallID: call.ID, Name: call.Name, Target: target, ToolKind: resolvedKind, Running: true, Icons: m.icons})
 			return
 		}
 		summary, paths := transcriptutil.EditPresentation(call)
-		state.StartToolCell(&tuihistory.PatchCell{CallID: call.ID, Name: call.Name, Summary: summary, Paths: paths, Running: true})
+		state.StartToolCell(&tuihistory.PatchCell{CallID: call.ID, Name: call.Name, Summary: summary, Paths: paths, Running: true, Icons: m.icons})
 	default:
-		state.StartToolCell(&tuihistory.ToolCell{CallID: call.ID, Name: call.Name, Target: target, ToolKind: resolvedKind, Running: true})
+		state.StartToolCell(&tuihistory.ToolCell{CallID: call.ID, Name: call.Name, Target: target, ToolKind: resolvedKind, Running: true, Icons: m.icons})
 	}
 }

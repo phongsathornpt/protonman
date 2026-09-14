@@ -108,30 +108,33 @@ func (m *bubbleModel) retireCompletedTodoForNextTurn() {
 const todoInspectViewID = "todo-inspect"
 
 type todoListItem struct {
-	item tododomain.Item
+	item  tododomain.Item
+	icons tuistyle.IconSet
 }
 
 func (i todoListItem) FilterValue() string { return i.item.Text + " " + i.item.ID }
 func (i todoListItem) Description() string { return "id: " + strings.TrimSpace(i.item.ID) }
 func (i todoListItem) Title() string {
-	glyph := glyphTodoPending
+	icons := tuistyle.OrUnicodeIcons(i.icons)
+	glyph := icons.TodoPending
 	switch i.item.Status {
 	case tododomain.StatusInProgress:
-		glyph = glyphTodoActive
+		glyph = icons.TodoActive
 	case tododomain.StatusCompleted:
-		glyph = glyphToolSuccess
+		glyph = icons.ToolSuccess
 	}
 	return glyph + i.item.Text
 }
 
-func todoStatusGlyph(status tododomain.Status) string {
+func todoStatusGlyph(status tododomain.Status, icons tuistyle.IconSet) string {
+	icons = tuistyle.OrUnicodeIcons(icons)
 	switch status {
 	case tododomain.StatusCompleted:
-		return tuistyle.TodoCompletedStyle.Render(glyphToolSuccess)
+		return tuistyle.TodoCompletedStyle.Render(icons.ToolSuccess)
 	case tododomain.StatusInProgress:
-		return tuistyle.TodoActiveStyle.Render(glyphTodoActive)
+		return tuistyle.TodoActiveStyle.Render(icons.TodoActive)
 	default:
-		return tuistyle.TodoPendingStyle.Render(glyphTodoPending)
+		return tuistyle.TodoPendingStyle.Render(icons.TodoPending)
 	}
 }
 
@@ -145,13 +148,14 @@ func (todoSetupDelegate) Render(w io.Writer, m list.Model, index int, item list.
 	if !ok {
 		return
 	}
+	icons := tuistyle.OrUnicodeIcons(entry.icons)
 	prefix := "  "
 	textStyle := bodyStyle
 	if index == m.Index() {
-		prefix = tuistyle.SelectionStyle.Render(glyphPrompt)
+		prefix = tuistyle.SelectionStyle.Render(icons.Prompt)
 		textStyle = tuistyle.TodoSelectedStyle
 	}
-	glyph := todoStatusGlyph(entry.item.Status)
+	glyph := todoStatusGlyph(entry.item.Status, icons)
 	availWidth := maxInt(1, m.Width()-4)
 	text := textStyle.Render(truncateWithEllipsis(entry.item.Text, availWidth))
 	_, _ = fmt.Fprint(w, prefix+glyph+text)
@@ -161,6 +165,7 @@ type todoPaneView struct {
 	picker      list.Model
 	initialized bool
 	lastItems   []tododomain.Item
+	icons       tuistyle.IconSet
 }
 
 func (*todoPaneView) ID() string                             { return todoInspectViewID }
@@ -170,7 +175,8 @@ func (v *todoPaneView) ensurePicker(ctx paneRenderContext) {
 	if v.initialized {
 		return
 	}
-	v.picker = paneutil.NewMinimalList(todoListItems(ctx.todos), todoSetupDelegate{}, maxInt(12, ctx.width-8), maxInt(5, minInt(14, ctx.height-4)))
+	v.icons = tuistyle.OrUnicodeIcons(v.icons)
+	v.picker = paneutil.NewMinimalList(todoListItems(ctx.todos, v.icons), todoSetupDelegate{}, maxInt(12, ctx.width-8), maxInt(5, minInt(14, ctx.height-4)))
 	v.picker.SetFilteringEnabled(false)
 	v.picker.SetStatusBarItemName("task", "tasks")
 	v.lastItems = tododomain.CloneItems(ctx.todos)
@@ -182,20 +188,22 @@ func (v *todoPaneView) refreshItems(ctx paneRenderContext) tea.Cmd {
 	if !v.initialized {
 		return nil
 	}
+	v.icons = tuistyle.OrUnicodeIcons(v.icons)
 	v.lastItems = tododomain.CloneItems(ctx.todos)
-	cmd := v.picker.SetItems(todoListItems(ctx.todos))
+	cmd := v.picker.SetItems(todoListItems(ctx.todos, v.icons))
 	v.syncTitle(ctx)
 	return cmd
 }
 
-func todoListItems(items []tododomain.Item) []list.Item {
+func todoListItems(items []tododomain.Item, icons tuistyle.IconSet) []list.Item {
+	icons = tuistyle.OrUnicodeIcons(icons)
 	ordered := tododomain.CloneItems(items)
 	slices.SortStableFunc(ordered, func(a, b tododomain.Item) int {
 		return todoStatusPriority(a.Status) - todoStatusPriority(b.Status)
 	})
 	out := make([]list.Item, 0, len(ordered))
 	for _, item := range ordered {
-		out = append(out, todoListItem{item: item})
+		out = append(out, todoListItem{item: item, icons: icons})
 	}
 	return out
 }
@@ -256,13 +264,14 @@ func (v *todoPaneView) Render(ctx paneRenderContext) string {
 		if !ok {
 			continue
 		}
+		icons := tuistyle.OrUnicodeIcons(item.icons)
 		prefix := "  "
 		textStyle := bodyStyle
 		if index == v.picker.Index() {
-			prefix = tuistyle.SelectionStyle.Render(glyphPrompt)
+			prefix = tuistyle.SelectionStyle.Render(icons.Prompt)
 			textStyle = tuistyle.TodoSelectedStyle
 		}
-		glyph := todoStatusGlyph(item.item.Status)
+		glyph := todoStatusGlyph(item.item.Status, icons)
 		text := textStyle.Render(truncateWithEllipsis(item.item.Text, availTextWidth))
 		listRows = append(listRows, prefix+glyph+text)
 	}
@@ -293,7 +302,7 @@ func (v *todoPaneView) Render(ctx paneRenderContext) string {
 
 func (m *bubbleModel) openTodoPane() tea.Cmd {
 	if !m.panes.bottom.has(todoInspectViewID) {
-		m.panes.bottom.push(&todoPaneView{})
+		m.panes.bottom.push(&todoPaneView{icons: m.icons})
 	}
 	m.requestRelayout()
 	return m.reloadTodoSnapshotCmd()
