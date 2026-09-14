@@ -21,6 +21,16 @@ func TestToolHistoryUsesProvidedIconProfile(t *testing.T) {
 			want: strings.TrimSpace(tuistyle.NerdIcons.Read),
 		},
 		{
+			name: "exec-running",
+			cell: &ExecCell{Name: "bash", Command: "go test ./...", Running: true, Icons: tuistyle.NerdIcons},
+			want: strings.TrimSpace(tuistyle.NerdIcons.Exec),
+		},
+		{
+			name: "exec-success",
+			cell: &ExecCell{Name: "bash", Command: "true", Icons: tuistyle.NerdIcons},
+			want: strings.TrimSpace(tuistyle.NerdIcons.ToolSuccess),
+		},
+		{
 			name: "patch-running",
 			cell: &PatchCell{Name: "edit", Summary: "update", Running: true, Icons: tuistyle.NerdIcons},
 			want: strings.TrimSpace(tuistyle.NerdIcons.Edit),
@@ -44,5 +54,16 @@ func TestToolHistoryUsesProvidedIconProfile(t *testing.T) {
 				t.Fatalf("rendered cell %q does not contain Nerd glyph %q", plain, tt.want)
 			}
 		})
+	}
+}
+
+func TestExecRawLinesRemainPortableWithNerdPresentation(t *testing.T) {
+	cell := ExecCell{Name: "bash", Command: "go test ./...", Icons: tuistyle.NerdIcons}
+	raw := strings.Join(cell.RawLines(), "\n")
+	if strings.Contains(raw, strings.TrimSpace(tuistyle.NerdIcons.Exec)) || strings.Contains(raw, strings.TrimSpace(tuistyle.NerdIcons.ToolSuccess)) {
+		t.Fatalf("raw exec transcript leaked Nerd Font PUA glyphs: %q", raw)
+	}
+	if !strings.HasPrefix(raw, "$ go test ./...") {
+		t.Fatalf("raw exec transcript = %q, want portable shell prefix", raw)
 	}
 }
