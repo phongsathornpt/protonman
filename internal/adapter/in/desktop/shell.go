@@ -27,8 +27,10 @@ func (a *application) initDesktopControls() {
 	a.chat = widget.NewRichTextFromMarkdown("")
 	a.chat.Wrapping = fyne.TextWrapWord
 	a.composer = widget.NewMultiLineEntry()
-	a.composer.SetPlaceHolder("Ask protonMAN…")
+	a.composer.SetPlaceHolder("Ask protonMAN… · Shift+Enter to send")
+	a.composer.SetMinRowsVisible(3)
 	a.composer.Wrapping = fyne.TextWrapWord
+	a.composer.OnSubmitted = func(_ string) { a.sendPrompt() }
 	a.send = widget.NewButton("Send", a.sendPrompt)
 	a.stop = widget.NewButtonWithIcon("", theme.MediaStopIcon(), a.cancelPrompt)
 	a.send.Disable()
