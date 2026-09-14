@@ -90,6 +90,7 @@ type PromptCapabilities struct {
 type SessionCapabilities struct {
 	Resume                *struct{} `json:"resume,omitempty"`
 	Delete                *struct{} `json:"delete,omitempty"`
+	Close                 *struct{} `json:"close,omitempty"`
 	AdditionalDirectories *struct{} `json:"additionalDirectories,omitempty"`
 }
 
@@ -201,6 +202,11 @@ type SessionCancelParams struct {
 	SessionID string `json:"sessionId"`
 }
 
+// SessionCloseParams closes an active session without deleting persisted history.
+type SessionCloseParams struct {
+	SessionID string `json:"sessionId"`
+}
+
 // SessionListParams lists sessions for a given workspace root.
 type SessionListParams struct {
 	Cwd string `json:"cwd,omitempty"`
@@ -244,10 +250,10 @@ type ContentBlock struct {
 	Type     BlockType             `json:"type"`
 	Text     string                `json:"text,omitempty"`
 	MIMEType string                `json:"mimeType,omitempty"`
-	Data     string                `json:"data,omitempty"`     // base64 image or audio
-	URI      string                `json:"uri,omitempty"`      // resource or resource_link URI
-	Name     string                `json:"name,omitempty"`     // resource_link name
-	Resource *EmbeddedTextResource `json:"resource,omitempty"` // embedded context
+	Data     string                `json:"data,omitempty"`
+	URI      string                `json:"uri,omitempty"`
+	Name     string                `json:"name,omitempty"`
+	Resource *EmbeddedTextResource `json:"resource,omitempty"`
 }
 
 // EmbeddedTextResource represents text contents embedded directly in a message.
@@ -362,7 +368,7 @@ type RequestPermissionParams struct {
 // RequestPermissionResult contains the user's decision from Zed.
 type RequestPermissionResult struct {
 	Outcome struct {
-		Outcome  string `json:"outcome"` // "selected" or "cancelled"
+		Outcome  string `json:"outcome"`
 		OptionID string `json:"optionId,omitempty"`
 	} `json:"outcome"`
 }
