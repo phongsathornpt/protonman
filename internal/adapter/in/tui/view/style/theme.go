@@ -2,29 +2,34 @@ package style
 
 import (
 	"charm.land/lipgloss/v2"
+	tuiicon "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/icon"
 )
 
+// Legacy glyph aliases keep existing renderers stable while icon-aware views
+// migrate to semantic icon.Set injection. Unicode remains the compatibility
+// profile until the runtime starts resolving a user-selected icon mode.
 const (
-	GlyphPrompt      = "› "
-	GlyphMark        = "› "
-	GlyphTool        = "$ "
+	GlyphPrompt      = tuiicon.UnicodePrompt
+	GlyphMark        = tuiicon.UnicodeMark
+	GlyphTool        = tuiicon.UnicodeTool
 	GlyphSep         = " · "
-	GlyphToolSuccess = "✓ "
-	GlyphToolError   = "× "
-	GlyphToolDenied  = "! "
-	GlyphWeb         = "↗ "
-	GlyphRead        = "≡ "
-	GlyphDir         = "▸ "
-	GlyphSearch      = "? "
-	GlyphExec        = "$ "
-	GlyphEdit        = "+ "
-	GlyphSkill       = "* "
-	GlyphAgent       = "→ "
-	GlyphGeneric     = "· "
-	GlyphTodoPending = "○ "
-	GlyphTodoActive  = "● "
+	GlyphToolSuccess = tuiicon.UnicodeToolSuccess
+	GlyphToolError   = tuiicon.UnicodeToolError
+	GlyphToolDenied  = tuiicon.UnicodeToolDenied
+	GlyphWeb         = tuiicon.UnicodeWeb
+	GlyphRead        = tuiicon.UnicodeRead
+	GlyphDir         = tuiicon.UnicodeDir
+	GlyphSearch      = tuiicon.UnicodeSearch
+	GlyphExec        = tuiicon.UnicodeExec
+	GlyphEdit        = tuiicon.UnicodeEdit
+	GlyphSkill       = tuiicon.UnicodeSkill
+	GlyphAgent       = tuiicon.UnicodeAgent
+	GlyphGit         = tuiicon.UnicodeGit
+	GlyphGeneric     = tuiicon.UnicodeGeneric
+	GlyphTodoPending = tuiicon.UnicodeTodoPending
+	GlyphTodoActive  = tuiicon.UnicodeTodoActive
 	// GlyphBrand is the compact Protonman terminal mark.
-	GlyphBrand = "◆"
+	GlyphBrand = tuiicon.UnicodeBrand
 )
 
 // MeasureProse caps prose line length so long model output stays readable on
