@@ -23,9 +23,9 @@ type sessionHistoryTracker struct {
 }
 
 var (
-	sessionHistoryTrackers                  sync.Map // map[*application]*sessionHistoryTracker
+	sessionHistoryTrackers                sync.Map // map[*application]*sessionHistoryTracker
 	errSessionHistoryWorkspaceUnavailable = errors.New("workspace path unavailable")
-	errSessionHistoryClientChanged         = errors.New("ACP client changed during history load")
+	errSessionHistoryClientChanged        = errors.New("ACP client changed during history load")
 )
 
 func sessionHistoryTrackerFor(a *application) *sessionHistoryTracker {
