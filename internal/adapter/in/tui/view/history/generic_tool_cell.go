@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	tuiicon "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/icon"
 	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/style"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/toolview"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
@@ -29,6 +30,7 @@ type ToolCell struct {
 	ToolKind        tool.Kind
 	Summary         string
 	ShowDetail      bool
+	Icons           tuiicon.Set
 }
 
 func (ToolCell) Kind() HistoryCellKind { return HistoryCellTool }
@@ -60,6 +62,7 @@ func (c ToolCell) RenderWidth(width int) []string {
 		Denied:      c.Denied,
 		FailureCode: c.FailureCode,
 		Spinner:     c.Spinner,
+		Icons:       c.Icons,
 	})
 	headerLine := toolview.RenderHeader(header, width)
 
