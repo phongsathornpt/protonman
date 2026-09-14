@@ -42,6 +42,10 @@ type State struct {
 	ActiveGoal string `json:"active_goal,omitempty"`
 	// AgentProfile records the active named coding profile without persisting a generated system prompt.
 	AgentProfile string `json:"agent_profile,omitempty"`
+	// ModelProvider records the session-local provider override.
+	ModelProvider string `json:"model_provider,omitempty"`
+	// ModelID records the session-local model override.
+	ModelID string `json:"model_id,omitempty"`
 	// ReasoningEffort records the session reasoning override ("auto" preserves provider/profile defaults).
 	ReasoningEffort string `json:"reasoning_effort,omitempty"`
 	// LowConcurrencyMode records the TUI low-concurrency override: auto, on, or off.

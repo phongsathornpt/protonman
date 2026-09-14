@@ -173,6 +173,8 @@ func (s *Session) ExecutePrompt(
 	s.cancel = cancel
 	s.mu.Unlock()
 
+	stopSubagentNotifications := s.startSubagentNotifications(promptCtx, notifier)
+	defer stopSubagentNotifications()
 	defer func() {
 		s.mu.Lock()
 		s.active = false
@@ -402,7 +404,7 @@ func (s *Session) ReplayHistory(notifier func(RPCNotification) error) error {
 			return err
 		}
 	}
-	return nil
+	return s.replaySubagents(notifier)
 }
 
 func (s *Session) handleSlashCommand(
@@ -774,16 +776,20 @@ func (s *Session) saveState(ctx context.Context) error {
 	if reasoningEffort != sdk.ReasoningDefault {
 		reasoningSetting = string(reasoningEffort)
 	}
+	runtimeSettings := sessionRuntimeFor(s)
 
 	err := s.sessionService.Save(ctx, s.id, session.State{
-		SessionID:       s.id,
-		Revision:        stateRevision,
-		WorkspaceKey:    s.workspaceKey,
-		WorkspaceName:   s.workspaceName,
-		PermissionMode:  s.service.Mode().String(),
-		ReasoningEffort: reasoningSetting,
-		Messages:        session.FromModelMessages(messages),
-		UpdatedAt:       time.Now().UTC(),
+		SessionID:          s.id,
+		Revision:           stateRevision,
+		WorkspaceKey:       s.workspaceKey,
+		WorkspaceName:      s.workspaceName,
+		PermissionMode:     s.service.Mode().String(),
+		ModelProvider:      runtimeSettings.Provider,
+		ModelID:            runtimeSettings.Model,
+		ReasoningEffort:    reasoningSetting,
+		LowConcurrencyMode: runtimeSettings.LowConcurrency,
+		Messages:           session.FromModelMessages(messages),
+		UpdatedAt:          time.Now().UTC(),
 	})
 	if err != nil {
 		return err

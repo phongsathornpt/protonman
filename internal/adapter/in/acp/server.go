@@ -21,54 +21,31 @@ import (
 	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 )
 
-// ErrInvalidServer indicates that the ACP server cannot start.
 var ErrInvalidServer = errors.New("invalid ACP server")
-
-// ErrInvalidRequest indicates malformed JSON-RPC or parameters.
 var ErrInvalidRequest = errors.New("invalid request")
 
-// Option configures an ACP Server.
 type Option func(*Server)
-
-// RunnerFactory creates a model/tool runner bound to one session's service.
 type RunnerFactory func(*toolcall.Service) (app.Conversation, error)
-
-// SessionRegistryFactory creates stateful tool bindings for one ACP session.
 type SessionRegistryFactory func(sessionID string, cwd string) (tool.Registry, error)
-
-// MCPRegistryConfigurer attaches client-provided MCP servers to a session-local registry.
 type MCPRegistryConfigurer func(ctx context.Context, cwd string, registry tool.Registry, servers []MCPServerConfig) (io.Closer, error)
 
-// WithSessions sets the application session service for persistence use cases.
 func WithSessions(sessions *app.Sessions) Option {
 	return func(server *Server) { server.sessionService = sessions }
 }
-
-// WithAgents supplies shared subagent lifecycle control, scoped per ACP session.
-func WithAgents(agents app.Agents) Option {
-	return func(server *Server) { server.agents = agents }
+func WithMemories(memories *app.Memories) Option {
+	return func(server *Server) { server.memories = memories }
 }
-
-// WithRunnerFactory supplies isolated runners for ACP sessions. The factory
-// receives the session-local tool-call service so model-driven calls do not
-// share permission state with other sessions.
+func WithAgents(agents app.Agents) Option { return func(server *Server) { server.agents = agents } }
 func WithRunnerFactory(factory RunnerFactory) Option {
-	return func(s *Server) {
-		s.runnerFactory = factory
-	}
+	return func(s *Server) { s.runnerFactory = factory }
 }
-
-// WithSessionRegistryFactory binds stateful tools such as todo state to each session.
 func WithSessionRegistryFactory(factory SessionRegistryFactory) Option {
 	return func(s *Server) { s.sessionRegistryFactory = factory }
 }
-
-// WithMCPRegistryConfigurer wires ACP mcpServers into each session-local tool registry.
 func WithMCPRegistryConfigurer(configurer MCPRegistryConfigurer) Option {
 	return func(s *Server) { s.mcpRegistryConfigurer = configurer }
 }
 
-// Server is a full-duplex JSON-RPC 2.0 ACP agent server.
 type Server struct {
 	service                *toolcall.Service
 	registry               tool.Registry
@@ -76,15 +53,14 @@ type Server struct {
 	sessionRegistryFactory SessionRegistryFactory
 	mcpRegistryConfigurer  MCPRegistryConfigurer
 	sessionService         *app.Sessions
+	memories               *app.Memories
 	agents                 app.Agents
-
-	mu       sync.Mutex
-	writeMu  sync.Mutex
-	sessions map[string]*Session
-	nextID   uint64
+	mu                     sync.Mutex
+	writeMu                sync.Mutex
+	sessions               map[string]*Session
+	nextID                 uint64
 }
 
-// New creates an ACP server over Protonman's toolcall service and model runner.
 func New(service *toolcall.Service, registry tool.Registry, runner app.Conversation, opts ...Option) (*Server, error) {
 	if service == nil {
 		return nil, fmt.Errorf("%w: service is required", ErrInvalidServer)
@@ -92,11 +68,7 @@ func New(service *toolcall.Service, registry tool.Registry, runner app.Conversat
 	if registry == nil {
 		return nil, fmt.Errorf("%w: registry is required", ErrInvalidServer)
 	}
-	s := &Server{
-		service:  service,
-		registry: registry,
-		sessions: make(map[string]*Session),
-	}
+	s := &Server{service: service, registry: registry, sessions: make(map[string]*Session)}
 	for _, opt := range opts {
 		if opt != nil {
 			opt(s)
@@ -113,7 +85,6 @@ func New(service *toolcall.Service, registry tool.Registry, runner app.Conversat
 	return s, nil
 }
 
-// Serve handles incoming JSON-RPC requests from input and writes responses to output.
 func (s *Server) Serve(ctx context.Context, input io.Reader, output io.Writer) error {
 	if err := ctx.Err(); err != nil {
 		return fmt.Errorf("start ACP server: %w", err)
@@ -121,16 +92,13 @@ func (s *Server) Serve(ctx context.Context, input io.Reader, output io.Writer) e
 	if input == nil || output == nil {
 		return fmt.Errorf("%w: input and output are required", ErrInvalidServer)
 	}
-
 	stopInputWatch := watchInputCancellation(ctx, input)
 	defer stopInputWatch()
 	defer s.closeSessions()
-
 	scanner := bufio.NewScanner(input)
 	scanner.Buffer(make([]byte, 0, 64*1024), 10*1024*1024)
 	var prompts sync.WaitGroup
 	asyncErrors := make(chan error, 1)
-
 	for scanner.Scan() {
 		if err := ctx.Err(); err != nil {
 			return err
@@ -139,7 +107,6 @@ func (s *Server) Serve(ctx context.Context, input io.Reader, output io.Writer) e
 		if len(line) == 0 {
 			continue
 		}
-
 		request, parseErr := decodeRequest(line)
 		if parseErr != nil {
 			if err := WriteJSON(output, &s.writeMu, parseErr); err != nil {
@@ -147,15 +114,12 @@ func (s *Server) Serve(ctx context.Context, input io.Reader, output io.Writer) e
 			}
 			continue
 		}
-
 		if request.Method != "session/prompt" {
 			if err := s.handleRequest(ctx, request, output); err != nil {
 				return err
 			}
 			continue
 		}
-
-		// Asynchronous prompt execution
 		var params SessionPromptParams
 		if err := json.Unmarshal(request.Params, &params); err != nil {
 			if err := s.writeResponse(output, request.ID, nil, nil, fmt.Errorf("%w: %v", ErrInvalidRequest, err)); err != nil {
@@ -177,13 +141,10 @@ func (s *Server) Serve(ctx context.Context, input io.Reader, output io.Writer) e
 			}
 			continue
 		}
-
 		prompts.Add(1)
 		go func(req RPCRequest, sess *Session, blocks []ContentBlock) {
 			defer prompts.Done()
-			notifier := func(notification RPCNotification) error {
-				return WriteJSON(output, &s.writeMu, notification)
-			}
+			notifier := func(notification RPCNotification) error { return WriteJSON(output, &s.writeMu, notification) }
 			result, promptErr := sess.ExecutePrompt(ctx, blocks, notifier)
 			if err := s.writeResponse(output, req.ID, result, nil, promptErr); err != nil {
 				select {
@@ -193,7 +154,6 @@ func (s *Server) Serve(ctx context.Context, input io.Reader, output io.Writer) e
 			}
 		}(request, sess, params.Prompt)
 	}
-
 	scanErr := scanner.Err()
 	prompts.Wait()
 	if err := ctx.Err(); err != nil {
@@ -229,22 +189,18 @@ func watchInputCancellation(ctx context.Context, input io.Reader) func() {
 func decodeRequest(line []byte) (RPCRequest, *RPCResponse) {
 	var request RPCRequest
 	if err := json.Unmarshal(line, &request); err != nil {
-		return RPCRequest{}, &RPCResponse{
-			JSONRPC: "2.0",
-			Error:   &RPCError{Code: CodeParseError, Message: "parse error"},
-		}
+		return RPCRequest{}, &RPCResponse{JSONRPC: "2.0", Error: &RPCError{Code: CodeParseError, Message: "parse error"}}
 	}
 	if request.Method == "" {
-		return RPCRequest{}, &RPCResponse{
-			JSONRPC: "2.0",
-			ID:      request.ID,
-			Error:   &RPCError{Code: CodeInvalidRequest, Message: "invalid request: method required"},
-		}
+		return RPCRequest{}, &RPCResponse{JSONRPC: "2.0", ID: request.ID, Error: &RPCError{Code: CodeInvalidRequest, Message: "invalid request: method required"}}
 	}
 	return request, nil
 }
 
 func (s *Server) handleRequest(ctx context.Context, request RPCRequest, output io.Writer) error {
+	if result, handled, err := s.dispatchSessionRuntime(ctx, request); handled {
+		return s.writeResponse(output, request.ID, result, nil, err)
+	}
 	result, notify, err := s.dispatch(ctx, request, output)
 	return s.writeResponse(output, request.ID, result, notify, err)
 }
@@ -254,11 +210,7 @@ func (s *Server) writeResponse(output io.Writer, id json.RawMessage, result any,
 		if len(id) == 0 || string(id) == "null" {
 			return nil
 		}
-		return WriteJSON(output, &s.writeMu, RPCResponse{
-			JSONRPC: "2.0",
-			ID:      id,
-			Error:   &RPCError{Code: CodeServerError, Message: requestErr.Error()},
-		})
+		return WriteJSON(output, &s.writeMu, RPCResponse{JSONRPC: "2.0", ID: id, Error: &RPCError{Code: CodeServerError, Message: requestErr.Error()}})
 	}
 	if notify != nil {
 		if err := WriteJSON(output, &s.writeMu, notify); err != nil {
@@ -268,44 +220,23 @@ func (s *Server) writeResponse(output io.Writer, id json.RawMessage, result any,
 	if len(id) == 0 || string(id) == "null" {
 		return nil
 	}
-	return WriteJSON(output, &s.writeMu, RPCResponse{
-		JSONRPC: "2.0",
-		ID:      id,
-		Result:  result,
-	})
+	return WriteJSON(output, &s.writeMu, RPCResponse{JSONRPC: "2.0", ID: id, Result: result})
 }
 
 func (s *Server) dispatch(ctx context.Context, request RPCRequest, output io.Writer) (any, *RPCNotification, error) {
 	switch request.Method {
 	case "initialize":
-		res := InitializeResult{
+		return InitializeResult{
 			ProtocolVersion: ProtocolVersion,
 			AgentCapabilities: AgentCapabilities{
-				LoadSession: true,
-				PromptCapabilities: PromptCapabilities{
-					Image:           true,
-					Audio:           false,
-					EmbeddedContext: true,
-				},
-				SessionCapabilities: SessionCapabilities{
-					Resume:                &struct{}{},
-					Delete:                &struct{}{},
-					AdditionalDirectories: &struct{}{},
-				},
-				MCPCapabilities: MCPCapabilities{
-					HTTP: true,
-					SSE:  false,
-				},
+				LoadSession:         true,
+				PromptCapabilities:  PromptCapabilities{Image: true, Audio: false, EmbeddedContext: true},
+				SessionCapabilities: SessionCapabilities{Resume: &struct{}{}, Delete: &struct{}{}, AdditionalDirectories: &struct{}{}},
+				MCPCapabilities:     MCPCapabilities{HTTP: true, SSE: false},
 			},
-			AgentInfo: ImplementationInfo{
-				Name:    "proton",
-				Title:   "Protonman AI Coding Agent",
-				Version: buildinfo.Version(),
-			},
+			AgentInfo:   ImplementationInfo{Name: "proton", Title: "Protonman AI Coding Agent", Version: buildinfo.Version()},
 			AuthMethods: []any{},
-		}
-		return res, nil, nil
-
+		}, nil, nil
 	case "session/new":
 		var params SessionNewParams
 		if len(request.Params) > 0 {
@@ -324,25 +255,8 @@ func (s *Server) dispatch(ctx context.Context, request RPCRequest, output io.Wri
 		s.mu.Lock()
 		s.sessions[sessionID] = sess
 		s.mu.Unlock()
-
-		notify := &RPCNotification{
-			JSONRPC: "2.0",
-			Method:  "session/update",
-			Params: map[string]any{
-				"sessionId": sessionID,
-				"update": map[string]any{
-					"sessionUpdate":     "available_commands_update",
-					"availableCommands": DefaultAvailableCommands(),
-				},
-			},
-		}
-
-		currentMode := sess.service.Mode().String()
-		return SessionNewResult{
-			SessionID: sessionID,
-			Modes:     DefaultSessionModes(currentMode),
-		}, notify, nil
-
+		notify := &RPCNotification{JSONRPC: "2.0", Method: "session/update", Params: map[string]any{"sessionId": sessionID, "update": map[string]any{"sessionUpdate": "available_commands_update", "availableCommands": DefaultAvailableCommands()}}}
+		return SessionNewResult{SessionID: sessionID, Modes: DefaultSessionModes(sess.service.Mode().String())}, notify, nil
 	case "session/load":
 		var params SessionLoadParams
 		if err := json.Unmarshal(request.Params, &params); err != nil {
@@ -352,7 +266,6 @@ func (s *Server) dispatch(ctx context.Context, request RPCRequest, output io.Wri
 		if params.SessionID == "" {
 			return nil, nil, errors.New("sessionId is required")
 		}
-
 		if err := validateMCPServerConfigs(params.MCPServers); err != nil {
 			return nil, nil, fmt.Errorf("session/load MCP servers: %w", err)
 		}
@@ -360,15 +273,10 @@ func (s *Server) dispatch(ctx context.Context, request RPCRequest, output io.Wri
 		if err != nil {
 			return nil, nil, err
 		}
-
-		// Replay past messages to client
-		if err := sess.ReplayHistory(func(notification RPCNotification) error {
-			return WriteJSON(output, &s.writeMu, notification)
-		}); err != nil {
+		if err := sess.ReplayHistory(func(notification RPCNotification) error { return WriteJSON(output, &s.writeMu, notification) }); err != nil {
 			return nil, nil, err
 		}
 		return nil, nil, nil
-
 	case "session/resume":
 		var params SessionResumeParams
 		if err := json.Unmarshal(request.Params, &params); err != nil {
@@ -382,11 +290,7 @@ func (s *Server) dispatch(ctx context.Context, request RPCRequest, output io.Wri
 			return nil, nil, fmt.Errorf("session/resume MCP servers: %w", err)
 		}
 		_, err := s.loadOrCreateSession(ctx, params.SessionID, params.Cwd, params.MCPServers)
-		if err != nil {
-			return nil, nil, err
-		}
-		return nil, nil, nil
-
+		return nil, nil, err
 	case "session/set_mode":
 		var params SessionSetModeParams
 		if err := json.Unmarshal(request.Params, &params); err != nil {
@@ -410,20 +314,8 @@ func (s *Server) dispatch(ctx context.Context, request RPCRequest, output io.Wri
 		if err := sess.saveStateDetached(ctx); err != nil {
 			return nil, nil, fmt.Errorf("save session %q: %w", params.SessionID, err)
 		}
-
-		notify := &RPCNotification{
-			JSONRPC: "2.0",
-			Method:  "session/update",
-			Params: map[string]any{
-				"sessionId": params.SessionID,
-				"update": map[string]any{
-					"sessionUpdate": "current_mode_update",
-					"modeId":        mode.String(),
-				},
-			},
-		}
+		notify := &RPCNotification{JSONRPC: "2.0", Method: "session/update", Params: map[string]any{"sessionId": params.SessionID, "update": map[string]any{"sessionUpdate": "current_mode_update", "modeId": mode.String()}}}
 		return nil, notify, nil
-
 	case "session/cancel":
 		var params SessionCancelParams
 		if err := json.Unmarshal(request.Params, &params); err != nil {
@@ -439,7 +331,6 @@ func (s *Server) dispatch(ctx context.Context, request RPCRequest, output io.Wri
 		}
 		sess.Cancel()
 		return map[string]any{}, nil, nil
-
 	case "session/list":
 		var params SessionListParams
 		if len(request.Params) > 0 {
@@ -452,7 +343,26 @@ func (s *Server) dispatch(ctx context.Context, request RPCRequest, output io.Wri
 			return nil, nil, err
 		}
 		return SessionListResult{Sessions: sessions}, nil, nil
-
+	case methodSessionContext:
+		var params ProtonmanSessionContextParams
+		if err := json.Unmarshal(request.Params, &params); err != nil {
+			return nil, nil, fmt.Errorf("decode %s: %w", methodSessionContext, err)
+		}
+		result, err := s.sessionContext(ctx, params.SessionID)
+		if err != nil {
+			return nil, nil, err
+		}
+		return result, nil, nil
+	case methodSessionMemory:
+		var params ProtonmanSessionMemoryParams
+		if err := json.Unmarshal(request.Params, &params); err != nil {
+			return nil, nil, fmt.Errorf("decode %s: %w", methodSessionMemory, err)
+		}
+		result, err := s.sessionMemory(ctx, params.SessionID)
+		if err != nil {
+			return nil, nil, err
+		}
+		return result, nil, nil
 	case "session/delete":
 		var params SessionDeleteParams
 		if err := json.Unmarshal(request.Params, &params); err != nil {
@@ -466,7 +376,6 @@ func (s *Server) dispatch(ctx context.Context, request RPCRequest, output io.Wri
 			return nil, nil, err
 		}
 		return nil, nil, nil
-
 	default:
 		return nil, nil, fmt.Errorf("method %q is not supported", request.Method)
 	}
@@ -489,7 +398,6 @@ func (s *Server) loadOrCreateSession(ctx context.Context, sessionID string, cwd 
 		}
 		return existing, nil
 	}
-
 	sess, err := s.newSession(ctx, sessionID, cwd, mcpServers)
 	if err != nil {
 		return nil, err
@@ -527,9 +435,11 @@ func (s *Server) loadOrCreateSession(ctx context.Context, sessionID string, cwd 
 					return nil, fmt.Errorf("restore session reasoning %q: %w", sessionID, err)
 				}
 			}
+			if err := restoreSessionRuntime(ctx, s, sess, state); err != nil {
+				return nil, fmt.Errorf("restore session runtime %q: %w", sessionID, err)
+			}
 		}
 	}
-
 	s.mu.Lock()
 	s.sessions[sessionID] = sess
 	s.mu.Unlock()
@@ -575,6 +485,7 @@ func (s *Server) newSession(ctx context.Context, sessionID string, cwd string, m
 		runner = created
 	}
 	sess := NewSession(sessionID, cwd, service, registry, runner, s.sessionService, s.agents.ForSession(sessionID))
+	bindSessionRuntime(s, sess)
 	sess.mcpServers = cloneMCPServerConfigs(mcpServers)
 	sess.resource = mcpResource
 	return sess, nil
@@ -589,14 +500,9 @@ func (s *Server) listSessions(ctx context.Context, cwd string) ([]SessionInfo, e
 			continue
 		}
 		seen[id] = true
-		list = append(list, SessionInfo{
-			SessionID: id,
-			Cwd:       sess.cwd,
-			Title:     "Session " + id,
-		})
+		list = append(list, SessionInfo{SessionID: id, Cwd: sess.cwd, Title: "Session " + id, WorkspaceKey: sess.workspaceKey, WorkspaceName: sess.workspaceName})
 	}
 	s.mu.Unlock()
-
 	if s.sessionService != nil {
 		options := app.SessionListOptions{}
 		if cwd != "" {
@@ -614,10 +520,9 @@ func (s *Server) listSessions(ctx context.Context, cwd string) ([]SessionInfo, e
 			if summary.WorkspaceName != "" {
 				title = summary.WorkspaceName + " · " + summary.ID
 			}
-			list = append(list, SessionInfo{SessionID: summary.ID, Cwd: cwd, Title: title})
+			list = append(list, SessionInfo{SessionID: summary.ID, Cwd: cwd, Title: title, WorkspaceKey: summary.WorkspaceKey, WorkspaceName: summary.WorkspaceName, UpdatedAt: summary.UpdatedAt.Format("2006-01-02T15:04:05Z07:00")})
 		}
 	}
-
 	return list, nil
 }
 
