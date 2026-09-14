@@ -41,7 +41,7 @@ func TestE2ETodoToolPersistsAcrossRestart(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	args, _ := json.Marshal(map[string]any{"action": "update", "expected_revision": uint64(0), "operations": []map[string]any{
+	args, _ := json.Marshal(map[string]any{"action": "update", "expectedRevision": uint64(0), "operations": []map[string]any{
 		{"op": "add", "id": "inspect", "text": "Inspect router", "status": "completed"},
 		{"op": "add", "id": "fix", "text": "Fix cache invalidation", "status": "in_progress"},
 		{"op": "add", "id": "test", "text": "Add integration tests", "status": "pending"},
@@ -90,7 +90,7 @@ func TestE2ETodoToolPersistsAcrossRestart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	args2, _ := json.Marshal(map[string]any{"action": "update", "expected_revision": restarted.Snapshot().Revision, "operations": []map[string]any{
+	args2, _ := json.Marshal(map[string]any{"action": "update", "expectedRevision": restarted.Snapshot().Revision, "operations": []map[string]any{
 		{"op": "set_status", "id": "fix", "status": "completed"},
 		{"op": "set_status", "id": "test", "status": "in_progress"},
 	}})
@@ -108,7 +108,7 @@ func TestE2ETodoLivesInSessionAggregateNotWorkspace(t *testing.T) {
 	ws := newTestWorkspace(t)
 	home := newTestHome(t)
 	sessionID := "todo-session-scope"
-	args := `{"action":"update","expected_revision":0,"operations":[{"op":"add","id":"inspect","text":"Inspect session todo","status":"in_progress"}]}`
+	args := `{"action":"update","expectedRevision":0,"operations":[{"op":"add","id":"inspect","text":"Inspect session todo","status":"in_progress"}]}`
 	res := runProton(t, runOptions{
 		args: []string{"-y", "-s", sessionID, "-p", "/call todo " + args},
 		dir:  ws,

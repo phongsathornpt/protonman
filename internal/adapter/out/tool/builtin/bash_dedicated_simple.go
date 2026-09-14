@@ -207,7 +207,7 @@ func dedicatedFindTool(args []string) *dedicatedToolSuggestion {
 	}
 	result := map[string]any{"path": path, "pattern": pattern, "type": kind}
 	if maxDepth > 0 {
-		result["max_depth"] = maxDepth
+		result["maxDepth"] = maxDepth
 	}
 	return &dedicatedToolSuggestion{
 		tool: "find", args: result,

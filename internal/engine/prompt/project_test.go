@@ -92,3 +92,23 @@ func TestLoadProjectInstructionsWithPolicyReadsThrough(t *testing.T) {
 		t.Fatalf("instructions = %q", got)
 	}
 }
+
+func TestLoadProjectInstructionsTruncationPreservesUTF8Boundary(t *testing.T) {
+	dir := t.TempDir()
+	// Place a 3-byte UTF-8 rune (snowman: \u2603) so it spans across MaxProjectInstructionsBytes boundary
+	padding := strings.Repeat("a", MaxProjectInstructionsBytes-1)
+	content := padding + "\u2603 extra text"
+	if err := os.WriteFile(filepath.Join(dir, "AGENTS.md"), []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	got, err := LoadProjectInstructions(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(got, "\uFFFD") {
+		t.Fatalf("truncated instructions contains replacement character: %q", got)
+	}
+	if !strings.Contains(got, "truncated by Protonman") {
+		t.Fatalf("truncated instructions missing truncation notice: %q", got)
+	}
+}

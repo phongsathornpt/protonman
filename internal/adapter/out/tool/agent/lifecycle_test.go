@@ -50,7 +50,7 @@ func TestWaitAgentTimeoutDoesNotCancelChild(t *testing.T) {
 	}
 
 	close(release)
-	call2, _ := tool.NewCall("wait-2", "subagent", json.RawMessage(`{"timeout_seconds":10}`))
+	call2, _ := tool.NewCall("wait-2", "subagent", json.RawMessage(`{"timeoutSeconds":10}`))
 	res, err = wait.Execute(context.Background(), call2)
 	if err != nil {
 		t.Fatal(err)
@@ -79,7 +79,7 @@ func TestAgentLifecycleGetListCancel(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	getCall, _ := tool.NewCall("get", "subagent", json.RawMessage(`{"agent_id":"`+h.ID+`"}`))
+	getCall, _ := tool.NewCall("get", "subagent", json.RawMessage(`{"agentId":"`+h.ID+`"}`))
 	if res, err := NewGetAgent(coord).Execute(context.Background(), getCall); err != nil || !strings.Contains(string(res.StructuredOutput), h.ID) {
 		t.Fatalf("get output=%s err=%v", res.Output, err)
 	}
@@ -87,7 +87,7 @@ func TestAgentLifecycleGetListCancel(t *testing.T) {
 	if res, err := NewListAgents(coord).Execute(context.Background(), listCall); err != nil || !strings.Contains(string(res.StructuredOutput), h.ID) {
 		t.Fatalf("list output=%s err=%v", res.Output, err)
 	}
-	cancelCall, _ := tool.NewCall("cancel", "subagent", json.RawMessage(`{"agent_id":"`+h.ID+`"}`))
+	cancelCall, _ := tool.NewCall("cancel", "subagent", json.RawMessage(`{"agentId":"`+h.ID+`"}`))
 	if _, err := NewCancelAgent(coord).Execute(context.Background(), cancelCall); err != nil {
 		t.Fatal(err)
 	}

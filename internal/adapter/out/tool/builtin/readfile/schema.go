@@ -1,6 +1,8 @@
 package readfile
 
-import "github.com/phongsathornpt/protonman/internal/core/tool"
+import (
+	"github.com/phongsathornpt/protonman/internal/core/tool"
+)
 
 const (
 	DefaultReadFileBytes = 64 * 1024
@@ -13,9 +15,9 @@ type readFileInput struct {
 	Offset       int64  `json:"offset,omitempty"`
 	Limit        int    `json:"limit,omitempty"`
 	Continuation string `json:"continuation,omitempty"`
-	StartLine    int    `json:"start_line,omitempty"`
-	EndLine      int    `json:"end_line,omitempty"`
-	LineNumbers  bool   `json:"line_numbers,omitempty"`
+	StartLine    int    `json:"startLine,omitempty"`
+	EndLine      int    `json:"endLine,omitempty"`
+	LineNumbers  bool   `json:"lineNumbers,omitempty"`
 }
 
 func (readFileHandler) Definition() tool.Definition {
@@ -44,11 +46,11 @@ func (readFileHandler) Definition() tool.Definition {
 				"offset": map[string]any{
 					"type":        "integer",
 					"minimum":     0,
-					"description": "Text-only byte offset; use next_offset from a truncated text result. Ignored when line selection is requested",
+					"description": "Text-only byte offset; use nextOffset from a truncated text result. Ignored when line selection is requested",
 				},
 				"continuation": map[string]any{
 					"type":        "string",
-					"description": "Text-only snapshot token from a truncated result; send it with next_offset to detect file changes. Ignored when line selection is requested",
+					"description": "Text-only snapshot token from a truncated result; send it with nextOffset to detect file changes. Ignored when line selection is requested",
 				},
 				"limit": map[string]any{
 					"type":        "integer",
@@ -56,17 +58,17 @@ func (readFileHandler) Definition() tool.Definition {
 					"maximum":     MaxReadFileBytes,
 					"description": "Text-only output page size; defaults to 64 KiB, may be increased up to 2 MiB, and may extend to finish one UTF-8 code point",
 				},
-				"start_line": map[string]any{
+				"startLine": map[string]any{
 					"type":        "integer",
 					"minimum":     0,
 					"description": "Text-only 1-based first line; selects line mode and takes precedence over byte offset/continuation",
 				},
-				"end_line": map[string]any{
+				"endLine": map[string]any{
 					"type":        "integer",
 					"minimum":     0,
 					"description": "Text-only 1-based inclusive last line; 0 reads through EOF. Selects line mode and takes precedence over byte offset/continuation",
 				},
-				"line_numbers": map[string]any{
+				"lineNumbers": map[string]any{
 					"type":        "boolean",
 					"description": "Text-only; prefix selected lines with their 1-based line number. Enables line mode and takes precedence over byte offset/continuation",
 				},

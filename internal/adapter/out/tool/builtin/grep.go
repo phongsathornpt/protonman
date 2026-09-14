@@ -100,11 +100,11 @@ func (grepHandler) Definition() tool.Definition {
 				"offset": map[string]any{
 					"type":        "integer",
 					"minimum":     0,
-					"description": "Match offset to skip; use next_offset from a truncated result",
+					"description": "Match offset to skip; use nextOffset from a truncated result",
 				},
 				"continuation": map[string]any{
 					"type":        "string",
-					"description": "Snapshot token from a truncated result; send it with next_offset to detect workspace changes",
+					"description": "Snapshot token from a truncated result; send it with nextOffset to detect workspace changes",
 				},
 				"limit": map[string]any{
 					"type":        "integer",

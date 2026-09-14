@@ -13,7 +13,7 @@ import (
 )
 
 func todoCapabilityPatchArgs(revision uint64, operations ...map[string]any) json.RawMessage {
-	payload, _ := json.Marshal(map[string]any{"action": "update", "expected_revision": revision, "operations": operations})
+	payload, _ := json.Marshal(map[string]any{"action": "update", "expectedRevision": revision, "operations": operations})
 	return payload
 }
 
@@ -123,7 +123,7 @@ func TestTodoServiceRejectsStringEncodedUpdateFields(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	call, _ := tool.NewCall("todo-string-fields", "todo", json.RawMessage(`{"action":"update","expected_revision":"0","operations":"[{\"op\":\"add\",\"id\":\"a\",\"text\":\"inspect\",\"status\":\"pending\"}]"}`))
+	call, _ := tool.NewCall("todo-string-fields", "todo", json.RawMessage(`{"action":"update","expectedRevision":"0","operations":"[{\"op\":\"add\",\"id\":\"a\",\"text\":\"inspect\",\"status\":\"pending\"}]"}`))
 	result, err := service.Call(context.Background(), call)
 	if err == nil || result.Failure == nil || result.Failure.Code != tool.ErrorCodeInvalidArguments {
 		t.Fatalf("result=%#v err=%v, want invalid arguments", result, err)

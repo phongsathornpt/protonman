@@ -52,7 +52,7 @@ func TestFindFilesSupportsDepthTypeAndPagination(t *testing.T) {
 	}
 	h := NewFindFiles(ws)
 	result, err := h.Execute(context.Background(), newJSONCall(t, "find-depth", "find", map[string]any{
-		"pattern": "*", "type": "file", "max_depth": 1, "limit": 1,
+		"pattern": "*", "type": "file", "maxDepth": 1, "limit": 1,
 	}))
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)

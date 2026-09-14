@@ -1,14 +1,9 @@
 package openai
 
 import (
-	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"strings"
-	"time"
 
 	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 	"github.com/phongsathornpt/protonman/proton-sdk/internal/providerutil"
@@ -89,101 +84,6 @@ type responsesRequest struct {
 	ToolChoice      string           `json:"tool_choice,omitempty"`
 	MaxOutputTokens int              `json:"max_output_tokens,omitempty"`
 	Reasoning       *reasoningConfig `json:"reasoning,omitempty"`
-}
-
-func (m *LanguageModel) Stream(ctx context.Context, request sdk.Request) (sdk.Stream, error) {
-	if err := request.Validate(); err != nil {
-		return nil, err
-	}
-	if strings.TrimSpace(m.modelID) == "" {
-		return nil, fmt.Errorf("%w: model id is required", sdk.ErrInvalidRequest)
-	}
-	endpoint, encoded, err := m.encodeRequest(request)
-	if err != nil {
-		return nil, err
-	}
-	policy := sdk.RetryPolicy{
-		BaseBackoff:       m.provider.options.RetryBackoff,
-		PostFirstRetryGap: m.provider.options.RetryPostFirstGap,
-		MaxBackoff:        m.provider.options.MaxRetryBackoff,
-		MaxRetryAfter:     m.provider.options.MaxRetryAfter,
-		RetryDelays:       m.provider.options.RetryDelays,
-	}
-	for attempt := 0; ; attempt++ {
-		httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(encoded))
-		if err != nil {
-			return nil, fmt.Errorf("create model request: %w", err)
-		}
-		httpReq.Header.Set("Content-Type", "application/json")
-		httpReq.Header.Set("Accept", "text/event-stream")
-		if m.provider.options.APIKey != "" {
-			httpReq.Header.Set("Authorization", "Bearer "+m.provider.options.APIKey)
-		}
-		if m.provider.options.UserAgent != "" {
-			httpReq.Header.Set("User-Agent", m.provider.options.UserAgent)
-		}
-		for key, values := range m.provider.options.Headers {
-			for _, value := range values {
-				httpReq.Header.Add(key, value)
-			}
-		}
-		providerutil.ApplySessionID(httpReq.Header, request.Metadata.SessionID)
-
-		resp, requestErr := m.provider.options.HTTPClient.Do(httpReq)
-		var providerErr error
-		if requestErr != nil {
-			if ctx.Err() != nil {
-				return nil, ctx.Err()
-			}
-			providerErr = sdk.NewTransportError(m.Provider(), requestErr)
-		} else {
-			if resp.StatusCode == http.StatusOK {
-				return newStream(resp.Body, responseMetadata(m.Provider(), resp.Header), request.Options.IncludeRawChunks, m.Provider()), nil
-			}
-			body, _ := io.ReadAll(io.LimitReader(resp.Body, 64*1024))
-			resp.Body.Close()
-			providerErr = providerError(m.Provider(), resp.StatusCode, body, resp.Header)
-		}
-		if attempt >= m.provider.options.MaxRetries {
-			return nil, providerErr
-		}
-		decision := sdk.DecideRetry(providerErr, attempt+1, policy)
-		if !decision.Retry {
-			return nil, providerErr
-		}
-		sdk.ObserveRetry(ctx, sdk.RetryEvent{
-			Provider: m.Provider(), ModelID: m.modelID, Reason: string(decision.Reason),
-			Attempt: attempt + 1, MaxRetries: m.provider.options.MaxRetries, Delay: decision.Delay,
-		})
-		if err := sdk.WaitForRetry(ctx, decision.Delay); err != nil {
-			return nil, err
-		}
-	}
-}
-
-func responseMetadata(provider string, headers http.Header) sdk.ProviderMetadata {
-	values := map[string]any{}
-	for key, header := range map[string]string{
-		"request_id":    "x-request-id",
-		"organization":  "openai-organization",
-		"project":       "openai-project",
-		"processing_ms": "openai-processing-ms",
-	} {
-		if value := strings.TrimSpace(headers.Get(header)); value != "" {
-			values[key] = value
-		}
-	}
-	if rateLimit := sdk.ParseRateLimitHeaders(headers, time.Now()); rateLimit != nil {
-		values["rate_limit"] = rateLimit
-	}
-	if len(values) == 0 {
-		return nil
-	}
-	raw, err := json.Marshal(values)
-	if err != nil {
-		return nil
-	}
-	return sdk.ProviderMetadata{provider: raw}
 }
 
 func (m *LanguageModel) encodeRequest(request sdk.Request) (string, []byte, error) {

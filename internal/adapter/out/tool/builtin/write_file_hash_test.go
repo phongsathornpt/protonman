@@ -35,7 +35,7 @@ func TestWriteFileRequiresExpectedSHA256ForOverwrite(t *testing.T) {
 	ws := newTestWorkspace(t, nil)
 	writeTestFile(t, ws.Root(), "file.txt", "old\n")
 	_, err := NewWriteFile(ws, &recordingCheckpointStore{id: "hash"}).Execute(context.Background(),
-		newJSONCall(t, "write-missing-hash", "edit", map[string]any{"file_path": "file.txt", "content": "new\n"}))
+		newJSONCall(t, "write-missing-hash", "edit", map[string]any{"filePath": "file.txt", "content": "new\n"}))
 	var toolErr *tool.ToolError
 	if !errors.As(err, &toolErr) || toolErr.Code != tool.ErrorCodeInvalidArguments {
 		t.Fatalf("missing hash error = %v, want invalid arguments", err)
@@ -55,7 +55,7 @@ func TestWriteFileRejectsStaleExpectedSHA256(t *testing.T) {
 	stale := sha256.Sum256([]byte("stale\n"))
 	_, err := NewWriteFile(ws, &recordingCheckpointStore{id: "hash"}).Execute(context.Background(),
 		newJSONCall(t, "write-stale-hash", "edit", map[string]any{
-			"file_path": "file.txt", "content": "new\n", "expected_sha256": fmt.Sprintf("%x", stale[:]),
+			"filePath": "file.txt", "content": "new\n", "expectedSha256": fmt.Sprintf("%x", stale[:]),
 		}))
 	var toolErr *tool.ToolError
 	if !errors.As(err, &toolErr) || toolErr.Code != tool.ErrorCodeConflict {
@@ -77,7 +77,7 @@ func TestWriteFileAcceptsMatchingExpectedSHA256(t *testing.T) {
 	writeTestFile(t, ws.Root(), "file.txt", "old\n")
 	old := sha256.Sum256([]byte("old\n"))
 	result := executeJSON(t, NewWriteFile(ws, &recordingCheckpointStore{id: "hash"}), "write-good-hash", map[string]any{
-		"file_path": "file.txt", "content": "new\n", "expected_sha256": fmt.Sprintf("%x", old[:]),
+		"filePath": "file.txt", "content": "new\n", "expectedSha256": fmt.Sprintf("%x", old[:]),
 	})
 	newDigest := sha256.Sum256([]byte("new\n"))
 	if want := fmt.Sprintf("%x", newDigest[:]); result.SHA256 != want {
@@ -91,7 +91,7 @@ func TestWriteFileAcceptsMatchingExpectedSHA256(t *testing.T) {
 func TestWriteFileCreateDoesNotRequireExpectedSHA256(t *testing.T) {
 	ws := newTestWorkspace(t, nil)
 	result := executeJSON(t, NewWriteFile(ws, &recordingCheckpointStore{id: "hash"}), "write-new", map[string]any{
-		"file_path": "new.txt", "content": "new\n",
+		"filePath": "new.txt", "content": "new\n",
 	})
 	if result.SHA256 == "" {
 		t.Fatal("new file result missing sha256")

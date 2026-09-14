@@ -66,7 +66,7 @@ func (h readFileHandler) Execute(ctx context.Context, call tool.Call) (tool.Resu
 		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "read offset must be non-negative")
 	}
 	if input.StartLine < 0 || input.EndLine < 0 {
-		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "read start_line and end_line must be non-negative")
+		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "read startLine and endLine must be non-negative")
 	}
 	lineMode := input.StartLine > 0 || input.EndLine > 0 || input.LineNumbers
 	if lineMode && input.View != "auto" && input.View != "text" {
@@ -88,7 +88,7 @@ func (h readFileHandler) Execute(ctx context.Context, call tool.Call) (tool.Resu
 		input.StartLine = 1
 	}
 	if input.EndLine > 0 && input.EndLine < input.StartLine {
-		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "read end_line must be greater than or equal to start_line")
+		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "read endLine must be greater than or equal to startLine")
 	}
 	if input.Limit < 0 || input.Limit > MaxReadFileBytes {
 		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "read limit must be between 1 byte and 2 MiB")

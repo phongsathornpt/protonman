@@ -125,15 +125,19 @@ func BuildConversation(service *toolcall.Service, skills *skill.Registry, agents
 	if spec.ModelFactory == nil {
 		return nil, fmt.Errorf("build conversation: language-model factory is required")
 	}
-	languageModel := spec.ModelFactory.Build(LanguageModelRequest{
+	request := LanguageModelRequest{
 		ProviderName: spec.ProviderName, ProviderType: spec.ProviderType, BaseURL: spec.BaseURL, APIKey: spec.APIKey,
 		ModelID: modelID, SessionID: spec.SessionID, AgentProfile: spec.AgentProfile, RequestTimeout: spec.RequestTimeout,
 		RemoteModel: spec.RemoteModel, LowConcurrency: spec.LowConcurrency,
-	})
+	}
+	languageModel := spec.ModelFactory.Build(request)
 	if languageModel == nil {
 		return nil, nil
 	}
-	agents.SetLanguageModel(languageModel)
+	// Children inherit the coordinator's language model. Root-only model
+	// decoration, such as durable-memory retrieval, must not leak into child
+	// turns, so hand the coordinator the undecorated base when one is exposed.
+	agents.SetLanguageModel(subagentLanguageModel(spec.ModelFactory, request, languageModel))
 	promptSpec, loopOptions, err := primaryConversationPolicy(spec)
 	if err != nil {
 		return nil, err

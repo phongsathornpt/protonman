@@ -14,7 +14,12 @@ type fakeRepository struct {
 	workspace []corememory.Entry
 	used      []corememory.UsageRef
 	processed map[string]uint64
+	revision  uint64
 }
+
+// Revision lets tests exercise the cache-invalidation path that a real
+// file-backed repository provides.
+func (r *fakeRepository) Revision() uint64 { return r.revision }
 
 func (r *fakeRepository) Load(_ context.Context, scope corememory.Scope, _ string) ([]corememory.Entry, error) {
 	if scope == corememory.ScopeWorkspace {
@@ -45,6 +50,32 @@ func (r *fakeRepository) Update(_ context.Context, scope corememory.Scope, _ str
 		return err
 	}
 	return r.Replace(context.Background(), scope, "", next)
+}
+
+func (r *fakeRepository) Forget(_ context.Context, scope corememory.Scope, _ string, ids []string) (int, error) {
+	drop := make(map[string]struct{}, len(ids))
+	for _, id := range ids {
+		drop[id] = struct{}{}
+	}
+	removed := 0
+	filter := func(entries []corememory.Entry) []corememory.Entry {
+		kept := make([]corememory.Entry, 0, len(entries))
+		for _, entry := range entries {
+			if _, ok := drop[entry.ID]; ok {
+				removed++
+				continue
+			}
+			kept = append(kept, entry)
+		}
+		return kept
+	}
+	if scope == corememory.ScopeWorkspace {
+		r.workspace = filter(r.workspace)
+	} else {
+		r.global = filter(r.global)
+	}
+	r.revision++
+	return removed, nil
 }
 
 func (r *fakeRepository) RecordUsage(_ context.Context, refs []corememory.UsageRef, _ time.Time) error {

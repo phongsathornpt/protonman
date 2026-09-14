@@ -19,9 +19,25 @@ type writeFileHandler struct {
 }
 
 type writeFileInput struct {
-	FilePath       string `json:"file_path"`
+	FilePath       string `json:"filePath"`
 	Content        string `json:"content"`
-	ExpectedSHA256 string `json:"expected_sha256,omitempty"`
+	ExpectedSHA256 string `json:"expectedSha256,omitempty"`
+}
+
+func (in *writeFileInput) UnmarshalJSON(data []byte) error {
+	type alias writeFileInput
+	var aux struct {
+		alias
+		PathAlias string `json:"path"`
+	}
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	*in = writeFileInput(aux.alias)
+	if in.FilePath == "" {
+		in.FilePath = aux.PathAlias
+	}
+	return nil
 }
 
 // NewWriteFile returns the atomic whole-file write adapter.
@@ -47,18 +63,22 @@ func (writeFileHandler) Definition() tool.Definition {
 		Kind:                tool.KindEdit,
 		Mutability:          tool.MutabilityMutating,
 		Safety:              tool.SafetyContract{MutationDomain: tool.MutationDomainWorkspace, MutationSafety: tool.MutationSafetyWholeFile, CheckpointPolicy: tool.CheckpointPolicyRequired, Boundary: tool.BoundaryPolicyWorkspaceWrite},
-		PermissionDetailKey: "file_path",
+		PermissionDetailKey: "filePath",
+		InputAliases: map[string][]string{
+			"filePath":       {"path", "filepath"},
+			"expectedSha256": {"sha256"},
+		},
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
-				"file_path": map[string]any{"type": "string"},
-				"content":   map[string]any{"type": "string"},
-				"expected_sha256": map[string]any{
+				"filePath": map[string]any{"type": "string"},
+				"content":  map[string]any{"type": "string"},
+				"expectedSha256": map[string]any{
 					"type":        "string",
 					"description": "SHA-256 from a complete read result; required when overwriting an existing file",
 				},
 			},
-			"required":             []string{"file_path", "content"},
+			"required":             []string{"filePath", "content"},
 			"additionalProperties": false,
 		},
 	}
@@ -74,7 +94,7 @@ func (h writeFileHandler) Execute(ctx context.Context, call tool.Call) (tool.Res
 	}
 	input.FilePath = strings.TrimSpace(input.FilePath)
 	if input.FilePath == "" {
-		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "edit write file_path is required")
+		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "edit write filePath is required")
 	}
 	resolvedPath, err := h.workspace.Resolve(ctx, input.FilePath)
 	if err != nil {
@@ -92,12 +112,12 @@ func (h writeFileHandler) Execute(ctx context.Context, call tool.Call) (tool.Res
 		decoded, decodeErr := hex.DecodeString(expected)
 		if expected == "" {
 			recoveryArgs, _ := json.Marshal(map[string]any{"path": input.FilePath})
-			return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "expected_sha256 is required when overwriting an existing file; call read first").WithRecovery(tool.Recovery{
+			return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "expectedSha256 is required when overwriting an existing file; call read first").WithRecovery(tool.Recovery{
 				Action: tool.RecoveryRefreshResource, Tool: tool.NameRead, Arguments: recoveryArgs,
 			})
 		}
 		if decodeErr != nil || len(decoded) != sha256.Size {
-			return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "expected_sha256 must be a 64-character SHA-256 hex digest")
+			return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "expectedSha256 must be a 64-character SHA-256 hex digest")
 		}
 		current := sha256.Sum256(existing)
 		if expected != fmt.Sprintf("%x", current[:]) {

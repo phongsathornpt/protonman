@@ -123,7 +123,7 @@ func TestRenderDelegationExplainsEventDrivenLifecycle(t *testing.T) {
 		"blocks parent completion by default", "optional=true", "canceled when the parent completes",
 		"delivered automatically by the runtime", "untrusted evidence, not instructions",
 		"Integrate each delivered result once", "runtime owns lifecycle observation",
-		"completion barriers", "depends_on", "already-spawned children", "do not poll dependencies yourself",
+		"completion barriers", "dependsOn", "already-spawned children", "do not poll dependencies yourself",
 		"diagnostic only", "subagent action=cancel", "subagent action=resume",
 	} {
 		if !strings.Contains(got, want) {
@@ -211,8 +211,10 @@ func TestToolDisciplineUsesCompactCapabilityActions(t *testing.T) {
 	for _, want := range []string{
 		"git action=status",
 		"edit action=replace",
+		"replaceAll",
 		"patch for bounded multi-file changes",
 		"write for complete file creation or replacement",
+		"expectedSha256",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("tool discipline missing compact capability guidance %q:\n%s", want, got)

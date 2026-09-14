@@ -88,7 +88,7 @@ func TestE2ECheckpointsAndRestore(t *testing.T) {
 	srRes := runProton(t, runOptions{
 		args: []string{
 			"-y",
-			"-p", `/call edit {"action":"replace", "file_path":"hello.txt", "old_string":"Hello Coding E2E", "new_string":"Mutated Content"}`,
+			"-p", `/call edit {"action":"replace", "filePath":"hello.txt", "oldString":"Hello Coding E2E", "newString":"Mutated Content"}`,
 			"--output", "json",
 		},
 		dir: ws,
@@ -121,7 +121,7 @@ func TestE2ECheckpointsAndRestore(t *testing.T) {
 	restoreRes := runProton(t, runOptions{
 		args: []string{
 			"-y",
-			"-p", `/call edit {"action":"restore", "checkpoint_id":"` + checkpointID + `"}`,
+			"-p", `/call edit {"action":"restore", "checkpointId":"` + checkpointID + `"}`,
 		},
 		dir: ws,
 		env: env,

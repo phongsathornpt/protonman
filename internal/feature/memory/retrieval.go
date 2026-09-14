@@ -41,6 +41,20 @@ func NewRetriever(repository corememory.Repository, policy runtimepolicy.MemoryP
 	return &Retriever{repository: repository, policy: policy}
 }
 
+// revision reports the repository's current write revision, or 0 when the
+// repository does not publish one. Callers cache retrieval reads by revision so
+// a correction such as Forget is observed without waiting for a model rebuild.
+func (r *Retriever) revision() uint64 {
+	if r == nil || r.repository == nil {
+		return 0
+	}
+	source, ok := r.repository.(corememory.RevisionSource)
+	if !ok {
+		return 0
+	}
+	return source.Revision()
+}
+
 func (r *Retriever) Retrieve(ctx context.Context, query Query) ([]corememory.Entry, error) {
 	if r == nil || r.repository == nil {
 		return nil, nil

@@ -46,7 +46,7 @@ func (s *FileStore) recordUsage(ctx context.Context, refs []memory.UsageRef, at 
 	for _, dir := range dirs {
 		g := groups[dir]
 		if err := s.withScopeLock(ctx, dir, func() error {
-			entries, err := s.loadUnlocked(dir, g.scope, g.workspaceKey)
+			entries, forgotten, err := s.loadUnlocked(dir, g.scope, g.workspaceKey)
 			if err != nil {
 				return err
 			}
@@ -62,7 +62,7 @@ func (s *FileStore) recordUsage(ctx context.Context, refs []memory.UsageRef, at 
 			if !changed {
 				return nil
 			}
-			return s.writeUnlocked(ctx, dir, entries)
+			return s.writeUnlocked(ctx, dir, entries, forgotten)
 		}); err != nil {
 			return err
 		}

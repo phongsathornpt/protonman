@@ -39,7 +39,7 @@ func TestRegistryForSessionIsolatesTodoState(t *testing.T) {
 	if !ok {
 		t.Fatal("session A todo missing")
 	}
-	call, err := tool.NewCall("a-update", "todo", json.RawMessage(`{"action":"update","expected_revision":0,"operations":[{"op":"add","id":"a","text":"session A","status":"pending"}]}`))
+	call, err := tool.NewCall("a-update", "todo", json.RawMessage(`{"action":"update","expectedRevision":0,"operations":[{"op":"add","id":"a","text":"session A","status":"pending"}]}`))
 	if err != nil {
 		t.Fatal(err)
 	}

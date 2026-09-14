@@ -37,7 +37,9 @@ func ReconcileStatus(ctx context.Context, repo PatchRepository, id string, statu
 			return after, true, nil
 		}
 		if !errors.Is(err, ErrRevisionConflict) {
-			return after, false, err
+			// A failed patch returns a zero-value projection; report the
+			// repository's current state instead of an empty snapshot.
+			return repo.Snapshot(), false, err
 		}
 	}
 	return repo.Snapshot(), false, ErrRevisionConflict

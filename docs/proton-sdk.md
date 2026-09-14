@@ -24,35 +24,70 @@ termination behavior should live with the runtime/turn engine that actually uses
 
 ## Package Shape
 
-The SDK root intentionally remains a flat Go package so callers continue to use
-`protonsdk.Request`, `protonsdk.Message`, `protonsdk.Tool`, and `protonsdk.Event`
-without nested `message.Message` or `stream.Event` APIs.
+`proton-sdk` is structured into Clean Architecture layers with grouping folders while keeping the root package `protonsdk` as a 100% backward-compatible facade so all existing callers continue to work seamlessly without nested import paths.
+
+- **`domain/`** (`package domain`): Pure domain entities, value objects, domain errors, and self-contained validation logic. Zero internal dependencies.
+- **`port/`** (`package port`): Boundary interfaces and extension points (`LanguageModel`, `MetadataModel`, `Stream`, `Middleware`, `SchemaValidator`). Imports `domain`.
+- **`usecase/`** (`package usecase`): Application services and use cases (`collector`, `history`, `schemavalidator`, `registry`, `metadata`). Imports `domain` and `port`.
+- **Root `proton-sdk/`** (`package protonsdk`): Unified facade re-exporting types, constants, variables, and forwarding functions.
+- **`internal/providerutil/`**: Shared provider utilities, configuration normalization, headers parsing, and stream transport runner.
+- **`provider/`**: Protocol provider implementations (`openai`, `anthropic`).
 
 ```text
 proton-sdk/
-  language_model.go
-  request.go
-  requirements.go
-  response.go
-  message.go
-  content.go
-  tool.go
-  reasoning.go
-  stream.go
-  usage.go
-  metadata.go
-  capabilities.go
-  collect.go
-  history.go
-  error.go
-  middleware.go
-  registry.go
-  retry.go
-  retry_observer.go
-  rate_limit.go
+  types.go                 # facade: unified type aliases for domain, port, and usecase
+  model.go                 # facade: model metadata and token limit functions
+  message.go               # facade: message roles, reasoning, and history functions
+  request.go               # facade: request choices and schema validation functions
+  stream.go                # facade: stream events, constructors, and collect functions
+  error.go                 # facade: sentinel errors, retry policy, and rate limit parsing
+  registry.go              # facade: registry and middleware constructors
+  model_test.go
+  message_test.go
+  request_test.go
+  stream_test.go
+  error_test.go
+  registry_test.go
+  ownership_test.go
+  domain/
+    model.go               # ModelCapabilities, RequestRequirements, ModelMetadata, TokenLimits
+    message.go             # Role, ContentPart, Message, ReasoningEffort
+    request.go             # ToolChoice, ModelOptions, Request, Tool, ToolCall, ToolResult
+    stream.go              # FinishReason, EventKind, Event, Usage, Response
+    error.go               # Sentinel errors, ErrorKind, ProviderError, RateLimitInfo, RetryPolicy
+  port/
+    model.go               # LanguageModel, MetadataModel, TokenLimitsModel, ContextWindowModel
+    stream.go              # Stream interface
+    middleware.go          # ModelFactory, StreamFunc, Middleware, MiddlewareFunc
+    validator.go           # SchemaValidator interface
+  usecase/
+    collector.go           # ResponseAccumulator, Collect, CollectStep
+    history.go             # AppendAssistantResponse, AppendAssistantStep, AppendToolResults
+    schemavalidator.go     # ToolSchemaValidator, ValidateToolInput, ValidateToolOutput
+    registry.go            # Registry, WrapLanguageModel
+    metadata.go            # ModelMetadataOf, ModelTokenLimits, ModelContextWindow
+  internal/
+    providerutil/
+      config.go
+      config_test.go
+      headers.go
+      options.go
+      options_test.go
+      transport.go
+      transport_test.go
   provider/
     openai/
+      provider.go
+      client.go
+      request.go
+      stream.go
+      error.go
     anthropic/
+      provider.go
+      client.go
+      request.go
+      stream.go
+      error.go
 ```
 
 Provider wire request/response types remain private to their provider package.

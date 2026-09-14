@@ -223,7 +223,7 @@ Children are coordinator-owned asynchronous runs scoped by session and parent tu
 Lifecycle state is derived from versioned domain events. Durable events are appended
 before lifecycle admission or transition is acknowledged, and restart recovery replays
 the per-session journal before converting process-owned live states to `interrupted`.
-Normal parent turns do not poll child completion. Versioned result references are published to a turn-scoped event stream, consumed with independent cursors, deduplicated by the synthesis coordinator, and delivered to the parent as ephemeral runtime context. After that context is encoded successfully, the synthesis consumer acknowledges the version exactly once with `agent_result_consumed`; this acknowledgement is presentation/telemetry state and never re-enters the result-availability stream. Delegated work is completion-blocking by default. `optional=true` marks speculative work: it remains active for safe event buffering and can be integrated if its result becomes ready, but it does not hold the parent's completion barrier and any still-live optional child is canceled when the parent commits its final response. `depends_on` forms same-turn dependency edges to already-admitted children; dependency waiting occurs before concurrency/workspace admission and does not consume queue-timeout budget. Downstream execution requires every dependency to reach `completed`.
+Normal parent turns do not poll child completion. Versioned result references are published to a turn-scoped event stream, consumed with independent cursors, deduplicated by the synthesis coordinator, and delivered to the parent as ephemeral runtime context. After that context is encoded successfully, the synthesis consumer acknowledges the version exactly once with `agent_result_consumed`; this acknowledgement is presentation/telemetry state and never re-enters the result-availability stream. Delegated work is completion-blocking by default. `optional=true` marks speculative work: it remains active for safe event buffering and can be integrated if its result becomes ready, but it does not hold the parent's completion barrier and any still-live optional child is canceled when the parent commits its final response. `dependsOn` forms same-turn dependency edges to already-admitted children; dependency waiting occurs before concurrency/workspace admission and does not consume queue-timeout budget. Downstream execution requires every dependency to reach `completed`.
 
 Parent-turn termination is also the ownership boundary for asynchronous children. Runtime-context finalization runs on successful completion, failure, and cancellation; it cancels any remaining live children for that turn and releases turn-scoped synthesis cursor/deduplication state. Retained terminal results remain available through explicit inspection until normal retention pruning.
 
@@ -307,7 +307,7 @@ Canonical argument names for common tools are intentionally stable:
 
 - `bash` -> `command`
 - `read` -> `path`
-- `edit` (`write`/`replace`) -> `file_path`
+- `edit` (`write`/`replace`) -> `filePath`
 - `grep` -> `pattern`
 - `web` (`action=fetch`) -> `url`
 

@@ -39,8 +39,15 @@ Desktop reads durable session context through typed Protonman ACP extensions:
 
 - `protonman/session/context` for active Goal and revisioned TODO state
 - `protonman/session/memory` for workspace memory and global preferences
+- `protonman/session/memory/forget` to permanently remove wrong or harmful memory
 
 Memory inspection is read-only. Opening the inspector does not record memory usage or trigger extraction.
+
+Forgetting is a separate capability because it changes future model behavior. The
+workspace key is resolved server-side from the session, so a client can only
+forget memory for the workspace its session is bound to. Workspace scope is the
+default; global scope must be requested explicitly because it changes
+cross-project behavior.
 
 ## Runtime controls
 

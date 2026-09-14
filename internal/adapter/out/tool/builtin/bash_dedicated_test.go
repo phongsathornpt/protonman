@@ -86,7 +86,7 @@ func TestBashRedirectsSimpleInspectionCommands(t *testing.T) {
 		{`rg "TODO" internal`, "grep", map[string]any{"pattern": "TODO", "path": "internal"}},
 		{`grep -R "TODO" internal`, "grep", map[string]any{"pattern": "TODO", "path": "internal"}},
 		{`find internal -name '*.go' -type f -maxdepth 3`, "find", map[string]any{
-			"path": "internal", "pattern": "*.go", "type": "file", "max_depth": 3,
+			"path": "internal", "pattern": "*.go", "type": "file", "maxDepth": 3,
 		}},
 	}
 	for _, test := range tests {

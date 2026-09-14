@@ -13,7 +13,7 @@ func TestE2ESubagentDelegationSuccess(t *testing.T) {
 	server.SetupWorkspaceConfig(t, home)
 
 	res := runProton(t, runOptions{
-		args: []string{"-y", "-p", `/call subagent {"action":"spawn","task":"Explore repository structure","profile":"agility","timeout_seconds":30}`},
+		args: []string{"-y", "-p", `/call subagent {"action":"spawn","task":"Explore repository structure","profile":"agility","timeoutSeconds":30}`},
 		dir:  ws,
 		env:  []string{"PROTONMAN_HOME=" + home},
 	})
@@ -54,11 +54,11 @@ func TestE2ESubagentDelegationRejectsExcessiveTimeout(t *testing.T) {
 	ws := newTestWorkspace(t)
 	home := newTestHome(t)
 	res := runProton(t, runOptions{
-		args: []string{"-y", "-p", `/call subagent {"action":"spawn","task":"Do work","profile":"agility","timeout_seconds":86401}`},
+		args: []string{"-y", "-p", `/call subagent {"action":"spawn","task":"Do work","profile":"agility","timeoutSeconds":86401}`},
 		dir:  ws,
 		env:  []string{"PROTONMAN_HOME=" + home},
 	})
-	if res.exitCode == 0 || !strings.Contains(res.stdout+res.stderr, "timeout_seconds") {
+	if res.exitCode == 0 || !strings.Contains(res.stdout+res.stderr, "timeoutSeconds") {
 		t.Fatalf("expected timeout validation error, got: %s %s", res.stdout, res.stderr)
 	}
 }

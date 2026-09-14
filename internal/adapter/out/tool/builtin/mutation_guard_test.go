@@ -22,7 +22,7 @@ func TestWriteFileRejectsDirtyUnownedPath(t *testing.T) {
 	}
 	ctx := workspace.WithMutationSession(context.Background())
 	_, err := NewWriteFile(ws, &recordingCheckpointStore{id: "guard"}).Execute(ctx,
-		newJSONCall(t, "write-guard", "edit", map[string]any{"file_path": "tracked.txt", "content": "agent overwrite\n"}))
+		newJSONCall(t, "write-guard", "edit", map[string]any{"filePath": "tracked.txt", "content": "agent overwrite\n"}))
 	var toolErr *tool.ToolError
 	if !errors.As(err, &toolErr) || toolErr.Code != tool.ErrorCodePreexistingWorkspaceChange {
 		t.Fatalf("write error = %v, want preexisting workspace change", err)
@@ -40,7 +40,7 @@ func TestContextualEditClaimsDirtyPathForLaterOverwrite(t *testing.T) {
 	ctx := workspace.WithMutationSession(context.Background())
 	replace := NewSearchReplace(ws, &recordingCheckpointStore{id: "replace"})
 	if _, err := replace.Execute(ctx, newJSONCall(t, "replace-claim", "edit", map[string]any{
-		"file_path": "tracked.txt", "old_string": "user", "new_string": "agent+user",
+		"filePath": "tracked.txt", "oldString": "user", "newString": "agent+user",
 	})); err != nil {
 		t.Fatalf("contextual edit failed: %v", err)
 	}
@@ -48,7 +48,7 @@ func TestContextualEditClaimsDirtyPathForLaterOverwrite(t *testing.T) {
 	current := readTestFile(t, ws.Root(), "tracked.txt")
 	digest := sha256.Sum256(current)
 	if _, err := write.Execute(ctx, newJSONCall(t, "write-owned", "edit", map[string]any{
-		"file_path": "tracked.txt", "content": "owned overwrite\n", "expected_sha256": fmt.Sprintf("%x", digest[:]),
+		"filePath": "tracked.txt", "content": "owned overwrite\n", "expectedSha256": fmt.Sprintf("%x", digest[:]),
 	})); err != nil {
 		t.Fatalf("owned overwrite blocked: %v", err)
 	}

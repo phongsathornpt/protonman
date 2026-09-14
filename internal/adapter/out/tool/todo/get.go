@@ -55,7 +55,7 @@ func (h getTodoHandler) Execute(ctx context.Context, call tool.Call) (tool.Resul
 	if h.sessionID == "" {
 		payload, err = json.Marshal(snapshot)
 	} else {
-		payload, err = json.Marshal(map[string]any{"session_id": h.sessionID, "revision": snapshot.Revision, "items": snapshot.Items})
+		payload, err = json.Marshal(map[string]any{"sessionId": h.sessionID, "session_id": h.sessionID, "revision": snapshot.Revision, "items": snapshot.Items})
 	}
 	if err != nil {
 		return tool.Result{}, tool.WrapToolError(tool.ErrorCodeExecution, "encode todo snapshot", err)

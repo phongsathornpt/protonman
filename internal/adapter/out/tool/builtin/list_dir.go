@@ -62,11 +62,11 @@ func (listDirHandler) Definition() tool.Definition {
 				"offset": map[string]any{
 					"type":        "integer",
 					"minimum":     0,
-					"description": "Visible entry offset; use next_offset from a truncated result",
+					"description": "Visible entry offset; use nextOffset from a truncated result",
 				},
 				"continuation": map[string]any{
 					"type":        "string",
-					"description": "Snapshot token from a truncated result; send it with next_offset to detect directory changes",
+					"description": "Snapshot token from a truncated result; send it with nextOffset to detect directory changes",
 				},
 				"limit": map[string]any{
 					"type":        "integer",
@@ -77,7 +77,7 @@ func (listDirHandler) Definition() tool.Definition {
 			},
 			"additionalProperties": false,
 		},
-		InputAliases: map[string][]string{"path": {"dir_path", "directory"}},
+		InputAliases: map[string][]string{"path": {"directory"}},
 		OutputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
