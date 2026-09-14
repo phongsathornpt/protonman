@@ -153,16 +153,14 @@ func (a *application) renderActiveView() {
 	a.mu.Lock()
 	activeID := a.state.ActiveSessionID
 	busy := a.sessionBusyLocked(activeID)
-	markdown := ""
-	if transcript := a.transcripts[activeID]; transcript != nil {
-		markdown = transcript.String()
+	transcript := ""
+	if current := a.transcripts[activeID]; current != nil {
+		transcript = current.String()
 	}
+	markdown := transcript
 	for _, session := range a.state.Sessions {
 		if session.ID == activeID {
-			markdown += renderSessionContext(session.Context)
-			markdown += renderMemory(session.Context.Memory)
-			markdown += renderTimeline(session.Timeline)
-			markdown += renderSubagents(session.Subagents)
+			markdown = renderConversation(transcript, session)
 			break
 		}
 	}
@@ -182,6 +180,17 @@ func (a *application) renderActiveView() {
 			a.stop.Disable()
 		}
 	})
+}
+
+// renderConversation intentionally excludes goal, TODO and durable memory.
+// Those are inspector state, not conversation content, and rendering them inline
+// makes the primary chat surface behave like a debug dump.
+func renderConversation(transcript string, session desktopstate.SessionState) string {
+	var out strings.Builder
+	out.WriteString(transcript)
+	out.WriteString(renderTimeline(session.Timeline))
+	out.WriteString(renderSubagents(session.Subagents))
+	return out.String()
 }
 
 func terminalToolStatus(status string) bool {
