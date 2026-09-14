@@ -16,6 +16,14 @@ Memory is deliberately separate from conversation retention and compaction. Comp
 8. Processing is idempotent per persisted session revision.
 9. Canonical managed system-prompt bytes do not change because memory changes.
 10. Durable-memory decoration must preserve the provider-visible message-role sequence.
+11. A root model factory never retrieves memory until it is bound to an active
+    workspace, and a session switch rebinds it rather than leaving it on the
+    session it was constructed with.
+12. Subagent admission builds from the undecorated base factory. A child that
+    inherits the root model must not inherit root memory decoration.
+13. A wrong or harmful memory can be permanently forgotten. Forgetting is
+    authorized from trusted session context, never from a client-supplied
+    workspace key, and it takes effect on the next turn.
 
 ## Filesystem layout
 
@@ -59,6 +67,13 @@ Each entry carries a stable ID, retrieval key/value, optional keywords, confiden
 ## Extraction write path
 
 `internal/feature/memory.Extractor` runs asynchronously after the first usable primary model is built. Work is bounded by `runtimepolicy.DurableMemory()`.
+
+The composition root builds one session-bound root factory
+(`NewSessionBoundModelFactory`) and binds it to the active session through
+`app.BindRootMemory`. The TUI re-binds on every runner reconfiguration, so a
+`/resume` switch moves retrieval and extraction onto the newly active session.
+Extraction is claimed once per active session per process; switching sessions
+re-arms it, while repeated model builds within one session do not.
 
 The extraction pass:
 
@@ -108,6 +123,8 @@ Ranking favors:
 
 Value-only overlap is intentionally too weak to qualify unless the lexical evidence is substantial. Selected entries update best-effort usage metadata only after they pass the relevance threshold. Failure to update usage counters never fails the user turn.
 
+The model-request decorator caches a retrieval result per `(workspace, revision, query)`. The repository revision lets a correction such as forget take effect on the next turn instead of being masked by that cache. Repositories that do not implement `RevisionSource` are treated as permanently unversioned, so the cache then persists until the model is rebuilt.
+
 ## Model-request injection
 
 Memory does not become an `Additional Instructions` section and does not modify the managed system prompt. The primary model factory decorates provider requests after the turn engine has already produced the canonical request.
@@ -131,7 +148,17 @@ The decorated content exists only in the provider request. It is not appended to
 
 A historical message that merely contains the memory marker does not disable future retrieval. Only an already-decorated current user turn suppresses duplicate decoration.
 
-The primary runtime uses `NewPrimaryModelFactory`. The subagent model resolver intentionally keeps the undecorated base model factory, preserving child isolation.
+The primary runtime builds root-session models from the session-bound memory
+factory. Two boundaries keep children isolated:
+
+- Explicit subagent model overrides are resolved from the undecorated base
+  factory in the composition root.
+- Profiles without an explicit model override inherit the model installed on the
+  coordinator. `app.BuildConversation` installs the undecorated base there, so
+  inheritance cannot smuggle memory decoration into a child turn.
+
+All other callers may build directly from the application model factory and
+receive retrieval decoration.
 
 ## Runtime policy
 
@@ -140,6 +167,7 @@ The primary runtime uses `NewPrimaryModelFactory`. The subagent model resolver i
 - maximum entries injected per turn;
 - maximum injected context bytes;
 - maximum entries retained per index;
+- maximum remembered tombstones per index;
 - maximum sessions processed per startup extraction pass;
 - maximum extraction transcript bytes;
 - idle age and extraction timeout;
@@ -147,6 +175,45 @@ The primary runtime uses `NewPrimaryModelFactory`. The subagent model resolver i
 - stale ages for repository facts and failure memories.
 
 Do not duplicate these values in adapters, UI code, or tests.
+
+## Correction and forget path
+
+`app.Memories.Forget` is the correction capability for durable memory. It is
+deliberately separate from `Inspect`, because inspecting is side-effect free while
+forgetting changes future model behavior.
+
+Authority is fail-closed:
+
+- workspace scope requires the caller's trusted workspace key; a blank key is
+  rejected rather than widened to every workspace;
+- global scope must be requested explicitly and cannot carry a workspace key;
+- the ACP method resolves the workspace key from session state, so a client
+  cannot retarget a forget at an unrelated workspace;
+- one request is bounded to `maxForgetIDs` entries.
+
+`memoryfs.FileStore.Forget` removes entries under the same per-scope write lock
+and atomic index replacement used by `Replace`/`Update`, so a concurrent
+retrieval or extraction merge cannot observe a partial delete. Removing an
+unknown ID is not an error, which keeps a repeated request idempotent.
+
+### Why forgetting needs a tombstone
+
+Extraction does not store a memory once; it re-derives an entry's ID
+deterministically from `(scope, workspace, kind, key)` and merges by ID on every
+pass over a source session. A plain delete would therefore be silently undone the
+next time that session was extracted, because the regenerated entry's ID would no
+longer be present in the index.
+
+`Forget` consequently records each ID in a bounded `forgotten` list stored in the
+same index file. Every write path (`Update`, `Replace`, `RecordUsage`) loads that
+list and suppresses tombstoned IDs, and `Load` filters against it as defense in
+depth. The tombstone set is persisted, so the correction survives a process
+restart, and it is the reason a forgotten memory stays forgotten.
+
+The tombstone set is bounded by `MaxForgottenEntries`. Eviction drops the oldest
+forgets first, so the most recent correction is always honored; the bound is
+larger than `MaxIndexEntries` because a tombstone is far smaller than the entry it
+suppresses.
 
 ## Security and trust boundary
 
@@ -156,6 +223,7 @@ Persisted session state already excludes raw tool arguments. Durable memory adds
 - generated keys, values, and keywords are redacted before they are accepted;
 - candidates must cite persisted message IDs from the source session;
 - historical markup is escaped before provider-request injection;
+- a forget request cannot name a workspace or scope it was not authorized for;
 - workspace-scoped entries cannot escape their workspace identity;
 - memory never substitutes for live verification when a fact can drift.
 

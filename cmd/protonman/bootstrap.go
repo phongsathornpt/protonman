@@ -245,12 +245,14 @@ func buildRuntime(ctx context.Context, options cliOptions) (*appRuntime, error) 
 		persistDone()
 	}
 	baseModelFactory := model.Factory{}
+	rootMemoryFactory := memoryfeature.NewSessionBoundModelFactory(baseModelFactory, memoryStore, stateStore, runtimepolicy.DurableMemory())
+	app.BindRootMemory(rootMemoryFactory, sessionID, workspaceKey(workDir))
 	application := app.Services{
 		Models:       app.NewModels(model.Catalog{}),
 		Providers:    app.NewProviders(config.NewUserProviderRepository(homeDir)),
 		Projects:     app.NewProjects(config.ProjectSettingsStore{}),
 		UserSettings: app.NewUserSettings(config.NewUserSettingsStore(homeDir)),
-		ModelFactory: memoryfeature.NewPrimaryModelFactory(baseModelFactory, memoryStore, stateStore, sessionID, workspaceKey(workDir), runtimepolicy.DurableMemory()),
+		ModelFactory: rootMemoryFactory,
 	}
 	failed := true
 	defer func() {
