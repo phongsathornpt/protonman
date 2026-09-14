@@ -8,10 +8,8 @@ import (
 	"strings"
 )
 
-// ProtocolVersion is the ACP protocol version supported by Protonman.
 const ProtocolVersion = 1
 
-// JSON-RPC 2.0 error codes.
 const (
 	CodeParseError     = -32700
 	CodeInvalidRequest = -32600
@@ -171,8 +169,9 @@ type SessionNewParams struct {
 
 type SessionNewResult struct {
 	MetaCarrier
-	SessionID string            `json:"sessionId"`
-	Modes     *SessionModeState `json:"modes,omitempty"`
+	SessionID     string                `json:"sessionId"`
+	Modes         *SessionModeState     `json:"modes,omitempty"`
+	ConfigOptions []SessionConfigOption `json:"configOptions,omitempty"`
 }
 
 type SessionLoadParams struct {
@@ -183,12 +182,24 @@ type SessionLoadParams struct {
 	MCPServers            []MCPServerConfig `json:"mcpServers,omitempty"`
 }
 
+type SessionLoadResult struct {
+	MetaCarrier
+	Modes         *SessionModeState     `json:"modes,omitempty"`
+	ConfigOptions []SessionConfigOption `json:"configOptions,omitempty"`
+}
+
 type SessionResumeParams struct {
 	MetaCarrier
 	SessionID             string            `json:"sessionId"`
 	Cwd                   string            `json:"cwd,omitempty"`
 	AdditionalDirectories []string          `json:"additionalDirectories,omitempty"`
 	MCPServers            []MCPServerConfig `json:"mcpServers,omitempty"`
+}
+
+type SessionResumeResult struct {
+	MetaCarrier
+	Modes         *SessionModeState     `json:"modes,omitempty"`
+	ConfigOptions []SessionConfigOption `json:"configOptions,omitempty"`
 }
 
 type SessionSetModeParams struct {
