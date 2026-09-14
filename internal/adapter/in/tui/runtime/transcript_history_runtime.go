@@ -79,7 +79,7 @@ func (m *bubbleModel) appendToolCall(call tool.Call) {
 		if cmd == "" {
 			cmd = extractStringArg(call.Arguments, "command")
 		}
-		state.StartToolCell(&tuihistory.ExecCell{CallID: call.ID, Name: call.Name, Command: cmd, Running: true, StartedAt: time.Now()})
+		state.StartToolCell(&tuihistory.ExecCell{CallID: call.ID, Name: call.Name, Command: cmd, Running: true, StartedAt: time.Now(), Icons: m.icons})
 	case tool.KindEdit:
 		if call.Name == "edit" && strings.EqualFold(extractStringArg(call.Arguments, "action"), "restore") {
 			state.StartToolCell(&tuihistory.ToolCell{CallID: call.ID, Name: call.Name, Target: target, ToolKind: resolvedKind, Running: true, Icons: m.icons})
