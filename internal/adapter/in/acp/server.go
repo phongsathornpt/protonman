@@ -66,9 +66,9 @@ func New(service *toolcall.Service, registry tool.Registry, runner app.Conversat
 		return nil, fmt.Errorf("%w: registry is required", ErrInvalidServer)
 	}
 	s := &Server{
-		service: service,
-		registry: registry,
-		sessions: make(map[string]*Session),
+		service:            service,
+		registry:           registry,
+		sessions:           make(map[string]*Session),
 		sessionDirectories: make(map[string][]string),
 	}
 	for _, opt := range opts {
