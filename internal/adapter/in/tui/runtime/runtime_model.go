@@ -82,15 +82,17 @@ type agentModelState struct {
 }
 
 type turnModelState struct {
-	turnProgress    turnProgress
-	activeTurnOwner string
-	busy            bool
-	imagePreparing  bool
-	activity        string
-	pendingActivity string
-	busyStarted     time.Time
-	turnCancel      context.CancelFunc
-	turnEvents      <-chan tea.Msg
+	turnProgress       turnProgress
+	activeTurnOwner    string
+	busy               bool
+	imagePreparing     bool
+	imagePreparationID uint64
+	pendingImageInput  *tuiconv.QueuedInput
+	activity           string
+	pendingActivity    string
+	busyStarted        time.Time
+	turnCancel         context.CancelFunc
+	turnEvents         <-chan tea.Msg
 }
 
 type modelSetupState struct {
