@@ -231,7 +231,7 @@ func (s *Server) dispatch(ctx context.Context, request RPCRequest, output io.Wri
 			AgentCapabilities: AgentCapabilities{
 				LoadSession:         true,
 				PromptCapabilities:  PromptCapabilities{Image: true, Audio: false, EmbeddedContext: true},
-				SessionCapabilities: SessionCapabilities{Resume: &struct{}{}, Delete: &struct{}{}, AdditionalDirectories: &struct{}{}},
+				SessionCapabilities: SessionCapabilities{Resume: &struct{}{}, Delete: &struct{}{}, Close: &struct{}{}, AdditionalDirectories: &struct{}{}},
 				MCPCapabilities:     MCPCapabilities{HTTP: true, SSE: false},
 			},
 			AgentInfo:   ImplementationInfo{Name: "proton", Title: "Protonman AI Coding Agent", Version: buildinfo.Version()},
@@ -330,6 +330,19 @@ func (s *Server) dispatch(ctx context.Context, request RPCRequest, output io.Wri
 			return nil, nil, fmt.Errorf("unknown session %q", params.SessionID)
 		}
 		sess.Cancel()
+		return map[string]any{}, nil, nil
+	case "session/close":
+		var params SessionCloseParams
+		if err := json.Unmarshal(request.Params, &params); err != nil {
+			return nil, nil, fmt.Errorf("decode session/close: %w", err)
+		}
+		params.SessionID = strings.TrimSpace(params.SessionID)
+		if params.SessionID == "" {
+			return nil, nil, errors.New("sessionId is required")
+		}
+		if err := s.closeSession(ctx, params.SessionID); err != nil {
+			return nil, nil, err
+		}
 		return map[string]any{}, nil, nil
 	case "session/list":
 		var params SessionListParams
@@ -546,29 +559,45 @@ func sessionListTitle(id, workspaceName, preview string) string {
 	return "Session " + id
 }
 
-func (s *Server) deleteSession(ctx context.Context, sessionID string) error {
+func (s *Server) closeSession(ctx context.Context, sessionID string) error {
 	s.mu.Lock()
-	sess := s.sessions[sessionID]
-	s.mu.Unlock()
-	if sess != nil {
-		sess.Cancel()
+	sess, ok := s.sessions[sessionID]
+	if ok {
+		delete(s.sessions, sessionID)
 	}
+	s.mu.Unlock()
+	if !ok || sess == nil {
+		return fmt.Errorf("unknown session %q", sessionID)
+	}
+
+	sess.Cancel()
 	if _, err := s.agents.ForSession(sessionID).CancelSessionAndWait(ctx); err != nil {
 		return fmt.Errorf("cancel session subagents %q: %w", sessionID, err)
 	}
+	if err := sess.Close(); err != nil {
+		return fmt.Errorf("close session %q: %w", sessionID, err)
+	}
+	return nil
+}
+
+func (s *Server) deleteSession(ctx context.Context, sessionID string) error {
+	s.mu.Lock()
+	_, active := s.sessions[sessionID]
+	s.mu.Unlock()
+
 	if s.sessionService != nil {
 		if err := s.sessionService.Delete(ctx, sessionID); err != nil {
 			return fmt.Errorf("delete session state %q: %w", sessionID, err)
 		}
 	}
-	s.mu.Lock()
-	sess = s.sessions[sessionID]
-	delete(s.sessions, sessionID)
-	s.mu.Unlock()
-	if sess != nil {
-		if err := sess.Close(); err != nil {
-			return fmt.Errorf("close session %q: %w", sessionID, err)
+	if active {
+		if err := s.closeSession(ctx, sessionID); err != nil {
+			return err
 		}
+		return nil
+	}
+	if _, err := s.agents.ForSession(sessionID).CancelSessionAndWait(ctx); err != nil {
+		return fmt.Errorf("cancel session subagents %q: %w", sessionID, err)
 	}
 	return nil
 }
