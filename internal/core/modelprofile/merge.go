@@ -37,6 +37,9 @@ func mergeProfile(dst *Resolved, src Profile) {
 	if src.Compaction != (CompactionPolicy{}) {
 		dst.Compaction = src.Compaction
 	}
+	if src.VisionPolicy != (VisionPolicy{}) {
+		dst.VisionPolicy = src.VisionPolicy
+	}
 	if src.Compatibility.ToolSchemaDialect != ToolSchemaDefault {
 		dst.Compatibility.ToolSchemaDialect = src.Compatibility.ToolSchemaDialect
 		dst.Provenance.ToolSchemaDialect = MetadataSourceBuiltin
