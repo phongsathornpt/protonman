@@ -311,6 +311,7 @@ func (m *bubbleModel) sessionHeaderView() string {
 		Workspace:      transcriptutil.FormatWorkspaceDisplay(m.workDir),
 		Compact:        profile.CompactHeader(),
 		Minimal:        profile.MinimalHeader(),
+		Icons:          m.icons,
 	})
 }
 
