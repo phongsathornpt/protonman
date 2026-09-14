@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"charm.land/lipgloss/v2"
 	agentuistate "github.com/phongsathornpt/protonman/internal/adapter/in/tui/state/agentui"
 	panecommon "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane/common"
 	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/style"
@@ -25,7 +26,7 @@ type AgentsSnapshot struct {
 func AgentRows(snapshot AgentsSnapshot) []string {
 	retained := append([]agent.AgentStatus(nil), snapshot.Retained...)
 	if len(retained) == 0 {
-		rows := []string{tuistyle.BrandStyle.Render("Agents")}
+		rows := []string{tuistyle.PaneTitleStyle.Render("Agents")}
 		if !snapshot.SubagentsEnabled {
 			rows = append(rows, tuistyle.WarningStyle.Render("Subagents disabled"), tuistyle.MutedStyle.Render("Universal handles work directly."))
 		} else {
@@ -44,7 +45,7 @@ func AgentRows(snapshot AgentsSnapshot) []string {
 	if len(visible) > limit {
 		visible = visible[:limit]
 	}
-	rows := []string{tuistyle.BrandStyle.Render(fmt.Sprintf("Agents · %d retained", len(retained)))}
+	rows := []string{tuistyle.PaneTitleStyle.Render(fmt.Sprintf("Agents · %d retained", len(retained)))}
 	if !snapshot.SubagentsEnabled {
 		rows = append(rows, tuistyle.WarningStyle.Render("New delegation disabled · existing agents remain manageable"))
 	}
@@ -63,7 +64,7 @@ func AgentRows(snapshot AgentsSnapshot) []string {
 			activityLabel = string(st.State)
 		}
 		header := AgentDisplayProfile(st) + "  " + textview.PadRight(activityLabel, 10) + " " + FormatElapsed(AgentDisplayDuration(st, now))
-		rows = append(rows, tuistyle.CommandStyle.Render(strings.TrimSpace(header)))
+		rows = append(rows, agentStateStyle(st.State).Render(strings.TrimSpace(header)))
 		if task := strings.TrimSpace(st.Task); task != "" {
 			rows = append(rows, "  "+textview.TruncateEllipsis(task, max(12, snapshot.Width-8)))
 		}
@@ -88,6 +89,23 @@ func AgentRows(snapshot AgentsSnapshot) []string {
 		rows = append(rows, "", tuistyle.MutedStyle.Render(textview.TruncateEllipsis("Status: "+agentuistate.LegendCompact(), max(12, snapshot.Width-4))))
 	}
 	return rows
+}
+
+func agentStateStyle(state agent.State) lipgloss.Style {
+	switch state {
+	case agent.StateCompleted:
+		return tuistyle.SuccessStyle
+	case agent.StateFailed:
+		return tuistyle.ErrorStyle
+	case agent.StateCanceling, agent.StateInterrupted:
+		return tuistyle.WarningStyle
+	case agent.StateQueued, agent.StateCanceled, agent.StateResumed:
+		return tuistyle.MutedStyle
+	case agent.StateRunning, agent.StateResuming:
+		return tuistyle.ActivityStyle
+	default:
+		return tuistyle.MutedStyle
+	}
 }
 
 func AgentDisplayProfile(st agent.AgentStatus) string {

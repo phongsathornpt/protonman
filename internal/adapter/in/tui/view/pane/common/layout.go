@@ -15,6 +15,7 @@ const (
 	overlayHeaderMinHeight = 18
 	defaultHorizontalInset = 1
 	minimumViewportHeight  = 1
+	tinyComposerReserve    = 3
 )
 
 type Tone uint8
@@ -150,8 +151,16 @@ func CompactRows(rows []string) []string {
 }
 
 func RenderModal(width, height int, border color.Color, rows []string) string {
+	mode := ModeForSize(width, height)
 	style := tuistyle.ModalStyle.BorderForeground(border).MaxWidth(max(1, width-4))
-	if ModeForHeight(height) != LayoutNormal {
+	if mode == LayoutTiny {
+		// Every cell matters on tiny terminals. Remove decorative horizontal
+		// padding, use the full width, and reserve enough rows for the composer so
+		// a bottom pane can never push the full frame beyond the terminal height.
+		style = style.Padding(0).
+			MaxWidth(max(1, width)).
+			MaxHeight(max(1, height-tinyComposerReserve))
+	} else if mode == LayoutCompact {
 		style = style.Padding(0, 1)
 	}
 	return style.Render(strings.Join(rows, "\n"))

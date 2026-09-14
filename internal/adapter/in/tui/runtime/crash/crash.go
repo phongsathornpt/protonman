@@ -109,7 +109,7 @@ func (m *CrashModel) View() tea.View {
 	contentWidth := min(84, max(24, m.width-4))
 	innerWidth := contentWidth - 4
 	var parts []string
-	headline := tuistyle.BrandStyle.Render("Protonman crashed")
+	headline := tuistyle.ErrorStyle.Bold(true).Render("Protonman crashed")
 	subtext := tuistyle.MutedStyle.Render("An unexpected error stopped the session.")
 	parts = append(parts, lipgloss.JoinVertical(lipgloss.Center, headline, subtext))
 	errBoxStyle := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(tuistyle.AccentError).Padding(0, 1).Width(contentWidth)

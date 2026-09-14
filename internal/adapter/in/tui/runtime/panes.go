@@ -10,6 +10,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/paneutil"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/state/agentui"
+	panecommon "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane/common"
+	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/style"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/app"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
@@ -51,7 +53,7 @@ func (*shortcutsPaneView) Render(ctx paneRenderContext) string {
 		rows = append(rows, "", mutedStyle.Render(legend))
 	}
 	help := paneKeyboardHelp(ctx.width-4, "esc/?", "Go Back")
-	return renderModalRows(ctx, accentAssistant, paneSection("Shortcuts", rows, help, "", ctx.width))
+	return renderModalRows(ctx, panecommon.ToneColor(panecommon.ToneAssistant), paneSection("Shortcuts", rows, help, "", ctx.width))
 }
 
 func (*shortcutsPaneView) HandlePaneKey(_ paneRenderContext, message tea.KeyPressMsg) paneKeyResult {
@@ -98,8 +100,8 @@ func (v *lowConcurrencyPaneView) Render(ctx paneRenderContext) string {
 		marker := "  "
 		style := mutedStyle
 		if i == v.index {
-			marker = brandStyle.Render(glyphPrompt)
-			style = bodyStyle.Bold(true)
+			marker = tuistyle.SelectionStyle.Render(glyphPrompt)
+			style = tuistyle.SelectionStyle
 		}
 		rows = append(rows, marker+style.Render(choice.label)+"  "+mutedStyle.Render(choice.desc))
 	}
@@ -113,7 +115,7 @@ func (v *lowConcurrencyPaneView) Render(ctx paneRenderContext) string {
 		rows = append(rows, "", mutedStyle.Render("Effective  off · no active model"))
 	}
 	help := paneKeyboardHelp(ctx.width-4, "↑/↓", "Navigate", "enter", "Apply", "esc/q", "Go Back")
-	return renderModalRows(ctx, accentAssistant, paneSection("Low Concurrency", rows, help, "", ctx.width))
+	return renderModalRows(ctx, panecommon.ToneColor(panecommon.ToneAssistant), paneSection("Low Concurrency", rows, help, "", ctx.width))
 }
 
 func (v *lowConcurrencyPaneView) HandlePaneKey(_ paneRenderContext, message tea.KeyPressMsg) paneKeyResult {
@@ -171,13 +173,13 @@ func (v *permissionModePaneView) Render(ctx paneRenderContext) string {
 		marker := "  "
 		style := mutedStyle
 		if i == v.index {
-			marker = brandStyle.Render(glyphPrompt)
-			style = bodyStyle.Bold(true)
+			marker = tuistyle.SelectionStyle.Render(glyphPrompt)
+			style = tuistyle.SelectionStyle
 		}
 		rows = append(rows, marker+style.Render(label))
 	}
 	help := paneKeyboardHelp(ctx.width-4, "↑/↓", "Navigate", "enter", "Select", "esc/q", "Go Back")
-	return renderModalRows(ctx, accentAssistant, paneSection("Permission Mode", rows, help, "", ctx.width))
+	return renderModalRows(ctx, panecommon.ToneColor(panecommon.ToneAssistant), paneSection("Permission Mode", rows, help, "", ctx.width))
 }
 
 func (v *permissionModePaneView) HandlePaneKey(_ paneRenderContext, message tea.KeyPressMsg) paneKeyResult {
@@ -300,8 +302,8 @@ func (skillSetupDelegate) Render(w io.Writer, m list.Model, index int, item list
 	prefix := "  "
 	style := bodyStyle
 	if index == m.Index() {
-		prefix = brandStyle.Render(glyphPrompt)
-		style = bodyStyle.Bold(true)
+		prefix = tuistyle.SelectionStyle.Render(glyphPrompt)
+		style = tuistyle.SelectionStyle
 	}
 	_, _ = fmt.Fprint(w, prefix+style.Render(truncateWithEllipsis(entry.Title(), maxInt(1, m.Width()-2))))
 }
@@ -397,8 +399,8 @@ func (v *skillsPaneView) Render(ctx paneRenderContext) string {
 		prefix := "  "
 		style := bodyStyle
 		if index == v.picker.Index() {
-			prefix = brandStyle.Render(glyphPrompt)
-			style = bodyStyle.Bold(true)
+			prefix = tuistyle.SelectionStyle.Render(glyphPrompt)
+			style = tuistyle.SelectionStyle
 		}
 		listRows = append(listRows, prefix+style.Render(truncateWithEllipsis(item.Title(), maxInt(1, ctx.width-8))))
 	}
@@ -410,7 +412,7 @@ func (v *skillsPaneView) Render(ctx paneRenderContext) string {
 		status = selected.name + " · " + status
 	}
 	rows := paneSection("Skills", listRows, help, status, ctx.width)
-	return renderModalRows(ctx, accentAssistant, rows)
+	return renderModalRows(ctx, panecommon.ToneColor(panecommon.ToneAssistant), rows)
 }
 
 func (v *skillsPaneView) HandlePaneKey(ctx paneRenderContext, message tea.KeyPressMsg) paneKeyResult {
@@ -515,7 +517,7 @@ func (v *sessionResumePaneView) Render(ctx paneRenderContext) string {
 	if !v.initialized || len(v.items) == 0 {
 		rows := []string{mutedStyle.Render("No sessions found.")}
 		help := paneKeyboardHelp(ctx.width-4, "esc/q", "Go Back")
-		return renderModalRows(ctx, accentAssistant, paneSection("Sessions", rows, help, "0 sessions", ctx.width))
+		return renderModalRows(ctx, panecommon.ToneColor(panecommon.ToneAssistant), paneSection("Sessions", rows, help, "0 sessions", ctx.width))
 	}
 	v.picker.SetSize(sessionResumeListWidth(ctx), sessionResumeListHeight(ctx))
 	help := paneKeyboardHelp(ctx.width-4, "↑/↓", "Navigate", "enter", "Resume", "/", "Filter", "esc/q", "Close")
@@ -535,8 +537,8 @@ func (v *sessionResumePaneView) Render(ctx paneRenderContext) string {
 		prefix := "  "
 		style := bodyStyle
 		if index == v.picker.Index() {
-			prefix = brandStyle.Render(glyphPrompt)
-			style = bodyStyle.Bold(true)
+			prefix = tuistyle.SelectionStyle.Render(glyphPrompt)
+			style = tuistyle.SelectionStyle
 		}
 		idLabel := item.summary.ID
 		currentTag := ""
@@ -578,7 +580,7 @@ func (v *sessionResumePaneView) Render(ctx paneRenderContext) string {
 		}
 	}
 	rows := paneSection("Sessions", listRows, help, status, ctx.width)
-	return renderModalRows(ctx, accentAssistant, rows)
+	return renderModalRows(ctx, panecommon.ToneColor(panecommon.ToneAssistant), rows)
 }
 
 func (v *sessionResumePaneView) HandlePaneKey(_ paneRenderContext, message tea.KeyPressMsg) paneKeyResult {

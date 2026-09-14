@@ -49,7 +49,8 @@ func PermissionView(snapshot PermissionSnapshot) PermissionRender {
 	case panecommon.ToneError:
 		titleStyle = tuistyle.ErrorStyle
 	}
-	if panecommon.ModeForHeight(snapshot.Height) == panecommon.LayoutTiny {
+	mode := panecommon.ModeForSize(snapshot.Width, snapshot.Height)
+	if mode == panecommon.LayoutTiny {
 		contentWidth := max(8, snapshot.Width-8)
 		selected := ""
 		if len(snapshot.Options) > 0 {
@@ -58,7 +59,7 @@ func PermissionView(snapshot PermissionSnapshot) PermissionRender {
 		return PermissionRender{Rows: []string{
 			titleStyle.Render(textview.TruncateEllipsis(snapshot.Title, contentWidth)),
 			tuistyle.MutedStyle.Render(textview.TruncateEllipsis(snapshot.ToolName+" · "+snapshot.Detail, contentWidth)),
-			tuistyle.BrandStyle.Render(tuistyle.GlyphPrompt + selected),
+			tuistyle.SelectionStyle.Render(tuistyle.GlyphPrompt + selected),
 		}, Tone: snapshot.Tone}
 	}
 	maxWidth := max(1, snapshot.Width-8)
@@ -70,7 +71,7 @@ func PermissionView(snapshot PermissionSnapshot) PermissionRender {
 		detailLines = append(detailLines, textview.WrapLines(extra, max(1, maxWidth-6))...)
 	}
 	maxDetailLines := 6
-	if panecommon.ModeForHeight(snapshot.Height) == panecommon.LayoutCompact {
+	if mode == panecommon.LayoutCompact {
 		maxDetailLines = 2
 	}
 	if len(detailLines) > maxDetailLines {
@@ -82,12 +83,12 @@ func PermissionView(snapshot PermissionSnapshot) PermissionRender {
 		marker := "  "
 		if i == index {
 			marker = tuistyle.GlyphPrompt
-			rows = append(rows, tuistyle.BrandStyle.Render(marker+option))
+			rows = append(rows, tuistyle.SelectionStyle.Render(marker+option))
 			continue
 		}
 		rows = append(rows, tuistyle.MutedStyle.Render(marker+option))
 	}
-	if panecommon.ModeForHeight(snapshot.Height) == panecommon.LayoutCompact {
+	if mode == panecommon.LayoutCompact {
 		rows = panecommon.CompactRows(rows)
 	}
 	return PermissionRender{Rows: rows, Tone: snapshot.Tone}

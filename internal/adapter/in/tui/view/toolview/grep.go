@@ -83,7 +83,7 @@ func highlightGrepTerms(content string, terms []string) string {
 		idx := strings.Index(strings.ToLower(result), strings.ToLower(term))
 		if idx != -1 && idx+len(term) <= len(result) {
 			matched := result[idx : idx+len(term)]
-			return tuistyle.BodyStyle.Render(result[:idx]) + tuistyle.BrandStyle.Render(matched) + tuistyle.BodyStyle.Render(result[idx+len(term):])
+			return tuistyle.BodyStyle.Render(result[:idx]) + tuistyle.FocusStyle.Render(matched) + tuistyle.BodyStyle.Render(result[idx+len(term):])
 		}
 	}
 	return tuistyle.BodyStyle.Render(result)

@@ -43,33 +43,58 @@ func RenderSessionHeader(model SessionHeaderModel) string {
 	if context == "" {
 		context = strings.TrimSpace(model.Workspace)
 	}
-	right := []string{tuistyle.ProductName, sessionHeaderMeta(model), "", context}
 	lines := make([]string, len(logo))
 	for i, mark := range logo {
 		lines[i] = tuistyle.BrandMarkStyle.Render(mark)
-		if right[i] == "" {
-			continue
-		}
 		gap := max(0, sessionHeaderTextColumn-ansi.StringWidth(mark))
 		available := max(1, width-sessionHeaderTextColumn)
-		if i == 0 {
-			text := ansi.Truncate(right[i], available, "")
-			lines[i] += strings.Repeat(" ", gap) + tuistyle.BrandStyle.Render(text)
-			continue
+
+		var text string
+		switch i {
+		case 0:
+			text = tuistyle.BrandStyle.Render(ansi.Truncate(tuistyle.ProductName, available, ""))
+		case 1:
+			text = renderSessionHeaderMeta(model, available)
+		case 3:
+			text = tuistyle.MutedStyle.Render(ansi.Truncate(context, available, "…"))
 		}
-		text := ansi.Truncate(right[i], available, "…")
-		lines[i] += strings.Repeat(" ", gap) + tuistyle.MutedStyle.Render(text)
+		if text != "" {
+			lines[i] += strings.Repeat(" ", gap) + text
+		}
 	}
 	return strings.Join(lines, "\n")
 }
 
 func renderCompactSessionHeader(model SessionHeaderModel) string {
 	brand := tuistyle.CompactBrand(model.Width)
-	meta := sessionHeaderMeta(model)
-	if meta == "" || model.Width < 12 {
+	if sessionHeaderMeta(model) == "" || model.Width < 12 {
 		return brand
 	}
-	return brand + "\n" + tuistyle.MutedStyle.Render(ansi.Truncate(meta, model.Width, "…"))
+	return brand + "\n" + renderSessionHeaderMeta(model, model.Width)
+}
+
+// renderSessionHeaderMeta keeps the model visually primary while operational
+// flags stay quieter. The words remain meaningful without color, and ANSI-aware
+// truncation keeps narrow layouts deterministic.
+func renderSessionHeaderMeta(model SessionHeaderModel, width int) string {
+	if width <= 0 {
+		return ""
+	}
+	parts := make([]string, 0, 3)
+	if name := strings.TrimSpace(model.Model); name != "" {
+		parts = append(parts, tuistyle.SystemStyle.Render(name))
+	}
+	if model.LowConcurrency {
+		parts = append(parts, tuistyle.MutedStyle.Render("low"))
+	}
+	if model.GoalActive {
+		parts = append(parts, tuistyle.FocusStyle.Render("goal active"))
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	separator := tuistyle.MutedStyle.Render(tuistyle.GlyphSep)
+	return ansi.Truncate(strings.Join(parts, separator), width, "…")
 }
 
 func sessionHeaderMeta(model SessionHeaderModel) string {

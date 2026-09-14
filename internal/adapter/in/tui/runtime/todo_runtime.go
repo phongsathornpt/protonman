@@ -2,14 +2,16 @@ package runtime
 
 import (
 	"fmt"
-	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/paneutil"
 	"io"
 	"strings"
 
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/list"
 	tea "charm.land/bubbletea/v2"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/paneutil"
+	panecommon "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane/common"
 	todopane "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane/todo"
+	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/style"
 	tododomain "github.com/phongsathornpt/protonman/internal/feature/todo"
 	"slices"
 )
@@ -125,11 +127,11 @@ func (i todoListItem) Title() string {
 func todoStatusGlyph(status tododomain.Status) string {
 	switch status {
 	case tododomain.StatusCompleted:
-		return successStyle.Render(glyphToolSuccess)
+		return tuistyle.TodoCompletedStyle.Render(glyphToolSuccess)
 	case tododomain.StatusInProgress:
-		return planStyle.Render(glyphTodoActive)
+		return tuistyle.TodoActiveStyle.Render(glyphTodoActive)
 	default:
-		return mutedStyle.Render(glyphTodoPending)
+		return tuistyle.TodoPendingStyle.Render(glyphTodoPending)
 	}
 }
 
@@ -146,8 +148,8 @@ func (todoSetupDelegate) Render(w io.Writer, m list.Model, index int, item list.
 	prefix := "  "
 	textStyle := bodyStyle
 	if index == m.Index() {
-		prefix = brandStyle.Render(glyphPrompt)
-		textStyle = bodyStyle.Bold(true)
+		prefix = tuistyle.SelectionStyle.Render(glyphPrompt)
+		textStyle = tuistyle.TodoSelectedStyle
 	}
 	glyph := todoStatusGlyph(entry.item.Status)
 	availWidth := maxInt(1, m.Width()-4)
@@ -257,8 +259,8 @@ func (v *todoPaneView) Render(ctx paneRenderContext) string {
 		prefix := "  "
 		textStyle := bodyStyle
 		if index == v.picker.Index() {
-			prefix = brandStyle.Render(glyphPrompt)
-			textStyle = bodyStyle.Bold(true)
+			prefix = tuistyle.SelectionStyle.Render(glyphPrompt)
+			textStyle = tuistyle.TodoSelectedStyle
 		}
 		glyph := todoStatusGlyph(item.item.Status)
 		text := textStyle.Render(truncateWithEllipsis(item.item.Text, availTextWidth))
@@ -286,7 +288,7 @@ func (v *todoPaneView) Render(ctx paneRenderContext) string {
 		}
 	}
 	rows := paneSection("Tasks", listRows, footer, "", ctx.width)
-	return renderModalRows(ctx, accentAssistant, rows)
+	return renderModalRows(ctx, panecommon.ToneColor(panecommon.ToneAssistant), rows)
 }
 
 func (m *bubbleModel) openTodoPane() tea.Cmd {
