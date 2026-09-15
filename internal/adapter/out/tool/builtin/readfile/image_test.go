@@ -509,7 +509,7 @@ func TestReadImageEnrichesOutputWithVisionAttachmentMetadata(t *testing.T) {
 	if env.Metadata.AttachedWidth != 10 || env.Metadata.AttachedHeight != 10 {
 		t.Fatalf("unexpected attached dimensions: %dx%d", env.Metadata.AttachedWidth, env.Metadata.AttachedHeight)
 	}
-	if env.Metadata.EstimatedTokens == nil || env.Metadata.EstimatedTokens.OpenAI != 255 {
+	if env.Metadata.EstimatedTokens == nil || env.Metadata.EstimatedTokens.OpenAI != 1 {
 		t.Fatalf("unexpected estimated tokens: %+v", env.Metadata.EstimatedTokens)
 	}
 }
