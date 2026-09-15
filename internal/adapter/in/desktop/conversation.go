@@ -18,58 +18,81 @@ func (a *application) handleEvent(event acpclient.Event) {
 	if event.Method != "session/update" {
 		return
 	}
-	var raw struct {
-		SessionID string `json:"sessionId"`
-		Update    struct {
-			Kind       string          `json:"sessionUpdate"`
-			ToolCallID string          `json:"toolCallId"`
-			Title      string          `json:"title"`
-			Status     string          `json:"status"`
-			Content    json.RawMessage `json:"content"`
-			AgentID    string          `json:"agentId"`
-			Profile    string          `json:"profile"`
-			Task       string          `json:"task"`
-			Summary    string          `json:"summary"`
-		} `json:"update"`
-	}
-	if json.Unmarshal(event.Params, &raw) != nil || raw.SessionID == "" {
+	sessionID, kind, rawUpdate, ok := decodeSessionUpdate(event.Params)
+	if !ok {
 		return
 	}
 
-	if raw.Update.Kind == subagentSessionUpdate {
-		a.reduceSubagentUpdate(raw.SessionID, raw.Update.AgentID, raw.Update.Profile, raw.Update.Task, raw.Update.Summary, raw.Update.Status)
-		return
-	}
-
-	text := sessionUpdateText(raw.Update.Content)
-	update := desktopstate.SessionUpdate{
-		SessionID:  raw.SessionID,
-		Kind:       raw.Update.Kind,
-		ToolCallID: raw.Update.ToolCallID,
-		Title:      raw.Update.Title,
-		Status:     raw.Update.Status,
-		Text:       text,
-	}
-
-	switch raw.Update.Kind {
-	case "user_message_chunk":
-		a.appendTranscript(raw.SessionID, formatUserTranscript(text))
-		return
-	case "agent_message_chunk":
-		a.appendTranscript(raw.SessionID, text)
-		return
-	}
-	if reduced, ok := desktopstate.TimelineEvent(update); ok {
-		a.mu.Lock()
-		a.state = desktopstate.Reduce(a.state, reduced)
-		active := a.state.ActiveSessionID == raw.SessionID
-		a.mu.Unlock()
-		if active {
-			a.refreshActiveView()
+	switch kind {
+	case subagentSessionUpdate:
+		var update subagentUpdate
+		if json.Unmarshal(rawUpdate, &update) == nil {
+			a.reduceSubagentUpdate(sessionID, update.AgentID, update.Profile, update.Task, update.Summary, update.Status)
 		}
-		if raw.Update.Kind == "tool_call_update" && terminalToolStatus(raw.Update.Status) {
-			a.refreshSessionContext(raw.SessionID, true)
-			a.refreshSessionMemory(raw.SessionID, true)
+		return
+	case "user_message_chunk", "agent_message_chunk":
+		var update messageChunkUpdate
+		if json.Unmarshal(rawUpdate, &update) != nil {
+			return
+		}
+		text := sessionUpdateText(update.Content)
+		if kind == "user_message_chunk" {
+			a.appendTranscript(sessionID, formatUserTranscript(text))
+		} else {
+			a.appendTranscript(sessionID, text)
+		}
+		return
+	case "config_option_update":
+		var update configOptionUpdate
+		if json.Unmarshal(rawUpdate, &update) == nil {
+			a.applySessionConfigOptions(sessionID, update.ConfigOptions)
+		}
+		return
+	case "session_info_update":
+		var update sessionInfoUpdate
+		if json.Unmarshal(rawUpdate, &update) == nil {
+			a.applySessionInfoUpdate(sessionID, update)
+		}
+		return
+	case "current_mode_update":
+		var update currentModeUpdate
+		if json.Unmarshal(rawUpdate, &update) == nil {
+			a.applyCurrentModeUpdate(sessionID, update)
+		}
+		return
+	case "available_commands_update":
+		var update availableCommandUpdate
+		if json.Unmarshal(rawUpdate, &update) == nil {
+			a.applyAvailableCommandsUpdate(sessionID, update)
+		}
+		return
+	case "usage_update":
+		var update usageUpdate
+		if json.Unmarshal(rawUpdate, &update) == nil {
+			a.applyUsageUpdate(sessionID, update)
+		}
+		return
+	case "tool_call", "tool_call_update":
+		var wire toolUpdate
+		if json.Unmarshal(rawUpdate, &wire) != nil {
+			return
+		}
+		update := desktopstate.SessionUpdate{
+			SessionID: sessionID, Kind: kind, ToolCallID: wire.ToolCallID,
+			Title: wire.Title, Status: wire.Status, Text: sessionUpdateText(wire.Content),
+		}
+		if reduced, ok := desktopstate.TimelineEvent(update); ok {
+			a.mu.Lock()
+			a.state = desktopstate.Reduce(a.state, reduced)
+			active := a.state.ActiveSessionID == sessionID
+			a.mu.Unlock()
+			if active {
+				a.refreshActiveView()
+			}
+			if kind == "tool_call_update" && terminalToolStatus(wire.Status) {
+				a.refreshSessionContext(sessionID, true)
+				a.refreshSessionMemory(sessionID, true)
+			}
 		}
 	}
 }
