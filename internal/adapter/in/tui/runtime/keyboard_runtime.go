@@ -197,8 +197,10 @@ func (m *bubbleModel) dispatch(line string) tea.Cmd {
 
 func (m *bubbleModel) dispatchInput(input tuiconv.QueuedInput) tea.Cmd {
 	display := submissionDisplayText(input)
-	if history := submissionHistoryText(input); history != "" {
-		m.panes.bottom.recordHistory(history)
+	if len(input.Attachments) == 0 {
+		if history := submissionHistoryText(input); history != "" {
+			m.panes.bottom.recordHistory(history)
+		}
 	}
 	if len(input.Attachments) == 0 && isCommandLine(input.Text) {
 		parsed := parseCommand(input.Text)
