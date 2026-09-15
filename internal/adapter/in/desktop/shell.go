@@ -66,16 +66,19 @@ func (a *application) initPermissionControls() {
 
 func (a *application) initRuntimeControls() {
 	a.modelProvider = widget.NewEntry()
-	a.modelProvider.SetPlaceHolder("provider")
-	a.modelID = widget.NewEntry()
-	a.modelID.SetPlaceHolder("model")
-	a.applyModel = widget.NewButton("Apply model", a.setRuntimeModel)
-	a.reasoningSelect = widget.NewSelect([]string{"auto", "none", "minimal", "low", "medium", "high", "xhigh", "max"}, func(value string) {
+	a.modelProvider.SetText("ACP")
+	a.modelProvider.Disable()
+	a.modelSelect = widget.NewSelect(nil, func(value string) {
+		if !a.runtimeSync {
+			a.setRuntimeModel(value)
+		}
+	})
+	a.reasoningSelect = widget.NewSelect(nil, func(value string) {
 		if !a.runtimeSync {
 			a.setRuntimeReasoning(value)
 		}
 	})
-	a.lowSelect = widget.NewSelect([]string{"auto", "on", "off"}, func(value string) {
+	a.lowSelect = widget.NewSelect(nil, func(value string) {
 		if !a.runtimeSync {
 			a.setRuntimeLowConcurrency(value)
 		}
@@ -85,9 +88,8 @@ func (a *application) initRuntimeControls() {
 	a.runtimePanel = container.NewVBox(
 		widget.NewSeparator(),
 		widget.NewLabelWithStyle("Runtime", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
-		container.NewGridWithColumns(2, widget.NewLabel("Provider"), a.modelProvider),
-		container.NewGridWithColumns(2, widget.NewLabel("Model"), a.modelID),
-		a.applyModel,
+		container.NewGridWithColumns(2, widget.NewLabel("Protocol"), a.modelProvider),
+		container.NewGridWithColumns(2, widget.NewLabel("Model"), a.modelSelect),
 		container.NewGridWithColumns(2, widget.NewLabel("Reasoning"), a.reasoningSelect),
 		container.NewGridWithColumns(2, widget.NewLabel("Low concurrency"), a.lowSelect),
 	)
