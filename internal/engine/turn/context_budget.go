@@ -201,10 +201,22 @@ func compactRequestToModelBudgetWithVisionPolicy(request sdk.Request, limits sdk
 	if messageTarget < 1 {
 		messageTarget = 1
 	}
-	request.Messages = conversation.Retain(request.Messages, conversation.RetentionPolicy{
-		MaxBytes:                     messageTarget * estimatedBytesPerToken,
-		RecentMessages:               policy.MinRecentMessages,
-		MaxHistoricalToolResultBytes: 2048,
-	})
+
+	retained, err := conversation.RetainByCost(
+		request.Messages,
+		policy.MinRecentMessages,
+		2048,
+		messageTarget,
+		func(messages []sdk.Message) (int, error) {
+			candidate := request
+			candidate.Messages = messages
+			candidate.Tools = nil
+			return estimateRequestTokensWithVisionPolicy(candidate, visionPolicy)
+		},
+	)
+	if err != nil {
+		return request, decision, err
+	}
+	request.Messages = retained
 	return request, decision, nil
 }
