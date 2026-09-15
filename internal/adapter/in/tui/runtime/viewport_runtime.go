@@ -67,6 +67,7 @@ func (m *bubbleModel) refreshViewportWithScroll(scroll viewportScrollSnapshot) {
 
 func (m *bubbleModel) setViewportContent(content string, fullHistory bool) {
 	m.viewport.SetContent(content)
+	m.invalidateViewportView()
 	m.conversationViewport.staleTail = false
 	m.conversationViewport.lineAnchors = nil
 	if m.historyState != nil {
@@ -79,7 +80,9 @@ func (m *bubbleModel) setViewportContent(content string, fullHistory bool) {
 	if len(historyAnchors) == 0 {
 		return
 	}
-	m.conversationViewport.lineAnchors = append([]tuihistory.ScrollAnchor(nil), historyAnchors...)
+	// ScrollAnchors returns an owned snapshot; copying it again here doubles
+	// linearly-sized allocation and memory traffic on every full refresh.
+	m.conversationViewport.lineAnchors = historyAnchors
 }
 
 func (m *bubbleModel) captureViewportScroll() viewportScrollSnapshot {
@@ -103,6 +106,7 @@ func (m *bubbleModel) captureViewportScroll() viewportScrollSnapshot {
 func (m *bubbleModel) restoreViewportScroll(scroll viewportScrollSnapshot) {
 	if scroll.follow {
 		m.viewport.GotoBottom()
+		m.invalidateViewportView()
 		m.conversationViewport.setFollowing(true)
 		return
 	}
@@ -115,6 +119,7 @@ func (m *bubbleModel) restoreViewportScroll(scroll viewportScrollSnapshot) {
 	}
 	if m.viewport.YOffset() != yOffset {
 		m.viewport.SetYOffset(yOffset)
+		m.invalidateViewportView()
 	}
 }
 
@@ -139,6 +144,7 @@ func (m *bubbleModel) updateConversationViewport(message tea.Msg) tea.Cmd {
 	m.hydrateViewportForScroll()
 	updated, command := m.viewport.Update(message)
 	m.viewport = updated
+	m.invalidateViewportView()
 	m.conversationViewport.setFollowing(m.viewport.AtBottom())
 	return command
 }
@@ -153,5 +159,6 @@ func (m *bubbleModel) scrollConversationLines(delta int) {
 	} else {
 		m.viewport.ScrollDown(delta)
 	}
+	m.invalidateViewportView()
 	m.conversationViewport.setFollowing(m.viewport.AtBottom())
 }

@@ -152,10 +152,22 @@ type presentationModelState struct {
 	panes              paneState
 	nextID             uint64
 	layout             layoutState
+	viewportViewCache  viewportViewCache
+	liveViewCache      string
+	liveViewCacheValid bool
 	sessionHeaderCache sessionHeaderCache
 	keyboardCapability keyboardCapability
 	transientNotice    string
 	transientNoticeID  uint64
+}
+
+type viewportViewCache struct {
+	valid     bool
+	content   string
+	width     int
+	height    int
+	yOffset   int
+	lineCount int
 }
 
 type bubbleModel struct {

@@ -29,10 +29,25 @@ func (m *bubbleModel) renderedViewport() string {
 	if m == nil {
 		return ""
 	}
-	return m.viewport.View()
+	cache := &m.viewportViewCache
+	lineCount := m.viewport.TotalLineCount()
+	if cache.valid && cache.width == m.viewport.Width() && cache.height == m.viewport.Height() &&
+		cache.yOffset == m.viewport.YOffset() && cache.lineCount == lineCount {
+		return cache.content
+	}
+	cache.content = m.viewport.View()
+	cache.width = m.viewport.Width()
+	cache.height = m.viewport.Height()
+	cache.yOffset = m.viewport.YOffset()
+	cache.lineCount = lineCount
+	cache.valid = true
+	return cache.content
 }
 
 func (m *bubbleModel) liveView() string {
+	if m.liveViewCacheValid {
+		return m.liveViewCache
+	}
 	frame := m.layout.frame
 	parts := make([]string, 0, 7)
 	if frame.header != "" {
@@ -63,7 +78,14 @@ func (m *bubbleModel) liveView() string {
 	if frame.footer != "" {
 		parts = append(parts, frame.footer)
 	}
-	return strings.Join(parts, "\n")
+	m.liveViewCache = strings.Join(parts, "\n")
+	m.liveViewCacheValid = true
+	return m.liveViewCache
+}
+
+func (m *bubbleModel) invalidateViewportView() {
+	m.viewportViewCache.valid = false
+	m.liveViewCacheValid = false
 }
 
 func (m *bubbleModel) footerView() string {
@@ -233,11 +255,13 @@ func (m *bubbleModel) applyFrameLayout(scroll viewportScrollSnapshot, frame fram
 	m.layout.generation++
 	frame.generation = m.layout.generation
 	m.layout.frame = frame
+	m.invalidateViewportView()
 	m.layout.geometry = panecommon.ResolveFrameGeometry(m.layout.width, m.layout.height, frame.height)
 	viewportHeight := m.layout.geometry.ViewportHeight
 	if m.viewport.Width() != m.layout.width || m.viewport.Height() != viewportHeight {
 		m.viewport.SetWidth(m.layout.width)
 		m.viewport.SetHeight(viewportHeight)
+		m.invalidateViewportView()
 	}
 	m.refreshViewportWithScroll(scroll)
 }
@@ -254,6 +278,7 @@ func (m *bubbleModel) refreshFrameLayout() {
 	m.layout.generation++
 	frame.generation = m.layout.generation
 	m.layout.frame = frame
+	m.invalidateViewportView()
 	m.layout.geometry = panecommon.ResolveFrameGeometry(m.layout.width, m.layout.height, frame.height)
 }
 
