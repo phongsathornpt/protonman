@@ -2,7 +2,7 @@ package imageprep
 
 import (
 	"bytes"
-	"encoding/base64"
+	"crypto/sha256"
 	"fmt"
 	"image"
 	_ "image/gif"
@@ -20,9 +20,17 @@ const MaxSnapshotBytes = 32 * 1024 * 1024
 
 type Snapshot struct {
 	MIMEType string
-	Data     string
+	Bytes    []byte
+	Digest   [32]byte
 	Width    int
 	Height   int
+}
+
+// CloneBytes returns an owned copy of the immutable snapshot payload. Callers
+// crossing an API boundary may encode this payload without retaining the
+// temporary source file or mutating the canonical snapshot.
+func (s Snapshot) CloneBytes() []byte {
+	return append([]byte(nil), s.Bytes...)
 }
 
 // ValidateSourceDimensions applies the same allocation-safety bound used before
@@ -75,7 +83,8 @@ func SnapshotLocal(path string) (Snapshot, error) {
 
 	return Snapshot{
 		MIMEType: mime,
-		Data:     base64.StdEncoding.EncodeToString(data),
+		Bytes:    data,
+		Digest:   sha256.Sum256(data),
 		Width:    config.Width,
 		Height:   config.Height,
 	}, nil
