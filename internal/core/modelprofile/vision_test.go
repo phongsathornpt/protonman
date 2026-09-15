@@ -32,6 +32,27 @@ func TestResolveBuiltinVisionPolicies(t *testing.T) {
 	}
 }
 
+func TestResolveBuiltinMuseSpark13SupportsVision(t *testing.T) {
+	resolved := ResolveBuiltin("openai", "muse-spark-1.3-contributor", CatalogMetadata{})
+	if resolved.Capabilities.Vision != SupportYes {
+		t.Fatalf("vision support = %v, want %v", resolved.Capabilities.Vision, SupportYes)
+	}
+	if resolved.Provenance.Vision != MetadataSourceBuiltin {
+		t.Fatalf("vision provenance = %v, want %v", resolved.Provenance.Vision, MetadataSourceBuiltin)
+	}
+}
+
+func TestCatalogCanDisableBuiltinMuseSparkVision(t *testing.T) {
+	disabled := false
+	resolved := ResolveBuiltin("openai", "muse-spark-1.3-contributor", CatalogMetadata{Vision: &disabled})
+	if resolved.Capabilities.Vision != SupportNo {
+		t.Fatalf("vision support = %v, want %v", resolved.Capabilities.Vision, SupportNo)
+	}
+	if resolved.Provenance.Vision != MetadataSourceCatalog {
+		t.Fatalf("vision provenance = %v, want %v", resolved.Provenance.Vision, MetadataSourceCatalog)
+	}
+}
+
 func TestEffectiveVisionPolicyFallsBackConservatively(t *testing.T) {
 	got := EffectiveVisionPolicy(Resolved{})
 	want := DefaultVisionPolicy()
