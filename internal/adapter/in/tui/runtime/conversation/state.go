@@ -19,6 +19,9 @@ const (
 type Attachment struct {
 	Placeholder string
 	Path        string
+	// Temporary means the TUI owns Path and may delete it once the attachment
+	// has been snapshotted, discarded, or removed from the queue.
+	Temporary bool
 }
 
 // QueuedInput preserves the complete user submission while another turn or
