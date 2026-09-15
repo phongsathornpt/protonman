@@ -88,6 +88,7 @@ func (l *Loop) prepareRoundRequest(
 ) (sdk.Request, toolDispatchState, bool, error) {
 	var tools []tool.Definition
 	reqMessages := append([]model.Message(nil), history...)
+	hasImageInput := requestContainsImage(reqMessages)
 	dispatch := toolDispatchState{reason: toolDispatchDisabledNoTools}
 
 	if forceNoProgressSynthesis {
@@ -120,6 +121,9 @@ func (l *Loop) prepareRoundRequest(
 	}
 	if l.promptSpec != nil {
 		spec := l.effectivePromptSpec(tools, promptExtras)
+		if hasImageInput {
+			spec.ExtraInstructions = append(spec.ExtraInstructions, prompt.AttachedImageInstruction)
+		}
 		spec.GroundingEvidence = string(grounding.evidence)
 		if projectInstructions != "" {
 			if base := strings.TrimSpace(spec.ProjectInstructions); base != "" {
@@ -135,7 +139,10 @@ func (l *Loop) prepareRoundRequest(
 			"prompt_version", prompt.Version,
 			"prompt_bytes", len(systemPrompt),
 			"tool_count", len(tools),
+			"native_image_input", hasImageInput,
 		)
+	} else if hasImageInput {
+		reqMessages = append([]model.Message{{Role: model.RoleSystem, Content: prompt.AttachedImageInstruction}}, reqMessages...)
 	}
 
 	slog.DebugContext(ctx, "turn tool dispatch state",
