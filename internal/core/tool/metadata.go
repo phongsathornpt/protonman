@@ -155,7 +155,7 @@ func targetEdit(args map[string]any) string {
 func affectedEdit(args map[string]any) []string {
 	switch strings.ToLower(ExtractString(args, "action")) {
 	case "write", "replace":
-		return affectedSinglePath("file_path", "path", "file", "filename", "target", "destination", "move_path")(args)
+		return affectedSinglePath("filePath", "file_path", "path", "file", "filename", "target", "destination", "move_path")(args)
 	case "patch":
 		return affectedPatch(args)
 	default:

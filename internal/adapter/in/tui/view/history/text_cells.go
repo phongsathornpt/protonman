@@ -9,7 +9,10 @@ import (
 )
 
 // UserCell renders submitted user input.
-type UserCell struct{ Text string }
+type UserCell struct {
+	Text  string
+	Icons tuistyle.IconSet
+}
 
 func (UserCell) Kind() HistoryCellKind { return HistoryCellUser }
 func (c UserCell) RenderWidth(width int) []string {
@@ -23,9 +26,44 @@ func (c UserCell) RenderWidth(width int) []string {
 		if index == 0 {
 			prefix = tuistyle.GlyphMark
 		}
-		out = append(out, tuistyle.UserStyle.Render(prefix)+tuistyle.BodyStyle.Render(line))
+		if isAttachmentLine(line) {
+			out = append(out, tuistyle.UserStyle.Render(prefix)+renderAttachmentPill(line, c.Icons))
+		} else {
+			out = append(out, tuistyle.UserStyle.Render(prefix)+tuistyle.BodyStyle.Render(line))
+		}
 	}
 	return out
+}
+
+func isAttachmentLine(line string) bool {
+	trimmed := strings.TrimSpace(line)
+	return (strings.HasPrefix(trimmed, "[Attached Image:") ||
+		strings.HasPrefix(trimmed, "[Attached File:") ||
+		strings.HasPrefix(trimmed, "[Reference to ")) &&
+		strings.HasSuffix(trimmed, "]")
+}
+
+func renderAttachmentPill(line string, icons tuistyle.IconSet) string {
+	trimmed := strings.TrimSpace(line)
+	content := trimmed[1 : len(trimmed)-1]
+	icon := icons.Attachment
+	if icon == "" {
+		icon = tuistyle.ASCIIAttachment
+	}
+	if strings.HasPrefix(content, "Attached Image:") {
+		if icons.Image != "" {
+			icon = icons.Image
+		} else {
+			icon = tuistyle.ASCIIImage
+		}
+	} else if strings.HasPrefix(content, "Reference to ") {
+		if icons.Link != "" {
+			icon = icons.Link
+		} else {
+			icon = tuistyle.ASCIILink
+		}
+	}
+	return tuistyle.InfoStyle.Render("[" + icon + content + "]")
 }
 func (c UserCell) RawLines() []string { return rawTextLines(c.Text) }
 func (c UserCell) LineCount() int     { return len(c.RawLines()) }

@@ -564,6 +564,34 @@ func TestResultModelPayloadKeepsStreamsWithoutCompatibilityOutput(t *testing.T) 
 	}
 }
 
+func TestResultModelPayloadCompactsImageData(t *testing.T) {
+	original := Result{
+		CallID:   "call-1",
+		ToolName: "read",
+		Output:   "image summary",
+		Image: &ImageAttachment{
+			MIMEType: "image/png",
+			Data:     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+			Width:    100,
+			Height:   100,
+		},
+	}
+	payload := original.ModelPayload()
+	if payload.Image == nil {
+		t.Fatal("expected image attachment in payload")
+	}
+	if payload.Image.Data != "" {
+		t.Fatalf("expected Image.Data to be stripped in ModelPayload, got %q", payload.Image.Data)
+	}
+	if payload.Image.MIMEType != "image/png" || payload.Image.Width != 100 || payload.Image.Height != 100 {
+		t.Fatalf("unexpected image metadata in ModelPayload: %+v", payload.Image)
+	}
+	// Verify original was not mutated
+	if original.Image.Data == "" {
+		t.Fatal("ModelPayload mutated original Result.Image.Data")
+	}
+}
+
 func TestFailureFromErrorUsesSemanticToolMessage(t *testing.T) {
 	err := fmt.Errorf("execute read: %w", WrapToolError(ErrorCodeNotFound, `not found: "src/missing.go"`, os.ErrNotExist))
 	failure := FailureFromError(err)

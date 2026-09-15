@@ -146,6 +146,7 @@ type Profile struct {
 	MaxOutputTokens int
 	Compatibility   CompatibilityPolicy
 	Compaction      CompactionPolicy
+	VisionPolicy    VisionPolicy
 }
 
 type CatalogReasoning struct {
@@ -203,6 +204,7 @@ type Resolved struct {
 	MaxOutputTokens int
 	Compatibility   CompatibilityPolicy
 	Compaction      CompactionPolicy
+	VisionPolicy    VisionPolicy
 	Provenance      MetadataProvenance
 }
 

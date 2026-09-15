@@ -2,6 +2,7 @@ package readfile
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"image"
 	_ "image/gif"
@@ -30,11 +31,14 @@ const (
 )
 
 type imageMetadata struct {
-	Format        string `json:"format"`
-	Width         int    `json:"width"`
-	Height        int    `json:"height"`
-	Opaque        bool   `json:"opaque"`
-	AnalysisScope string `json:"analysis_scope,omitempty"`
+	Format          string               `json:"format"`
+	Width           int                  `json:"width"`
+	Height          int                  `json:"height"`
+	Opaque          bool                 `json:"opaque"`
+	AnalysisScope   string               `json:"analysis_scope,omitempty"`
+	AttachedWidth   int                  `json:"attached_width,omitempty"`
+	AttachedHeight  int                  `json:"attached_height,omitempty"`
+	EstimatedTokens *VisionTokenEstimate `json:"estimated_tokens,omitempty"`
 }
 
 type dominantColor struct {
@@ -70,6 +74,9 @@ func readImageArtifact(ctx context.Context, file *os.File, info os.FileInfo, inp
 	}
 	config, format, err := image.DecodeConfig(&contextReader{ctx: ctx, reader: file})
 	if err != nil {
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) || ctx.Err() != nil {
+			return tool.Result{}, fmt.Errorf("decode image metadata %q: %w", input.Path, err)
+		}
 		return tool.Result{}, tool.WrapToolError(tool.ErrorCodeInvalidArguments, "decode image metadata", err)
 	}
 	if !imageDimensionsWithinLimit(config.Width, config.Height) {
@@ -80,6 +87,9 @@ func readImageArtifact(ctx context.Context, file *os.File, info os.FileInfo, inp
 	}
 	img, _, err := image.Decode(&contextReader{ctx: ctx, reader: file})
 	if err != nil {
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) || ctx.Err() != nil {
+			return tool.Result{}, fmt.Errorf("decode image %q: %w", input.Path, err)
+		}
 		return tool.Result{}, tool.WrapToolError(tool.ErrorCodeInvalidArguments, "decode image", err)
 	}
 	bounds := img.Bounds()
@@ -90,12 +100,16 @@ func readImageArtifact(ctx context.Context, file *os.File, info os.FileInfo, inp
 	var brightnessStats baseanalysis.RunningStats
 	regionStats := make([]baseanalysis.RunningStats, imageRegionRows*imageRegionCols)
 	edgeComparisons, edgeHits := 0, 0
-	var previousRow []float64
+	var currentRow, previousRow []float64
 	for row := 0; row < rows; row++ {
 		if err := ctx.Err(); err != nil {
 			return tool.Result{}, fmt.Errorf("analyze image %q: %w", input.Path, err)
 		}
-		currentRow := make([]float64, 0, cols)
+		if cap(currentRow) < cols {
+			currentRow = make([]float64, 0, cols)
+		} else {
+			currentRow = currentRow[:0]
+		}
 		for col := 0; col < cols; col++ {
 			x := bounds.Min.X + stratifiedCoordinate(bounds.Dx(), cols, col, row, 0x9e3779b97f4a7c15)
 			y := bounds.Min.Y + stratifiedCoordinate(bounds.Dy(), rows, row, col, 0xbf58476d1ce4e5b9)
@@ -128,7 +142,7 @@ func readImageArtifact(ctx context.Context, file *os.File, info os.FileInfo, inp
 			key := int(r>>4)<<8 | int(g>>4)<<4 | int(b>>4)
 			histogram[key]++
 		}
-		previousRow = currentRow
+		previousRow, currentRow = currentRow, previousRow
 	}
 	buckets := make([]colorBucket, 0, len(histogram))
 	for key, count := range histogram {
@@ -167,15 +181,33 @@ func readImageArtifact(ctx context.Context, file *os.File, info os.FileInfo, inp
 		edgeDensity = float64(edgeHits) / float64(edgeComparisons)
 	}
 	analysis := imageAnalysis{Samples: samples, Brightness: summary, DominantColors: colors, Regions: regions, EdgeDensity: edgeDensity, ASCIIPreview: imageASCIIPreview(img, imageASCIIWidth, imageASCIIHeight)}
+	attachment, estimate := prepareVisionAttachment(ctx, file, info, img, format, artifact.MIMEType)
 	metadata := imageMetadata{Format: format, Width: config.Width, Height: config.Height, Opaque: opaque}
+	if attachment != nil {
+		metadata.AttachedWidth = attachment.Width
+		metadata.AttachedHeight = attachment.Height
+		metadata.EstimatedTokens = &estimate
+	}
 	if format == "gif" {
 		metadata.AnalysisScope = "first_frame"
 	}
-	output := fmt.Sprintf("image %s %dx%d · sampled %d px · brightness mean %.1f min %.1f max %.1f", format, config.Width, config.Height, samples, summary.Mean, summary.Min, summary.Max)
+	output := fmt.Sprintf("image %s %dx%d · sampled %d px", format, config.Width, config.Height, samples)
+	if attachment != nil {
+		if attachment.Width != config.Width || attachment.Height != config.Height {
+			output += fmt.Sprintf(" (attached: %dx%d %s, ~%d tokens)", attachment.Width, attachment.Height, attachment.MIMEType, estimate.Anthropic)
+		} else {
+			output += fmt.Sprintf(" (attached: ~%d tokens)", estimate.Anthropic)
+		}
+	}
+	if summary.Count > 0 {
+		output += fmt.Sprintf(" · brightness mean %.1f min %.1f max %.1f", summary.Mean, summary.Min, summary.Max)
+	} else {
+		output += " · transparent (no visible pixels)"
+	}
 	if len(colors) > 0 {
 		output += fmt.Sprintf(" · dominant %s", colors[0].Hex)
 	}
-	return artifactResult(call, artifactEnvelope{Kind: artifactImage, Path: input.Path, MIMEType: artifact.MIMEType, SizeBytes: info.Size(), Metadata: metadata, Analysis: analysis}, output)
+	return artifactResultWithImage(call, artifactEnvelope{Kind: artifactImage, Path: input.Path, MIMEType: artifact.MIMEType, SizeBytes: info.Size(), Metadata: metadata, Analysis: analysis}, output, attachment)
 }
 
 type contextReader struct {
@@ -223,8 +255,8 @@ func imageSampleGrid(width, height, budget int) (int, int) {
 }
 
 func stratifiedCoordinate(size, cells, index, phase int, salt uint64) int {
-	start := index * size / cells
-	end := (index + 1) * size / cells
+	start := int(int64(index) * int64(size) / int64(cells))
+	end := int(int64(index+1) * int64(size) / int64(cells))
 	span := end - start
 	if span <= 1 {
 		return start
@@ -247,6 +279,9 @@ func unpremultiplyRGBA(r16, g16, b16, a16 uint32) (uint8, uint8, uint8) {
 }
 
 func imageOpaque(ctx context.Context, img image.Image) (bool, error) {
+	if o, ok := img.(interface{ Opaque() bool }); ok {
+		return o.Opaque(), nil
+	}
 	bounds := img.Bounds()
 	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
 		if err := ctx.Err(); err != nil {
@@ -269,10 +304,27 @@ func imageDimensionsWithinLimit(width, height int) bool {
 	return int64(width)*int64(height) <= int64(maxImagePixels)
 }
 
-func imageASCIIPreview(img image.Image, width, height int) string {
+func imageASCIIPreview(img image.Image, maxWidth, maxHeight int) string {
 	bounds := img.Bounds()
-	if width <= 0 || height <= 0 || bounds.Empty() {
+	if maxWidth <= 0 || maxHeight <= 0 || bounds.Empty() {
 		return ""
+	}
+	width := maxWidth
+	// Terminal character cells are typically ~2:1 height-to-width ratio.
+	// Adjust target rows so the ASCII preview preserves visual aspect ratio.
+	height := int(math.Round(float64(width) * float64(bounds.Dy()) / (float64(bounds.Dx()) * 2.0)))
+	if height < 1 {
+		height = 1
+	}
+	if height > maxHeight {
+		height = maxHeight
+		width = int(math.Round(float64(height) * float64(bounds.Dx()) * 2.0 / float64(bounds.Dy())))
+		if width < 1 {
+			width = 1
+		}
+		if width > maxWidth {
+			width = maxWidth
+		}
 	}
 	if width > bounds.Dx() {
 		width = bounds.Dx()

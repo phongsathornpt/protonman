@@ -62,7 +62,9 @@ func TestTodoCapabilityAcceptsNormalizedWireVariants(t *testing.T) {
 	validator := capabilityValidator(t)
 	calls := map[string]string{
 		"quoted revision":            `{"action":"update","expectedRevision":"7","operations":[{"op":"remove","id":"a"}]}`,
+		"legacy snake case update":   `{"action":"update","expected_revision":7,"operations":[{"op":"remove","id":"a"}]}`,
 		"echoed session_id":          `{"action":"update","sessionId":"session-1","expectedRevision":0,"operations":[{"op":"remove","id":"a"}]}`,
+		"legacy snake case session":  `{"action":"update","session_id":"session-1","expectedRevision":0,"operations":[{"op":"remove","id":"a"}]}`,
 		"uppercase action":           `{"action":"UPDATE","expectedRevision":0,"operations":[{"op":"remove","id":"a"}]}`,
 		"uppercase op":               `{"action":"update","expectedRevision":0,"operations":[{"op":"REMOVE","id":"a"}]}`,
 		"uppercase status":           `{"action":"update","expectedRevision":0,"operations":[{"op":"add","id":"a","text":"t","status":"PENDING"}]}`,
@@ -76,13 +78,41 @@ func TestTodoCapabilityAcceptsNormalizedWireVariants(t *testing.T) {
 	}
 }
 
+func TestTodoCapabilityFacadePublishesProviderSafeSchema(t *testing.T) {
+	schema := NewTodo(nil).Definition().InputSchema
+	for _, forbidden := range []string{"oneOf", "allOf", "if", "then", "const"} {
+		if todoSchemaContainsKey(schema, forbidden) {
+			t.Fatalf("facade schema contains provider-hostile %q: %#v", forbidden, schema)
+		}
+	}
+}
+
+func todoSchemaContainsKey(value any, want string) bool {
+	switch typed := value.(type) {
+	case map[string]any:
+		if _, ok := typed[want]; ok {
+			return true
+		}
+		for _, child := range typed {
+			if todoSchemaContainsKey(child, want) {
+				return true
+			}
+		}
+	case []any:
+		for _, child := range typed {
+			if todoSchemaContainsKey(child, want) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func TestTodoCapabilityStillRejectsGenuineMisuse(t *testing.T) {
 	validator := capabilityValidator(t)
 	calls := map[string]string{
 		"missing action":            `{}`,
 		"unknown action":            `{"action":"delete"}`,
-		"update without revision":   `{"action":"update","operations":[{"op":"remove","id":"a"}]}`,
-		"update without operations": `{"action":"update","expectedRevision":0}`,
 		"update with no operations": `{"action":"update","expectedRevision":0,"operations":[]}`,
 		"non-numeric revision":      `{"action":"update","expectedRevision":"abc","operations":[{"op":"remove","id":"a"}]}`,
 		"negative revision":         `{"action":"update","expectedRevision":-1,"operations":[{"op":"remove","id":"a"}]}`,
@@ -98,16 +128,13 @@ func TestTodoCapabilityStillRejectsGenuineMisuse(t *testing.T) {
 	}
 }
 
-// A schema failure must name the offending field so the model can correct it
-// within the compaction budget applied to model-visible failures.
-func TestTodoCapabilitySchemaErrorIsActionable(t *testing.T) {
+// The facade intentionally leaves update-specific required fields to the child
+// handler selected by the action. This keeps the published schema provider-safe.
+func TestTodoCapabilityFacadeAllowsSharedUpdateEnvelope(t *testing.T) {
 	validator := capabilityValidator(t)
 	err := validator.Validate(normalizeThroughCapability(t, `{"action":"update","operations":[{"op":"remove","id":"a"}]}`))
-	if err == nil {
-		t.Fatal("missing expectedRevision was accepted")
-	}
-	if !strings.Contains(err.Error(), "expectedRevision") {
-		t.Fatalf("schema error does not name the offending field: %v", err)
+	if err != nil {
+		t.Fatalf("shared update envelope rejected: %v", err)
 	}
 }
 

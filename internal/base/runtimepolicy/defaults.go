@@ -37,21 +37,26 @@ const (
 )
 
 const (
-	SessionPersistenceTimeout     = 5 * time.Second
-	AgentCloseTimeout             = 5 * time.Second
-	AgentEventEmitTimeout         = 100 * time.Millisecond
-	AgentLifecycleEmitTimeout     = 5 * time.Second
-	SandboxCommandWaitDelay       = 2 * time.Second
-	TerminalEmitTimeout           = 5 * time.Second
-	ProtectionObserverTimeout     = time.Second
-	ModelRetryMaxRetries          = 4
-	ModelRetryBackoffStep         = 5 * time.Second
-	ModelRetrySecondDelay         = 15 * time.Second
-	ModelRetryThirdDelay          = 30 * time.Second
-	ModelRetryLastDelay           = 60 * time.Second
-	ModelRetryPostFirstGap        = 0 // legacy exponential-policy field
-	ModelRetryMaxBackoff          = 60 * time.Second
-	ModelRetryMaxRetryAfter       = 30 * time.Second
+	SessionPersistenceTimeout = 5 * time.Second
+	AgentCloseTimeout         = 5 * time.Second
+	AgentEventEmitTimeout     = 100 * time.Millisecond
+	AgentLifecycleEmitTimeout = 5 * time.Second
+	SandboxCommandWaitDelay   = 2 * time.Second
+	TerminalEmitTimeout       = 5 * time.Second
+	ProtectionObserverTimeout = time.Second
+	ModelRetryMaxRetries      = 4
+	ModelRetryBackoffStep     = 5 * time.Second
+	ModelRetrySecondDelay     = 15 * time.Second
+	ModelRetryThirdDelay      = 30 * time.Second
+	ModelRetryLastDelay       = 60 * time.Second
+	ModelRetryPostFirstGap    = 0 // legacy exponential-policy field
+	ModelRetryMaxBackoff      = 60 * time.Second
+	ModelRetryMaxRetryAfter   = 30 * time.Second
+	// ModelStreamReplayMaxRetries bounds replay-safe recovery for non-free
+	// models. It covers only pre-commit prefixes (no visible text yet);
+	// committed text is never replayed. Free-model recovery keeps the full
+	// ModelRetryMaxRetries budget with stream timeouts.
+	ModelStreamReplayMaxRetries   = 2
 	OpenCodeFreeFirstEventTimeout = 30 * time.Second
 	OpenCodeFreeIdleEventTimeout  = 60 * time.Second
 	OpenCodeFreeStreamMaxDuration = 5 * time.Minute

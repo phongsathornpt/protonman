@@ -34,6 +34,10 @@ func (h todoHandler) Definition() tool.Definition {
 		Safety:      tool.SafetyContract{MutationDomain: tool.MutationDomainTaskState, MutationSafety: tool.MutationSafetyNone, CheckpointPolicy: tool.CheckpointPolicyNone, Boundary: tool.BoundaryPolicyNone},
 		Semantics:   h.callSemantics,
 		InputSchema: todoCapabilityInputSchema(),
+		InputAliases: map[string][]string{
+			"expectedRevision": {"expected_revision"},
+			"sessionId":        {"session_id"},
+		},
 		OutputSchema: map[string]any{
 			"oneOf": []any{todoSnapshotSchema(), todoUpdateOutputSchema()},
 		},
@@ -60,15 +64,6 @@ func todoCapabilityInputSchema() map[string]any {
 		"properties":           props,
 		"required":             []any{"action"},
 		"additionalProperties": false,
-		"allOf": []any{map[string]any{
-			// Argument normalization canonicalizes case variants of the action
-			// before validation, so the condition only needs the canonical form.
-			"if": map[string]any{
-				"properties": map[string]any{"action": map[string]any{"const": "update"}},
-				"required":   []any{"action"},
-			},
-			"then": map[string]any{"required": []any{"expectedRevision", "operations"}},
-		}},
 	}
 }
 

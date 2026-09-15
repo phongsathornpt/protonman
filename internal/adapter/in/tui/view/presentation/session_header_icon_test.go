@@ -13,10 +13,10 @@ func TestCompactSessionHeaderUsesProvidedBrandIcon(t *testing.T) {
 		Width:   25,
 		Model:   "qwen3.8-27b",
 		Compact: true,
-		Icons:   tuistyle.NerdIcons,
+		Icons:   tuistyle.UnicodeIcons,
 	}))
-	if !strings.Contains(got, tuistyle.NerdIcons.Brand) {
-		t.Fatalf("compact header %q does not contain Nerd brand %q", got, tuistyle.NerdIcons.Brand)
+	if !strings.Contains(got, tuistyle.UnicodeIcons.Brand) {
+		t.Fatalf("compact header %q does not contain Unicode brand %q", got, tuistyle.UnicodeIcons.Brand)
 	}
 }
 

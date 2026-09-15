@@ -1,22 +1,33 @@
 package turn
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"image"
+	_ "image/gif"
+	_ "image/jpeg"
+	_ "image/png"
+	"strings"
 
 	"github.com/phongsathornpt/protonman/internal/core/conversation"
 	"github.com/phongsathornpt/protonman/internal/core/modelprofile"
 	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	_ "golang.org/x/image/webp"
 )
 
 const estimatedBytesPerToken = 3
 
 func validateContextBudget(languageModel sdk.LanguageModel, request sdk.Request) error {
+	return validateContextBudgetWithVisionPolicy(languageModel, request, modelprofile.DefaultVisionPolicy())
+}
+
+func validateContextBudgetWithVisionPolicy(languageModel sdk.LanguageModel, request sdk.Request, visionPolicy modelprofile.VisionPolicy) error {
 	limits := sdk.ModelTokenLimits(languageModel)
 	if limits.ContextWindow <= 0 && limits.MaxInputTokens <= 0 && limits.MaxOutputTokens <= 0 {
 		return nil
 	}
-	estimated, err := estimateRequestTokens(request)
+	estimated, err := estimateRequestTokensWithVisionPolicy(request, visionPolicy)
 	if err != nil {
 		return fmt.Errorf("estimate model context: %w", err)
 	}
@@ -41,14 +52,91 @@ func validateContextBudget(languageModel sdk.LanguageModel, request sdk.Request)
 }
 
 func estimateRequestTokens(request sdk.Request) (int, error) {
-	payload, err := json.Marshal(request)
+	return estimateRequestTokensWithVisionPolicy(request, modelprofile.DefaultVisionPolicy())
+}
+
+func estimateRequestTokensWithVisionPolicy(request sdk.Request, visionPolicy modelprofile.VisionPolicy) (int, error) {
+	visionPolicy = modelprofile.EffectiveVisionPolicy(modelprofile.Resolved{VisionPolicy: visionPolicy})
+	transportNeutral := request
+	transportNeutral.Messages = sdk.CloneMessages(request.Messages)
+	imageTokens := 0
+	for messageIndex := range transportNeutral.Messages {
+		for partIndex := range transportNeutral.Messages[messageIndex].Parts {
+			part := &transportNeutral.Messages[messageIndex].Parts[partIndex]
+			if part.Type != sdk.ContentPartImage {
+				continue
+			}
+			imageTokens += estimateImageTokensWithPolicy(part.Data, visionPolicy)
+			// Base64 is a transport representation, not text consumed by the model.
+			// Keep MIME/type framing in the serialized estimate but remove payload bytes.
+			part.Data = ""
+		}
+	}
+
+	payload, err := json.Marshal(transportNeutral)
 	if err != nil {
 		return 0, err
 	}
-	if len(payload) == 0 {
-		return 0, nil
+	textAndFramingTokens := 0
+	if len(payload) > 0 {
+		textAndFramingTokens = (len(payload) + estimatedBytesPerToken - 1) / estimatedBytesPerToken
 	}
-	return (len(payload) + estimatedBytesPerToken - 1) / estimatedBytesPerToken, nil
+	return textAndFramingTokens + imageTokens, nil
+}
+
+func estimateImageTokens(data string) int {
+	return estimateImageTokensWithPolicy(data, modelprofile.DefaultVisionPolicy())
+}
+
+func estimateImageTokensWithPolicy(data string, policy modelprofile.VisionPolicy) int {
+	policy = modelprofile.EffectiveVisionPolicy(modelprofile.Resolved{VisionPolicy: policy})
+	data = strings.TrimSpace(data)
+	if data == "" {
+		return policy.FallbackTokens
+	}
+	decoder := base64.NewDecoder(base64.StdEncoding, strings.NewReader(data))
+	config, _, err := image.DecodeConfig(decoder)
+	if err != nil || config.Width <= 0 || config.Height <= 0 {
+		return policy.FallbackTokens
+	}
+
+	switch policy.TokenScheme {
+	case modelprofile.VisionTokenAnthropicPixels:
+		// Anthropic documents an approximate width*height/750 image-token rule.
+		pixels := int64(config.Width) * int64(config.Height)
+		tokens := int((pixels + 749) / 750)
+		return max(1, tokens)
+	case modelprofile.VisionTokenGeminiTiles:
+		// Gemini images up to 384px in both dimensions cost 258 tokens. Larger
+		// images are tiled; Google's published rough crop unit is floor(min/1.5).
+		if config.Width <= 384 && config.Height <= 384 {
+			return 258
+		}
+		minSide := min(config.Width, config.Height)
+		crop := max(1, (2*minSide)/3)
+		tilesWide := ceilDiv(config.Width, crop)
+		tilesHigh := ceilDiv(config.Height, crop)
+		return max(258, tilesWide*tilesHigh*258)
+	default:
+		patch := max(1, policy.PatchSize)
+		patchesWide := ceilDiv(config.Width, patch)
+		patchesHigh := ceilDiv(config.Height, patch)
+		patches := patchesWide * patchesHigh
+		if patches < 1 {
+			return 1
+		}
+		if policy.MaxPatches > 0 && patches > policy.MaxPatches {
+			return policy.MaxPatches
+		}
+		return patches
+	}
+}
+
+func ceilDiv(value, divisor int) int {
+	if divisor <= 0 {
+		return 0
+	}
+	return (value + divisor - 1) / divisor
 }
 
 func contextOutputReserve(window, requested int) int {
@@ -90,7 +178,11 @@ func effectiveInputBudget(limits sdk.TokenLimits, requestedOutput int) int {
 }
 
 func compactRequestToModelBudget(request sdk.Request, limits sdk.TokenLimits, policy modelprofile.CompactionPolicy) (sdk.Request, conversation.CompactionDecision, error) {
-	estimated, err := estimateRequestTokens(request)
+	return compactRequestToModelBudgetWithVisionPolicy(request, limits, policy, modelprofile.DefaultVisionPolicy())
+}
+
+func compactRequestToModelBudgetWithVisionPolicy(request sdk.Request, limits sdk.TokenLimits, policy modelprofile.CompactionPolicy, visionPolicy modelprofile.VisionPolicy) (sdk.Request, conversation.CompactionDecision, error) {
+	estimated, err := estimateRequestTokensWithVisionPolicy(request, visionPolicy)
 	if err != nil {
 		return request, conversation.CompactionDecision{}, err
 	}
@@ -101,7 +193,7 @@ func compactRequestToModelBudget(request sdk.Request, limits sdk.TokenLimits, po
 	}
 	fixed := request
 	fixed.Messages = nil
-	fixedTokens, err := estimateRequestTokens(fixed)
+	fixedTokens, err := estimateRequestTokensWithVisionPolicy(fixed, visionPolicy)
 	if err != nil {
 		return request, decision, err
 	}
@@ -109,10 +201,28 @@ func compactRequestToModelBudget(request sdk.Request, limits sdk.TokenLimits, po
 	if messageTarget < 1 {
 		messageTarget = 1
 	}
-	request.Messages = conversation.Retain(request.Messages, conversation.RetentionPolicy{
-		MaxBytes:                     messageTarget * estimatedBytesPerToken,
-		RecentMessages:               policy.MinRecentMessages,
-		MaxHistoricalToolResultBytes: 2048,
-	})
+
+	retained, err := conversation.RetainByCost(
+		request.Messages,
+		policy.MinRecentMessages,
+		2048,
+		messageTarget,
+		func(messages []sdk.Message) (int, error) {
+			candidate := request
+			candidate.Messages = messages
+			tokens, err := estimateRequestTokensWithVisionPolicy(candidate, visionPolicy)
+			if err != nil {
+				return 0, err
+			}
+			if tokens <= fixedTokens {
+				return 0, nil
+			}
+			return tokens - fixedTokens, nil
+		},
+	)
+	if err != nil {
+		return request, decision, err
+	}
+	request.Messages = retained
 	return request, decision, nil
 }

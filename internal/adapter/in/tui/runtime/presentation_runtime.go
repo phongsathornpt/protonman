@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"charm.land/bubbles/v2/key"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/transcriptutil"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/state/agentui"
@@ -15,6 +16,8 @@ import (
 	tuihistory "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/history"
 	agentpane "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane/agent"
 	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/style"
+	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
+	"github.com/phongsathornpt/protonman/internal/core/modelprofile"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/feature/agent"
@@ -56,17 +59,33 @@ func (m *bubbleModel) promptView() string {
 	}
 	prompt := m.panes.bottom.prompt()
 	dividerStyle := tuistyle.PromptDividerIdle
+	focused := prompt.Focused()
 	switch {
 	case m.permissionView() != nil:
 		dividerStyle = tuistyle.PromptDividerWarning
+		focused = false
 	case m.service != nil && m.service.Mode() == permission.ModeDeny:
 		dividerStyle = tuistyle.PromptDividerError
-	case prompt.Focused():
+		focused = false
+	case focused:
 		dividerStyle = tuistyle.PromptDividerFocused
 	}
 	usableWidth := composerUsableWidth(m.layout.width)
-	border := dividerStyle.Render(strings.Repeat("─", usableWidth))
+	border := renderPromptDivider(dividerStyle, usableWidth, focused)
 	return border + "\n" + prompt.View() + "\n" + border
+}
+
+func renderPromptDivider(style lipgloss.Style, width int, focused bool) string {
+	line := strings.Repeat("─", maxInt(1, width))
+	if !focused {
+		return style.Render(line)
+	}
+
+	accentWidth := minInt(8, len([]rune(line)))
+	accent := strings.Repeat("─", accentWidth)
+	neutral := strings.Repeat("─", len([]rune(line))-accentWidth)
+	return tuistyle.PromptDividerFocused.Render(accent) +
+		tuistyle.PromptDividerIdle.Render(neutral)
 }
 
 func (m *bubbleModel) modeChip() string {
@@ -249,7 +268,8 @@ func (m bubbleModel) statusView() string {
 		return warningStyle.Render(truncateWithEllipsis(line, maxInt(1, maxWidth)))
 	}
 
-	indicator := brandMarkStyle.Render("◌")
+	icons := tuistyle.OrUnicodeIcons(m.icons)
+	indicator := brandMarkStyle.Render(icons.Status)
 	if spin := m.spinnerIndicator(); spin != "" {
 		indicator = spin
 	}
@@ -305,6 +325,7 @@ func (m *bubbleModel) sessionHeaderView() string {
 	return renderSessionHeader(sessionHeaderModel{
 		Width:          profile.ContentWidth(m.layout.width),
 		Model:          m.activeModel,
+		Vision:         m.activeModelSupportsVision(),
 		LowConcurrency: m.lowConcurrencyEffective(),
 		GoalActive:     strings.TrimSpace(m.activeGoal) != "",
 		Branch:         cache.branch,
@@ -313,6 +334,14 @@ func (m *bubbleModel) sessionHeaderView() string {
 		Minimal:        profile.MinimalHeader(),
 		Icons:          m.icons,
 	})
+}
+
+func (m *bubbleModel) activeModelSupportsVision() bool {
+	if m == nil || strings.TrimSpace(m.activeModel) == "" {
+		return false
+	}
+	profile := model.ResolveModelProfile(m.activeProvider, m.activeModel, nil)
+	return profile.Capabilities.Vision == modelprofile.SupportYes
 }
 
 func (m *bubbleModel) invalidateSessionHeaderBranch() {

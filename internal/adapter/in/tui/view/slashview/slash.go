@@ -59,7 +59,37 @@ func Catalog() []Command {
 
 func IsCommandLine(line string) bool {
 	trimmed := strings.TrimSpace(line)
-	return strings.HasPrefix(trimmed, "/") || strings.HasPrefix(trimmed, ":")
+	if len(trimmed) < 2 {
+		return false
+	}
+	if trimmed[0] != '/' && trimmed[0] != ':' {
+		return false
+	}
+	if strings.HasPrefix(trimmed, "//") || strings.HasPrefix(trimmed, "::") {
+		return false
+	}
+	body := strings.TrimSpace(trimmed[1:])
+	if body == "" {
+		return false
+	}
+	parts := strings.SplitN(body, " ", 2)
+	name := parts[0]
+	if name == "" {
+		return false
+	}
+	if strings.Contains(name, "/") || strings.Contains(name, "\\") || strings.Contains(name, ".") {
+		return false
+	}
+	for _, r := range name {
+		if !isValidCommandRune(r) {
+			return false
+		}
+	}
+	return true
+}
+
+func isValidCommandRune(r rune) bool {
+	return (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' || r == '_'
 }
 
 type ParsedCommand struct {
@@ -70,10 +100,10 @@ type ParsedCommand struct {
 }
 
 func ParseCommand(line string) ParsedCommand {
-	trimmed := strings.TrimSpace(line)
-	if len(trimmed) < 2 || trimmed[0] != '/' && trimmed[0] != ':' {
+	if !IsCommandLine(line) {
 		return ParsedCommand{}
 	}
+	trimmed := strings.TrimSpace(line)
 	body := strings.TrimSpace(trimmed[1:])
 	parts := strings.SplitN(body, " ", 3)
 	if len(parts) == 0 {
@@ -182,6 +212,14 @@ func ParseContext(value string) (Context, bool) {
 	}
 	if strings.Contains(body, " ") {
 		return Context{}, false
+	}
+	if strings.Contains(body, "/") || strings.Contains(body, "\\") || strings.Contains(body, ".") {
+		return Context{}, false
+	}
+	for _, r := range body {
+		if !isValidCommandRune(r) {
+			return Context{}, false
+		}
 	}
 	return Context{Kind: ContextCommand, Prefix: prefix, Lead: prefix, Query: body}, true
 }

@@ -40,8 +40,10 @@ func todoCapabilityService(t *testing.T, items []tododomain.Item) *toolcall.Serv
 func TestTodoCapabilityServiceAcceptsWireVariants(t *testing.T) {
 	calls := map[string]string{
 		"canonical update":  `{"action":"update","expectedRevision":0,"operations":[{"op":"set_status","id":"a","status":"in_progress"}]}`,
+		"legacy snake case": `{"action":"update","expected_revision":0,"operations":[{"op":"set_status","id":"a","status":"in_progress"}]}`,
 		"quoted revision":   `{"action":"update","expectedRevision":"0","operations":[{"op":"set_status","id":"a","status":"in_progress"}]}`,
 		"echoed session_id": `{"action":"update","sessionId":"session-1","expectedRevision":0,"operations":[{"op":"set_status","id":"a","status":"in_progress"}]}`,
+		"legacy session id": `{"action":"update","session_id":"session-1","expectedRevision":0,"operations":[{"op":"set_status","id":"a","status":"in_progress"}]}`,
 		"uppercase op":      `{"action":"update","expectedRevision":0,"operations":[{"op":"SET_STATUS","id":"a","status":"in_progress"}]}`,
 		"uppercase status":  `{"action":"update","expectedRevision":0,"operations":[{"op":"set_status","id":"a","status":"IN_PROGRESS"}]}`,
 		"echoed get args":   `{"action":"get","expectedRevision":0,"sessionId":"session-1"}`,

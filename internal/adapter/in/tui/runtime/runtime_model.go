@@ -82,14 +82,17 @@ type agentModelState struct {
 }
 
 type turnModelState struct {
-	turnProgress    turnProgress
-	activeTurnOwner string
-	busy            bool
-	activity        string
-	pendingActivity string
-	busyStarted     time.Time
-	turnCancel      context.CancelFunc
-	turnEvents      <-chan tea.Msg
+	turnProgress       turnProgress
+	activeTurnOwner    string
+	busy               bool
+	imagePreparing     bool
+	imagePreparationID uint64
+	pendingImageInput  *tuiconv.QueuedInput
+	activity           string
+	pendingActivity    string
+	busyStarted        time.Time
+	turnCancel         context.CancelFunc
+	turnEvents         <-chan tea.Msg
 }
 
 type modelSetupState struct {
@@ -149,10 +152,22 @@ type presentationModelState struct {
 	panes              paneState
 	nextID             uint64
 	layout             layoutState
+	viewportViewCache  viewportViewCache
+	liveViewCache      string
+	liveViewCacheValid bool
 	sessionHeaderCache sessionHeaderCache
 	keyboardCapability keyboardCapability
 	transientNotice    string
 	transientNoticeID  uint64
+}
+
+type viewportViewCache struct {
+	valid     bool
+	content   string
+	width     int
+	height    int
+	yOffset   int
+	lineCount int
 }
 
 type bubbleModel struct {
@@ -197,6 +212,11 @@ func newBubbleModel(ctx context.Context, service *toolcall.Service, registry too
 		iconMode = tuistyle.IconModeAuto
 	}
 	icons := tuistyle.ResolveIcons(iconMode, true)
+	spinnerStyle := spinner.Dot
+	if icons == tuistyle.ASCIIIcons {
+		spinnerStyle = spinner.Line
+	}
+	spin.Spinner = spinnerStyle
 	pane := viewport.New(viewport.WithWidth(defaultBubbleWidth), viewport.WithHeight(defaultBubbleHeight-6))
 	disableViewportKeys(&pane)
 	transcriptPane := viewport.New(viewport.WithWidth(defaultBubbleWidth-8), viewport.WithHeight(defaultBubbleHeight-8))
@@ -206,6 +226,10 @@ func newBubbleModel(ctx context.Context, service *toolcall.Service, registry too
 	helpView := help.New()
 	helpView.SetWidth(defaultBubbleWidth - 2)
 	helpView.ShortSeparator = glyphSep
+	helpView.Styles.ShortKey = tuistyle.SystemStyle
+	helpView.Styles.ShortDesc = tuistyle.MutedStyle
+	helpView.Styles.ShortSeparator = tuistyle.MutedStyle
+	helpView.Styles.Ellipsis = tuistyle.MutedStyle
 	retention := conversation.DefaultRetentionPolicy()
 	ui := &bubbleModel{
 		ctx:      ctx,

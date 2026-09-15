@@ -13,8 +13,7 @@ const (
 	Telemetry    = "PROTONMAN_TELEMETRY"
 	DebugLog     = "PROTONMAN_DEBUG_LOG"
 	ForceTTY     = "PROTONMAN_FORCE_TTY"
-	// Icons selects the TUI icon capability profile: auto, nerd, unicode, or ascii.
-	// Nerd mode assumes a Nerd Font Mono terminal font; auto never guesses fonts.
+	// Icons selects the TUI icon capability profile: auto, unicode, or ascii.
 	Icons = "PROTONMAN_ICONS"
 	// ReducedMotion replaces the TUI's self-running animation (the busy spinner
 	// and the caret blink) with static indicators that carry the same meaning.

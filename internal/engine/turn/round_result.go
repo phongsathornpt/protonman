@@ -69,7 +69,7 @@ func finalizeDisabledToolCallResponse(
 	return assistant, nil
 }
 
-func toolMessagesForExecutions(executions []executedCall) ([]model.Message, error) {
+func toolMessagesForExecutions(executions []executedCall, supportsVision bool) ([]model.Message, error) {
 	messages := make([]model.Message, 0, len(executions))
 	for _, execution := range executions {
 		toolResult := execution.result
@@ -81,14 +81,21 @@ func toolMessagesForExecutions(executions []executedCall) ([]model.Message, erro
 		if modelToolName == "" {
 			modelToolName = execution.call.Name
 		}
-		messages = append(messages, model.Message{
+		msg := model.Message{
 			ID:                model.NewMessageID(),
 			Role:              model.RoleTool,
 			Content:           string(content),
 			ToolCallID:        execution.call.ID,
 			ToolName:          modelToolName,
 			ToolResultIsError: execution.err != nil || toolResult.Denied || toolResult.Failure != nil,
-		})
+		}
+		if supportsVision && toolResult.Image != nil && toolResult.Image.Data != "" {
+			msg.Parts = []model.ContentPart{
+				{Type: model.ContentPartText, Text: string(content)},
+				{Type: model.ContentPartImage, MIMEType: toolResult.Image.MIMEType, Data: toolResult.Image.Data},
+			}
+		}
+		messages = append(messages, msg)
 	}
 	return messages, nil
 }

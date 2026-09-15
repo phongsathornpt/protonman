@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/charmbracelet/x/ansi"
+	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/style"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 )
 
@@ -68,5 +69,54 @@ func TestToolCellHeaderStateGrammar(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestToolCellRendersImageASCIIPreviewInDetailView(t *testing.T) {
+	cell := ToolCell{
+		Name:       tool.NameRead,
+		Target:     "screenshot.png",
+		ToolKind:   tool.KindRead,
+		Summary:    "image png 100x100 · sampled 1000 px",
+		ShowDetail: true,
+		Preview:    " .:-=+*#%@\n .:-=+*#%@",
+	}
+	lines := cell.RenderWidth(80)
+	if len(lines) < 2 {
+		t.Fatalf("expected header and preview lines, got %d lines: %#v", len(lines), lines)
+	}
+	joined := strings.Join(lines, "\n")
+	if !strings.Contains(joined, ".:-=+*#%@") {
+		t.Fatalf("expected ASCII preview in detail lines, got:\n%s", joined)
+	}
+}
+
+func TestToolCellRendersImageASCIIPreviewWithImageIcon(t *testing.T) {
+	cellUnicode := ToolCell{
+		Name:       tool.NameRead,
+		Target:     "screenshot.png",
+		ToolKind:   tool.KindRead,
+		Summary:    "image png 100x100 · sampled 1000 px",
+		ShowDetail: true,
+		Preview:    " .:-=+*#%@",
+		Icons:      tuistyle.UnicodeIcons,
+	}
+	linesUnicode := strings.Join(cellUnicode.RenderWidth(80), "\n")
+	if !strings.Contains(linesUnicode, "🖼") || !strings.Contains(linesUnicode, "preview") {
+		t.Fatalf("expected Unicode image icon in preview excerpt: %q", linesUnicode)
+	}
+
+	cellASCII := ToolCell{
+		Name:       tool.NameRead,
+		Target:     "screenshot.png",
+		ToolKind:   tool.KindRead,
+		Summary:    "image png 100x100 · sampled 1000 px",
+		ShowDetail: true,
+		Preview:    " .:-=+*#%@",
+		Icons:      tuistyle.ASCIIIcons,
+	}
+	linesASCII := strings.Join(cellASCII.RenderWidth(80), "\n")
+	if !strings.Contains(linesASCII, "#") || !strings.Contains(linesASCII, "preview") {
+		t.Fatalf("expected ASCII image icon in preview excerpt: %q", linesASCII)
 	}
 }

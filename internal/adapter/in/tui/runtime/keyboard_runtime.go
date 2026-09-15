@@ -54,6 +54,7 @@ func (m *bubbleModel) updateKeyboardCapability(message tea.KeyboardEnhancementsM
 	configureComposerNewline(nil, &m.keys.Newline, m.keyboardCapability)
 	m.debugKeyboardCapability(previous)
 }
+
 func keyboardDebugEnabled() bool {
 	return os.Getenv(keyboardDebugEnv) == "1"
 }
@@ -94,6 +95,18 @@ const (
 	maxQueuePreviewRunes = 160
 )
 
+func (m *bubbleModel) composerInput() tuiconv.QueuedInput {
+	if m == nil || m.panes.bottom == nil || m.panes.bottom.prompt() == nil {
+		return tuiconv.QueuedInput{}
+	}
+	prompt := m.panes.bottom.prompt()
+	attachments := m.panes.bottom.composer.attachments.snapshot(prompt)
+	return tuiconv.QueuedInput{
+		Text:        stripAttachmentPlaceholders(prompt.Value(), attachments),
+		Attachments: attachments,
+	}
+}
+
 func (m *bubbleModel) submit() tea.Cmd {
 	prompt := m.panes.bottom.prompt()
 	line := strings.TrimSpace(prompt.Value())
@@ -104,7 +117,7 @@ func (m *bubbleModel) submit() tea.Cmd {
 			m.setBashMode(false)
 			return nil
 		}
-		if m.busy || m.hasPermissionView() {
+		if m.busy || m.imagePreparing || m.hasPermissionView() {
 			if !m.enqueuePrompt("!" + line) {
 				return nil
 			}
@@ -118,69 +131,107 @@ func (m *bubbleModel) submit() tea.Cmd {
 		m.setBashMode(false)
 		return m.dispatchBang(line)
 	}
-	if line == "" {
+
+	input := m.composerInput()
+	if strings.TrimSpace(input.Text) == "" && len(input.Attachments) == 0 {
 		if prompt.Value() != "" {
 			m.resetPrompt()
 		}
 		return nil
 	}
-	if strings.HasPrefix(line, "/") {
-		m.resetPrompt()
-		m.panes.bottom.remove(slashViewID)
-		return m.dispatch(line)
+	if len(input.Attachments) == 0 && strings.HasPrefix(input.Text, "/") && isCommandLine(input.Text) {
+		return m.dispatch(input.Text)
 	}
-	if m.busy || m.hasPermissionView() {
-		if !m.enqueuePrompt(line) {
+	if len(input.Attachments) > 0 && !m.currentModelAcceptsImageInput() {
+		m.appendError(m.imageInputsNotSupportedMessage())
+		m.refreshViewport()
+		return nil
+	}
+	if m.busy || m.imagePreparing || m.hasPermissionView() {
+		if !m.enqueueInput(input) {
 			return nil
+		}
+		if len(input.Attachments) > 0 {
+			m.panes.bottom.composer.attachments.release()
 		}
 		m.resetPrompt()
 		m.panes.bottom.remove(slashViewID)
 		m.refreshViewport()
 		return nil
 	}
+	if len(input.Attachments) > 0 {
+		m.panes.bottom.composer.attachments.release()
+	}
 	m.resetPrompt()
 	m.panes.bottom.remove(slashViewID)
-	return m.dispatch(line)
+	return m.dispatchInput(input)
 }
 
 func (m *bubbleModel) enqueuePrompt(line string) bool {
-	if m.conversation == nil || !m.conversation.Enqueue(line) {
+	return m.enqueueInput(tuiconv.QueuedInput{Text: line})
+}
+
+func (m *bubbleModel) enqueueInput(input tuiconv.QueuedInput) bool {
+	if m.conversation == nil || !m.conversation.EnqueueInput(input) {
 		m.appendMuted(fmt.Sprintf("queue full (%d); finish or cancel the active turn before adding more", tuiconv.DefaultMaxQueuedPrompts))
 		m.refreshViewport()
 		return false
 	}
-	m.appendMuted(fmt.Sprintf("queued (%d): %s", m.conversation.QueueLen(), tuiconv.QueuePreview(line, maxQueuePreviewRunes)))
+	preview := submissionDisplayText(input)
+	m.appendMuted(fmt.Sprintf("queued (%d): %s", m.conversation.QueueLen(), tuiconv.QueuePreview(preview, maxQueuePreviewRunes)))
 	return true
 }
 
 func (m *bubbleModel) drainQueue() tea.Cmd {
-	if m.busy || m.hasPermissionView() || m.conversation == nil || m.conversation.QueueLen() == 0 {
+	if m.busy || m.imagePreparing || m.hasPermissionView() || m.conversation == nil || m.conversation.QueueLen() == 0 {
 		return nil
 	}
-	line, ok := m.conversation.Dequeue()
+	input, ok := m.conversation.DequeueInput()
 	if !ok {
 		return nil
 	}
-	if strings.HasPrefix(line, "!") && !isCommandLine(line) {
-		return m.dispatchBang(strings.TrimPrefix(line, "!"))
+	if len(input.Attachments) == 0 && strings.HasPrefix(input.Text, "!") && !isCommandLine(input.Text) {
+		return m.dispatchBang(strings.TrimPrefix(input.Text, "!"))
 	}
-	return m.dispatch(line)
+	return m.dispatchInput(input)
 }
 
 func (m *bubbleModel) dispatch(line string) tea.Cmd {
-	m.panes.bottom.recordHistory(line)
-	if isCommandLine(line) {
-		parsed := parseCommand(line)
-		if spec, ok := slashview.LookupCommand(parsed.Name); ok && spec.EchoUser {
-			m.appendUser(line)
-		}
-		if m.rejectBlockedSlashCommand(line) {
+	return m.dispatchInput(tuiconv.QueuedInput{Text: line})
+}
+
+func (m *bubbleModel) dispatchInput(input tuiconv.QueuedInput) tea.Cmd {
+	display := submissionDisplayText(input)
+	if len(input.Attachments) == 0 && isCommandLine(input.Text) {
+		parsed := parseCommand(input.Text)
+		if m.rejectBlockedSlashCommand(input.Text) {
 			return nil
 		}
-		return m.executeCommand(line)
+		m.resetPrompt()
+		m.panes.bottom.remove(slashViewID)
+		if history := submissionHistoryText(input); history != "" {
+			m.panes.bottom.recordHistory(history)
+		}
+		if spec, ok := slashview.LookupCommand(parsed.Name); ok && spec.EchoUser {
+			m.appendUser(input.Text)
+		}
+		return m.executeCommand(input.Text)
 	}
-	m.appendUser(line)
-	return m.startTurn(line)
+	if len(input.Attachments) == 0 {
+		if history := submissionHistoryText(input); history != "" {
+			m.panes.bottom.recordHistory(history)
+		}
+	}
+	if len(input.Attachments) > 0 && !m.currentModelAcceptsImageInput() {
+		m.appendError(m.imageInputsNotSupportedMessage())
+		m.restoreSubmissionToComposer(input)
+		return nil
+	}
+	if len(input.Attachments) > 0 {
+		return m.beginImagePreparation(input)
+	}
+	m.appendUser(display)
+	return m.startTurn(input.Text)
 }
 
 func (m *bubbleModel) dispatchBang(command string) tea.Cmd {
@@ -194,7 +245,7 @@ func (m *bubbleModel) rejectBlockedSlashCommand(line string) bool {
 	if m == nil || !strings.HasPrefix(strings.TrimSpace(line), "/") {
 		return false
 	}
-	if !m.busy && !m.hasPermissionView() {
+	if !m.busy && !m.imagePreparing && !m.hasPermissionView() {
 		return false
 	}
 
@@ -203,7 +254,7 @@ func (m *bubbleModel) rejectBlockedSlashCommand(line string) bool {
 		return false
 	}
 
-	m.appendError(blockedSlashCommandMessage(cmd, m.busy))
+	m.appendError(blockedSlashCommandMessage(cmd, m.busy, m.imagePreparing))
 	m.refreshViewport()
 	return true
 }
@@ -226,7 +277,10 @@ func slashCommandRequiresIdle(cmd cmdpolicy.Command) bool {
 	}
 }
 
-func blockedSlashCommandMessage(cmd cmdpolicy.Command, busy bool) string {
+func blockedSlashCommandMessage(cmd cmdpolicy.Command, busy, imagePreparing bool) string {
+	if imagePreparing {
+		return fmt.Sprintf("cannot run /%s while image input is being prepared", cmd.Name)
+	}
 	if !busy {
 		return fmt.Sprintf("cannot run /%s while a permission request is active", cmd.Name)
 	}

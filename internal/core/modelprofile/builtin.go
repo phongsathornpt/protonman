@@ -16,6 +16,10 @@ var builtinRegistry = mustRegistry(
 		},
 		ContextWindow: 1_048_576,
 		Compatibility: CompatibilityPolicy{ToolSchemaDialect: ToolSchemaGeminiSubset},
+		VisionPolicy: VisionPolicy{
+			MaxDimension: 6000, MaxPatches: 10000, PatchSize: 32,
+			MaxOutputBytes: 10 * 1024 * 1024, TokenScheme: VisionTokenGeminiTiles, FallbackTokens: 2064,
+		},
 	},
 	Profile{
 		Name:         "zai-glm-5.3-family",
@@ -101,7 +105,7 @@ var builtinRegistry = mustRegistry(
 		Name:  "muse-spark-1.3-family",
 		Match: Matcher{Prefixes: []string{"muse-spark-1.3"}},
 		Capabilities: Capabilities{
-			Reasoning: SupportYes,
+			Vision: SupportYes, Reasoning: SupportYes,
 		},
 		Reasoning: Reasoning{
 			Support: SupportYes,
@@ -111,6 +115,7 @@ var builtinRegistry = mustRegistry(
 			},
 			Default: sdk.ReasoningHigh,
 		},
+		VisionPolicy: DefaultVisionPolicy(),
 	},
 	Profile{
 		Name:  "gpt-5.6-family",
@@ -127,6 +132,7 @@ var builtinRegistry = mustRegistry(
 			Default: sdk.ReasoningMedium,
 		},
 		ContextWindow: 1_050_000,
+		VisionPolicy:  DefaultVisionPolicy(),
 	},
 	Profile{
 		Name:  "grok-4.6",
@@ -139,6 +145,7 @@ var builtinRegistry = mustRegistry(
 			Levels:  []sdk.ReasoningEffort{sdk.ReasoningLow, sdk.ReasoningMedium, sdk.ReasoningHigh, sdk.ReasoningXHigh},
 			Default: sdk.ReasoningHigh,
 		},
+		VisionPolicy: DefaultVisionPolicy(),
 	},
 	Profile{
 		Name: "claude-adaptive-thinking",
@@ -148,6 +155,10 @@ var builtinRegistry = mustRegistry(
 		}},
 		Capabilities: Capabilities{Reasoning: SupportYes},
 		Reasoning:    Reasoning{Support: SupportYes},
+		VisionPolicy: VisionPolicy{
+			MaxDimension: 1568, MaxPatches: 1160, PatchSize: 32,
+			MaxOutputBytes: 10 * 1024 * 1024, TokenScheme: VisionTokenAnthropicPixels, FallbackTokens: 1600,
+		},
 	},
 )
 

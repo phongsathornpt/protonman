@@ -30,6 +30,7 @@ type ToolCell struct {
 	Summary         string
 	ShowDetail      bool
 	Icons           tuistyle.IconSet
+	Preview         string
 }
 
 func (ToolCell) Kind() HistoryCellKind { return HistoryCellTool }
@@ -77,7 +78,17 @@ func (c ToolCell) RenderWidth(width int) []string {
 				out = append(out, tuistyle.ToolExcerptStyle.Render("  ↳ "+excerpt))
 			}
 		}
-		if c.ToolKind == tool.KindGrep || c.Name == "grep" {
+		if c.Preview != "" {
+			imageGlyph := c.Icons.Image
+			if imageGlyph == "" {
+				imageGlyph = tuistyle.ASCIIImage
+			}
+			out = append(out, tuistyle.ToolExcerptStyle.Render("  ↳ "+strings.TrimSpace(imageGlyph)+" preview"))
+			previewLines := strings.Split(c.Preview, "\n")
+			for _, line := range previewLines {
+				out = append(out, tuistyle.ToolExcerptStyle.Render("  "+line))
+			}
+		} else if c.ToolKind == tool.KindGrep || c.Name == "grep" {
 			for _, line := range toolview.FormatGrepView(c.bodyLines(), c.Target, width) {
 				out = append(out, "  "+line)
 			}

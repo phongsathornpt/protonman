@@ -62,6 +62,12 @@ func WrapLines(text string, width int) []string {
 					continue
 				}
 			}
+			if breakAtSlash := strings.LastIndexAny(cut, "/\\"); breakAtSlash > 0 {
+				candidate := cut[:breakAtSlash+1]
+				lines = append(lines, candidate)
+				remaining = remaining[len(candidate):]
+				continue
+			}
 			lines = append(lines, cut)
 			remaining = remaining[len(cut):]
 		}
@@ -134,6 +140,12 @@ func wrapASCIILine(text string, width int) []string {
 				remaining = remaining[breakAt:]
 				continue
 			}
+		}
+		if breakAtSlash := strings.LastIndexAny(cut, "/\\"); breakAtSlash > 0 {
+			candidate := cut[:breakAtSlash+1]
+			lines = append(lines, candidate)
+			remaining = remaining[breakAtSlash+1:]
+			continue
 		}
 		lines = append(lines, cut)
 		remaining = remaining[width:]

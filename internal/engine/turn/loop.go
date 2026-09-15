@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
+	"github.com/phongsathornpt/protonman/internal/core/modelprofile"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/core/workspace"
 	"github.com/phongsathornpt/protonman/internal/engine/prompt"
@@ -403,6 +404,7 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 		modelCatalogOverride = resolvedModel.profile.CatalogOverride
 		modelMetadataProvenance = resolvedModel.profile.Provenance.Summary()
 	}
+	supportsVision := resolvedModel.has && resolvedModel.profile.Capabilities.Vision == modelprofile.SupportYes
 
 	slog.DebugContext(ctx, "turn reasoning policy resolved",
 		"requested", reasoningRequestedLabel(reasoningResolution),
@@ -608,7 +610,7 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 			terminalReason = "runtime_event_flush_failed"
 			return l.failWithResult(ctx, sink, round, checkpoint(), err)
 		}
-		toolMessages, err := toolMessagesForExecutions(executions)
+		toolMessages, err := toolMessagesForExecutions(executions, supportsVision)
 		if err != nil {
 			terminalReason = "tool_result_encoding_failed"
 			return l.failWithResult(ctx, sink, round, checkpoint(), err)

@@ -131,28 +131,15 @@ func TestTodoCapabilityDefinitionUsesClosedTypedRootSchema(t *testing.T) {
 	if _, ok := props["sessionId"]; !ok {
 		t.Fatalf("sessionId echo is not tolerated: %#v", props)
 	}
-	// A strict oneOf cannot express "get takes nothing, update takes both
-	// fields", so the contract is published as a single conditional requirement.
+	// The facade publishes only the provider-safe shared envelope. The selected
+	// update child validates expectedRevision and operations at execution time.
 	if _, ok := def.InputSchema["oneOf"]; ok {
 		t.Fatalf("capability schema still uses oneOf: %#v", def.InputSchema["oneOf"])
 	}
-	branches, ok := def.InputSchema["allOf"].([]any)
-	if !ok || len(branches) != 1 {
-		t.Fatalf("allOf = %#v, want one conditional requirement", def.InputSchema["allOf"])
-	}
-	branch := branches[0].(map[string]any)
-	condition, ok := branch["if"].(map[string]any)
-	if !ok {
-		t.Fatalf("conditional requirement missing if clause: %#v", branch)
-	}
-	conditionProps := condition["properties"].(map[string]any)
-	if _, ok := conditionProps["action"]; !ok {
-		t.Fatalf("if clause does not key on action: %#v", condition)
-	}
-	then := branch["then"].(map[string]any)
-	required := then["required"].([]any)
-	if len(required) != 2 {
-		t.Fatalf("then required = %#v, want expectedRevision and operations", required)
+	for _, forbidden := range []string{"allOf", "if", "then", "const"} {
+		if todoSchemaContainsKey(def.InputSchema, forbidden) {
+			t.Fatalf("capability schema contains provider-hostile %q: %#v", forbidden, def.InputSchema)
+		}
 	}
 	if err := def.Validate(); err != nil {
 		t.Fatal(err)

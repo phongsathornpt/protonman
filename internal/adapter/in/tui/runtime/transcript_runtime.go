@@ -38,8 +38,10 @@ func (m *bubbleModel) refreshTranscriptViewport(forceTail bool) {
 	}
 	follow := forceTail || m.panes.transcript.AtBottom()
 	scrollPercent := m.panes.transcript.ScrollPercent()
-	content := m.historyState.Raw()
-	if !m.panes.rawTranscript {
+	content := ""
+	if m.panes.rawTranscript {
+		content = m.historyState.Raw()
+	} else {
 		content = strings.Join(m.historyState.RenderLinesAt(maxInt(8, m.panes.transcript.Width())), "\n")
 	}
 	if strings.TrimSpace(content) == "" {

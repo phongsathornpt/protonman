@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 
+	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/style"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 )
@@ -27,7 +29,19 @@ func expectedPromptDivider(m *bubbleModel, styleName string) string {
 	case "idle":
 		return tuistyle.PromptDividerIdle.Render(line)
 	default:
-		return tuistyle.PromptDividerFocused.Render(line)
+		return renderPromptDivider(tuistyle.PromptDividerFocused, len([]rune(line)), true)
+	}
+}
+
+func TestFocusedPromptDividerUsesAccentRail(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	line := promptDividerLine(t, m)
+	plain := ansi.Strip(line)
+	if !strings.HasPrefix(plain, strings.Repeat("─", 8)) {
+		t.Fatalf("focused divider missing accent rail: %q", plain)
+	}
+	if got := lipgloss.Width(line); got != m.layout.width {
+		t.Fatalf("focused divider width = %d, want %d", got, m.layout.width)
 	}
 }
 

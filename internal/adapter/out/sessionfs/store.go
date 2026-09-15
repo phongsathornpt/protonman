@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sort"
@@ -54,6 +55,14 @@ func (s *FileStore) Load(ctx context.Context, sessionID string) (State, bool, er
 	}
 	if closeErr != nil {
 		return State{}, false, fmt.Errorf("close session state: %w", closeErr)
+	}
+	resources, err := session.ResolveResources(s.root, sessionID)
+	if err != nil {
+		return State{}, false, err
+	}
+	state, err = hydrateImageParts(resources, state)
+	if err != nil {
+		return State{}, false, err
 	}
 	state, err = session.NormalizeLoadedState(sessionID, state)
 	if err != nil {
@@ -107,6 +116,10 @@ func (s *FileStore) saveLocked(ctx context.Context, sessionID string, state Stat
 	if err := os.Chmod(resources.Root, 0o700); err != nil {
 		return fmt.Errorf("protect session directory: %w", err)
 	}
+	prepared, err = externalizeImageParts(resources, prepared)
+	if err != nil {
+		return err
+	}
 	file, err := os.CreateTemp(resources.Root, ".state-*.tmp")
 	if err != nil {
 		return fmt.Errorf("create temporary session state: %w", err)
@@ -141,6 +154,14 @@ func (s *FileStore) saveLocked(ctx context.Context, sessionID string, state Stat
 	}
 	if err := os.Rename(temporaryPath, resources.State); err != nil {
 		return fmt.Errorf("install session state: %w", err)
+	}
+	// State installation is the commit point. Sidecar cleanup happens only
+	// afterwards so a crash can leak an orphan but can never leave state.json
+	// referencing a blob that was deleted before commit. Cleanup failure is
+	// therefore non-fatal; reporting Save as failed after commit would make a
+	// retry race the already-advanced session revision.
+	if err := pruneAttachmentBlobs(resources, prepared); err != nil {
+		slog.WarnContext(ctx, "session attachment cleanup failed", "session_id", sessionID, "error", err)
 	}
 	return nil
 }

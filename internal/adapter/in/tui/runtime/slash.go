@@ -2,13 +2,15 @@ package runtime
 
 import (
 	"fmt"
-	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/paneutil"
 	"io"
+	"os"
 	"strings"
 
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/list"
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/paneutil"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/slashview"
 	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/style"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/textview"
@@ -99,7 +101,9 @@ func (v *slashPaneView) Render(ctx paneRenderContext) string {
 	rows := v.commandRows(ctx)
 	if layoutModeForHeight(ctx.height) != layoutTiny {
 		width := maxInt(1, ctx.width-6)
-		rows = append(rows, paneHelpStatusLine(width, slashPickerHelp(width), v.selectionStatusText()))
+		statusText := v.selectionStatusText()
+		helpWidth := maxInt(1, width-ansi.StringWidth(statusText)-1)
+		rows = append(rows, paneHelpStatusLine(width, slashPickerHelp(helpWidth), statusText))
 	} else if status := v.selectionStatus(ctx.width); status != "" {
 		rows = append(rows, status)
 	}
@@ -157,7 +161,21 @@ func (v *slashPaneView) selectionStatusText() string {
 		return ""
 	}
 	index := maxInt(0, minInt(v.picker.GlobalIndex(), len(v.matches)-1))
-	return fmt.Sprintf("%d/%d", index+1, len(v.matches))
+	total := len(v.matches)
+	indicator := ""
+	if total > maxSlashRows {
+		items := v.picker.VisibleItems()
+		start, end := paneWindow(len(items), v.picker.Index(), maxSlashRows, layoutNormal)
+		switch {
+		case start > 0 && end < total:
+			indicator = " ↕"
+		case start > 0:
+			indicator = " ↑"
+		case end < total:
+			indicator = " ↓"
+		}
+	}
+	return fmt.Sprintf("%d/%d%s", index+1, total, indicator)
 }
 
 func (v *slashPaneView) selectionStatus(width int) string {
@@ -187,7 +205,17 @@ func (v *slashPaneView) HandlePaneKey(ctx paneRenderContext, message tea.KeyPres
 }
 
 func isCommandLine(line string) bool {
-	return slashview.IsCommandLine(line)
+	if !slashview.IsCommandLine(line) {
+		return false
+	}
+	trimmed := strings.TrimSpace(line)
+	if _, err := os.Stat(trimmed); err == nil {
+		parsed := slashview.ParseCommand(trimmed)
+		if _, ok := slashview.LookupCommand(parsed.Name); !ok {
+			return false
+		}
+	}
+	return true
 }
 
 func splitCommand(line string) (string, string, []string) {
@@ -264,6 +292,7 @@ func (m *bubbleModel) syncSlashView() {
 	if m.panes.bottom == nil {
 		return
 	}
+	m.panes.bottom.syncPromptChrome()
 	matches := m.slashMatches()
 	if len(matches) == 0 {
 		m.panes.bottom.remove(slashViewID)

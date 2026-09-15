@@ -155,7 +155,7 @@ func (m *bubbleModel) loadInitialMessages(messages []model.Message) {
 						text = text[:idx]
 					}
 				}
-				state.Append(&tuihistory.UserCell{Text: text})
+				state.Append(&tuihistory.UserCell{Text: text, Icons: m.icons})
 			}
 		case model.RoleAssistant:
 			if text != "" {

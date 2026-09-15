@@ -133,17 +133,11 @@ func (h searchReplaceHandler) Execute(ctx context.Context, call tool.Call) (tool
 	}
 
 	content := string(contents)
-	occurrences := strings.Count(content, input.OldString)
-	if occurrences == 0 {
-		return tool.Result{}, fmt.Errorf("oldString was not found in %q", input.FilePath)
+	matches, err := findReplacements(content, input.OldString, input.NewString, input.ReplaceAll, input.FilePath)
+	if err != nil {
+		return tool.Result{}, err
 	}
-	if occurrences > 1 && !input.ReplaceAll {
-		return tool.Result{}, fmt.Errorf("oldString matched %d locations; use replaceAll for multiple matches", occurrences)
-	}
-	updated := strings.Replace(content, input.OldString, input.NewString, 1)
-	if input.ReplaceAll {
-		updated = strings.ReplaceAll(content, input.OldString, input.NewString)
-	}
+	updated := applyReplacements(content, matches)
 	checkpointID, err := prepareWorkspaceMutation(ctx, h.workspace, h.checkpoints, h.Definition().Safety, nil, []string{resolvedPath})
 	if err != nil {
 		return tool.Result{}, err

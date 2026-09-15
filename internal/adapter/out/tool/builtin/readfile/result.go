@@ -19,6 +19,10 @@ type artifactEnvelope struct {
 }
 
 func artifactResult(call tool.Call, envelope artifactEnvelope, output string) (tool.Result, error) {
+	return artifactResultWithImage(call, envelope, output, nil)
+}
+
+func artifactResultWithImage(call tool.Call, envelope artifactEnvelope, output string, attachment *tool.ImageAttachment) (tool.Result, error) {
 	structured, err := json.Marshal(envelope)
 	if err != nil {
 		return tool.Result{}, fmt.Errorf("encode read artifact result: %w", err)
@@ -29,5 +33,6 @@ func artifactResult(call tool.Call, envelope artifactEnvelope, output string) (t
 		Output:           output,
 		StructuredOutput: structured,
 		Truncated:        envelope.Truncated,
+		Image:            attachment,
 	}, nil
 }

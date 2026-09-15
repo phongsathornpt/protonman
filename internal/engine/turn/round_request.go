@@ -10,6 +10,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/core/modelprofile"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/engine/prompt"
+	"github.com/phongsathornpt/protonman/internal/feature/imageprep"
 	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 )
 
@@ -87,6 +88,7 @@ func (l *Loop) prepareRoundRequest(
 ) (sdk.Request, toolDispatchState, bool, error) {
 	var tools []tool.Definition
 	reqMessages := append([]model.Message(nil), history...)
+	hasCurrentTurnImage := latestUserMessageContainsImage(reqMessages)
 	dispatch := toolDispatchState{reason: toolDispatchDisabledNoTools}
 
 	if forceNoProgressSynthesis {
@@ -119,6 +121,9 @@ func (l *Loop) prepareRoundRequest(
 	}
 	if l.promptSpec != nil {
 		spec := l.effectivePromptSpec(tools, promptExtras)
+		if hasCurrentTurnImage {
+			spec.ExtraInstructions = append(spec.ExtraInstructions, prompt.AttachedImageInstruction)
+		}
 		spec.GroundingEvidence = string(grounding.evidence)
 		if projectInstructions != "" {
 			if base := strings.TrimSpace(spec.ProjectInstructions); base != "" {
@@ -134,7 +139,10 @@ func (l *Loop) prepareRoundRequest(
 			"prompt_version", prompt.Version,
 			"prompt_bytes", len(systemPrompt),
 			"tool_count", len(tools),
+			"native_image_input", hasCurrentTurnImage,
 		)
+	} else if hasCurrentTurnImage {
+		reqMessages = append([]model.Message{{Role: model.RoleSystem, Content: prompt.AttachedImageInstruction}}, reqMessages...)
 	}
 
 	slog.DebugContext(ctx, "turn tool dispatch state",
@@ -183,23 +191,46 @@ func (l *Loop) prepareRoundRequest(
 			Dynamic: definition.Kind == tool.KindMCP,
 		})
 	}
-	request := sdk.Request{Messages: reqMessages, Tools: sdkTools}
-	if grounding.pending() && dispatch.enabled() && len(sdkTools) > 0 && resolved.has &&
-		resolved.profile.Capabilities.ToolChoiceRequired == modelprofile.SupportYes {
-		request.Options.ToolChoice = sdk.ToolChoiceRequired
-	}
-	request.Options.ReasoningEffort = reasoning.Effective
+
 	limits := sdk.ModelTokenLimits(l.languageModel)
-	compactionProfile := modelprofile.Resolved{
+	effectiveProfile := modelprofile.Resolved{
 		ContextWindow:   limits.ContextWindow,
 		MaxInputTokens:  limits.MaxInputTokens,
 		MaxOutputTokens: limits.MaxOutputTokens,
 	}
 	if resolved.has {
-		compactionProfile = resolved.profile
+		effectiveProfile = resolved.profile
 	}
-	compactionPolicy := modelprofile.EffectiveCompactionPolicy(compactionProfile)
-	compactedRequest, compaction, err := compactRequestToModelBudget(request, limits, compactionPolicy)
+	visionPolicy := modelprofile.EffectiveVisionPolicy(effectiveProfile)
+
+	request := sdk.Request{Messages: reqMessages, Tools: sdkTools}
+	if request.Requirements().Vision {
+		if !caps.Vision {
+			return sdk.Request{}, dispatch, softToolBudgetWarned, fmt.Errorf("model %q does not support image input", l.languageModel.ModelID())
+		}
+		prepared, err := imageprep.PrepareMessages(request.Messages, imageprep.Policy{
+			MaxDimension:   visionPolicy.MaxDimension,
+			MaxPatches:     visionPolicy.MaxPatches,
+			PatchSize:      visionPolicy.PatchSize,
+			MaxOutputBytes: visionPolicy.MaxOutputBytes,
+		})
+		if err != nil {
+			return sdk.Request{}, dispatch, softToolBudgetWarned, fmt.Errorf("prepare model images: %w", err)
+		}
+		request.Messages = prepared
+		slog.DebugContext(ctx, "turn model images prepared",
+			"token_scheme", visionPolicy.TokenScheme,
+			"max_dimension", visionPolicy.MaxDimension,
+			"max_patches", visionPolicy.MaxPatches,
+		)
+	}
+	if grounding.pending() && dispatch.enabled() && len(sdkTools) > 0 && resolved.has &&
+		resolved.profile.Capabilities.ToolChoiceRequired == modelprofile.SupportYes {
+		request.Options.ToolChoice = sdk.ToolChoiceRequired
+	}
+	request.Options.ReasoningEffort = reasoning.Effective
+	compactionPolicy := modelprofile.EffectiveCompactionPolicy(effectiveProfile)
+	compactedRequest, compaction, err := compactRequestToModelBudgetWithVisionPolicy(request, limits, compactionPolicy, visionPolicy)
 	if err != nil {
 		return sdk.Request{}, dispatch, softToolBudgetWarned, fmt.Errorf("compact model context: %w", err)
 	}
@@ -216,8 +247,22 @@ func (l *Loop) prepareRoundRequest(
 	if err := request.Validate(); err != nil {
 		return sdk.Request{}, dispatch, softToolBudgetWarned, err
 	}
-	if err := validateContextBudget(l.languageModel, request); err != nil {
+	if err := validateContextBudgetWithVisionPolicy(l.languageModel, request, visionPolicy); err != nil {
 		return sdk.Request{}, dispatch, softToolBudgetWarned, err
 	}
 	return request, dispatch, softToolBudgetWarned, nil
+}
+
+func requestContainsImage(messages []sdk.Message) bool {
+	return (sdk.Request{Messages: messages}).Requirements().Vision
+}
+
+func latestUserMessageContainsImage(messages []sdk.Message) bool {
+	for index := len(messages) - 1; index >= 0; index-- {
+		if messages[index].Role != sdk.RoleUser {
+			continue
+		}
+		return requestContainsImage([]sdk.Message{messages[index]})
+	}
+	return false
 }
