@@ -90,3 +90,35 @@ func TestTextOnlyTurnDoesNotInjectAttachedImagePolicy(t *testing.T) {
 		t.Fatalf("text-only prompt unexpectedly contains attached-image policy: %s", base.requests[0].Messages[0].Content)
 	}
 }
+
+func TestHistoricalImageDoesNotInjectAttachedImagePolicyIntoCurrentTextTurn(t *testing.T) {
+	base := &scriptedClient{streams: []scriptedStreamSpec{{events: []sdk.Event{
+		{Kind: sdk.EventTextDelta, Text: "done"},
+		{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
+	}}}}
+	client := &visionScriptedClient{scriptedClient: base}
+	loop, _ := newTestLoop(t, client, permission.ActionAllow, WithSystemPromptSpec(prompt.Spec{}))
+
+	imageData := encodedBlankPNG(t, 32, 32)
+	_, err := loop.Run(context.Background(), []model.Message{
+		{
+			Role:    model.RoleUser,
+			Content: "inspect this screenshot",
+			Parts: []model.ContentPart{
+				{Type: model.ContentPartImage, MIMEType: "image/png", Data: imageData},
+				{Type: model.ContentPartText, Text: "inspect this screenshot"},
+			},
+		},
+		{Role: model.RoleAssistant, Content: "the screenshot contains a toolbar"},
+		{Role: model.RoleUser, Content: "now inspect the repository"},
+	}, nil)
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	if len(base.requests) != 1 || len(base.requests[0].Messages) == 0 {
+		t.Fatalf("requests = %#v", base.requests)
+	}
+	if strings.Contains(base.requests[0].Messages[0].Content, "# Attached Images") {
+		t.Fatalf("historical image leaked attached-image policy into current text turn: %s", base.requests[0].Messages[0].Content)
+	}
+}
