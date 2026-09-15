@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/widget"
 
 	"github.com/phongsathornpt/protonman/internal/adapter/out/acpclient"
 	desktopstate "github.com/phongsathornpt/protonman/internal/feature/desktop"
@@ -203,9 +204,12 @@ func (a *application) renderRuntimeControls() {
 	})
 }
 
-func setSelectEnabled(selectWidget *fyne.Container, enabled bool) {
-	_ = selectWidget
-	_ = enabled
+func setSelectEnabled(selectWidget *widget.Select, enabled bool) {
+	if enabled {
+		selectWidget.Enable()
+		return
+	}
+	selectWidget.Disable()
 }
 
 func runtimeSummaryText(runtime desktopstate.RuntimeSettingsState) string {
