@@ -13,40 +13,52 @@ import (
 )
 
 type clipboardImageLoadedMsg struct {
-	requestID uint64
-	path      string
-	width     int
-	height    int
-	err       error
+	draftText        string
+	draftAttachments int
+	path             string
+	width            int
+	height           int
+	err              error
 }
 
-func loadClipboardImage(requestID uint64) tea.Cmd {
+func loadClipboardImage(draftText string, draftAttachments int) tea.Cmd {
 	return func() tea.Msg {
+		result := clipboardImageLoadedMsg{draftText: draftText, draftAttachments: draftAttachments}
 		if err := clipboard.Init(); err != nil {
-			return clipboardImageLoadedMsg{requestID: requestID, err: fmt.Errorf("clipboard unavailable: %w", err)}
+			result.err = fmt.Errorf("clipboard unavailable: %w", err)
+			return result
 		}
 		raw := clipboard.Read(clipboard.FmtImage)
 		if len(raw) == 0 {
-			return clipboardImageLoadedMsg{requestID: requestID, err: fmt.Errorf("clipboard does not contain an image")}
+			result.err = fmt.Errorf("clipboard does not contain an image")
+			return result
 		}
 		if len(raw) > imageprep.MaxSnapshotBytes {
-			return clipboardImageLoadedMsg{requestID: requestID, err: fmt.Errorf("clipboard image exceeds %d byte limit", imageprep.MaxSnapshotBytes)}
+			result.err = fmt.Errorf("clipboard image exceeds %d byte limit", imageprep.MaxSnapshotBytes)
+			return result
 		}
 		config, format, err := image.DecodeConfig(bytes.NewReader(raw))
 		if err != nil {
-			return clipboardImageLoadedMsg{requestID: requestID, err: fmt.Errorf("decode clipboard image: %w", err)}
+			result.err = fmt.Errorf("decode clipboard image: %w", err)
+			return result
 		}
 		if format != "png" {
-			return clipboardImageLoadedMsg{requestID: requestID, err: fmt.Errorf("clipboard image format %q is not PNG", format)}
+			result.err = fmt.Errorf("clipboard image format %q is not PNG", format)
+			return result
 		}
 		if err := imageprep.ValidateSourceDimensions(config.Width, config.Height); err != nil {
-			return clipboardImageLoadedMsg{requestID: requestID, err: fmt.Errorf("clipboard image: %w", err)}
+			result.err = fmt.Errorf("clipboard image: %w", err)
+			return result
 		}
 		path, err := writeClipboardTempPNG(raw)
 		if err != nil {
-			return clipboardImageLoadedMsg{requestID: requestID, err: err}
+			result.err = err
+			return result
 		}
-		return clipboardImageLoadedMsg{requestID: requestID, path: path, width: config.Width, height: config.Height}
+		result.path = path
+		result.width = config.Width
+		result.height = config.Height
+		return result
 	}
 }
 
@@ -81,57 +93,45 @@ func writeClipboardTempPNG(raw []byte) (path string, writeErr error) {
 }
 
 func (m *bubbleModel) beginClipboardImagePaste() tea.Cmd {
-	if m == nil || m.clipboardImageLoading {
+	if m == nil || m.panes.bottom == nil || !m.panes.bottom.composerVisible() || m.panes.bottom.prompt() == nil {
 		return nil
 	}
 	if !m.currentModelAcceptsImageInput() {
-		m.appendError(m.imageInputsNotSupportedMessage())
-		m.requestRelayout()
-		return nil
-	}
-	m.clipboardImageRequestID++
-	requestID := m.clipboardImageRequestID
-	m.clipboardImageLoading = true
-	m.requestRelayout()
-	return loadClipboardImage(requestID)
-}
-
-func (m *bubbleModel) updateClipboardImageLoaded(message clipboardImageLoadedMsg) tea.Cmd {
-	if message.requestID != m.clipboardImageRequestID {
-		if message.path != "" {
-			_ = os.Remove(message.path)
-		}
-		return nil
-	}
-	m.clipboardImageLoading = false
-	if message.err != nil {
-		m.appendError(message.err.Error())
-		m.requestRelayout()
-		return nil
-	}
-	if m.panes.bottom == nil || !m.panes.bottom.composerVisible() || m.panes.bottom.prompt() == nil {
-		_ = os.Remove(message.path)
-		return nil
-	}
-	if !m.currentModelAcceptsImageInput() {
-		_ = os.Remove(message.path)
 		m.appendError(m.imageInputsNotSupportedMessage())
 		m.requestRelayout()
 		return nil
 	}
 	prompt := m.panes.bottom.prompt()
+	return loadClipboardImage(prompt.Value(), len(m.panes.bottom.composer.attachments.localImages))
+}
+
+func (m *bubbleModel) updateClipboardImageLoaded(message clipboardImageLoadedMsg) tea.Cmd {
+	if m == nil || m.panes.bottom == nil || !m.panes.bottom.composerVisible() || m.panes.bottom.prompt() == nil {
+		if message.path != "" {
+			_ = os.Remove(message.path)
+		}
+		return nil
+	}
+	prompt := m.panes.bottom.prompt()
+	if prompt.Value() != message.draftText || len(m.panes.bottom.composer.attachments.localImages) != message.draftAttachments {
+		if message.path != "" {
+			_ = os.Remove(message.path)
+		}
+		return nil
+	}
+	if message.err != nil {
+		m.appendError(message.err.Error())
+		m.requestRelayout()
+		return nil
+	}
+	if !m.currentModelAcceptsImageInput() {
+		_ = os.Remove(message.path)
+		m.appendError(m.imageInputsNotSupportedMessage())
+		m.requestRelayout()
+		return nil
+	}
 	m.panes.bottom.composer.attachments.attachTemporaryImage(prompt, message.path)
 	m.syncSlashView()
 	m.requestRelayout()
 	return nil
-}
-
-func (m *bubbleModel) cancelClipboardImagePaste() bool {
-	if m == nil || !m.clipboardImageLoading {
-		return false
-	}
-	m.clipboardImageRequestID++
-	m.clipboardImageLoading = false
-	m.requestRelayout()
-	return true
 }
