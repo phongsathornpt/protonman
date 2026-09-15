@@ -81,15 +81,9 @@ Desktop sends native Fyne notifications when:
 
 Successful completion notifications are suppressed for the currently active session to avoid duplicating foreground UI feedback. Failure notifications are always emitted and long error text is compacted before delivery.
 
-## Nerd Font UI glyphs
+## UI glyphs
 
-Desktop uses the Nerd Fonts Symbols Only asset for presentation-only glyphs in the native chrome, including the Protonman brand mark, workspace/session rows, and session lifecycle status.
-
-The pinned asset is Nerd Fonts `v3.5.1` `SymbolsNerdFontMono-Regular.ttf`. It is not used as the normal application font, so chat content, Thai text, code rendering, and other Unicode text continue to use Fyne's normal font selection.
-
-`make desktop` and `make desktop-run` fetch the pinned font into `bin/share/fonts/`. Release packaging includes the same file under `share/fonts/` plus its upstream license. The fetch script verifies the upstream Git blob SHA before accepting the file.
-
-For custom packaging or local testing, set `PROTONMAN_NERD_FONT` to an alternate font file. If the asset is unavailable, Desktop falls back to Fyne's symbol rendering instead of refusing to start.
+Desktop uses portable Unicode and Fyne theme rendering for presentation-only glyphs in the native chrome. No external font asset is downloaded or bundled.
 
 ## Build
 
@@ -105,6 +99,6 @@ Linux Fyne builds require the normal OpenGL, X11, and Wayland development packag
 
 ## Scope
 
-The current Desktop milestone covers durable task/session UX, permissions, structured activity, workspace grouping, Goal/TODO/Memory inspection, runtime controls, MCP integrations, reconnect behavior, native notifications, and Nerd Font-backed desktop chrome.
+The current Desktop milestone covers durable task/session UX, permissions, structured activity, workspace grouping, Goal/TODO/Memory inspection, runtime controls, MCP integrations, reconnect behavior, native notifications, and portable desktop chrome.
 
 Scheduled routines, remote runtime/SSH/sandbox targets, and a richer workspace runtime inspector remain follow-up work.

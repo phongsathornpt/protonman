@@ -124,8 +124,8 @@ func (a *application) initSessionList() {
 			return len(a.sidebarRows)
 		},
 		func() fyne.CanvasObject {
-			title := newNerdIconText(iconSession, "Session", fyne.TextStyle{}, false)
-			subtitle := newNerdIconText(iconFolder, "workspace", fyne.TextStyle{}, true)
+			title := newIconText(iconSession, "Session", fyne.TextStyle{}, false)
+			subtitle := newIconText(iconFolder, "workspace", fyne.TextStyle{}, true)
 			return container.NewVBox(title, subtitle)
 		},
 		func(id widget.ListItemID, object fyne.CanvasObject) {
@@ -157,8 +157,8 @@ func (a *application) bindSessionRow(id widget.ListItemID, object fyne.CanvasObj
 	title := box.Objects[0].(*fyne.Container)
 	subtitle := box.Objects[1].(*fyne.Container)
 	if row.Kind == sidebarWorkspaceRow {
-		setNerdIconText(title, iconFolder, compactText(row.WorkspaceName, sidebarTitleMaxRunes))
-		setNerdIconText(subtitle, iconSession, fmt.Sprintf("%d sessions", row.SessionCount))
+		setIconText(title, iconFolder, compactText(row.WorkspaceName, sidebarTitleMaxRunes))
+		setIconText(subtitle, iconSession, fmt.Sprintf("%d sessions", row.SessionCount))
 		return
 	}
 
@@ -166,17 +166,17 @@ func (a *application) bindSessionRow(id widget.ListItemID, object fyne.CanvasObj
 	if titleText == "" {
 		titleText = "Session " + shortID(session.ID)
 	}
-	setNerdIconText(title, iconSession, compactText(titleText, sidebarTitleMaxRunes))
+	setIconText(title, iconSession, compactText(titleText, sidebarTitleMaxRunes))
 
 	if session.Status != desktopstate.TaskIdle {
-		setNerdIconText(subtitle, taskStatusIcon(session.Status), string(session.Status))
+		setIconText(subtitle, taskStatusIcon(session.Status), string(session.Status))
 		return
 	}
 	workspace := strings.TrimSpace(session.WorkspaceName)
 	if workspace == "" {
 		workspace = "workspace"
 	}
-	setNerdIconText(subtitle, iconFolder, compactText(workspace, sidebarMetaMaxRunes))
+	setIconText(subtitle, iconFolder, compactText(workspace, sidebarMetaMaxRunes))
 }
 
 func (a *application) selectSessionRow(id widget.ListItemID) {
@@ -236,7 +236,7 @@ func (a *application) buildSidebar() fyne.CanvasObject {
 		a.newSession()
 	})
 	sidebarHeader := container.NewBorder(nil, nil, nil, newTask,
-		newNerdIconText(iconRocket, "protonMAN", fyne.TextStyle{Bold: true}, false),
+		newIconText(iconRocket, "protonMAN", fyne.TextStyle{Bold: true}, false),
 	)
 
 	secondary := container.NewVBox(

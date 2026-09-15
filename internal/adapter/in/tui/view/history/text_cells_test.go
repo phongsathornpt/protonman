@@ -147,17 +147,11 @@ func TestUserCellRendersAttachmentPills(t *testing.T) {
 		t.Fatalf("rendered line = %q, want ASCII file attachment icon and name", fileRendered[0])
 	}
 
-	// Explicit Nerd Font profile
-	nerdCell := UserCell{Text: "[Attached Image: image/png]", Icons: tuistyle.NerdIcons}
-	nerdRendered := nerdCell.RenderWidth(80)
-	if !strings.Contains(nerdRendered[0], "\uf03e") || !strings.Contains(nerdRendered[0], "image/png") {
-		t.Fatalf("rendered line = %q, want FontAwesome image attachment icon and mime", nerdRendered[0])
-	}
-
 	// Explicit Unicode profile
 	unicodeCell := UserCell{Text: "[Attached Image: image/png]", Icons: tuistyle.UnicodeIcons}
 	unicodeRendered := unicodeCell.RenderWidth(80)
-	if !strings.Contains(unicodeRendered[0], "🖼") || !strings.Contains(unicodeRendered[0], "image/png") {
-		t.Fatalf("rendered line = %q, want Unicode image icon", unicodeRendered[0])
+	if !strings.Contains(unicodeRendered[0], tuistyle.UnicodeIcons.Image) || !strings.Contains(unicodeRendered[0], "image/png") {
+		t.Fatalf("rendered line = %q, want Unicode image attachment icon and mime", unicodeRendered[0])
 	}
+
 }

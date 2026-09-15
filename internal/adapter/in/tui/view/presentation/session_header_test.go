@@ -48,15 +48,15 @@ func TestRenderSessionHeaderIncludesVisionWhenSupported(t *testing.T) {
 		t.Fatalf("expected ASCII vision flag in header: %q", got)
 	}
 
-	// Nerd Font profile
-	nerdGot := renderSessionHeaderMeta(SessionHeaderModel{
+	// Unicode profile
+	unicodeGot := renderSessionHeaderMeta(SessionHeaderModel{
 		Model:  "gpt-4o",
 		Vision: true,
-		Icons:  tuistyle.NerdIcons,
+		Icons:  tuistyle.UnicodeIcons,
 	}, 80)
 
-	if !strings.Contains(nerdGot, "vision") || !strings.Contains(nerdGot, "\uea72") {
-		t.Fatalf("expected Nerd Font vision flag in header: %q", nerdGot)
+	if !strings.Contains(unicodeGot, "vision") || !strings.Contains(unicodeGot, strings.TrimSpace(tuistyle.UnicodeIcons.Vision)) {
+		t.Fatalf("expected Unicode vision flag in header: %q", unicodeGot)
 	}
 }
 

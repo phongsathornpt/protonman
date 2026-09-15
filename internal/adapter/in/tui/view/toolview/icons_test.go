@@ -14,19 +14,19 @@ func TestKindGlyphWithIconsUsesProvidedProfile(t *testing.T) {
 		toolName string
 		want     string
 	}{
-		{"web", tool.KindWeb, tool.NameWeb, tuistyle.NerdIcons.Web},
-		{"read", tool.KindRead, tool.NameRead, tuistyle.NerdIcons.Read},
-		{"directory", tool.KindRead, tool.NameLS, tuistyle.NerdIcons.Dir},
-		{"search", tool.KindGrep, "grep", tuistyle.NerdIcons.Search},
-		{"git", tool.KindGit, "git", tuistyle.NerdIcons.Git},
-		{"exec", tool.KindBash, "bash", tuistyle.NerdIcons.Exec},
-		{"edit", tool.KindEdit, "edit", tuistyle.NerdIcons.Edit},
-		{"todo", tool.KindTask, tool.NameTodo, tuistyle.NerdIcons.TodoActive},
-		{"agent", tool.KindAgent, "subagent", tuistyle.NerdIcons.Agent},
-		{"image", tool.KindRead, "image", tuistyle.NerdIcons.Image},
+		{"web", tool.KindWeb, tool.NameWeb, tuistyle.UnicodeIcons.Web},
+		{"read", tool.KindRead, tool.NameRead, tuistyle.UnicodeIcons.Read},
+		{"directory", tool.KindRead, tool.NameLS, tuistyle.UnicodeIcons.Dir},
+		{"search", tool.KindGrep, "grep", tuistyle.UnicodeIcons.Search},
+		{"git", tool.KindGit, "git", tuistyle.UnicodeIcons.Git},
+		{"exec", tool.KindBash, "bash", tuistyle.UnicodeIcons.Exec},
+		{"edit", tool.KindEdit, "edit", tuistyle.UnicodeIcons.Edit},
+		{"todo", tool.KindTask, tool.NameTodo, tuistyle.UnicodeIcons.TodoActive},
+		{"agent", tool.KindAgent, "subagent", tuistyle.UnicodeIcons.Agent},
+		{"image", tool.KindRead, "image", tuistyle.UnicodeIcons.Image},
 	}
 	for _, tt := range tests {
-		if got := KindGlyphWithIcons(tuistyle.NerdIcons, tt.kind, tt.toolName); got != tt.want {
+		if got := KindGlyphWithIcons(tuistyle.UnicodeIcons, tt.kind, tt.toolName); got != tt.want {
 			t.Fatalf("%s glyph = %q, want %q", tt.name, got, tt.want)
 		}
 	}
@@ -39,11 +39,11 @@ func TestKindGlyphWithTargetUsesImageIconForImages(t *testing.T) {
 		target string
 		want   string
 	}{
-		{"nerd png", tuistyle.NerdIcons, "screenshot.png", tuistyle.NerdIcons.Image},
-		{"nerd quoted jpeg", tuistyle.NerdIcons, `"photo.jpeg"`, tuistyle.NerdIcons.Image},
+		{"unicode png", tuistyle.UnicodeIcons, "screenshot.png", tuistyle.UnicodeIcons.Image},
+		{"unicode quoted jpeg", tuistyle.UnicodeIcons, `"photo.jpeg"`, tuistyle.UnicodeIcons.Image},
 		{"unicode webp", tuistyle.UnicodeIcons, "chart.webp", tuistyle.UnicodeIcons.Image},
 		{"ascii gif", tuistyle.ASCIIIcons, "anim.gif", tuistyle.ASCIIIcons.Image},
-		{"nerd code file", tuistyle.NerdIcons, "main.go", tuistyle.NerdIcons.Read},
+		{"unicode code file", tuistyle.UnicodeIcons, "main.go", tuistyle.UnicodeIcons.Read},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

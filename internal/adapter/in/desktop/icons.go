@@ -12,27 +12,25 @@ import (
 	desktopstate "github.com/phongsathornpt/protonman/internal/feature/desktop"
 )
 
-type nerdIcon string
+type icon string
 
 const (
-	iconRocket     nerdIcon = "\uf135"
-	iconFolder     nerdIcon = "\uf07b"
-	iconSession    nerdIcon = "\uf075"
-	iconReady      nerdIcon = "\uf111"
-	iconQueued     nerdIcon = "\uf017"
-	iconRunning    nerdIcon = "\uf110"
-	iconPermission nerdIcon = "\uf084"
-	iconWaiting    nerdIcon = "\uf254"
-	iconPaused     nerdIcon = "\uf04c"
-	iconCompleted  nerdIcon = "\uf058"
-	iconFailed     nerdIcon = "\uf057"
+	iconRocket     icon = "◆"
+	iconFolder     icon = "▸"
+	iconSession    icon = "●"
+	iconReady      icon = "○"
+	iconQueued     icon = "◌"
+	iconRunning    icon = "◐"
+	iconPermission icon = "!"
+	iconWaiting    icon = "…"
+	iconPaused     icon = "Ⅱ"
+	iconCompleted  icon = "✓"
+	iconFailed     icon = "×"
 )
 
-func newNerdIconText(icon nerdIcon, text string, style fyne.TextStyle, lowImportance bool) *fyne.Container {
+func newIconText(icon icon, text string, style fyne.TextStyle, lowImportance bool) *fyne.Container {
 	glyph := canvas.NewText(string(icon), theme.ForegroundColor())
 	glyph.TextSize = theme.TextSize()
-	glyph.TextStyle = fyne.TextStyle{Symbol: true}
-	glyph.FontSource = loadNerdFontResource()
 	label := widget.NewLabelWithStyle(text, fyne.TextAlignLeading, style)
 	if lowImportance {
 		label.Importance = widget.LowImportance
@@ -40,7 +38,7 @@ func newNerdIconText(icon nerdIcon, text string, style fyne.TextStyle, lowImport
 	return container.NewHBox(glyph, label)
 }
 
-func setNerdIconText(row *fyne.Container, icon nerdIcon, text string) {
+func setIconText(row *fyne.Container, icon icon, text string) {
 	if row == nil || len(row.Objects) < 2 {
 		return
 	}
@@ -54,7 +52,7 @@ func setNerdIconText(row *fyne.Container, icon nerdIcon, text string) {
 	label.SetText(text)
 }
 
-func taskStatusIcon(status desktopstate.TaskStatus) nerdIcon {
+func taskStatusIcon(status desktopstate.TaskStatus) icon {
 	switch status {
 	case desktopstate.TaskQueued:
 		return iconQueued

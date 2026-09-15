@@ -15,7 +15,7 @@ func TestRuntimeIconModeResolvesFromEnvironment(t *testing.T) {
 		want tuistyle.IconSet
 	}{
 		{name: "auto", raw: "auto", want: tuistyle.UnicodeIcons},
-		{name: "nerd", raw: "nerd", want: tuistyle.NerdIcons},
+		{name: "unsupported-nerd", raw: "nerd", want: tuistyle.UnicodeIcons},
 		{name: "unicode", raw: "unicode", want: tuistyle.UnicodeIcons},
 		{name: "ascii", raw: "ascii", want: tuistyle.ASCIIIcons},
 		{name: "invalid-safe-fallback", raw: "emoji-magic", want: tuistyle.UnicodeIcons},

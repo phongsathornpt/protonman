@@ -41,7 +41,6 @@ type IconMode string
 
 const (
 	IconModeAuto    IconMode = "auto"
-	IconModeNerd    IconMode = "nerd"
 	IconModeUnicode IconMode = "unicode"
 	IconModeASCII   IconMode = "ascii"
 )
@@ -106,36 +105,6 @@ const (
 	ASCIIVision      = "* "
 )
 
-// Nerd Font profile uses Codicons from Nerd Fonts v3. Protonman supports the
-// Nerd Font Mono terminal variant so these PUA glyphs retain a one-cell width.
-const (
-	NerdComposer    = "\ueab6 " // nf-cod-chevron_right
-	NerdPrompt      = "\ueab6 " // nf-cod-chevron_right
-	NerdMark        = "\ueab6 " // nf-cod-chevron_right
-	NerdTool        = "\ueb6d " // nf-cod-tools
-	NerdToolSuccess = "\ueab2 " // nf-cod-check
-	NerdToolError   = "\uea87 " // nf-cod-error
-	NerdToolDenied  = "\uea6c " // nf-cod-warning
-	NerdWeb         = "\ueb01 " // nf-cod-globe
-	NerdRead        = "\uea7b " // nf-cod-file
-	NerdDir         = "\uea83 " // nf-cod-folder
-	NerdSearch      = "\uea6d " // nf-cod-search
-	NerdExec        = "\uea85 " // nf-cod-terminal
-	NerdEdit        = "\uea73 " // nf-cod-edit
-	NerdSkill       = "\uec10 " // nf-cod-sparkle
-	NerdAgent       = "\uec67 " // nf-cod-agent
-	NerdGit         = "\uea68 " // nf-cod-source_control
-	NerdGeneric     = "\ueabc " // nf-cod-circle
-	NerdTodoPending = "\ueabc " // nf-cod-circle
-	NerdTodoActive  = "\uea71 " // nf-cod-circle_filled
-	NerdBrand       = "\ueb44"  // nf-cod-rocket
-	NerdStatus      = "\ueabc"  // nf-cod-circle
-	NerdAttachment  = "\uf0c6 " // nf-fa-paperclip
-	NerdImage       = "\uf03e " // nf-fa-image
-	NerdLink        = "\ueb15 " // nf-cod-link
-	NerdVision      = "\uea72 " // nf-cod-eye
-)
-
 var (
 	UnicodeIcons = IconSet{
 		Composer: UnicodeComposer, Prompt: UnicodePrompt, Mark: UnicodeMark, Tool: UnicodeTool,
@@ -155,15 +124,6 @@ var (
 		Brand: ASCIIBrand, Status: ASCIIStatus,
 		Attachment: ASCIIAttachment, Image: ASCIIImage, Link: ASCIILink, Vision: ASCIIVision,
 	}
-	NerdIcons = IconSet{
-		Composer: NerdComposer, Prompt: NerdPrompt, Mark: NerdMark, Tool: NerdTool,
-		ToolSuccess: NerdToolSuccess, ToolError: NerdToolError, ToolDenied: NerdToolDenied,
-		Web: NerdWeb, Read: NerdRead, Dir: NerdDir, Search: NerdSearch,
-		Exec: NerdExec, Edit: NerdEdit, Skill: NerdSkill, Agent: NerdAgent, Git: NerdGit,
-		Generic: NerdGeneric, TodoPending: NerdTodoPending, TodoActive: NerdTodoActive,
-		Brand: NerdBrand, Status: NerdStatus,
-		Attachment: NerdAttachment, Image: NerdImage, Link: NerdLink, Vision: NerdVision,
-	}
 )
 
 // ParseIconMode validates an icon mode from user-controlled environment state.
@@ -173,7 +133,7 @@ func ParseIconMode(value string) (IconMode, error) {
 		return IconModeAuto, nil
 	}
 	switch mode {
-	case IconModeAuto, IconModeNerd, IconModeUnicode, IconModeASCII:
+	case IconModeAuto, IconModeUnicode, IconModeASCII:
 		return mode, nil
 	default:
 		return "", fmt.Errorf("unsupported icon mode %q", value)
@@ -185,8 +145,6 @@ func ParseIconMode(value string) (IconMode, error) {
 // especially over SSH, tmux, or remote IDE terminals.
 func ResolveIcons(mode IconMode, interactive bool) IconSet {
 	switch mode {
-	case IconModeNerd:
-		return NerdIcons
 	case IconModeASCII:
 		return ASCIIIcons
 	case IconModeUnicode:

@@ -110,10 +110,10 @@ func TestProjectHeaderUsesImageIconForImageTargetWhenRunning(t *testing.T) {
 		Kind:    tool.KindRead,
 		Target:  "photo.jpg",
 		Running: true,
-		Icons:   tuistyle.NerdIcons,
+		Icons:   tuistyle.UnicodeIcons,
 	})
-	if headerNerd.Glyph != tuistyle.NerdIcons.Image {
-		t.Fatalf("glyph = %q, want %q", headerNerd.Glyph, tuistyle.NerdIcons.Image)
+	if headerNerd.Glyph != tuistyle.UnicodeIcons.Image {
+		t.Fatalf("glyph = %q, want %q", headerNerd.Glyph, tuistyle.UnicodeIcons.Image)
 	}
 
 	headerASCII := ProjectHeader(HeaderInput{

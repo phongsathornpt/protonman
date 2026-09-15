@@ -106,20 +106,6 @@ func TestToolCellRendersImageASCIIPreviewWithImageIcon(t *testing.T) {
 		t.Fatalf("expected Unicode image icon in preview excerpt: %q", linesUnicode)
 	}
 
-	cellNerd := ToolCell{
-		Name:       tool.NameRead,
-		Target:     "screenshot.png",
-		ToolKind:   tool.KindRead,
-		Summary:    "image png 100x100 · sampled 1000 px",
-		ShowDetail: true,
-		Preview:    " .:-=+*#%@",
-		Icons:      tuistyle.NerdIcons,
-	}
-	linesNerd := strings.Join(cellNerd.RenderWidth(80), "\n")
-	if !strings.Contains(linesNerd, "\uf03e") || !strings.Contains(linesNerd, "preview") {
-		t.Fatalf("expected Nerd image icon in preview excerpt: %q", linesNerd)
-	}
-
 	cellASCII := ToolCell{
 		Name:       tool.NameRead,
 		Target:     "screenshot.png",

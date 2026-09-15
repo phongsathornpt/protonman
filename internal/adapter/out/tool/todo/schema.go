@@ -23,10 +23,9 @@ func patchOperationSchema() map[string]any {
 	}
 }
 
-// todoUpdateInputSchema declares the patch contract for the update action. A
-// strict oneOf cannot express "get takes nothing, update takes both fields", so
-// the conditional requirement is expressed with if/then, which keeps validation
-// errors attributable to a single JSON pointer.
+// todoUpdateInputSchema declares the complete patch contract for the update
+// action. The facade schema validates only the shared action envelope; once the
+// action is selected, this child schema enforces both required patch fields.
 func todoUpdateInputSchema() map[string]any {
 	return map[string]any{
 		"type": "object",

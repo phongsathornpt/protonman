@@ -14,7 +14,6 @@ func TestParseIconMode(t *testing.T) {
 	}{
 		{"", IconModeAuto, false},
 		{"AUTO", IconModeAuto, false},
-		{"nerd", IconModeNerd, false},
 		{"unicode", IconModeUnicode, false},
 		{"ascii", IconModeASCII, false},
 		{"emoji-magic", "", true},
@@ -43,7 +42,6 @@ func TestIconProfilesPreservePrefixWidthContract(t *testing.T) {
 	profiles := map[string]IconSet{
 		"unicode": UnicodeIcons,
 		"ascii":   ASCIIIcons,
-		"nerd":    NerdIcons,
 	}
 	for name, icons := range profiles {
 		prefixes := []string{
