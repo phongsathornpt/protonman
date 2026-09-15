@@ -60,7 +60,7 @@ func TestAnthropicStreamTextAndRequestMapping(t *testing.T) {
 
 	model := NewProvider(ProviderOptions{BaseURL: server.URL, APIKey: "secret"}).Model("claude-test")
 	stream, err := model.Stream(context.Background(), sdk.Request{
-		Messages: []sdk.Message{{Role: sdk.RoleSystem, Content: "system instruction"}, {Role: sdk.RoleUser, Parts: []sdk.ContentPart{{Type: sdk.ContentPartText, Text: "look"}, {Type: sdk.ContentPartImage, MIMEType: "image/png", Data: "abc"}}}},
+		Messages: []sdk.Message{{Role: sdk.RoleSystem, Content: "system instruction"}, {Role: sdk.RoleUser, Parts: []sdk.ContentPart{{Type: sdk.ContentPartText, Text: "look"}, {Type: sdk.ContentPartImage, MIMEType: "image/png", Data: "YWJj"}}}},
 		Tools:    []sdk.Tool{{Name: "read", Description: "read file", InputSchema: map[string]any{"type": "object"}}},
 		Options:  sdk.ModelOptions{MaxOutputTokens: 321},
 	})
