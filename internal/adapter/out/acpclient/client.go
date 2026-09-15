@@ -172,6 +172,20 @@ func (c *Client) Call(ctx context.Context, method string, params any, result any
 	}
 }
 
+// Notify sends a JSON-RPC notification. Notifications intentionally do not
+// allocate a request ID or pending response slot because the peer must not
+// reply to them. ACP uses this form for methods such as session/cancel.
+func (c *Client) Notify(method string, params any) error {
+	if method == "" {
+		return errors.New("ACP method is required")
+	}
+	paramsJSON, err := json.Marshal(params)
+	if err != nil {
+		return fmt.Errorf("encode %s params: %w", method, err)
+	}
+	return c.write(envelope{JSONRPC: "2.0", Method: method, Params: paramsJSON})
+}
+
 func (c *Client) Close() error {
 	c.shutdown(ErrClosed)
 	if c.cmd.Process != nil {
@@ -194,7 +208,7 @@ func (c *Client) write(v any) error {
 	}
 	payload = append(payload, '\n')
 	if _, err := c.stdin.Write(payload); err != nil {
-		return fmt.Errorf("write ACP request: %w", err)
+		return fmt.Errorf("write ACP message: %w", err)
 	}
 	return nil
 }
