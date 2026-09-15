@@ -169,6 +169,7 @@ func (a *application) markDisconnected(client *acpclient.Client) {
 	resetLoadingSessionHistories(a)
 	a.setStatus("Disconnected · reconnecting…")
 	fyne.Do(func() { a.list.Refresh() })
+	a.renderAttachments()
 	a.refreshActiveView()
 	a.refreshPermissionView()
 }
@@ -178,6 +179,7 @@ func (a *application) setClient(client *acpclient.Client, capabilities acpclient
 	a.client = client
 	a.agentCapabilities = capabilities
 	a.mu.Unlock()
+	a.renderAttachments()
 }
 
 func (a *application) currentClient() *acpclient.Client {
