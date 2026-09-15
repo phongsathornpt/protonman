@@ -54,6 +54,7 @@ func (m *bubbleModel) updateKeyboardCapability(message tea.KeyboardEnhancementsM
 	configureComposerNewline(nil, &m.keys.Newline, m.keyboardCapability)
 	m.debugKeyboardCapability(previous)
 }
+
 func keyboardDebugEnabled() bool {
 	return os.Getenv(keyboardDebugEnv) == "1"
 }
@@ -152,10 +153,16 @@ func (m *bubbleModel) submit() tea.Cmd {
 		if !m.enqueueInput(input) {
 			return nil
 		}
+		if len(input.Attachments) > 0 {
+			m.panes.bottom.composer.attachments.release()
+		}
 		m.resetPrompt()
 		m.panes.bottom.remove(slashViewID)
 		m.refreshViewport()
 		return nil
+	}
+	if len(input.Attachments) > 0 {
+		m.panes.bottom.composer.attachments.release()
 	}
 	m.resetPrompt()
 	m.panes.bottom.remove(slashViewID)
