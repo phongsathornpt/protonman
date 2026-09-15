@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -148,4 +149,63 @@ func writeAttachmentBlob(root, name string, raw []byte) (writeErr error) {
 		return fmt.Errorf("install session attachment: %w", err)
 	}
 	return nil
+}
+
+// pruneAttachmentBlobs removes digest-named image sidecars that are no longer
+// referenced by the committed session state. Unknown files are left untouched:
+// this cleanup owns only the blob namespace it can validate.
+func pruneAttachmentBlobs(resources session.Resources, state State) error {
+	referenced := make(map[string]struct{})
+	for _, message := range state.Messages {
+		for _, part := range message.Parts {
+			if part.Type != sdk.ContentPartImage {
+				continue
+			}
+			name := strings.TrimSpace(part.Blob)
+			if name == "" {
+				continue
+			}
+			if err := validateAttachmentBlobName(name); err != nil {
+				return err
+			}
+			referenced[name] = struct{}{}
+		}
+	}
+
+	entries, err := os.ReadDir(resources.Attachments)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("read session attachment directory for cleanup: %w", err)
+	}
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		if validateAttachmentBlobName(name) != nil {
+			continue
+		}
+		if _, keep := referenced[name]; keep {
+			continue
+		}
+		if err := os.Remove(filepath.Join(resources.Attachments, name)); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("remove stale session attachment %q: %w", name, err)
+		}
+	}
+	if len(referenced) == 0 {
+		// Removal succeeds only when no unknown file remains. ENOTEMPTY is benign
+		// because foreign/diagnostic files are deliberately outside GC ownership.
+		if err := os.Remove(resources.Attachments); err != nil && !errors.Is(err, os.ErrNotExist) && !isDirectoryNotEmpty(err) {
+			return fmt.Errorf("remove empty session attachment directory: %w", err)
+		}
+	}
+	return nil
+}
+
+func isDirectoryNotEmpty(err error) bool {
+	// Go intentionally exposes platform-specific syscall values for ENOTEMPTY.
+	// Treat a still-nonempty directory as benign without depending on errno.
+	return err != nil && strings.Contains(strings.ToLower(err.Error()), "directory not empty")
 }
