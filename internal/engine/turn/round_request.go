@@ -204,7 +204,7 @@ func (l *Loop) prepareRoundRequest(
 	visionPolicy := modelprofile.EffectiveVisionPolicy(effectiveProfile)
 
 	request := sdk.Request{Messages: reqMessages, Tools: sdkTools}
-	if requestContainsImage(request.Messages) {
+	if request.Requirements().Vision {
 		if !caps.Vision {
 			return sdk.Request{}, dispatch, softToolBudgetWarned, fmt.Errorf("model %q does not support image input", l.languageModel.ModelID())
 		}
@@ -254,12 +254,5 @@ func (l *Loop) prepareRoundRequest(
 }
 
 func requestContainsImage(messages []sdk.Message) bool {
-	for _, message := range messages {
-		for _, part := range message.Parts {
-			if part.Type == sdk.ContentPartImage {
-				return true
-			}
-		}
-	}
-	return false
+	return (sdk.Request{Messages: messages}).Requirements().Vision
 }
