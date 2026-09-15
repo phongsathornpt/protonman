@@ -25,6 +25,12 @@ type Snapshot struct {
 	Height   int
 }
 
+// ValidateSourceDimensions applies the same allocation-safety bound used before
+// full image decode. Input adapters can reject unsafe images before enqueueing.
+func ValidateSourceDimensions(width, height int) error {
+	return validateSourceDimensions(width, height)
+}
+
 func SnapshotLocal(path string) (Snapshot, error) {
 	path = strings.TrimSpace(path)
 	if path == "" {
@@ -63,7 +69,7 @@ func SnapshotLocal(path string) (Snapshot, error) {
 	if !ok {
 		return Snapshot{}, fmt.Errorf("unsupported image format %q", format)
 	}
-	if err := validateSourceDimensions(config.Width, config.Height); err != nil {
+	if err := ValidateSourceDimensions(config.Width, config.Height); err != nil {
 		return Snapshot{}, fmt.Errorf("image %q: %w", filepath.Base(path), err)
 	}
 
