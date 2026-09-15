@@ -188,7 +188,8 @@ func (l *Loop) prepareRoundRequest(
 		sdkTools = append(sdkTools, sdk.Tool{
 			Name: publishedName, Description: definition.Description,
 			InputSchema: inputSchema, OutputSchema: definition.OutputSchema,
-			Dynamic: definition.Kind == tool.KindMCP,
+			ProviderOptions: sdk.ProviderOptions(definition.ProviderOptions),
+			Dynamic:         definition.Kind == tool.KindMCP,
 		})
 	}
 

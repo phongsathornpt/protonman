@@ -237,6 +237,48 @@ func TestResponsesAPIRequestAndStream(t *testing.T) {
 	}
 }
 
+func TestDeepSeekResponsesPreservesReasoningHistory(t *testing.T) {
+	var body map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatal(err)
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		io.WriteString(w, "data: {\"type\":\"response.reasoning_text.delta\",\"delta\":\"inspect\"}\n\n")
+		io.WriteString(w, "data: {\"type\":\"response.completed\",\"response\":{}}\n\n")
+	}))
+	defer server.Close()
+
+	model := NewProvider(ProviderOptions{
+		ProviderName: "deepseek",
+		BaseURL:      server.URL,
+	}).Model("deepseek-flash", WithResponsesAPI())
+	stream, err := model.Stream(context.Background(), sdk.Request{
+		Messages: []sdk.Message{
+			{Role: sdk.RoleAssistant, ReasoningContent: "inspect first", ToolCalls: []sdk.ToolCall{{
+				ID: "call-1", Name: "read", Arguments: json.RawMessage(`{}`),
+			}}},
+			{Role: sdk.RoleTool, ToolCallID: "call-1", ToolName: "read", Content: "file"},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	events := collectEvents(t, stream)
+	if len(events) == 0 || events[0].Kind != sdk.EventReasoningDelta || events[0].ReasoningContent != "inspect" {
+		t.Fatalf("events = %#v", events)
+	}
+
+	input, ok := body["input"].([]any)
+	if !ok || len(input) < 3 {
+		t.Fatalf("input = %#v", body["input"])
+	}
+	reasoning, ok := input[0].(map[string]any)
+	if !ok || reasoning["type"] != "reasoning" {
+		t.Fatalf("reasoning item = %#v", input[0])
+	}
+}
+
 func TestOpenAISessionIDHeaderPersistsAcrossRetries(t *testing.T) {
 	attempts := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

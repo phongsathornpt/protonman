@@ -273,6 +273,10 @@ func (s *stream) processResponses(payload string) error {
 		return providerStreamError(s.provider, chunk.Response.Error.Code, chunk.Response.Error.Type, chunk.Response.Error.Message, chunk.Response.Error.Metadata)
 	}
 	switch chunk.Type {
+	case "response.reasoning_text.delta":
+		if chunk.Delta != "" {
+			s.queue = append(s.queue, sdk.Event{Kind: sdk.EventReasoningDelta, ReasoningContent: chunk.Delta})
+		}
 	case "response.output_text.delta":
 		if chunk.Delta != "" {
 			s.queue = append(s.queue, sdk.Event{Kind: sdk.EventTextDelta, Text: chunk.Delta})

@@ -102,6 +102,16 @@ func (m *LanguageModel) encodeRequest(request sdk.Request) (string, []byte, erro
 			case sdk.RoleUser, sdk.RoleSystem:
 				input = append(input, map[string]any{"role": string(message.Role), "content": responsesMessageContent(message)})
 			case sdk.RoleAssistant:
+				if isDeepSeekResponsesModel(m.provider.options.ProviderName, m.provider.options.BaseURL, m.modelID) &&
+					strings.TrimSpace(message.ReasoningContent) != "" {
+					input = append(input, map[string]any{
+						"type": "reasoning",
+						"content": []map[string]any{{
+							"type": "reasoning_text",
+							"text": message.ReasoningContent,
+						}},
+					})
+				}
 				if text := strings.TrimSpace(message.TextContent()); text != "" {
 					input = append(input, map[string]any{"role": "assistant", "content": text})
 				}
@@ -217,6 +227,16 @@ func isQwenHybridThinkingModel(modelID string) bool {
 	}
 	for _, prefix := range []string{"qwen3.5-plus", "qwen3.6-plus", "qwen3.6-flash", "qwen3.7-plus", "qwen3.7-max", "qwen3.8-flash"} {
 		if strings.HasPrefix(id, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+func isDeepSeekResponsesModel(providerName, baseURL, modelID string) bool {
+	values := []string{providerName, baseURL, modelID}
+	for _, value := range values {
+		if strings.Contains(strings.ToLower(strings.TrimSpace(value)), "deepseek") {
 			return true
 		}
 	}
