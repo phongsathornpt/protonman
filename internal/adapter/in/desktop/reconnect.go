@@ -45,7 +45,8 @@ func (a *application) superviseConnection() {
 			continue
 		}
 		client.SetRequestHandler(a.handleRequest)
-		if err := a.initializeClient(ctx, client); err != nil {
+		initialized, err := a.initializeClient(ctx, client)
+		if err != nil {
 			_ = client.Close()
 			if ctx.Err() != nil {
 				return
@@ -60,7 +61,9 @@ func (a *application) superviseConnection() {
 
 		a.setClient(client)
 		delay = reconnectInitialDelay
-		a.resumeKnownSessions(ctx, client)
+		if initialized.AgentCapabilities.SessionCapabilities.Resume != nil {
+			a.resumeKnownSessions(ctx, client)
+		}
 		go a.refreshSessions()
 
 		select {
@@ -97,29 +100,24 @@ func resolveACPBinaryFor(override, executable string, isFile func(string) bool) 
 	return "protonman"
 }
 
-func (a *application) initializeClient(ctx context.Context, client *acpclient.Client) error {
-	var result struct {
-		ProtocolVersion int `json:"protocolVersion"`
-		AgentInfo       struct {
-			Version string `json:"version"`
-		} `json:"agentInfo"`
-	}
+func (a *application) initializeClient(ctx context.Context, client *acpclient.Client) (acpclient.InitializeResult, error) {
+	var result acpclient.InitializeResult
 	if err := callReconnectRPC(ctx, client, "initialize", map[string]any{
 		"protocolVersion":    1,
 		"clientInfo":         map[string]any{"name": "protonman-desktop", "title": "Protonman Desktop"},
 		"clientCapabilities": map[string]any{},
 	}, &result); err != nil {
-		return err
+		return acpclient.InitializeResult{}, err
 	}
 	if result.ProtocolVersion != 1 {
-		return fmt.Errorf("unsupported ACP v%d", result.ProtocolVersion)
+		return acpclient.InitializeResult{}, fmt.Errorf("unsupported ACP v%d", result.ProtocolVersion)
 	}
 	version := strings.TrimPrefix(result.AgentInfo.Version, "v")
 	if version == "" {
 		version = "connected"
 	}
 	a.setStatus("Protonman " + version + " · ACP v1")
-	return nil
+	return result, nil
 }
 
 func (a *application) resumeKnownSessions(ctx context.Context, client *acpclient.Client) {
