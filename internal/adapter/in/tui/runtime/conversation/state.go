@@ -52,7 +52,6 @@ func NewState(retention coreconv.RetentionPolicy, initialMessages ...[]model.Mes
 	}
 	return &State{
 		messages:         msgs,
-		queue:            make([]QueuedInput, 0),
 		retention:        retention,
 		maxQueuedPrompts: DefaultMaxQueuedPrompts,
 	}
@@ -188,7 +187,7 @@ func (s *State) ClearQueue() {
 
 // Queue returns queued prompt text for legacy display/test callers.
 func (s *State) Queue() []string {
-	if s == nil {
+	if s == nil || len(s.queue) == 0 {
 		return nil
 	}
 	out := make([]string, 0, len(s.queue))
@@ -200,7 +199,7 @@ func (s *State) Queue() []string {
 
 // QueuedInputs returns a defensive copy of complete queued submissions.
 func (s *State) QueuedInputs() []QueuedInput {
-	if s == nil {
+	if s == nil || len(s.queue) == 0 {
 		return nil
 	}
 	out := make([]QueuedInput, 0, len(s.queue))
@@ -216,28 +215,4 @@ func (s *State) QueueLen() int {
 		return 0
 	}
 	return len(s.queue)
-}
-
-// Reset clears messages and the queue while preserving retention policy.
-func (s *State) Reset() {
-	if s == nil {
-		return
-	}
-	clear(s.messages)
-	s.messages = nil
-	s.ClearQueue()
-}
-
-// QueuePreview truncates a prompt string to a maximum number of runes for display.
-func QueuePreview(line string, maxRunes ...int) string {
-	limit := DefaultMaxQueuePreviewRunes
-	if len(maxRunes) > 0 && maxRunes[0] > 0 {
-		limit = maxRunes[0]
-	}
-	trimmed := strings.TrimSpace(line)
-	runes := []rune(trimmed)
-	if len(runes) <= limit {
-		return string(runes)
-	}
-	return string(runes[:limit-1]) + "…"
 }
