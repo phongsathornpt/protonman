@@ -74,6 +74,9 @@ func TestCancelImagePreparationInvalidatesStaleCompletion(t *testing.T) {
 	if got := m.panes.bottom.prompt().Value(); !strings.Contains(got, "inspect screenshot") || !strings.Contains(got, "[Image #1]") {
 		t.Fatalf("canceled draft was not restored: %q", got)
 	}
+	if got := len(m.panes.bottom.composer.history); got != 0 {
+		t.Fatalf("canceled image turn wrote %d history entries, want 0", got)
+	}
 
 	stale := imageSubmissionPreparedMsg{
 		preparationID: 41,
@@ -91,5 +94,8 @@ func TestCancelImagePreparationInvalidatesStaleCompletion(t *testing.T) {
 	}
 	if m.busy {
 		t.Fatal("stale preparation started a model turn")
+	}
+	if got := len(m.panes.bottom.composer.history); got != 0 {
+		t.Fatalf("stale completion wrote %d history entries, want 0", got)
 	}
 }
