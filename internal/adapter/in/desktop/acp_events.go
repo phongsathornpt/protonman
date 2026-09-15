@@ -129,7 +129,11 @@ func (a *application) applyCurrentModeUpdate(sessionID string, update currentMod
 	state := states[sessionID]
 	state.Mode = strings.TrimSpace(update.CurrentID)
 	states[sessionID] = state
+	active := a.state.ActiveSessionID == sessionID
 	a.mu.Unlock()
+	if active {
+		a.renderSessionChrome()
+	}
 }
 
 func (a *application) applyAvailableCommandsUpdate(sessionID string, update availableCommandUpdate) {
@@ -147,8 +151,15 @@ func (a *application) applyUsageUpdate(sessionID string, update usageUpdate) {
 	state := states[sessionID]
 	state.Usage = update
 	states[sessionID] = state
+	active := a.state.ActiveSessionID == sessionID
 	a.mu.Unlock()
-	if a.state.ActiveSessionID == sessionID {
+	if active {
 		a.renderSessionChrome()
 	}
+}
+
+func (a *application) protocolState(sessionID string) sessionProtocolState {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return protocolStateMapFor(a)[sessionID]
 }
