@@ -193,9 +193,7 @@ func (a *application) newSession() {
 		return
 	}
 	go func() {
-		var result struct {
-			SessionID string `json:"sessionId"`
-		}
+		var result acpclient.SessionNewResult
 		params := map[string]any{"cwd": cwd}
 		if servers := a.mcpServersPayload(); len(servers) > 0 {
 			params["mcpServers"] = servers
@@ -215,6 +213,7 @@ func (a *application) newSession() {
 		a.state = desktopstate.Reduce(a.state, desktopstate.Event{Kind: desktopstate.EventSessionSelected, SessionID: result.SessionID})
 		index := sidebarRowIndexForSession(a.sidebarRows, result.SessionID)
 		a.mu.Unlock()
+		a.applySessionConfigOptions(result.SessionID, result.ConfigOptions)
 		if index >= 0 {
 			fyne.Do(func() { a.list.Select(widget.ListItemID(index)) })
 		}
@@ -259,7 +258,11 @@ func (a *application) sendPrompt() {
 		if servers := a.mcpServersPayload(); len(servers) > 0 {
 			resumeParams["mcpServers"] = servers
 		}
-		err := client.Call(a.ctx, "session/resume", resumeParams, nil)
+		var resumeResult acpclient.SessionResumeResult
+		err := client.Call(a.ctx, "session/resume", resumeParams, &resumeResult)
+		if err == nil {
+			a.applySessionConfigOptions(sessionID, resumeResult.ConfigOptions)
+		}
 		var result struct {
 			StopReason string `json:"stopReason"`
 		}
