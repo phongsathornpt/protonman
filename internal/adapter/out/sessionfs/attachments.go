@@ -194,18 +194,5 @@ func pruneAttachmentBlobs(resources session.Resources, state State) error {
 			return fmt.Errorf("remove stale session attachment %q: %w", name, err)
 		}
 	}
-	if len(referenced) == 0 {
-		// Removal succeeds only when no unknown file remains. ENOTEMPTY is benign
-		// because foreign/diagnostic files are deliberately outside GC ownership.
-		if err := os.Remove(resources.Attachments); err != nil && !errors.Is(err, os.ErrNotExist) && !isDirectoryNotEmpty(err) {
-			return fmt.Errorf("remove empty session attachment directory: %w", err)
-		}
-	}
 	return nil
-}
-
-func isDirectoryNotEmpty(err error) bool {
-	// Go intentionally exposes platform-specific syscall values for ENOTEMPTY.
-	// Treat a still-nonempty directory as benign without depending on errno.
-	return err != nil && strings.Contains(strings.ToLower(err.Error()), "directory not empty")
 }
