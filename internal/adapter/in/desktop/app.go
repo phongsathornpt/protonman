@@ -302,7 +302,7 @@ func (a *application) cancelPrompt() {
 		return
 	}
 	go func() {
-		if err := client.Call(a.ctx, "session/cancel", map[string]any{"sessionId": sessionID}, nil); err != nil && a.clientIsCurrent(client) {
+		if err := client.Notify("session/cancel", map[string]any{"sessionId": sessionID}); err != nil && a.clientIsCurrent(client) {
 			a.setStatus("Cancel failed · " + err.Error())
 		}
 	}()
