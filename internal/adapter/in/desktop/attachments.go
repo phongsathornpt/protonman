@@ -63,6 +63,7 @@ func (a *application) readPromptAttachment(reader fyne.URIReadCloser) (composerA
 		mimeType = strings.TrimSpace(mimeType[:cut])
 	}
 	image := strings.HasPrefix(mimeType, "image/")
+	textResource := strings.HasPrefix(mimeType, "text/") || mimeType == "application/json" || mimeType == "application/xml"
 
 	a.mu.Lock()
 	caps := a.agentCapabilities.PromptCapabilities
@@ -72,6 +73,9 @@ func (a *application) readPromptAttachment(reader fyne.URIReadCloser) (composerA
 	}
 	if !image && !caps.EmbeddedContext {
 		return composerAttachment{}, errors.New("connected ACP agent does not advertise embedded context")
+	}
+	if !image && mimeType != "" && !textResource {
+		return composerAttachment{}, fmt.Errorf("%s is not a supported text resource", name)
 	}
 
 	limited := io.LimitReader(reader, maxPromptAttachmentBytes+1)
@@ -83,11 +87,7 @@ func (a *application) readPromptAttachment(reader fyne.URIReadCloser) (composerA
 		return composerAttachment{}, fmt.Errorf("%s exceeds the 20 MiB attachment limit", name)
 	}
 	if mimeType == "" {
-		if image {
-			mimeType = "application/octet-stream"
-		} else {
-			mimeType = "text/plain"
-		}
+		mimeType = "text/plain"
 	}
 	return composerAttachment{Name: name, URI: uri.String(), MIMEType: mimeType, Data: data, Image: image}, nil
 }
