@@ -32,6 +32,7 @@ type application struct {
 	client            *acpclient.Client
 	agentCapabilities acpclient.AgentCapabilities
 	desktopApp        fyne.App
+	window            fyne.Window
 
 	mu                    sync.Mutex
 	state                 desktopstate.State
@@ -41,6 +42,7 @@ type application struct {
 	conversationSessionID string
 	permissionWaiters     map[string]chan string
 	sessionConfigOptions  map[string][]acpclient.SessionConfigOption
+	attachments           []composerAttachment
 	preferences           fyne.Preferences
 
 	status             *widget.Label
@@ -49,6 +51,8 @@ type application struct {
 	chat               *widget.RichText
 	conversationScroll fyne.CanvasObject
 	composer           *widget.Entry
+	attachmentStrip    *fyne.Container
+	attachButton       *widget.Button
 	send               *widget.Button
 	stop               *widget.Button
 	sessionTitle       *widget.Label
@@ -93,6 +97,7 @@ func Run(ctx context.Context) error {
 	ui := &application{
 		ctx:                  ctx,
 		desktopApp:           desktopApp,
+		window:               window,
 		transcripts:          make(map[string]*strings.Builder),
 		permissionWaiters:    make(map[string]chan string),
 		sessionConfigOptions: make(map[string][]acpclient.SessionConfigOption),
@@ -227,10 +232,15 @@ func (a *application) newSession() {
 func (a *application) sendPrompt() {
 	text := strings.TrimSpace(a.composer.Text)
 	client := a.currentClient()
-	if text == "" || client == nil {
+	if client == nil {
 		return
 	}
 	a.mu.Lock()
+	attachments := append([]composerAttachment(nil), a.attachments...)
+	if text == "" && len(attachments) == 0 {
+		a.mu.Unlock()
+		return
+	}
 	sessionID := a.state.ActiveSessionID
 	if sessionID == "" || a.sessionBusyLocked(sessionID) {
 		a.mu.Unlock()
@@ -249,11 +259,21 @@ func (a *application) sendPrompt() {
 		a.setStatus("Cannot run session · workspace path is unavailable; open the workspace again instead of falling back to the Desktop process directory")
 		return
 	}
+	a.attachments = nil
 	a.state = desktopstate.Reduce(a.state, desktopstate.Event{Kind: desktopstate.EventPromptStarted, SessionID: sessionID})
 	a.mu.Unlock()
 
+	blocks := a.promptContentBlocks(text, attachments)
 	a.composer.SetText("")
-	a.appendTranscript(sessionID, "\n\n> "+text+"\n\n")
+	a.renderAttachments()
+	display := text
+	if len(attachments) > 0 {
+		if display != "" {
+			display += "\n"
+		}
+		display += fmt.Sprintf("[%d attachment(s)]", len(attachments))
+	}
+	a.appendTranscript(sessionID, "\n\n> "+display+"\n\n")
 	fyne.Do(func() { a.list.Refresh() })
 
 	go func() {
@@ -269,13 +289,11 @@ func (a *application) sendPrompt() {
 				a.applySessionConfigOptions(sessionID, resumeResult.ConfigOptions)
 			}
 		}
-		var result struct {
-			StopReason string `json:"stopReason"`
-		}
+		var result acpclient.SessionPromptResult
 		if err == nil {
-			err = client.Call(a.ctx, "session/prompt", map[string]any{
-				"sessionId": sessionID,
-				"prompt":    []map[string]any{{"type": "text", "text": text}},
+			err = client.Call(a.ctx, "session/prompt", acpclient.SessionPromptParams{
+				SessionID: sessionID,
+				Prompt:    blocks,
 			}, &result)
 		}
 
@@ -286,11 +304,13 @@ func (a *application) sendPrompt() {
 		kind := desktopstate.EventPromptCompleted
 		if err != nil {
 			kind = desktopstate.EventPromptFailed
+			a.attachments = append(attachments, a.attachments...)
 		}
 		a.state = desktopstate.Reduce(a.state, desktopstate.Event{Kind: kind, SessionID: sessionID})
 		a.mu.Unlock()
 		if err != nil {
 			a.appendTranscript(sessionID, "\n\n**Error:** "+err.Error()+"\n")
+			a.renderAttachments()
 		}
 		a.notifyTurnFinished(sessionID, err)
 		fyne.Do(func() { a.list.Refresh() })
