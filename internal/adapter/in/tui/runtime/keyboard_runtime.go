@@ -242,7 +242,7 @@ func (m *bubbleModel) rejectBlockedSlashCommand(line string) bool {
 	if m == nil || !strings.HasPrefix(strings.TrimSpace(line), "/") {
 		return false
 	}
-	if !m.busy && !m.hasPermissionView() {
+	if !m.busy && !m.imagePreparing && !m.hasPermissionView() {
 		return false
 	}
 
@@ -251,7 +251,7 @@ func (m *bubbleModel) rejectBlockedSlashCommand(line string) bool {
 		return false
 	}
 
-	m.appendError(blockedSlashCommandMessage(cmd, m.busy))
+	m.appendError(blockedSlashCommandMessage(cmd, m.busy, m.imagePreparing))
 	m.refreshViewport()
 	return true
 }
@@ -274,7 +274,10 @@ func slashCommandRequiresIdle(cmd cmdpolicy.Command) bool {
 	}
 }
 
-func blockedSlashCommandMessage(cmd cmdpolicy.Command, busy bool) string {
+func blockedSlashCommandMessage(cmd cmdpolicy.Command, busy, imagePreparing bool) string {
+	if imagePreparing {
+		return fmt.Sprintf("cannot run /%s while image input is being prepared", cmd.Name)
+	}
 	if !busy {
 		return fmt.Sprintf("cannot run /%s while a permission request is active", cmd.Name)
 	}
