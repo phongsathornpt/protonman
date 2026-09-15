@@ -43,6 +43,13 @@ func (m *bubbleModel) handleInterruptKey() tea.Cmd {
 		m.requestRelayout()
 		return nil
 	}
+	if m.imagePreparing {
+		m.cancelImagePreparation()
+		if m.conversation != nil {
+			m.conversation.ClearQueue()
+		}
+		return nil
+	}
 	if m.busy && m.turnCancel != nil {
 		m.cancelActiveTurn()
 		if m.conversation != nil {
