@@ -210,8 +210,14 @@ func compactRequestToModelBudgetWithVisionPolicy(request sdk.Request, limits sdk
 		func(messages []sdk.Message) (int, error) {
 			candidate := request
 			candidate.Messages = messages
-			candidate.Tools = nil
-			return estimateRequestTokensWithVisionPolicy(candidate, visionPolicy)
+			tokens, err := estimateRequestTokensWithVisionPolicy(candidate, visionPolicy)
+			if err != nil {
+				return 0, err
+			}
+			if tokens <= fixedTokens {
+				return 0, nil
+			}
+			return tokens - fixedTokens, nil
 		},
 	)
 	if err != nil {
