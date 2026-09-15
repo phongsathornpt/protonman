@@ -198,7 +198,7 @@ func (m *bubbleModel) updateTurnDone(message turnmsg.Done) tea.Cmd {
 	}
 	m.requestRelayout()
 	if message.Err != nil {
-		m.conversation.ClearQueue()
+		m.clearQueuedInputs()
 		return nil
 	}
 	return m.withSpinner(m.drainQueue())
