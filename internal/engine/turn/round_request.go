@@ -88,7 +88,7 @@ func (l *Loop) prepareRoundRequest(
 ) (sdk.Request, toolDispatchState, bool, error) {
 	var tools []tool.Definition
 	reqMessages := append([]model.Message(nil), history...)
-	hasImageInput := requestContainsImage(reqMessages)
+	hasCurrentTurnImage := latestUserMessageContainsImage(reqMessages)
 	dispatch := toolDispatchState{reason: toolDispatchDisabledNoTools}
 
 	if forceNoProgressSynthesis {
@@ -121,7 +121,7 @@ func (l *Loop) prepareRoundRequest(
 	}
 	if l.promptSpec != nil {
 		spec := l.effectivePromptSpec(tools, promptExtras)
-		if hasImageInput {
+		if hasCurrentTurnImage {
 			spec.ExtraInstructions = append(spec.ExtraInstructions, prompt.AttachedImageInstruction)
 		}
 		spec.GroundingEvidence = string(grounding.evidence)
@@ -139,9 +139,9 @@ func (l *Loop) prepareRoundRequest(
 			"prompt_version", prompt.Version,
 			"prompt_bytes", len(systemPrompt),
 			"tool_count", len(tools),
-			"native_image_input", hasImageInput,
+			"native_image_input", hasCurrentTurnImage,
 		)
-	} else if hasImageInput {
+	} else if hasCurrentTurnImage {
 		reqMessages = append([]model.Message{{Role: model.RoleSystem, Content: prompt.AttachedImageInstruction}}, reqMessages...)
 	}
 
@@ -255,4 +255,14 @@ func (l *Loop) prepareRoundRequest(
 
 func requestContainsImage(messages []sdk.Message) bool {
 	return (sdk.Request{Messages: messages}).Requirements().Vision
+}
+
+func latestUserMessageContainsImage(messages []sdk.Message) bool {
+	for index := len(messages) - 1; index >= 0; index-- {
+		if messages[index].Role != sdk.RoleUser {
+			continue
+		}
+		return requestContainsImage([]sdk.Message{messages[index]})
+	}
+	return false
 }
