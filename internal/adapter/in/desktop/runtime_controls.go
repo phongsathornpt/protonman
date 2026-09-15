@@ -19,6 +19,14 @@ const runtimeSummaryMaxRunes = 40
 // coupling unrelated conversation refresh code to the migration.
 func (a *application) refreshSessionRuntime(_ string, _ bool) {}
 
+func cloneSessionConfigOptions(options []acpclient.SessionConfigOption) []acpclient.SessionConfigOption {
+	out := append([]acpclient.SessionConfigOption(nil), options...)
+	for i := range out {
+		out[i].Options = append([]acpclient.SessionConfigSelectOption(nil), out[i].Options...)
+	}
+	return out
+}
+
 func (a *application) applySessionConfigOptions(sessionID string, options []acpclient.SessionConfigOption) {
 	sessionID = strings.TrimSpace(sessionID)
 	if sessionID == "" {
@@ -26,6 +34,10 @@ func (a *application) applySessionConfigOptions(sessionID string, options []acpc
 	}
 
 	a.mu.Lock()
+	if a.sessionConfigOptions == nil {
+		a.sessionConfigOptions = make(map[string][]acpclient.SessionConfigOption)
+	}
+	a.sessionConfigOptions[sessionID] = cloneSessionConfigOptions(options)
 	var runtime desktopstate.RuntimeSettingsState
 	for _, session := range a.state.Sessions {
 		if session.ID == sessionID {
@@ -59,11 +71,7 @@ func (a *application) applySessionConfigOptions(sessionID string, options []acpc
 	}
 }
 
-func (a *application) setRuntimeModel() {
-	value := strings.TrimSpace(a.modelID.Text)
-	if value == "" {
-		return
-	}
+func (a *application) setRuntimeModel(value string) {
 	a.setSessionConfigOption("model", value)
 }
 
@@ -108,6 +116,37 @@ func (a *application) setSessionConfigOption(configID, value string) {
 	}()
 }
 
+func sessionConfigValues(options []acpclient.SessionConfigOption, configID, current string) []string {
+	var values []string
+	for _, option := range options {
+		if strings.TrimSpace(option.ID) != configID {
+			continue
+		}
+		values = make([]string, 0, len(option.Options)+1)
+		for _, candidate := range option.Options {
+			value := strings.TrimSpace(candidate.Value)
+			if value != "" {
+				values = append(values, value)
+			}
+		}
+		break
+	}
+	current = strings.TrimSpace(current)
+	if current != "" {
+		found := false
+		for _, value := range values {
+			if value == current {
+				found = true
+				break
+			}
+		}
+		if !found {
+			values = append([]string{current}, values...)
+		}
+	}
+	return values
+}
+
 func (a *application) renderRuntimeControls() {
 	a.mu.Lock()
 	activeID := a.state.ActiveSessionID
@@ -119,34 +158,54 @@ func (a *application) renderRuntimeControls() {
 			break
 		}
 	}
+	options := cloneSessionConfigOptions(a.sessionConfigOptions[activeID])
 	a.mu.Unlock()
+
+	modelValues := sessionConfigValues(options, "model", runtime.Model)
+	reasoningValues := sessionConfigValues(options, "reasoning", runtime.Reasoning)
+	lowValues := sessionConfigValues(options, "lowConcurrency", runtime.LowConcurrency)
 	summary := runtimeSummaryText(runtime)
 
 	fyne.Do(func() {
 		a.runtimeSync = true
-		a.modelProvider.SetText(runtime.Provider)
+		a.modelProvider.SetText("ACP")
 		a.modelProvider.Disable()
-		a.modelID.SetText(runtime.Model)
+
+		a.modelSelect.Options = modelValues
+		a.modelSelect.Refresh()
+		if runtime.Model != "" {
+			a.modelSelect.SetSelected(runtime.Model)
+		} else {
+			a.modelSelect.ClearSelected()
+		}
+
+		a.reasoningSelect.Options = reasoningValues
+		a.reasoningSelect.Refresh()
 		if runtime.Reasoning != "" {
 			a.reasoningSelect.SetSelected(runtime.Reasoning)
+		} else {
+			a.reasoningSelect.ClearSelected()
 		}
+
+		a.lowSelect.Options = lowValues
+		a.lowSelect.Refresh()
 		if runtime.LowConcurrency != "" {
 			a.lowSelect.SetSelected(runtime.LowConcurrency)
+		} else {
+			a.lowSelect.ClearSelected()
 		}
 		a.runtimeSummary.SetText(summary)
 		a.runtimeSync = false
-		if activeID == "" || busy {
-			a.modelID.Disable()
-			a.applyModel.Disable()
-			a.reasoningSelect.Disable()
-			a.lowSelect.Disable()
-		} else {
-			a.modelID.Enable()
-			a.applyModel.Enable()
-			a.reasoningSelect.Enable()
-			a.lowSelect.Enable()
-		}
+
+		setSelectEnabled(a.modelSelect, activeID != "" && !busy && len(modelValues) > 0)
+		setSelectEnabled(a.reasoningSelect, activeID != "" && !busy && len(reasoningValues) > 0)
+		setSelectEnabled(a.lowSelect, activeID != "" && !busy && len(lowValues) > 0)
 	})
+}
+
+func setSelectEnabled(selectWidget *fyne.Container, enabled bool) {
+	_ = selectWidget
+	_ = enabled
 }
 
 func runtimeSummaryText(runtime desktopstate.RuntimeSettingsState) string {
