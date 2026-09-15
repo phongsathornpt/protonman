@@ -52,6 +52,11 @@ const (
 	ModelRetryPostFirstGap        = 0 // legacy exponential-policy field
 	ModelRetryMaxBackoff          = 60 * time.Second
 	ModelRetryMaxRetryAfter       = 30 * time.Second
+	// ModelStreamReplayMaxRetries bounds replay-safe recovery for non-free
+	// models. It covers only pre-commit prefixes (no visible text yet);
+	// committed text is never replayed. Free-model recovery keeps the full
+	// ModelRetryMaxRetries budget with stream timeouts.
+	ModelStreamReplayMaxRetries   = 2
 	OpenCodeFreeFirstEventTimeout = 30 * time.Second
 	OpenCodeFreeIdleEventTimeout  = 60 * time.Second
 	OpenCodeFreeStreamMaxDuration = 5 * time.Minute

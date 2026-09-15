@@ -167,6 +167,8 @@ func newSDKOpenAILanguageModel(providerName, baseURL, apiKey, modelID string, op
 			runtimepolicy.OpenCodeFreeFirstEventTimeout,
 			runtimepolicy.OpenCodeFreeIdleEventTimeout,
 			runtimepolicy.OpenCodeFreeStreamMaxDuration)
+	} else {
+		model = withReplaySafeRetryConfig(model, runtimepolicy.ModelStreamReplayMaxRetries, retryPolicy)
 	}
 	return withModelProfile(model, cfg.profile)
 }
@@ -204,6 +206,7 @@ func newSDKAnthropicLanguageModel(providerName, baseURL, apiKey, modelID string,
 	if cfg.lowConcurrency.Enabled(false) {
 		model = withLowConcurrencyMode(model, providerName, lowConcurrencyRoute(providerName, cfg.baseURL, cfg.modelID), runtimepolicy.LowConcurrencyMode())
 	}
+	model = withReplaySafeRetryConfig(model, runtimepolicy.ModelStreamReplayMaxRetries, retryPolicy)
 	return withModelProfile(model, cfg.profile)
 }
 
@@ -261,6 +264,12 @@ type emptyStreamRetryModel struct {
 	firstEventTimeout time.Duration
 	idleEventTimeout  time.Duration
 	maxStreamDuration time.Duration
+	// retryOpenFailures reports whether open failures are retried by the
+	// wrapper. Free-model recovery owns the complete retry budget
+	// (provider retries disabled), so it retries opens. Generic replay-safe
+	// recovery keeps provider open retries intact and only retries
+	// replay-safe mid-stream prefixes, so it must not double-retry opens.
+	retryOpenFailures bool
 }
 
 func withEmptyStreamRetry(base sdk.LanguageModel, maxRetries int, backoff time.Duration) sdk.LanguageModel {
@@ -303,6 +312,22 @@ func withStreamRetryPolicyConfig(base sdk.LanguageModel, maxRetries int, policy 
 	return &emptyStreamRetryModel{
 		base: base, maxRetries: maxRetries, retryPolicy: policy,
 		firstEventTimeout: firstEventTimeout, idleEventTimeout: idleEventTimeout, maxStreamDuration: maxStreamDuration,
+		retryOpenFailures: true,
+	}
+}
+
+// withReplaySafeRetryConfig wraps a model with replay-safe incomplete-stream
+// recovery that never replays committed text. Unlike the free-model wrapper,
+// it does not retry stream opens: provider transport already owns the open
+// retry budget, so retrying opens here would double-count. Only replay-safe
+// mid-stream prefixes and empty finishes consume this budget.
+func withReplaySafeRetryConfig(base sdk.LanguageModel, maxRetries int, policy sdk.RetryPolicy) sdk.LanguageModel {
+	if base == nil || maxRetries <= 0 {
+		return base
+	}
+	return &emptyStreamRetryModel{
+		base: base, maxRetries: maxRetries, retryPolicy: policy,
+		retryOpenFailures: false,
 	}
 }
 
@@ -317,6 +342,13 @@ func (m *emptyStreamRetryModel) Stream(ctx context.Context, request sdk.Request)
 		base: m.base, request: request, parentCtx: ctx,
 		maxRetries: m.maxRetries, retryPolicy: m.retryPolicy,
 		firstEventTimeout: m.firstEventTimeout, idleEventTimeout: m.idleEventTimeout, maxStreamDuration: m.maxStreamDuration,
+		retryOpenFailures: m.retryOpenFailures,
+	}
+	if !m.retryOpenFailures {
+		if err := retry.openAttempt(); err != nil {
+			return nil, err
+		}
+		return retry, nil
 	}
 	if err := retry.openWithRetry(ctx); err != nil {
 		return nil, err
@@ -343,6 +375,7 @@ type emptyStreamRetry struct {
 	progress          streamRetryProgress
 	pending           []sdk.Event
 	queue             []sdk.Event
+	retryOpenFailures bool
 }
 
 func (s *emptyStreamRetry) Next(ctx context.Context) (sdk.Event, error) {
@@ -363,7 +396,7 @@ func (s *emptyStreamRetry) Next(ctx context.Context) (sdk.Event, error) {
 					if retryErr := s.retry(ctx, streamTimeoutReason(timeoutCause), timeoutCause); retryErr != nil {
 						return sdk.Event{}, retryErr
 					}
-					if retryErr := s.openWithRetry(ctx); retryErr != nil {
+					if retryErr := s.reopenAfterRetry(ctx); retryErr != nil {
 						return sdk.Event{}, fmt.Errorf("retry empty model stream: %w", retryErr)
 					}
 					continue
@@ -375,7 +408,7 @@ func (s *emptyStreamRetry) Next(ctx context.Context) (sdk.Event, error) {
 				if retryErr := s.retry(ctx, reason, err); retryErr != nil {
 					return sdk.Event{}, retryErr
 				}
-				if retryErr := s.openWithRetry(ctx); retryErr != nil {
+				if retryErr := s.reopenAfterRetry(ctx); retryErr != nil {
 					return sdk.Event{}, fmt.Errorf("retry empty model stream: %w", retryErr)
 				}
 				continue
@@ -418,7 +451,7 @@ func (s *emptyStreamRetry) Next(ctx context.Context) (sdk.Event, error) {
 					if retryErr := s.retry(ctx, "empty_finish", nil); retryErr != nil {
 						return sdk.Event{}, retryErr
 					}
-					if retryErr := s.openWithRetry(ctx); retryErr != nil {
+					if retryErr := s.reopenAfterRetry(ctx); retryErr != nil {
 						return sdk.Event{}, fmt.Errorf("retry empty model stream: %w", retryErr)
 					}
 					continue
@@ -473,6 +506,18 @@ func (s *emptyStreamRetry) openWithRetry(ctx context.Context) error {
 	}
 }
 
+// reopenAfterRetry opens the next attempt after a mid-stream retry. Wrappers
+// that own the open budget (free-model recovery) reuse openWithRetry so a
+// retryable open failure consumes the same budget. Generic replay-safe
+// recovery leaves open retries to provider transport and opens exactly once
+// so one logical retry never double-counts.
+func (s *emptyStreamRetry) reopenAfterRetry(ctx context.Context) error {
+	if s.retryOpenFailures {
+		return s.openWithRetry(ctx)
+	}
+	return s.openAttempt()
+}
+
 func (s *emptyStreamRetry) canRetry(cause error, retryIndex int) bool {
 	return s.retryDecision(cause, retryIndex).Retry
 }
@@ -497,7 +542,7 @@ func (s *emptyStreamRetry) retryDecision(cause error, retryIndex int) sdk.RetryD
 
 func (s *emptyStreamRetry) scheduleRetry(ctx context.Context, reason string, decision sdk.RetryDecision) error {
 	delay := decision.Delay
-	slog.DebugContext(ctx, "opencode free model stream is replay-safe; retrying",
+	slog.DebugContext(ctx, "model stream is replay-safe; retrying",
 		"provider", s.base.Provider(), "model", s.base.ModelID(),
 		"reason", reason, "retry", s.retries, "max_retries", s.maxRetries,
 		"delay_ms", delay.Milliseconds(),

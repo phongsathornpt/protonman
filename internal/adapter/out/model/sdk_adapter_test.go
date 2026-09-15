@@ -621,8 +621,15 @@ func TestOpenCodeFreeModelFactoryEnablesEmptyStreamRetry(t *testing.T) {
 		}
 	}
 	paid := newSDKOpenAILanguageModel(DefaultOpenCodeName, "https://example.test/v1", "", "paid-model", WithSessionID("session-1"))
-	if _, ok := paid.(*emptyStreamRetryModel); ok {
-		t.Fatalf("paid model unexpectedly enabled empty stream retry: %T", paid)
+	paidRetry, ok := paid.(*emptyStreamRetryModel)
+	if !ok {
+		t.Fatalf("paid model unexpectedly missing replay-safe retry wrapper: %T", paid)
+	}
+	if paidRetry.maxRetries != runtimepolicy.ModelStreamReplayMaxRetries {
+		t.Fatalf("paid model max retries = %d, want runtime policy %d", paidRetry.maxRetries, runtimepolicy.ModelStreamReplayMaxRetries)
+	}
+	if paidRetry.retryOpenFailures {
+		t.Fatal("paid model wrapper must not retry stream opens")
 	}
 }
 
@@ -646,24 +653,41 @@ func TestLowConcurrencySettingControlsOpenCodeWrapper(t *testing.T) {
 	}
 
 	paidAuto := newSDKOpenAILanguageModel(DefaultOpenCodeName, "https://example.test/v1", "", "paid-model")
-	if _, ok := paidAuto.(*lowConcurrencyModel); ok {
+	if inner := unwrapRetryModel(paidAuto); inner != nil {
+		if _, ok := inner.(*lowConcurrencyModel); ok {
+			t.Fatalf("paid auto unexpectedly enabled low concurrency: %T", inner)
+		}
+	} else if _, ok := paidAuto.(*lowConcurrencyModel); ok {
 		t.Fatalf("paid auto unexpectedly enabled low concurrency: %T", paidAuto)
 	}
 
 	paidOn := newSDKOpenAILanguageModel(DefaultOpenCodeName, "https://example.test/v1", "", "paid-model", WithLowConcurrencyMode(LowConcurrencyOn))
-	if _, ok := paidOn.(*lowConcurrencyModel); !ok {
-		t.Fatalf("paid on type = %T, want low concurrency wrapper", paidOn)
+	if inner := unwrapRetryModel(paidOn); inner == nil {
+		t.Fatalf("paid on type = %T, want replay wrapper around low concurrency wrapper", paidOn)
+	} else if _, ok := inner.(*lowConcurrencyModel); !ok {
+		t.Fatalf("paid on inner type = %T, want low concurrency wrapper", inner)
 	}
 
 	nonOpenCode := newSDKOpenAILanguageModel(DefaultOpenAIName, "https://api.openai.com/v1", "key", "gpt-test", WithLowConcurrencyMode(LowConcurrencyOn))
-	if _, ok := nonOpenCode.(*lowConcurrencyModel); !ok {
-		t.Fatalf("non-OpenCode on type = %T, want low concurrency wrapper", nonOpenCode)
+	if inner := unwrapRetryModel(nonOpenCode); inner == nil {
+		t.Fatalf("non-OpenCode on type = %T, want replay wrapper around low concurrency wrapper", nonOpenCode)
+	} else if _, ok := inner.(*lowConcurrencyModel); !ok {
+		t.Fatalf("non-OpenCode on inner type = %T, want low concurrency wrapper", inner)
 	}
 
 	anthropicOn := newSDKAnthropicLanguageModel(DefaultAnthropicName, "https://api.anthropic.com", "key", "claude-test", WithLowConcurrencyMode(LowConcurrencyOn))
-	if _, ok := anthropicOn.(*lowConcurrencyModel); !ok {
-		t.Fatalf("anthropic on type = %T, want low concurrency wrapper", anthropicOn)
+	if inner := unwrapRetryModel(anthropicOn); inner == nil {
+		t.Fatalf("anthropic on type = %T, want replay wrapper around low concurrency wrapper", anthropicOn)
+	} else if _, ok := inner.(*lowConcurrencyModel); !ok {
+		t.Fatalf("anthropic on inner type = %T, want low concurrency wrapper", inner)
 	}
+}
+
+func unwrapRetryModel(model sdk.LanguageModel) sdk.LanguageModel {
+	if retry, ok := model.(*emptyStreamRetryModel); ok && retry != nil {
+		return retry.base
+	}
+	return nil
 }
 
 func TestOpenCodeFreeFactoryUsesOneRetryBudget(t *testing.T) {
@@ -680,6 +704,118 @@ func TestOpenCodeFreeFactoryUsesOneRetryBudget(t *testing.T) {
 	_, err := model.Stream(context.Background(), sdk.Request{Messages: []sdk.Message{{Role: sdk.RoleUser, Content: "hi"}}})
 	if err == nil || attempts != runtimepolicy.ModelRetryMaxRetries+1 {
 		t.Fatalf("err=%v attempts=%d, want error after %d total attempts", err, attempts, runtimepolicy.ModelRetryMaxRetries+1)
+	}
+}
+
+func TestReplaySafeRetryRecoversFromIncompleteBeforeOutput(t *testing.T) {
+	base := &emptyRetryTestModel{streams: []sdk.Stream{
+		&emptyRetryTestStream{err: sdk.ErrIncompleteStream},
+		&emptyRetryTestStream{events: []sdk.Event{{Kind: sdk.EventTextDelta, Text: "ok"}, {Kind: sdk.EventFinish, FinishReason: sdk.FinishStop}}},
+	}}
+	policy := streamRetryPolicy(0, 0)
+	stream, err := withReplaySafeRetryConfig(base, 2, policy).Stream(context.Background(), sdk.Request{Messages: []sdk.Message{{Role: sdk.RoleUser, Content: "hi"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := sdk.CollectStep(context.Background(), stream)
+	if err != nil || result.Text != "ok" || base.requests != 2 {
+		t.Fatalf("result=%q requests=%d err=%v, want ok/2", result.Text, base.requests, err)
+	}
+}
+
+func TestReplaySafeRetryDoesNotReplayAfterVisibleText(t *testing.T) {
+	base := &emptyRetryTestModel{streams: []sdk.Stream{
+		&emptyRetryTestStream{events: []sdk.Event{{Kind: sdk.EventTextDelta, Text: "partial"}}, err: sdk.ErrIncompleteStream},
+		&emptyRetryTestStream{events: []sdk.Event{{Kind: sdk.EventTextDelta, Text: "duplicate"}, {Kind: sdk.EventFinish, FinishReason: sdk.FinishStop}}},
+	}}
+	policy := streamRetryPolicy(0, 0)
+	stream, err := withReplaySafeRetryConfig(base, 2, policy).Stream(context.Background(), sdk.Request{Messages: []sdk.Message{{Role: sdk.RoleUser, Content: "hi"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = sdk.CollectStep(context.Background(), stream)
+	if !errors.Is(err, sdk.ErrIncompleteStream) || base.requests != 1 {
+		t.Fatalf("err=%v requests=%d, want incomplete/1", err, base.requests)
+	}
+}
+
+func TestReplaySafeRetryDoesNotRetryOpenFailure(t *testing.T) {
+	providerErr := sdk.NewProviderError(DefaultOpenAIName, 0, "ProviderResponseStreamError", "upstream open failed")
+	base := &openFailTestModel{err: providerErr}
+	policy := streamRetryPolicy(0, 0)
+	_, err := withReplaySafeRetryConfig(base, 2, policy).Stream(context.Background(), sdk.Request{Messages: []sdk.Message{{Role: sdk.RoleUser, Content: "hi"}}})
+	if !errors.Is(err, providerErr) || base.requests != 1 {
+		t.Fatalf("err=%v requests=%d, want original open error/1", err, base.requests)
+	}
+}
+
+type openFailTestModel struct {
+	err      error
+	requests int
+}
+
+func (*openFailTestModel) Provider() string { return DefaultOpenAIName }
+func (*openFailTestModel) ModelID() string  { return "paid-model" }
+func (*openFailTestModel) Capabilities() sdk.ModelCapabilities {
+	return sdk.ModelCapabilities{Streaming: true, Tools: true}
+}
+func (m *openFailTestModel) Stream(context.Context, sdk.Request) (sdk.Stream, error) {
+	m.requests++
+	return nil, m.err
+}
+
+func TestReplaySafeRetryIsBounded(t *testing.T) {
+	base := &emptyRetryTestModel{streams: []sdk.Stream{
+		&emptyRetryTestStream{events: []sdk.Event{{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop}}},
+		&emptyRetryTestStream{events: []sdk.Event{{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop}}},
+		&emptyRetryTestStream{events: []sdk.Event{{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop}}},
+	}}
+	policy := streamRetryPolicy(0, 0)
+	stream, err := withReplaySafeRetryConfig(base, 2, policy).Stream(context.Background(), sdk.Request{Messages: []sdk.Message{{Role: sdk.RoleUser, Content: "hi"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := sdk.CollectStep(context.Background(), stream)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Text != "" || base.requests != 3 {
+		t.Fatalf("result=%+v requests=%d, want empty/3", result, base.requests)
+	}
+}
+
+func TestGenericFactoryEnablesReplaySafeRetry(t *testing.T) {
+	paid := newSDKOpenAILanguageModel(DefaultOpenAIName, "https://api.openai.com/v1", "key", "gpt-test")
+	retry, ok := paid.(*emptyStreamRetryModel)
+	if !ok {
+		t.Fatalf("paid OpenAI type = %T, want *emptyStreamRetryModel", paid)
+	}
+	if retry.maxRetries != runtimepolicy.ModelStreamReplayMaxRetries {
+		t.Fatalf("paid OpenAI max retries = %d, want %d", retry.maxRetries, runtimepolicy.ModelStreamReplayMaxRetries)
+	}
+	if retry.retryOpenFailures {
+		t.Fatal("paid OpenAI wrapper must not retry stream opens")
+	}
+	if retry.firstEventTimeout != 0 || retry.idleEventTimeout != 0 || retry.maxStreamDuration != 0 {
+		t.Fatalf("paid OpenAI wrapper must not arm stream timeouts: %+v", retry)
+	}
+
+	anthropic := newSDKAnthropicLanguageModel(DefaultAnthropicName, "https://api.anthropic.com", "key", "claude-test")
+	anthropicRetry, ok := anthropic.(*emptyStreamRetryModel)
+	if !ok {
+		t.Fatalf("anthropic type = %T, want *emptyStreamRetryModel", anthropic)
+	}
+	if anthropicRetry.maxRetries != runtimepolicy.ModelStreamReplayMaxRetries || anthropicRetry.retryOpenFailures {
+		t.Fatalf("anthropic wrapper = %+v, want generic replay-safe budget without open retries", anthropicRetry)
+	}
+
+	free := newSDKOpenAILanguageModel(DefaultOpenCodeName, "https://example.test/v1", "", "nemotron-3.5-lightning-free")
+	freeRetry, ok := free.(*emptyStreamRetryModel)
+	if !ok {
+		t.Fatalf("free type = %T, want *emptyStreamRetryModel", free)
+	}
+	if !freeRetry.retryOpenFailures || freeRetry.maxRetries != runtimepolicy.ModelRetryMaxRetries {
+		t.Fatalf("free wrapper = %+v, want open-retry ownership with full budget", freeRetry)
 	}
 }
 
