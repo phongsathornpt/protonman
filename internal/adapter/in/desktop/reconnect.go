@@ -59,7 +59,7 @@ func (a *application) superviseConnection() {
 			continue
 		}
 
-		a.setClient(client)
+		a.setClient(client, initialized.AgentCapabilities)
 		delay = reconnectInitialDelay
 		if initialized.AgentCapabilities.SessionCapabilities.Resume != nil {
 			a.resumeKnownSessions(ctx, client)
@@ -162,6 +162,7 @@ func (a *application) markDisconnected(client *acpclient.Client) {
 		return
 	}
 	a.client = nil
+	a.agentCapabilities = acpclient.AgentCapabilities{}
 	a.state = desktopstate.MarkDisconnected(a.state)
 	a.permissionWaiters = make(map[string]chan string)
 	a.mu.Unlock()
@@ -172,9 +173,10 @@ func (a *application) markDisconnected(client *acpclient.Client) {
 	a.refreshPermissionView()
 }
 
-func (a *application) setClient(client *acpclient.Client) {
+func (a *application) setClient(client *acpclient.Client, capabilities acpclient.AgentCapabilities) {
 	a.mu.Lock()
 	a.client = client
+	a.agentCapabilities = capabilities
 	a.mu.Unlock()
 }
 
