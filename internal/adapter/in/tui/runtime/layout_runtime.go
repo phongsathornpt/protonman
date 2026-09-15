@@ -115,12 +115,33 @@ func (m *bubbleModel) idleContextFooter() string {
 	width := maxInt(1, m.layoutProfile().ContentWidth(m.layout.width)-1)
 	permission := m.permissionModeLabel()
 	reasoning := reasoningpolicy.EffortLabel(m.reasoningEffort)
+	submitHint := m.keys.Submit.Help().Key + " send"
+	newlineHint := m.keys.Newline.Help().Key + " new line"
 	rightCandidates := []string{permission}
 	if reasoning != "" && reasoning != permission {
 		rightCandidates = append([]string{reasoning + " · " + permission}, rightCandidates...)
 	}
+	profile := m.layoutProfile()
+	if !profile.ShowHeader && width >= 72 && strings.TrimSpace(m.activeModel) != "" {
+		rightCandidates = []string{modelFooterLabel(m.activeModel)}
+		if reasoning != "" {
+			rightCandidates[0] += " · " + reasoning
+		}
+	}
 
-	for _, left := range []string{"? for shortcuts", "? shortcuts", "?", ""} {
+	leftCandidates := []string{"? for shortcuts", "? shortcuts", "?", ""}
+	if width >= 72 {
+		leftCandidates = []string{
+			submitHint + " · " + newlineHint + " · ? for shortcuts",
+			submitHint + " · " + newlineHint,
+			submitHint,
+			"? for shortcuts",
+			"? shortcuts",
+			"?",
+			"",
+		}
+	}
+	for _, left := range leftCandidates {
 		for _, right := range rightCandidates {
 			available := width - ansi.StringWidth(left)
 			if left != "" {
@@ -133,10 +154,35 @@ func (m *bubbleModel) idleContextFooter() string {
 				return inset + mutedStyle.Render(right)
 			}
 			spaces := strings.Repeat(" ", maxInt(1, width-ansi.StringWidth(left)-ansi.StringWidth(right)))
-			return inset + mutedStyle.Render(left+spaces+right)
+			return inset + renderIdleFooter(left, spaces, right, submitHint, newlineHint)
 		}
 	}
 	return inset + mutedStyle.Render(truncateWithEllipsis(permission, width))
+}
+
+func renderIdleFooter(left, spaces, right, submitHint, newlineHint string) string {
+	if strings.HasPrefix(left, submitHint) {
+		leftView := strings.Replace(left, submitHint, userStyle.Bold(true).Render(submitHint), 1)
+		leftView = strings.Replace(leftView, newlineHint, userStyle.Bold(true).Render(newlineHint), 1)
+		leftView = mutedStyle.Render(leftView)
+		return leftView + spaces + mutedStyle.Render(right)
+	}
+	return mutedStyle.Render(left + spaces + right)
+}
+
+func modelFooterLabel(modelID string) string {
+	parts := strings.FieldsFunc(strings.TrimSpace(modelID), func(r rune) bool {
+		return r == '-' || r == '_'
+	})
+	for index, part := range parts {
+		if part == "" {
+			continue
+		}
+		runes := []rune(part)
+		runes[0] = []rune(strings.ToUpper(string(runes[0])))[0]
+		parts[index] = string(runes)
+	}
+	return strings.Join(parts, " ")
 }
 
 func (m *bubbleModel) resize(width int, height int) {
@@ -206,7 +252,8 @@ func (m *bubbleModel) buildFrameLayout() frameLayout {
 	frame.footer = m.footerView()
 	if m.panes.bottom.composerVisible() {
 		frame.divider = chromeDivider(m.layout.width)
-		frame.composer = composerContentView(m.promptView())
+		keepLowerRule := profile.Mode != panecommon.LayoutTiny || frame.top == ""
+		frame.composer = composerContentView(m.promptView(), keepLowerRule)
 	}
 	for _, part := range []string{frame.header, frame.divider, frame.status, frame.top, frame.composer, frame.footer} {
 		if part != "" {
@@ -220,7 +267,7 @@ func chromeDivider(width int) string {
 	return mutedStyle.Render(strings.Repeat("─", maxInt(1, width)))
 }
 
-func composerContentView(view string) string {
+func composerContentView(view string, keepLowerRule bool) string {
 	if view == "" {
 		return ""
 	}
@@ -228,7 +275,11 @@ func composerContentView(view string) string {
 	if len(lines) <= 2 {
 		return view
 	}
-	return strings.Join(lines[1:len(lines)-1], "\n")
+	end := len(lines)
+	if !keepLowerRule {
+		end--
+	}
+	return strings.Join(lines[1:end], "\n")
 }
 
 type viewportScrollSnapshot struct {

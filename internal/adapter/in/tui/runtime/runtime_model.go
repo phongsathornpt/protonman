@@ -212,6 +212,11 @@ func newBubbleModel(ctx context.Context, service *toolcall.Service, registry too
 		iconMode = tuistyle.IconModeAuto
 	}
 	icons := tuistyle.ResolveIcons(iconMode, true)
+	spinnerStyle := spinner.Dot
+	if icons == tuistyle.ASCIIIcons {
+		spinnerStyle = spinner.Line
+	}
+	spin.Spinner = spinnerStyle
 	pane := viewport.New(viewport.WithWidth(defaultBubbleWidth), viewport.WithHeight(defaultBubbleHeight-6))
 	disableViewportKeys(&pane)
 	transcriptPane := viewport.New(viewport.WithWidth(defaultBubbleWidth-8), viewport.WithHeight(defaultBubbleHeight-8))

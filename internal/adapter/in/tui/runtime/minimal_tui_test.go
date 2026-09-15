@@ -25,6 +25,32 @@ func TestMinimalIdleChromeUsesContextFooter(t *testing.T) {
 	}
 }
 
+func TestIdleFooterExposesComposerActions(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.resize(80, 24)
+
+	footer := ansi.Strip(m.footerView())
+	for _, want := range []string{"enter send", "ctrl+j new line", "? for shortcuts"} {
+		if !strings.Contains(footer, want) {
+			t.Fatalf("idle footer missing %q: %q", want, footer)
+		}
+	}
+}
+
+func TestCompactWideFooterShowsModelContext(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.activeModel = "gemini-3.8-flash"
+	m.reasoningEffort = sdk.ReasoningHigh
+	m.resize(110, 9)
+
+	footer := ansi.Strip(m.footerView())
+	for _, want := range []string{"Gemini 3.8 Flash", "high"} {
+		if !strings.Contains(footer, want) {
+			t.Fatalf("compact footer missing %q: %q", want, footer)
+		}
+	}
+}
+
 func TestPlanModeKeepsIdleContextFooter(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	m.activeModel = "glm-5.3-flash"
@@ -38,8 +64,10 @@ func TestPlanModeKeepsIdleContextFooter(t *testing.T) {
 			t.Fatalf("plan context footer missing %q: %q", want, footer)
 		}
 	}
-	if strings.Contains(footer, "enter") || strings.Contains(footer, "new line") {
-		t.Fatalf("plan mode replaced context footer with shortcut help: %q", footer)
+	for _, want := range []string{"enter send", "new line"} {
+		if !strings.Contains(footer, want) {
+			t.Fatalf("plan footer missing composer action %q: %q", want, footer)
+		}
 	}
 }
 

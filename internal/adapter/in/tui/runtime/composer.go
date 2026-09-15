@@ -307,7 +307,7 @@ func applyPromptChrome(prompt *textarea.Model, bash bool, icons tuistyle.IconSet
 	}
 	prompt.Prompt = prefix
 	styles := prompt.Styles()
-	styles.Focused.Prompt = lipgloss.NewStyle().Foreground(accent)
+	styles.Focused.Prompt = lipgloss.NewStyle().Bold(true).Foreground(accent)
 	styles.Focused.Text = bodyStyle
 	styles.Focused.Placeholder = mutedStyle
 	styles.Blurred = styles.Focused

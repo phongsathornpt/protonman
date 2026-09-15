@@ -21,8 +21,8 @@ func TestFinalVisualPolishUsesSingleWorkDivider(t *testing.T) {
 	if got := ansi.StringWidth(frame.divider); got != 80 {
 		t.Fatalf("divider width = %d, want terminal width 80", got)
 	}
-	if strings.Contains(ansi.Strip(frame.composer), "──") {
-		t.Fatalf("composer retained nested border chrome: %q", ansi.Strip(frame.composer))
+	if !strings.HasSuffix(ansi.Strip(frame.composer), strings.Repeat("─", 80)) {
+		t.Fatalf("composer is missing its lower rule: %q", ansi.Strip(frame.composer))
 	}
 	if got := strings.Count(ansi.Strip(frame.composer), "> "); got != 1 {
 		t.Fatalf("composer prompt count = %d, want 1", got)
@@ -37,8 +37,8 @@ func TestFinalVisualPolishHasTwoSectionRules(t *testing.T) {
 
 	view := ansi.Strip(m.View().Content)
 	rule := strings.Repeat("─", 80)
-	if got := strings.Count(view, rule); got != 2 {
-		t.Fatalf("section rule count = %d, want header + work rules; view=%q", got, view)
+	if got := strings.Count(view, rule); got != 3 {
+		t.Fatalf("section rule count = %d, want header + prompt rules; view=%q", got, view)
 	}
 }
 

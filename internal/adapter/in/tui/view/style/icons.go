@@ -73,7 +73,7 @@ const (
 	UnicodeAttachment  = "📎 "
 	UnicodeImage       = "🖼  "
 	UnicodeLink        = "↗ "
-	UnicodeVision      = "👁  "
+	UnicodeVision      = "◉ "
 )
 
 // ASCII profile is safe for dumb terminals, redirected output, and logs.

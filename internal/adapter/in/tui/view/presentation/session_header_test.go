@@ -58,6 +58,9 @@ func TestRenderSessionHeaderIncludesVisionWhenSupported(t *testing.T) {
 	if !strings.Contains(unicodeGot, "vision") || !strings.Contains(unicodeGot, strings.TrimSpace(tuistyle.UnicodeIcons.Vision)) {
 		t.Fatalf("expected Unicode vision flag in header: %q", unicodeGot)
 	}
+	if strings.Contains(unicodeGot, "👁") {
+		t.Fatalf("Unicode vision flag retained emoji: %q", unicodeGot)
+	}
 }
 
 func TestRenderSessionHeaderResponsiveWidth(t *testing.T) {
