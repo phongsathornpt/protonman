@@ -161,6 +161,7 @@ func (a *application) renderRuntimeControls() {
 	}
 	options := cloneSessionConfigOptions(a.sessionConfigOptions[activeID])
 	a.mu.Unlock()
+	connected := a.currentClient() != nil
 
 	modelValues := sessionConfigValues(options, "model", runtime.Model)
 	reasoningValues := sessionConfigValues(options, "reasoning", runtime.Reasoning)
@@ -172,24 +173,21 @@ func (a *application) renderRuntimeControls() {
 		a.modelProvider.SetText("ACP")
 		a.modelProvider.Disable()
 
-		a.modelSelect.Options = modelValues
-		a.modelSelect.Refresh()
+		a.modelSelect.SetOptions(modelValues)
 		if runtime.Model != "" {
 			a.modelSelect.SetSelected(runtime.Model)
 		} else {
 			a.modelSelect.ClearSelected()
 		}
 
-		a.reasoningSelect.Options = reasoningValues
-		a.reasoningSelect.Refresh()
+		a.reasoningSelect.SetOptions(reasoningValues)
 		if runtime.Reasoning != "" {
 			a.reasoningSelect.SetSelected(runtime.Reasoning)
 		} else {
 			a.reasoningSelect.ClearSelected()
 		}
 
-		a.lowSelect.Options = lowValues
-		a.lowSelect.Refresh()
+		a.lowSelect.SetOptions(lowValues)
 		if runtime.LowConcurrency != "" {
 			a.lowSelect.SetSelected(runtime.LowConcurrency)
 		} else {
@@ -198,9 +196,9 @@ func (a *application) renderRuntimeControls() {
 		a.runtimeSummary.SetText(summary)
 		a.runtimeSync = false
 
-		setSelectEnabled(a.modelSelect, activeID != "" && !busy && len(modelValues) > 0)
-		setSelectEnabled(a.reasoningSelect, activeID != "" && !busy && len(reasoningValues) > 0)
-		setSelectEnabled(a.lowSelect, activeID != "" && !busy && len(lowValues) > 0)
+		setSelectEnabled(a.modelSelect, connected && activeID != "" && !busy && len(modelValues) > 0)
+		setSelectEnabled(a.reasoningSelect, connected && activeID != "" && !busy && len(reasoningValues) > 0)
+		setSelectEnabled(a.lowSelect, connected && activeID != "" && !busy && len(lowValues) > 0)
 	})
 }
 
