@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"fmt"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -9,7 +10,10 @@ import (
 	"charm.land/bubbles/v2/textarea"
 	"charm.land/bubbles/v2/viewport"
 	"charm.land/lipgloss/v2"
+	tuiconv "github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/conversation"
 	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/style"
+	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
+	"github.com/phongsathornpt/protonman/internal/core/modelprofile"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 )
 
@@ -30,6 +34,16 @@ type bottomPaneView interface {
 // pickers and MCP elicitation can implement the same contract later.
 
 const maxCommandHistory = 500
+
+type localImageAttachment struct {
+	placeholder string
+	path        string
+	temporary   bool
+}
+
+type attachmentState struct {
+	localImages []localImageAttachment
+}
 
 type composerState struct {
 	input         textarea.Model
@@ -130,6 +144,13 @@ func (p *bottomPane) attachImage(path string) {
 		return
 	}
 	p.composer.attachments.attachImage(&p.composer.input, path)
+}
+
+func (p *bottomPane) attachTemporaryImage(path string) {
+	if p == nil {
+		return
+	}
+	p.composer.attachments.attachTemporaryImage(&p.composer.input, path)
 }
 
 func (p *bottomPane) setIcons(icons tuistyle.IconSet) {
@@ -267,8 +288,6 @@ func newPrompt(hasRunner bool, reducedMotion bool) textarea.Model {
 	styles := prompt.Styles()
 	styles.Focused.CursorLine = lipgloss.NewStyle()
 	styles.Blurred.CursorLine = lipgloss.NewStyle()
-	// A static caret keeps the insertion point visible without self-running
-	// motion; bubbles maps Blink=false to its visible non-blinking cursor mode.
 	if reducedMotion {
 		styles.Cursor.Blink = false
 	}
@@ -283,8 +302,6 @@ func applyPromptChrome(prompt *textarea.Model, bash bool, icons tuistyle.IconSet
 	prefix := icons.Composer
 	accent := accentAssistant
 	if bash {
-		// Preserve the existing shell-mode affordance independently from the
-		// terminal font profile; only the normal assistant prompt is semantic.
 		prefix = "! "
 		accent = commandColor
 	}
@@ -335,6 +352,223 @@ func (m *bubbleModel) historyPrevious() {
 
 func (m *bubbleModel) historyNext() {
 	m.panes.bottom.historyNext()
+}
+
+func (s *attachmentState) attachImage(prompt *textarea.Model, path string) {
+	s.attachImageWithOwnership(prompt, path, false)
+}
+
+func (s *attachmentState) attachTemporaryImage(prompt *textarea.Model, path string) {
+	s.attachImageWithOwnership(prompt, path, true)
+}
+
+func (s *attachmentState) attachImageWithOwnership(prompt *textarea.Model, path string, temporary bool) {
+	if s == nil || prompt == nil || strings.TrimSpace(path) == "" {
+		return
+	}
+	placeholder := localImageLabel(len(s.localImages) + 1)
+	value := prompt.Value()
+	if value != "" && !strings.HasSuffix(value, " ") && !strings.HasSuffix(value, "\n") {
+		value += " "
+	}
+	value += placeholder
+	prompt.SetValue(value)
+	prompt.CursorEnd()
+	s.localImages = append(s.localImages, localImageAttachment{placeholder: placeholder, path: path, temporary: temporary})
+}
+
+func (s *attachmentState) release() {
+	if s == nil {
+		return
+	}
+	clear(s.localImages)
+	s.localImages = nil
+}
+
+func (s *attachmentState) clear() {
+	s.discard()
+}
+
+func (s *attachmentState) discard() {
+	if s == nil {
+		return
+	}
+	cleanupLocalImages(s.localImages)
+	s.release()
+}
+
+func cleanupLocalImages(images []localImageAttachment) {
+	for _, image := range images {
+		if image.temporary && strings.TrimSpace(image.path) != "" {
+			_ = os.Remove(image.path)
+		}
+	}
+}
+
+func cleanupQueuedInputAttachments(input tuiconv.QueuedInput) {
+	for _, attachment := range input.Attachments {
+		if attachment.Temporary && strings.TrimSpace(attachment.Path) != "" {
+			_ = os.Remove(attachment.Path)
+		}
+	}
+}
+
+func (m *bubbleModel) clearQueuedInputs() {
+	if m == nil || m.conversation == nil {
+		return
+	}
+	for _, input := range m.conversation.QueuedInputs() {
+		cleanupQueuedInputAttachments(input)
+	}
+	m.conversation.ClearQueue()
+}
+
+func (s *attachmentState) syncWithText(prompt *textarea.Model) {
+	if s == nil || prompt == nil || len(s.localImages) == 0 {
+		return
+	}
+	text := prompt.Value()
+	kept := make([]localImageAttachment, 0, len(s.localImages))
+	for _, image := range s.localImages {
+		if strings.Contains(text, image.placeholder) {
+			kept = append(kept, image)
+			continue
+		}
+		if image.temporary {
+			_ = os.Remove(image.path)
+		}
+	}
+	s.localImages = kept
+	for i := range s.localImages {
+		expected := localImageLabel(i + 1)
+		if s.localImages[i].placeholder == expected {
+			continue
+		}
+		text = strings.Replace(text, s.localImages[i].placeholder, expected, 1)
+		s.localImages[i].placeholder = expected
+	}
+	if text != prompt.Value() {
+		prompt.SetValue(text)
+		prompt.CursorEnd()
+	}
+}
+
+func (s *attachmentState) snapshot(prompt *textarea.Model) []tuiconv.Attachment {
+	if s == nil {
+		return nil
+	}
+	if prompt != nil {
+		s.syncWithText(prompt)
+	}
+	out := make([]tuiconv.Attachment, 0, len(s.localImages))
+	for _, image := range s.localImages {
+		out = append(out, tuiconv.Attachment{
+			Placeholder: image.placeholder,
+			Path:        image.path,
+			Temporary:   image.temporary,
+		})
+	}
+	return out
+}
+
+func localImageLabel(index int) string {
+	return fmt.Sprintf("[Image #%d]", index)
+}
+
+func stripAttachmentPlaceholders(text string, attachments []tuiconv.Attachment) string {
+	for _, attachment := range attachments {
+		if attachment.Placeholder != "" {
+			text = strings.ReplaceAll(text, attachment.Placeholder, "")
+		}
+	}
+	return strings.TrimSpace(text)
+}
+
+func submissionDisplayText(input tuiconv.QueuedInput) string {
+	parts := make([]string, 0, len(input.Attachments)+1)
+	if strings.TrimSpace(input.Text) != "" {
+		parts = append(parts, strings.TrimSpace(input.Text))
+	}
+	for i, attachment := range input.Attachments {
+		label := attachment.Placeholder
+		if strings.TrimSpace(label) == "" {
+			label = localImageLabel(i + 1)
+		}
+		parts = append(parts, label)
+	}
+	return strings.Join(parts, " ")
+}
+
+func submissionHistoryText(input tuiconv.QueuedInput) string {
+	if len(input.Attachments) > 0 {
+		return strings.TrimSpace(input.Text)
+	}
+	return strings.TrimSpace(submissionDisplayText(input))
+}
+
+func localImagePathFromPaste(content, workDir string) (string, bool) {
+	if strings.TrimSpace(content) == "" || strings.ContainsAny(content, "\r\n") {
+		return "", false
+	}
+	cleaned := normalizePastedPath(content, workDir)
+	candidate := strings.TrimSpace(cleaned)
+	if candidate == "" {
+		return "", false
+	}
+	path := candidate
+	if !filepath.IsAbs(path) && strings.TrimSpace(workDir) != "" {
+		path = filepath.Join(workDir, path)
+	}
+	info, err := os.Stat(path)
+	if err != nil || !info.Mode().IsRegular() {
+		return "", false
+	}
+	switch strings.ToLower(filepath.Ext(path)) {
+	case ".png", ".jpg", ".jpeg", ".gif", ".webp":
+		return filepath.Clean(path), true
+	default:
+		return "", false
+	}
+}
+
+func (m *bubbleModel) currentModelAcceptsImageInput() bool {
+	if m == nil || strings.TrimSpace(m.activeModel) == "" {
+		return true
+	}
+	var remote *model.RemoteModel
+	if candidate, ok := m.activeRemoteModel(); ok {
+		remote = &candidate
+	}
+	profile := model.ResolveModelProfile(m.activeProvider, m.activeModel, remote)
+	return profile.Capabilities.Vision != modelprofile.SupportNo
+}
+
+func (m *bubbleModel) imageInputsNotSupportedMessage() string {
+	modelID := strings.TrimSpace(m.activeModel)
+	if modelID == "" {
+		modelID = "current model"
+	}
+	return fmt.Sprintf("model %s does not support image inputs; remove images or switch models", modelID)
+}
+
+func (m *bubbleModel) discardPrompt() {
+	if m == nil || m.panes.bottom == nil {
+		return
+	}
+	m.panes.bottom.composer.attachments.discard()
+	m.resetPrompt()
+}
+
+func (m *bubbleModel) cleanupPendingImageInput() {
+	if m == nil || m.pendingImageInput == nil {
+		return
+	}
+	cleanupQueuedInputAttachments(*m.pendingImageInput)
+	m.pendingImageInput = nil
+}
+
+func attachmentPathTemporary(path string) bool {
+	return strings.TrimSpace(path) != ""
 }
 
 func normalizePastedPath(content string, workDir string) string {
