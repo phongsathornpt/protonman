@@ -5,6 +5,7 @@ package desktop
 import (
 	"encoding/json"
 	"strings"
+	"sync"
 
 	"github.com/phongsathornpt/protonman/internal/adapter/out/acpclient"
 )
@@ -71,6 +72,23 @@ type subagentUpdate struct {
 	Status  string `json:"status"`
 }
 
+type sessionProtocolState struct {
+	Mode     string
+	Commands []acpclient.AvailableCommand
+	Usage    usageUpdate
+}
+
+var sessionProtocolStates sync.Map // map[*application]map[string]sessionProtocolState
+
+func protocolStateMapFor(a *application) map[string]sessionProtocolState {
+	if current, ok := sessionProtocolStates.Load(a); ok {
+		return current.(map[string]sessionProtocolState)
+	}
+	created := make(map[string]sessionProtocolState)
+	actual, _ := sessionProtocolStates.LoadOrStore(a, created)
+	return actual.(map[string]sessionProtocolState)
+}
+
 func decodeSessionUpdate(params json.RawMessage) (string, string, json.RawMessage, bool) {
 	var envelope sessionUpdateEnvelope
 	if json.Unmarshal(params, &envelope) != nil || strings.TrimSpace(envelope.SessionID) == "" || len(envelope.Update) == 0 {
@@ -81,4 +99,56 @@ func decodeSessionUpdate(params json.RawMessage) (string, string, json.RawMessag
 		return "", "", nil, false
 	}
 	return envelope.SessionID, header.Kind, envelope.Update, true
+}
+
+func (a *application) applySessionInfoUpdate(sessionID string, update sessionInfoUpdate) {
+	if update.Title == nil {
+		return
+	}
+	a.mu.Lock()
+	for i := range a.state.Sessions {
+		if a.state.Sessions[i].ID == sessionID {
+			a.state.Sessions[i].Title = strings.TrimSpace(*update.Title)
+			break
+		}
+	}
+	active := a.state.ActiveSessionID == sessionID
+	a.rebuildSidebarRowsLocked()
+	a.mu.Unlock()
+	if a.list != nil {
+		a.list.Refresh()
+	}
+	if active {
+		a.renderSessionChrome()
+	}
+}
+
+func (a *application) applyCurrentModeUpdate(sessionID string, update currentModeUpdate) {
+	a.mu.Lock()
+	states := protocolStateMapFor(a)
+	state := states[sessionID]
+	state.Mode = strings.TrimSpace(update.CurrentID)
+	states[sessionID] = state
+	a.mu.Unlock()
+}
+
+func (a *application) applyAvailableCommandsUpdate(sessionID string, update availableCommandUpdate) {
+	a.mu.Lock()
+	states := protocolStateMapFor(a)
+	state := states[sessionID]
+	state.Commands = append([]acpclient.AvailableCommand(nil), update.AvailableCommands...)
+	states[sessionID] = state
+	a.mu.Unlock()
+}
+
+func (a *application) applyUsageUpdate(sessionID string, update usageUpdate) {
+	a.mu.Lock()
+	states := protocolStateMapFor(a)
+	state := states[sessionID]
+	state.Usage = update
+	states[sessionID] = state
+	a.mu.Unlock()
+	if a.state.ActiveSessionID == sessionID {
+		a.renderSessionChrome()
+	}
 }
