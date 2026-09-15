@@ -7,6 +7,7 @@ import (
 	"image/png"
 	"testing"
 
+	"github.com/phongsathornpt/protonman/internal/core/modelprofile"
 	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 )
 
@@ -45,10 +46,11 @@ func TestEstimateRequestTokensDoesNotChargeImageBase64AsText(t *testing.T) {
 }
 
 func TestEstimateImageTokensCapsPathologicalDimensions(t *testing.T) {
-	// Invalid payloads use a conservative bounded fallback rather than charging
-	// their entire encoded transport representation.
+	// Invalid payloads use the active vision policy's conservative bounded
+	// fallback rather than charging their entire encoded transport representation.
 	data := base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{0xff}, 1024*1024))
-	if got := estimateImageTokens(data); got != fallbackImageTokens {
-		t.Fatalf("fallback image tokens = %d, want %d", got, fallbackImageTokens)
+	want := modelprofile.DefaultVisionPolicy().FallbackTokens
+	if got := estimateImageTokens(data); got != want {
+		t.Fatalf("fallback image tokens = %d, want %d", got, want)
 	}
 }
