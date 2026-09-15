@@ -40,6 +40,7 @@ type application struct {
 	transcripts           map[string]*strings.Builder
 	conversationSessionID string
 	permissionWaiters     map[string]chan string
+	sessionConfigOptions  map[string][]acpclient.SessionConfigOption
 	preferences           fyne.Preferences
 
 	status             *widget.Label
@@ -64,8 +65,7 @@ type application struct {
 	permissionActions  *fyne.Container
 
 	modelProvider   *widget.Entry
-	modelID         *widget.Entry
-	applyModel      *widget.Button
+	modelSelect     *widget.Select
 	reasoningSelect *widget.Select
 	lowSelect       *widget.Select
 	runtimeSync     bool
@@ -91,11 +91,12 @@ func Run(ctx context.Context) error {
 	window.Resize(fyne.NewSize(1220, 780))
 
 	ui := &application{
-		ctx:               ctx,
-		desktopApp:        desktopApp,
-		transcripts:       make(map[string]*strings.Builder),
-		permissionWaiters: make(map[string]chan string),
-		preferences:       desktopApp.Preferences(),
+		ctx:                  ctx,
+		desktopApp:           desktopApp,
+		transcripts:          make(map[string]*strings.Builder),
+		permissionWaiters:    make(map[string]chan string),
+		sessionConfigOptions: make(map[string][]acpclient.SessionConfigOption),
+		preferences:          desktopApp.Preferences(),
 	}
 	ui.initDesktopControls()
 	window.SetContent(ui.buildDesktopShell())
