@@ -128,7 +128,6 @@ func (m *bubbleModel) updateAnimationEvent(msg tea.Msg) (tea.Cmd, bool) {
 		return command, true
 	case cursor.BlinkMsg:
 		if m.reducedMotion {
-			// Reduced motion keeps the caret static and never re-arms the loop.
 			return nil, true
 		}
 		if top := m.panes.bottom.top(); top != nil {
@@ -208,6 +207,8 @@ func (m *bubbleModel) updateRuntimeEvent(msg tea.Msg) (tea.Cmd, bool) {
 		return m.updateProviderDeleted(message), true
 	case permissionRuleSavedMsg:
 		return m.updatePermissionRuleSaved(message), true
+	case clipboardImageLoadedMsg:
+		return m.updateClipboardImageLoaded(message), true
 	case imageSubmissionPreparedMsg:
 		return m.updateImageSubmissionPrepared(message), true
 	case transientnotice.Expired:
