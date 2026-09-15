@@ -44,6 +44,11 @@ func mergeProfile(dst *Resolved, src Profile) {
 		dst.Compatibility.ToolSchemaDialect = src.Compatibility.ToolSchemaDialect
 		dst.Provenance.ToolSchemaDialect = MetadataSourceBuiltin
 	}
+	if src.Compatibility.ThinkingMode != ThinkingModeDefault {
+		dst.Compatibility.ThinkingMode = src.Compatibility.ThinkingMode
+		dst.Provenance.ThinkingMode = MetadataSourceBuiltin
+	}
+	mergeSupportWithSource(&dst.Compatibility.ForcedToolChoice, src.Compatibility.ForcedToolChoice, &dst.Provenance.ForcedToolChoice, MetadataSourceBuiltin)
 }
 
 func mergeCatalog(dst *Resolved, src CatalogMetadata) {
@@ -70,6 +75,18 @@ func mergeCatalog(dst *Resolved, src CatalogMetadata) {
 	if src.MaxOutputTokens > 0 {
 		dst.MaxOutputTokens = src.MaxOutputTokens
 		dst.Provenance.MaxOutputTokens = MetadataSourceCatalog
+	}
+	if src.ToolSchemaDialect == ToolSchemaGeminiSubset {
+		dst.Compatibility.ToolSchemaDialect = src.ToolSchemaDialect
+		dst.Provenance.ToolSchemaDialect = MetadataSourceCatalog
+	}
+	if src.ThinkingMode == ThinkingModeAdaptive || src.ThinkingMode == ThinkingModeManual || src.ThinkingMode == ThinkingModeUnsupported {
+		dst.Compatibility.ThinkingMode = src.ThinkingMode
+		dst.Provenance.ThinkingMode = MetadataSourceCatalog
+	}
+	if src.VisionPolicy != nil && validateVisionPolicy(*src.VisionPolicy) == nil {
+		dst.VisionPolicy = *src.VisionPolicy
+		dst.Provenance.VisionPolicy = MetadataSourceCatalog
 	}
 	if src.Reasoning == nil {
 		return

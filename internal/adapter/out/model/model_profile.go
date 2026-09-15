@@ -152,7 +152,7 @@ func ResolvedModelProfile(model sdk.LanguageModel) (modelprofile.Resolved, bool)
 func (m *profiledLanguageModel) Provider() string { return m.base.Provider() }
 func (m *profiledLanguageModel) ModelID() string  { return m.base.ModelID() }
 func (m *profiledLanguageModel) Capabilities() sdk.ModelCapabilities {
-	return m.base.Capabilities()
+	return m.profile.Capabilities.Apply(m.base.Capabilities())
 }
 func (m *profiledLanguageModel) Metadata() sdk.ModelMetadata {
 	return sdk.ModelMetadataOf(m.base)

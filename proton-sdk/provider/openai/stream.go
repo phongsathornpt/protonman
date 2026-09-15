@@ -49,8 +49,9 @@ type cachedTokenDetails struct {
 type chatChunk struct {
 	Choices []struct {
 		Delta struct {
-			Content   string `json:"content,omitempty"`
-			ToolCalls []struct {
+			Content          string `json:"content,omitempty"`
+			ReasoningContent string `json:"reasoning_content,omitempty"`
+			ToolCalls        []struct {
 				Index    int    `json:"index"`
 				ID       string `json:"id,omitempty"`
 				Function struct {
@@ -224,6 +225,9 @@ func (s *stream) processChat(payload string) error {
 		}})
 	}
 	for _, choice := range chunk.Choices {
+		if choice.Delta.ReasoningContent != "" {
+			s.queue = append(s.queue, sdk.Event{Kind: sdk.EventReasoningDelta, ReasoningContent: choice.Delta.ReasoningContent})
+		}
 		if choice.Delta.Content != "" {
 			s.queue = append(s.queue, sdk.Event{Kind: sdk.EventTextDelta, Text: choice.Delta.Content})
 		}

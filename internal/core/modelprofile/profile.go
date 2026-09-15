@@ -34,6 +34,17 @@ const (
 	ToolSchemaGeminiSubset ToolSchemaDialect = "gemini_openapi_subset"
 )
 
+// ThinkingMode describes the provider contract used to request model
+// reasoning. It is transport metadata, not prompt policy.
+type ThinkingMode string
+
+const (
+	ThinkingModeDefault     ThinkingMode = ""
+	ThinkingModeAdaptive    ThinkingMode = "adaptive"
+	ThinkingModeManual      ThinkingMode = "manual"
+	ThinkingModeUnsupported ThinkingMode = "unsupported"
+)
+
 type MetadataSource string
 
 const (
@@ -49,6 +60,9 @@ type MetadataProvenance struct {
 	ReasoningLevels    MetadataSource
 	ReasoningDefault   MetadataSource
 	ToolChoiceRequired MetadataSource
+	ThinkingMode       MetadataSource
+	VisionPolicy       MetadataSource
+	ForcedToolChoice   MetadataSource
 	ContextWindow      MetadataSource
 	MaxInputTokens     MetadataSource
 	MaxOutputTokens    MetadataSource
@@ -63,6 +77,8 @@ func (p MetadataProvenance) Summary() string {
 		{"tools", p.Tools}, {"vision", p.Vision}, {"reasoning_support", p.ReasoningSupport},
 		{"reasoning_levels", p.ReasoningLevels}, {"reasoning_default", p.ReasoningDefault},
 		{"tool_choice_required", p.ToolChoiceRequired}, {"context_window", p.ContextWindow},
+		{"thinking_mode", p.ThinkingMode}, {"vision_policy", p.VisionPolicy},
+		{"forced_tool_choice", p.ForcedToolChoice},
 		{"max_input_tokens", p.MaxInputTokens}, {"max_output_tokens", p.MaxOutputTokens},
 		{"tool_schema_dialect", p.ToolSchemaDialect},
 	}
@@ -108,6 +124,19 @@ type Capabilities struct {
 	ToolChoiceRequired Support
 }
 
+// Apply overlays model-level capability knowledge onto the capabilities
+// published by the transport adapter. Unknown model fields deliberately keep
+// the adapter value; explicit model metadata always wins.
+func (c Capabilities) Apply(base sdk.ModelCapabilities) sdk.ModelCapabilities {
+	if value, known := c.Tools.Bool(); known {
+		base.Tools = value
+	}
+	if value, known := c.Vision.Bool(); known {
+		base.Vision = value
+	}
+	return base
+}
+
 type Reasoning struct {
 	Support Support
 	Levels  []sdk.ReasoningEffort
@@ -122,6 +151,8 @@ type Sampling struct {
 
 type CompatibilityPolicy struct {
 	ToolSchemaDialect ToolSchemaDialect
+	ThinkingMode      ThinkingMode
+	ForcedToolChoice  Support
 }
 
 // CompactionPolicy controls when conversation history is compacted relative to
@@ -188,6 +219,9 @@ type CatalogMetadata struct {
 	MaxInputTokens     int
 	MaxOutputTokens    int
 	Reasoning          *CatalogReasoning
+	ToolSchemaDialect  ToolSchemaDialect
+	ThinkingMode       ThinkingMode
+	VisionPolicy       *VisionPolicy
 }
 
 type Resolved struct {
@@ -287,7 +321,10 @@ func modelIDLeaf(modelID string) string {
 }
 
 func catalogHasMetadata(c CatalogMetadata) bool {
-	return c.Tools != nil || c.Vision != nil || c.ToolChoiceRequired != nil || c.ContextWindow > 0 || c.MaxInputTokens > 0 || c.MaxOutputTokens > 0 || c.Reasoning != nil
+	validDialect := c.ToolSchemaDialect == ToolSchemaGeminiSubset
+	validThinking := c.ThinkingMode == ThinkingModeAdaptive || c.ThinkingMode == ThinkingModeManual || c.ThinkingMode == ThinkingModeUnsupported
+	validVisionPolicy := c.VisionPolicy != nil && validateVisionPolicy(*c.VisionPolicy) == nil
+	return c.Tools != nil || c.Vision != nil || c.ToolChoiceRequired != nil || c.ContextWindow > 0 || c.MaxInputTokens > 0 || c.MaxOutputTokens > 0 || c.Reasoning != nil || validDialect || validThinking || validVisionPolicy
 }
 
 func (m Matcher) score(provider, modelID string) (int, bool) {

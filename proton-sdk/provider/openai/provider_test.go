@@ -99,6 +99,53 @@ func TestChatStreamToolLifecycle(t *testing.T) {
 	}
 }
 
+func TestChatStreamPreservesReasoningContent(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		io.WriteString(w, "data: {\"choices\":[{\"delta\":{\"reasoning_content\":\"inspect first\"},\"finish_reason\":null}]}\n\n")
+		io.WriteString(w, "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call-1\",\"function\":{\"name\":\"read\",\"arguments\":\"{}\"}}]},\"finish_reason\":\"tool_calls\"}]}\n\n")
+	}))
+	defer server.Close()
+
+	stream, err := NewProvider(ProviderOptions{BaseURL: server.URL}).Model("deepseek-flash").Stream(context.Background(), sdk.Request{Messages: []sdk.Message{{Role: sdk.RoleUser, Content: "inspect"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	events := collectEvents(t, stream)
+	if len(events) < 1 || events[0].Kind != sdk.EventReasoningDelta || events[0].ReasoningContent != "inspect first" {
+		t.Fatalf("reasoning events = %#v", events)
+	}
+}
+
+func TestChatRequestPreservesAssistantReasoningContent(t *testing.T) {
+	var body map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatal(err)
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		io.WriteString(w, "data: {\"choices\":[{\"delta\":{\"content\":\"ok\"},\"finish_reason\":\"stop\"}]}\n\n")
+	}))
+	defer server.Close()
+
+	stream, err := NewProvider(ProviderOptions{BaseURL: server.URL}).Model("deepseek-flash").Stream(context.Background(), sdk.Request{Messages: []sdk.Message{
+		{Role: sdk.RoleAssistant, ReasoningContent: "inspect first", ToolCalls: []sdk.ToolCall{{ID: "call-1", Name: "read", Arguments: json.RawMessage(`{}`)}}},
+		{Role: sdk.RoleTool, ToolCallID: "call-1", ToolName: "read", Content: "file"},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = collectEvents(t, stream)
+	messages, ok := body["messages"].([]any)
+	if !ok || len(messages) != 2 {
+		t.Fatalf("messages = %#v", body["messages"])
+	}
+	assistant, ok := messages[0].(map[string]any)
+	if !ok || assistant["reasoning_content"] != "inspect first" {
+		t.Fatalf("assistant message = %#v", messages[0])
+	}
+}
+
 func TestChatStreamToolResultWithImage(t *testing.T) {
 	var receivedBody map[string]any
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

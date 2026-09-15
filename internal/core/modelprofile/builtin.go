@@ -32,6 +32,23 @@ var builtinRegistry = mustRegistry(
 		},
 	},
 	Profile{
+		Name: "zai-glm-5.3-flash",
+		Match: Matcher{
+			ExactIDs: []string{"glm-5.3-flash"},
+			Prefixes: []string{"glm-5.3-flash"},
+		},
+		Capabilities: Capabilities{
+			Tools: SupportYes, Vision: SupportYes, Reasoning: SupportYes,
+		},
+		Reasoning: Reasoning{
+			Support: SupportYes,
+			Levels:  []sdk.ReasoningEffort{sdk.ReasoningLow, sdk.ReasoningHigh, sdk.ReasoningMax},
+			Default: sdk.ReasoningMax,
+		},
+		ContextWindow:   1_048_576,
+		MaxOutputTokens: 131_072,
+	},
+	Profile{
 		Name: "zai-glm-thinking",
 		Match: Matcher{Prefixes: []string{
 			"glm-4.5", "glm-4.6", "glm-4.7", "glm-5",
@@ -43,9 +60,11 @@ var builtinRegistry = mustRegistry(
 		},
 	},
 	Profile{
-		Name:         "qwen3.8-flash-family",
-		Match:        Matcher{Prefixes: []string{"qwen3.8-flash"}},
-		Capabilities: Capabilities{Reasoning: SupportYes},
+		Name:  "qwen3.8-flash-family",
+		Match: Matcher{Prefixes: []string{"qwen3.8-flash"}},
+		Capabilities: Capabilities{
+			Tools: SupportYes, Vision: SupportYes, Reasoning: SupportYes,
+		},
 		Reasoning: Reasoning{
 			Support: SupportYes,
 			Levels:  []sdk.ReasoningEffort{sdk.ReasoningNone, sdk.ReasoningLow, sdk.ReasoningMedium, sdk.ReasoningXHigh},
@@ -56,7 +75,7 @@ var builtinRegistry = mustRegistry(
 		Name:  "qwen3.8-max-family",
 		Match: Matcher{Prefixes: []string{"qwen3.8-max"}},
 		Capabilities: Capabilities{
-			Reasoning: SupportYes,
+			Tools: SupportYes, Vision: SupportYes, Reasoning: SupportYes,
 		},
 		Reasoning: Reasoning{
 			Support: SupportYes,
@@ -72,7 +91,7 @@ var builtinRegistry = mustRegistry(
 			"qwen3.5-plus", "qwen3.6-plus", "qwen3.6-flash",
 			"qwen3.7-plus", "qwen3.7-max",
 		}},
-		Capabilities: Capabilities{Reasoning: SupportYes},
+		Capabilities: Capabilities{Tools: SupportYes, Reasoning: SupportYes},
 		Reasoning: Reasoning{
 			Support: SupportYes,
 			Levels:  []sdk.ReasoningEffort{sdk.ReasoningNone},
@@ -102,10 +121,34 @@ var builtinRegistry = mustRegistry(
 		},
 	},
 	Profile{
-		Name:  "muse-spark-1.3-family",
-		Match: Matcher{Prefixes: []string{"muse-spark-1.3"}},
+		Name: "deepseek-v4.1-flash-family",
+		Match: Matcher{
+			ExactIDs: []string{"deepseek-flash"},
+			Prefixes: []string{"deepseek-v4.1-flash", "deepseek-v4-flash"},
+		},
 		Capabilities: Capabilities{
-			Vision: SupportYes, Reasoning: SupportYes,
+			Tools: SupportYes, Vision: SupportYes, Reasoning: SupportYes,
+		},
+		Reasoning: Reasoning{
+			Support: SupportYes,
+			Levels: []sdk.ReasoningEffort{
+				sdk.ReasoningNone, sdk.ReasoningLow, sdk.ReasoningHigh, sdk.ReasoningMax,
+			},
+			Default: sdk.ReasoningHigh,
+		},
+	},
+	Profile{
+		Name: "muse-spark-1.3-family",
+		Match: Matcher{
+			ExactIDs: []string{
+				"muse-spark-1.3",
+				"muse-spark-1.3-contributor",
+				"muse-spark-1.3-contributor-free",
+			},
+			Prefixes: []string{"muse-spark-1.3"},
+		},
+		Capabilities: Capabilities{
+			Tools: SupportYes, Vision: SupportYes, Reasoning: SupportYes,
 		},
 		Reasoning: Reasoning{
 			Support: SupportYes,
@@ -117,23 +160,12 @@ var builtinRegistry = mustRegistry(
 		},
 		VisionPolicy: DefaultVisionPolicy(),
 	},
-	Profile{
-		Name:  "gpt-5.6-family",
-		Match: Matcher{Prefixes: []string{"gpt-5.6"}},
-		Capabilities: Capabilities{
-			Tools: SupportYes, Reasoning: SupportYes,
-		},
-		Reasoning: Reasoning{
-			Support: SupportYes,
-			Levels: []sdk.ReasoningEffort{
-				sdk.ReasoningNone, sdk.ReasoningLow, sdk.ReasoningMedium,
-				sdk.ReasoningHigh, sdk.ReasoningXHigh, sdk.ReasoningMax,
-			},
-			Default: sdk.ReasoningMedium,
-		},
-		ContextWindow: 1_050_000,
-		VisionPolicy:  DefaultVisionPolicy(),
-	},
+	gpt56Profile(
+		"gpt-5.6-sol",
+		[]string{"gpt-5.6-sol", "gpt-5.6"},
+	),
+	gpt56Profile("gpt-5.6-terra", []string{"gpt-5.6-terra"}),
+	gpt56Profile("gpt-5.6-luna", []string{"gpt-5.6-luna"}),
 	Profile{
 		Name:  "grok-4.6",
 		Match: Matcher{Prefixes: []string{"grok-4.6"}},
@@ -153,12 +185,15 @@ var builtinRegistry = mustRegistry(
 			"claude-opus-4-6", "claude-opus-4-7", "claude-opus-4-8", "claude-opus-5",
 			"claude-sonnet-4-6", "claude-sonnet-5", "claude-fable-5", "claude-mythos-5",
 		}},
-		Capabilities: Capabilities{Reasoning: SupportYes},
-		Reasoning:    Reasoning{Support: SupportYes},
+		Capabilities: Capabilities{
+			Tools: SupportYes, Vision: SupportYes, Reasoning: SupportYes,
+		},
+		Reasoning: Reasoning{Support: SupportYes},
 		VisionPolicy: VisionPolicy{
 			MaxDimension: 1568, MaxPatches: 1160, PatchSize: 32,
 			MaxOutputBytes: 10 * 1024 * 1024, TokenScheme: VisionTokenAnthropicPixels, FallbackTokens: 1600,
 		},
+		Compatibility: CompatibilityPolicy{ThinkingMode: ThinkingModeAdaptive},
 	},
 )
 
@@ -175,4 +210,28 @@ func mustRegistry(profiles ...Profile) *Registry {
 		panic(err)
 	}
 	return registry
+}
+
+func gpt56Profile(name string, exactIDs []string) Profile {
+	return Profile{
+		Name: name,
+		Match: Matcher{
+			ExactIDs: exactIDs,
+			Prefixes: []string{name},
+		},
+		Capabilities: Capabilities{
+			Tools: SupportYes, Vision: SupportYes, Reasoning: SupportYes,
+		},
+		Reasoning: Reasoning{
+			Support: SupportYes,
+			Levels: []sdk.ReasoningEffort{
+				sdk.ReasoningNone, sdk.ReasoningLow, sdk.ReasoningMedium,
+				sdk.ReasoningHigh, sdk.ReasoningXHigh, sdk.ReasoningMax,
+			},
+			Default: sdk.ReasoningMedium,
+		},
+		ContextWindow:   1_050_000,
+		MaxOutputTokens: 131_072,
+		VisionPolicy:    DefaultVisionPolicy(),
+	}
 }

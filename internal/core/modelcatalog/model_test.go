@@ -27,6 +27,9 @@ func TestRemoteModelProfileMetadata(t *testing.T) {
 		VisionSupport:      &vision,
 		ToolChoiceRequired: &toolChoice,
 		Reasoning:          reasoning,
+		ToolSchemaDialect:  modelprofile.ToolSchemaGeminiSubset,
+		ThinkingMode:       modelprofile.ThinkingModeManual,
+		VisionPolicy:       &modelprofile.VisionPolicy{MaxDimension: 6000},
 	}
 
 	meta := model.ProfileMetadata()
@@ -50,6 +53,12 @@ func TestRemoteModelProfileMetadata(t *testing.T) {
 	}
 	if meta.Reasoning == nil || meta.Reasoning.Supported == nil || !*meta.Reasoning.Supported {
 		t.Errorf("Reasoning = %v; want supported", meta.Reasoning)
+	}
+	if meta.ToolSchemaDialect != modelprofile.ToolSchemaGeminiSubset || meta.ThinkingMode != modelprofile.ThinkingModeManual {
+		t.Errorf("compatibility = %q/%q", meta.ToolSchemaDialect, meta.ThinkingMode)
+	}
+	if meta.VisionPolicy == nil || meta.VisionPolicy.MaxDimension != 6000 {
+		t.Errorf("VisionPolicy = %v; want max dimension 6000", meta.VisionPolicy)
 	}
 }
 

@@ -19,10 +19,11 @@ type chatFunctionCall struct {
 	Arguments string `json:"arguments"`
 }
 type chatMessage struct {
-	Role       string         `json:"role"`
-	Content    any            `json:"content,omitempty"`
-	ToolCallID string         `json:"tool_call_id,omitempty"`
-	ToolCalls  []chatToolCall `json:"tool_calls,omitempty"`
+	Role             string         `json:"role"`
+	Content          any            `json:"content,omitempty"`
+	ReasoningContent string         `json:"reasoning_content,omitempty"`
+	ToolCallID       string         `json:"tool_call_id,omitempty"`
+	ToolCalls        []chatToolCall `json:"tool_calls,omitempty"`
 }
 type chatTool struct {
 	Type     string       `json:"type"`
@@ -133,7 +134,7 @@ func (m *LanguageModel) encodeRequest(request sdk.Request) (string, []byte, erro
 			for _, call := range message.ToolCalls {
 				calls = append(calls, chatToolCall{ID: call.ID, Type: "function", Function: chatFunctionCall{Name: call.Name, Arguments: string(call.Arguments)}})
 			}
-			msg := chatMessage{Role: "assistant", ToolCalls: calls}
+			msg := chatMessage{Role: "assistant", ToolCalls: calls, ReasoningContent: message.ReasoningContent}
 			if text := strings.TrimSpace(message.TextContent()); text != "" {
 				content := text
 				msg.Content = &content

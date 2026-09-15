@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/phongsathornpt/protonman/internal/core/modelprofile"
 	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 )
 
@@ -358,6 +359,33 @@ func TestFetchProviderModelsOpenAIParsesExtendedMetadata(t *testing.T) {
 	}
 	if models[0].ToolSupport == nil || !*models[0].ToolSupport || models[0].VisionSupport == nil || !*models[0].VisionSupport {
 		t.Fatalf("feature capabilities = %+v", models[0])
+	}
+}
+
+func TestFetchProviderModelsParsesCompatibilityMetadata(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":[{"id":"muse-spark-1.3-contributor-free","tool_schema":"gemini_openapi_subset","thinking_mode":"manual","vision_policy":{"max_dimension":6000,"max_patches":10000,"patch_size":32,"max_output_bytes":10485760,"token_scheme":"gemini_tiles","fallback_tokens":2064}}]}`))
+	}))
+	defer ts.Close()
+
+	models, err := FetchProviderModels(context.Background(), ts.URL, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(models) != 1 {
+		t.Fatalf("models = %+v", models)
+	}
+	model := models[0]
+	if model.ToolSchemaDialect != modelprofile.ToolSchemaGeminiSubset || model.ThinkingMode != modelprofile.ThinkingModeManual {
+		t.Fatalf("compatibility metadata = %+v", model)
+	}
+	if model.VisionPolicy == nil || model.VisionPolicy.TokenScheme != modelprofile.VisionTokenGeminiTiles {
+		t.Fatalf("vision policy = %+v", model.VisionPolicy)
+	}
+	profile := model.ProfileMetadata()
+	if profile.VisionPolicy == nil || profile.VisionPolicy.MaxDimension != 6000 {
+		t.Fatalf("profile metadata vision policy = %+v", profile.VisionPolicy)
 	}
 }
 

@@ -1,6 +1,9 @@
 package modelprofile
 
-import "reflect"
+import (
+	"reflect"
+	"sort"
+)
 
 // PublishInputSchema adapts a canonical Protonman tool schema to the subset a
 // model family can reliably consume. Runtime validation still uses the
@@ -89,9 +92,14 @@ func mergeObjectBranches(branches []any) (map[string]any, bool) {
 	}
 	out := map[string]any{"type": "object", "properties": mergedProps}
 	if len(required) > 0 {
-		items := make([]any, 0, len(required))
+		names := make([]string, 0, len(required))
 		for name := range required {
-			items = append(items, name)
+			names = append(names, name)
+		}
+		sort.Strings(names)
+		items := make([]any, len(names))
+		for index, name := range names {
+			items[index] = name
 		}
 		out["required"] = items
 	}

@@ -69,6 +69,7 @@ func promptCacheHitPercent(usage sdk.Usage) float64 {
 
 func consumeSDKStream(ctx context.Context, round int, stream sdk.Stream, sink Sink) (model.Message, []model.ToolCall, error) {
 	var text strings.Builder
+	var reasoning strings.Builder
 	calls := make([]model.ToolCall, 0)
 	for {
 		event, err := stream.Next(ctx)
@@ -82,6 +83,8 @@ func consumeSDKStream(ctx context.Context, round int, stream sdk.Stream, sink Si
 			return model.Message{}, nil, fmt.Errorf("validate model stream round %d: %w", round, err)
 		}
 		switch event.Kind {
+		case sdk.EventReasoningDelta:
+			reasoning.WriteString(event.ReasoningContent)
 		case sdk.EventTextDelta:
 			text.WriteString(event.Text)
 			if err := emit(ctx, sink, Event{Kind: EventTextDelta, Round: round, Text: event.Text}); err != nil {
@@ -104,7 +107,7 @@ func consumeSDKStream(ctx context.Context, round int, stream sdk.Stream, sink Si
 			if text.Len() == 0 && len(calls) == 0 {
 				return model.Message{}, nil, fmt.Errorf("model stream round %d: %w", round, ErrEmptyResponse)
 			}
-			return model.Message{ID: model.NewMessageID(), Role: model.RoleAssistant, Content: text.String(), ToolCalls: calls}, calls, nil
+			return model.Message{ID: model.NewMessageID(), Role: model.RoleAssistant, Content: text.String(), ReasoningContent: reasoning.String(), ToolCalls: calls}, calls, nil
 		}
 	}
 	return model.Message{}, nil, fmt.Errorf("read model stream round %d: %w", round, sdk.ErrIncompleteStream)

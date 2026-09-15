@@ -11,7 +11,8 @@ import (
 func TestAppendAssistantResponse(t *testing.T) {
 	initial := []domain.Message{{Role: domain.RoleUser, Content: "hi"}}
 	resp := domain.Response{
-		Text: "hello",
+		Text:             "hello",
+		ReasoningContent: "inspect first",
 		ToolCalls: []domain.ToolCall{
 			{ID: "c1", Name: "read", Arguments: json.RawMessage(`{"path":"a"}`)},
 		},
@@ -22,6 +23,9 @@ func TestAppendAssistantResponse(t *testing.T) {
 	}
 	if history[1].Role != domain.RoleAssistant || history[1].Content != "hello" {
 		t.Fatalf("unexpected assistant message: %+v", history[1])
+	}
+	if history[1].ReasoningContent != "inspect first" {
+		t.Fatalf("reasoning content was not preserved: %+v", history[1])
 	}
 	if len(history[1].ToolCalls) != 1 {
 		t.Fatalf("expected 1 tool call, got %d", len(history[1].ToolCalls))

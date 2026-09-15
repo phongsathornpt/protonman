@@ -34,6 +34,11 @@ func validateProfile(profile Profile) error {
 	default:
 		return fmt.Errorf("invalid tool schema dialect %q", profile.Compatibility.ToolSchemaDialect)
 	}
+	switch profile.Compatibility.ThinkingMode {
+	case ThinkingModeDefault, ThinkingModeAdaptive, ThinkingModeManual, ThinkingModeUnsupported:
+	default:
+		return fmt.Errorf("invalid thinking mode %q", profile.Compatibility.ThinkingMode)
+	}
 	return nil
 }
 
