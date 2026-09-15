@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"encoding/base64"
 	"fmt"
 	"strings"
 
@@ -33,7 +34,7 @@ func prepareImageSubmission(preparationID uint64, input tuiconv.QueuedInput) tea
 			parts = append(parts, model.ContentPart{
 				Type:     model.ContentPartImage,
 				MIMEType: snapshot.MIMEType,
-				Data:     snapshot.Data,
+				Data:     base64.StdEncoding.EncodeToString(snapshot.Bytes),
 			})
 		}
 		if text := strings.TrimSpace(input.Text); text != "" {
