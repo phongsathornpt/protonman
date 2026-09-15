@@ -49,9 +49,9 @@ func (s *attachmentState) attachImageWithOwnership(prompt *textarea.Model, path 
 	s.localImages = append(s.localImages, localImageAttachment{placeholder: placeholder, path: path, temporary: temporary})
 }
 
-// clear forgets composer attachment state without deleting owned files. Use it
-// only when ownership has moved into a queued/preparing submission.
-func (s *attachmentState) clear() {
+// release forgets composer attachment state without deleting owned files. It is
+// used only when ownership has moved into a queued/preparing submission.
+func (s *attachmentState) release() {
 	if s == nil {
 		return
 	}
@@ -59,13 +59,17 @@ func (s *attachmentState) clear() {
 	s.localImages = nil
 }
 
-// discard removes TUI-owned temporary files before forgetting the draft.
+// clear discards the current draft attachments, including TUI-owned temp files.
+func (s *attachmentState) clear() {
+	s.discard()
+}
+
 func (s *attachmentState) discard() {
 	if s == nil {
 		return
 	}
 	cleanupLocalImages(s.localImages)
-	s.clear()
+	s.release()
 }
 
 func cleanupLocalImages(images []localImageAttachment) {
@@ -82,6 +86,16 @@ func cleanupQueuedInputAttachments(input tuiconv.QueuedInput) {
 			_ = os.Remove(attachment.Path)
 		}
 	}
+}
+
+func (m *bubbleModel) clearQueuedInputs() {
+	if m == nil || m.conversation == nil {
+		return
+	}
+	for _, input := range m.conversation.QueuedInputs() {
+		cleanupQueuedInputAttachments(input)
+	}
+	m.conversation.ClearQueue()
 }
 
 func (s *attachmentState) syncWithText(prompt *textarea.Model) {
