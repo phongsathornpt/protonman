@@ -63,8 +63,8 @@ func SnapshotLocal(path string) (Snapshot, error) {
 	if !ok {
 		return Snapshot{}, fmt.Errorf("unsupported image format %q", format)
 	}
-	if config.Width <= 0 || config.Height <= 0 {
-		return Snapshot{}, fmt.Errorf("image %q has invalid dimensions %dx%d", filepath.Base(path), config.Width, config.Height)
+	if err := validateSourceDimensions(config.Width, config.Height); err != nil {
+		return Snapshot{}, fmt.Errorf("image %q: %w", filepath.Base(path), err)
 	}
 
 	return Snapshot{
