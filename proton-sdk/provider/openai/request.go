@@ -44,6 +44,17 @@ func (f chatFunction) MarshalJSON() ([]byte, error) {
 	return providerutil.MarshalWithOptions(base, f.ProviderOptions, "name", "description", "parameters")
 }
 
+type chatRequest struct {
+	Model           string              `json:"model"`
+	Messages        []chatMessage       `json:"messages"`
+	Stream          bool                `json:"stream"`
+	Tools           []chatTool          `json:"tools,omitempty"`
+	ToolChoice      string              `json:"tool_choice,omitempty"`
+	MaxTokens       int                 `json:"max_tokens,omitempty"`
+	ReasoningEffort sdk.ReasoningEffort `json:"reasoning_effort,omitempty"`
+	EnableThinking  *bool               `json:"enable_thinking,omitempty"`
+}
+
 type responsesTool struct {
 	Type            string          `json:"type"`
 	Name            string          `json:"name"`
