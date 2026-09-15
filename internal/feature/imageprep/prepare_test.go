@@ -30,7 +30,7 @@ func TestOutputDimensionsMatchesPatchPolicy(t *testing.T) {
 	policy := DefaultPolicy()
 	for _, tc := range []struct {
 		width, height int
-		wantW, wantH int
+		wantW, wantH  int
 	}{
 		{800, 600, 800, 600},
 		{4000, 2000, 2048, 1024},
@@ -60,7 +60,7 @@ func TestPreparePreservesSmallPNGBytes(t *testing.T) {
 func TestPrepareMessagesResizesRequestCopyOnly(t *testing.T) {
 	data := pngDataURLPayload(t, 2000, 2000)
 	messages := []sdk.Message{{
-		Role: sdk.RoleUser,
+		Role:  sdk.RoleUser,
 		Parts: []sdk.ContentPart{{Type: sdk.ContentPartImage, MIMEType: "image/png", Data: data}},
 	}}
 	prepared, err := PrepareMessages(messages, DefaultPolicy())

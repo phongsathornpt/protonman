@@ -21,8 +21,8 @@ func TestContentPartValidation(t *testing.T) {
 		"unknown type": {Type: "audio"},
 		"missing mime": {Type: domain.ContentPartImage, Data: validImage.Data},
 		"missing data": {Type: domain.ContentPartImage, MIMEType: "image/png"},
-		"bad base64":  {Type: domain.ContentPartImage, MIMEType: "image/png", Data: "%%%"},
-		"mixed text":  {Type: domain.ContentPartText, Text: "hello", Data: validImage.Data},
+		"bad base64":   {Type: domain.ContentPartImage, MIMEType: "image/png", Data: "%%%"},
+		"mixed text":   {Type: domain.ContentPartText, Text: "hello", Data: validImage.Data},
 	} {
 		t.Run(name, func(t *testing.T) {
 			if err := part.Validate(); err == nil {

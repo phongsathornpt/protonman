@@ -57,7 +57,7 @@ func TestEstimateGeminiSmallImageUsesSingleFixedCharge(t *testing.T) {
 func TestEstimateImageTokensUsesPolicyFallbackForInvalidPayload(t *testing.T) {
 	data := base64.StdEncoding.EncodeToString([]byte("not an image"))
 	got := estimateImageTokensWithPolicy(data, modelprofile.VisionPolicy{
-		TokenScheme: modelprofile.VisionTokenAnthropicPixels,
+		TokenScheme:    modelprofile.VisionTokenAnthropicPixels,
 		FallbackTokens: 1600,
 	})
 	if got != 1600 {

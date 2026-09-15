@@ -4,12 +4,12 @@ import "testing"
 
 func TestResolveBuiltinVisionPolicies(t *testing.T) {
 	tests := []struct {
-		name       string
-		provider   string
-		modelID    string
-		scheme     VisionTokenScheme
-		maxDim     int
-		fallback   int
+		name     string
+		provider string
+		modelID  string
+		scheme   VisionTokenScheme
+		maxDim   int
+		fallback int
 	}{
 		{name: "gemini tiles", provider: "google", modelID: "gemini-3.8-flash", scheme: VisionTokenGeminiTiles, maxDim: 6000, fallback: 2064},
 		{name: "claude pixels", provider: "anthropic", modelID: "claude-sonnet-4-6", scheme: VisionTokenAnthropicPixels, maxDim: 1568, fallback: 1600},

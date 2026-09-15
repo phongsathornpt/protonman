@@ -112,7 +112,7 @@ func TestLocalImagePathFromPasteRecognizesSupportedImagesOnly(t *testing.T) {
 	}
 
 	svgPath := filepath.Join(tempDir, "vector.svg")
-	if err := os.WriteFile(svgPath, []byte("<svg/>") , 0o644); err != nil {
+	if err := os.WriteFile(svgPath, []byte("<svg/>"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if path, ok := localImagePathFromPaste(svgPath, tempDir); ok {

@@ -29,8 +29,8 @@ const (
 	MaxSourcePixels = 12 * 1024 * 1024
 	// MaxSourceDimension also rejects pathological skinny images before decode.
 	MaxSourceDimension = 16384
-	maxCacheEntries     = 32
-	maxCacheBytes       = 64 * 1024 * 1024
+	maxCacheEntries    = 32
+	maxCacheBytes      = 64 * 1024 * 1024
 )
 
 // Policy describes the model-visible image budget. It intentionally models

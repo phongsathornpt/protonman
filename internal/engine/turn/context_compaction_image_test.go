@@ -24,12 +24,12 @@ func imagePayloadWithTransportPadding(t *testing.T, padding int) string {
 
 func TestCompactionIgnoresImageTransportPayloadSize(t *testing.T) {
 	policy := modelprofile.CompactionPolicy{
-		SoftThresholdRatio: 0.30,
-		MediumThresholdRatio: 0.50,
+		SoftThresholdRatio:       0.30,
+		MediumThresholdRatio:     0.50,
 		AggressiveThresholdRatio: 0.70,
-		EmergencyThresholdRatio: 0.90,
-		TargetRatio: 0.25,
-		MinRecentMessages: 2,
+		EmergencyThresholdRatio:  0.90,
+		TargetRatio:              0.25,
+		MinRecentMessages:        2,
 	}
 	vision := modelprofile.DefaultVisionPolicy()
 	limits := sdk.TokenLimits{MaxInputTokens: 4_000}

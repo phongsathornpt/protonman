@@ -216,3 +216,27 @@ func (s *State) QueueLen() int {
 	}
 	return len(s.queue)
 }
+
+// Reset clears messages and the queue while preserving retention policy.
+func (s *State) Reset() {
+	if s == nil {
+		return
+	}
+	clear(s.messages)
+	s.messages = nil
+	s.ClearQueue()
+}
+
+// QueuePreview truncates a prompt string to a maximum number of runes for display.
+func QueuePreview(line string, maxRunes ...int) string {
+	limit := DefaultMaxQueuePreviewRunes
+	if len(maxRunes) > 0 && maxRunes[0] > 0 {
+		limit = maxRunes[0]
+	}
+	trimmed := strings.TrimSpace(line)
+	runes := []rune(trimmed)
+	if len(runes) <= limit {
+		return string(runes)
+	}
+	return string(runes[:limit-1]) + "…"
+}
