@@ -105,7 +105,7 @@ var builtinRegistry = mustRegistry(
 		Name:  "muse-spark-1.3-family",
 		Match: Matcher{Prefixes: []string{"muse-spark-1.3"}},
 		Capabilities: Capabilities{
-			Reasoning: SupportYes,
+			Vision: SupportYes, Reasoning: SupportYes,
 		},
 		Reasoning: Reasoning{
 			Support: SupportYes,
