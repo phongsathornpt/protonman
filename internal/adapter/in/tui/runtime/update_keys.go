@@ -8,11 +8,12 @@ import (
 )
 
 var composerKeys = struct {
-	ExitBash, HistoryUp, HistoryDown key.Binding
+	ExitBash, HistoryUp, HistoryDown, PasteImage key.Binding
 }{
 	ExitBash:    key.NewBinding(key.WithKeys("backspace", "ctrl+h", "delete")),
 	HistoryUp:   key.NewBinding(key.WithKeys("up")),
 	HistoryDown: key.NewBinding(key.WithKeys("down")),
+	PasteImage:  key.NewBinding(key.WithKeys("ctrl+v", "ctrl+alt+v"), key.WithHelp("ctrl+v", "paste image")),
 }
 
 func (m *bubbleModel) semanticKeyBindings() keyboardpolicy.Bindings {
@@ -45,16 +46,12 @@ func (m *bubbleModel) handleInterruptKey() tea.Cmd {
 	}
 	if m.imagePreparing {
 		m.cancelImagePreparation()
-		if m.conversation != nil {
-			m.conversation.ClearQueue()
-		}
+		m.clearQueuedInputs()
 		return nil
 	}
 	if m.busy && m.turnCancel != nil {
 		m.cancelActiveTurn()
-		if m.conversation != nil {
-			m.conversation.ClearQueue()
-		}
+		m.clearQueuedInputs()
 		return nil
 	}
 	prompt := m.panes.bottom.prompt()
@@ -151,6 +148,9 @@ func (m *bubbleModel) composerAction(message tea.KeyPressMsg) composerKeyAction 
 
 func (m *bubbleModel) handlePromptKey(message tea.KeyPressMsg) tea.Cmd {
 	prompt := m.panes.bottom.prompt()
+	if key.Matches(message, composerKeys.PasteImage) && !m.panes.bottom.bashMode() {
+		return m.beginClipboardImagePaste()
+	}
 	if message.Text == "?" && prompt.Value() == "" && !m.panes.bottom.bashMode() {
 		m.openShortcutsPane()
 		return nil
