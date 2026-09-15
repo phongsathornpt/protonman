@@ -78,6 +78,9 @@ func (m *bubbleModel) updateImageSubmissionPrepared(message imageSubmissionPrepa
 		m.requestRelayout()
 		return nil
 	}
+	// SnapshotLocal made the model message self-contained. Temporary clipboard
+	// files are no longer needed once every attachment has been snapshotted.
+	cleanupQueuedInputAttachments(message.input)
 	if history := submissionHistoryText(message.input); history != "" {
 		m.panes.bottom.recordHistory(history)
 	}
@@ -107,10 +110,12 @@ func (m *bubbleModel) cancelImagePreparation() bool {
 
 func (m *bubbleModel) restoreCanceledImageSubmission(input tuiconv.QueuedInput) {
 	if m == nil || m.panes.bottom == nil || m.panes.bottom.prompt() == nil {
+		cleanupQueuedInputAttachments(input)
 		return
 	}
 	prompt := m.panes.bottom.prompt()
 	if strings.TrimSpace(prompt.Value()) != "" || len(m.panes.bottom.composer.attachments.localImages) > 0 {
+		cleanupQueuedInputAttachments(input)
 		return
 	}
 	m.restoreSubmissionToComposer(input)
@@ -118,18 +123,23 @@ func (m *bubbleModel) restoreCanceledImageSubmission(input tuiconv.QueuedInput) 
 
 func (m *bubbleModel) restoreSubmissionToComposer(input tuiconv.QueuedInput) {
 	if m == nil || m.panes.bottom == nil || m.panes.bottom.prompt() == nil {
+		cleanupQueuedInputAttachments(input)
 		return
 	}
 	prompt := m.panes.bottom.prompt()
 	if strings.TrimSpace(prompt.Value()) != "" || len(m.panes.bottom.composer.attachments.localImages) > 0 {
-		if m.conversation != nil {
-			_ = m.conversation.EnqueueInput(input)
+		if m.conversation == nil || !m.conversation.EnqueueInput(input) {
+			cleanupQueuedInputAttachments(input)
 		}
 		return
 	}
 	prompt.SetValue(input.Text)
 	prompt.CursorEnd()
 	for _, attachment := range input.Attachments {
+		if attachment.Temporary {
+			m.panes.bottom.composer.attachments.attachTemporaryImage(prompt, attachment.Path)
+			continue
+		}
 		m.panes.bottom.attachImage(attachment.Path)
 	}
 	m.panes.bottom.syncPromptChrome()
