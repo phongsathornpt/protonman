@@ -15,6 +15,7 @@ import (
 type localImageAttachment struct {
 	placeholder string
 	path        string
+	temporary   bool
 }
 
 type attachmentState struct {
@@ -26,6 +27,14 @@ func localImageLabel(index int) string {
 }
 
 func (s *attachmentState) attachImage(prompt *textarea.Model, path string) {
+	s.attachImageWithOwnership(prompt, path, false)
+}
+
+func (s *attachmentState) attachTemporaryImage(prompt *textarea.Model, path string) {
+	s.attachImageWithOwnership(prompt, path, true)
+}
+
+func (s *attachmentState) attachImageWithOwnership(prompt *textarea.Model, path string, temporary bool) {
 	if s == nil || prompt == nil || strings.TrimSpace(path) == "" {
 		return
 	}
@@ -37,15 +46,42 @@ func (s *attachmentState) attachImage(prompt *textarea.Model, path string) {
 	value += placeholder
 	prompt.SetValue(value)
 	prompt.CursorEnd()
-	s.localImages = append(s.localImages, localImageAttachment{placeholder: placeholder, path: path})
+	s.localImages = append(s.localImages, localImageAttachment{placeholder: placeholder, path: path, temporary: temporary})
 }
 
+// clear forgets composer attachment state without deleting owned files. Use it
+// only when ownership has moved into a queued/preparing submission.
 func (s *attachmentState) clear() {
 	if s == nil {
 		return
 	}
 	clear(s.localImages)
 	s.localImages = nil
+}
+
+// discard removes TUI-owned temporary files before forgetting the draft.
+func (s *attachmentState) discard() {
+	if s == nil {
+		return
+	}
+	cleanupLocalImages(s.localImages)
+	s.clear()
+}
+
+func cleanupLocalImages(images []localImageAttachment) {
+	for _, image := range images {
+		if image.temporary && strings.TrimSpace(image.path) != "" {
+			_ = os.Remove(image.path)
+		}
+	}
+}
+
+func cleanupQueuedInputAttachments(input tuiconv.QueuedInput) {
+	for _, attachment := range input.Attachments {
+		if attachment.Temporary && strings.TrimSpace(attachment.Path) != "" {
+			_ = os.Remove(attachment.Path)
+		}
+	}
 }
 
 func (s *attachmentState) syncWithText(prompt *textarea.Model) {
@@ -57,6 +93,10 @@ func (s *attachmentState) syncWithText(prompt *textarea.Model) {
 	for _, image := range s.localImages {
 		if strings.Contains(text, image.placeholder) {
 			kept = append(kept, image)
+			continue
+		}
+		if image.temporary {
+			_ = os.Remove(image.path)
 		}
 	}
 	s.localImages = kept
@@ -83,7 +123,11 @@ func (s *attachmentState) snapshot(prompt *textarea.Model) []tuiconv.Attachment 
 	}
 	out := make([]tuiconv.Attachment, 0, len(s.localImages))
 	for _, image := range s.localImages {
-		out = append(out, tuiconv.Attachment{Placeholder: image.placeholder, Path: image.path})
+		out = append(out, tuiconv.Attachment{
+			Placeholder: image.placeholder,
+			Path:        image.path,
+			Temporary:   image.temporary,
+		})
 	}
 	return out
 }
