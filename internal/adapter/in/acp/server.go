@@ -13,12 +13,8 @@ import (
 	"sync"
 
 	"github.com/phongsathornpt/protonman/internal/app"
-	"github.com/phongsathornpt/protonman/internal/base/buildinfo"
-	"github.com/phongsathornpt/protonman/internal/core/permission"
-	"github.com/phongsathornpt/protonman/internal/core/session"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/engine/toolcall"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 )
 
 var ErrInvalidServer = errors.New("invalid ACP server")
@@ -26,7 +22,7 @@ var ErrInvalidRequest = errors.New("invalid request")
 
 type Option func(*Server)
 type RunnerFactory func(*toolcall.Service) (app.Conversation, error)
-type SessionRegistryFactory func(sessionID string, cwd string) (tool.Registry, error)
+type SessionRegistryFactory func(sessionID string, cwd string, additionalDirectories []string) (tool.Registry, error)
 type MCPRegistryConfigurer func(ctx context.Context, cwd string, registry tool.Registry, servers []MCPServerConfig) (io.Closer, error)
 
 func WithSessions(sessions *app.Sessions) Option {
@@ -58,6 +54,7 @@ type Server struct {
 	mu                     sync.Mutex
 	writeMu                sync.Mutex
 	sessions               map[string]*Session
+	sessionDirectories     map[string][]string
 	nextID                 uint64
 }
 
@@ -68,7 +65,12 @@ func New(service *toolcall.Service, registry tool.Registry, runner app.Conversat
 	if registry == nil {
 		return nil, fmt.Errorf("%w: registry is required", ErrInvalidServer)
 	}
-	s := &Server{service: service, registry: registry, sessions: make(map[string]*Session)}
+	s := &Server{
+		service:            service,
+		registry:           registry,
+		sessions:           make(map[string]*Session),
+		sessionDirectories: make(map[string][]string),
+	}
 	for _, opt := range opts {
 		if opt != nil {
 			opt(s)
@@ -221,376 +223,4 @@ func (s *Server) writeResponse(output io.Writer, id json.RawMessage, result any,
 		return nil
 	}
 	return WriteJSON(output, &s.writeMu, RPCResponse{JSONRPC: "2.0", ID: id, Result: result})
-}
-
-func (s *Server) dispatch(ctx context.Context, request RPCRequest, output io.Writer) (any, *RPCNotification, error) {
-	switch request.Method {
-	case "initialize":
-		return InitializeResult{
-			ProtocolVersion: ProtocolVersion,
-			AgentCapabilities: AgentCapabilities{
-				LoadSession:         true,
-				PromptCapabilities:  PromptCapabilities{Image: true, Audio: false, EmbeddedContext: true},
-				SessionCapabilities: SessionCapabilities{Resume: &struct{}{}, Delete: &struct{}{}, AdditionalDirectories: &struct{}{}},
-				MCPCapabilities:     MCPCapabilities{HTTP: true, SSE: false},
-			},
-			AgentInfo:   ImplementationInfo{Name: "proton", Title: "Protonman AI Coding Agent", Version: buildinfo.Version()},
-			AuthMethods: []any{},
-		}, nil, nil
-	case "session/new":
-		var params SessionNewParams
-		if len(request.Params) > 0 {
-			if err := json.Unmarshal(request.Params, &params); err != nil {
-				return nil, nil, fmt.Errorf("decode session/new: %w", err)
-			}
-		}
-		if err := validateMCPServerConfigs(params.MCPServers); err != nil {
-			return nil, nil, fmt.Errorf("session/new MCP servers: %w", err)
-		}
-		sessionID := session.NewID(params.Cwd)
-		sess, err := s.newSession(ctx, sessionID, params.Cwd, params.MCPServers)
-		if err != nil {
-			return nil, nil, err
-		}
-		s.mu.Lock()
-		s.sessions[sessionID] = sess
-		s.mu.Unlock()
-		notify := &RPCNotification{JSONRPC: "2.0", Method: "session/update", Params: map[string]any{"sessionId": sessionID, "update": map[string]any{"sessionUpdate": "available_commands_update", "availableCommands": DefaultAvailableCommands()}}}
-		return SessionNewResult{SessionID: sessionID, Modes: DefaultSessionModes(sess.service.Mode().String())}, notify, nil
-	case "session/load":
-		var params SessionLoadParams
-		if err := json.Unmarshal(request.Params, &params); err != nil {
-			return nil, nil, fmt.Errorf("decode session/load: %w", err)
-		}
-		params.SessionID = strings.TrimSpace(params.SessionID)
-		if params.SessionID == "" {
-			return nil, nil, errors.New("sessionId is required")
-		}
-		if err := validateMCPServerConfigs(params.MCPServers); err != nil {
-			return nil, nil, fmt.Errorf("session/load MCP servers: %w", err)
-		}
-		sess, err := s.loadOrCreateSession(ctx, params.SessionID, params.Cwd, params.MCPServers)
-		if err != nil {
-			return nil, nil, err
-		}
-		if err := sess.ReplayHistory(func(notification RPCNotification) error { return WriteJSON(output, &s.writeMu, notification) }); err != nil {
-			return nil, nil, err
-		}
-		return nil, nil, nil
-	case "session/resume":
-		var params SessionResumeParams
-		if err := json.Unmarshal(request.Params, &params); err != nil {
-			return nil, nil, fmt.Errorf("decode session/resume: %w", err)
-		}
-		params.SessionID = strings.TrimSpace(params.SessionID)
-		if params.SessionID == "" {
-			return nil, nil, errors.New("sessionId is required")
-		}
-		if err := validateMCPServerConfigs(params.MCPServers); err != nil {
-			return nil, nil, fmt.Errorf("session/resume MCP servers: %w", err)
-		}
-		_, err := s.loadOrCreateSession(ctx, params.SessionID, params.Cwd, params.MCPServers)
-		return nil, nil, err
-	case "session/set_mode":
-		var params SessionSetModeParams
-		if err := json.Unmarshal(request.Params, &params); err != nil {
-			return nil, nil, fmt.Errorf("decode session/set_mode: %w", err)
-		}
-		params.SessionID = strings.TrimSpace(params.SessionID)
-		if params.SessionID == "" {
-			return nil, nil, errors.New("sessionId is required")
-		}
-		sess, ok := s.lookupSession(params.SessionID)
-		if !ok {
-			return nil, nil, fmt.Errorf("unknown session %q", params.SessionID)
-		}
-		mode, err := permission.ParseMode(params.ModeID)
-		if err != nil {
-			return nil, nil, fmt.Errorf("invalid mode %q: %w", params.ModeID, err)
-		}
-		if err := sess.service.SetMode(mode); err != nil {
-			return nil, nil, fmt.Errorf("set session mode: %w", err)
-		}
-		if err := sess.saveStateDetached(ctx); err != nil {
-			return nil, nil, fmt.Errorf("save session %q: %w", params.SessionID, err)
-		}
-		notify := &RPCNotification{JSONRPC: "2.0", Method: "session/update", Params: map[string]any{"sessionId": params.SessionID, "update": map[string]any{"sessionUpdate": "current_mode_update", "modeId": mode.String()}}}
-		return nil, notify, nil
-	case "session/cancel":
-		var params SessionCancelParams
-		if err := json.Unmarshal(request.Params, &params); err != nil {
-			return nil, nil, fmt.Errorf("decode session/cancel: %w", err)
-		}
-		params.SessionID = strings.TrimSpace(params.SessionID)
-		if params.SessionID == "" {
-			return nil, nil, errors.New("sessionId is required")
-		}
-		sess, ok := s.lookupSession(params.SessionID)
-		if !ok {
-			return nil, nil, fmt.Errorf("unknown session %q", params.SessionID)
-		}
-		sess.Cancel()
-		return map[string]any{}, nil, nil
-	case "session/list":
-		var params SessionListParams
-		if len(request.Params) > 0 {
-			if err := json.Unmarshal(request.Params, &params); err != nil {
-				return nil, nil, fmt.Errorf("decode session/list: %w", err)
-			}
-		}
-		sessions, err := s.listSessions(ctx, params.Cwd)
-		if err != nil {
-			return nil, nil, err
-		}
-		return SessionListResult{Sessions: sessions}, nil, nil
-	case methodSessionContext:
-		var params ProtonmanSessionContextParams
-		if err := json.Unmarshal(request.Params, &params); err != nil {
-			return nil, nil, fmt.Errorf("decode %s: %w", methodSessionContext, err)
-		}
-		result, err := s.sessionContext(ctx, params.SessionID)
-		if err != nil {
-			return nil, nil, err
-		}
-		return result, nil, nil
-	case methodSessionMemory:
-		var params ProtonmanSessionMemoryParams
-		if err := json.Unmarshal(request.Params, &params); err != nil {
-			return nil, nil, fmt.Errorf("decode %s: %w", methodSessionMemory, err)
-		}
-		result, err := s.sessionMemory(ctx, params.SessionID)
-		if err != nil {
-			return nil, nil, err
-		}
-		return result, nil, nil
-	case methodSessionMemoryForget:
-		var params ProtonmanSessionMemoryForgetParams
-		if err := json.Unmarshal(request.Params, &params); err != nil {
-			return nil, nil, fmt.Errorf("decode %s: %w", methodSessionMemoryForget, err)
-		}
-		result, err := s.sessionMemoryForget(ctx, params)
-		if err != nil {
-			return nil, nil, err
-		}
-		return result, nil, nil
-	case "session/delete":
-		var params SessionDeleteParams
-		if err := json.Unmarshal(request.Params, &params); err != nil {
-			return nil, nil, fmt.Errorf("decode session/delete: %w", err)
-		}
-		params.SessionID = strings.TrimSpace(params.SessionID)
-		if params.SessionID == "" {
-			return nil, nil, errors.New("sessionId is required")
-		}
-		if err := s.deleteSession(ctx, params.SessionID); err != nil {
-			return nil, nil, err
-		}
-		return nil, nil, nil
-	default:
-		return nil, nil, fmt.Errorf("method %q is not supported", request.Method)
-	}
-}
-
-func (s *Server) lookupSession(sessionID string) (*Session, bool) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	sess, ok := s.sessions[sessionID]
-	return sess, ok
-}
-
-func (s *Server) loadOrCreateSession(ctx context.Context, sessionID string, cwd string, mcpServers []MCPServerConfig) (*Session, error) {
-	s.mu.Lock()
-	existing, ok := s.sessions[sessionID]
-	s.mu.Unlock()
-	if ok {
-		if err := existing.matchMCPServers(mcpServers); err != nil {
-			return nil, err
-		}
-		return existing, nil
-	}
-	sess, err := s.newSession(ctx, sessionID, cwd, mcpServers)
-	if err != nil {
-		return nil, err
-	}
-	if s.sessionService != nil {
-		state, found, err := s.sessionService.Load(ctx, sessionID)
-		if err != nil {
-			return nil, fmt.Errorf("load session state %q: %w", sessionID, err)
-		}
-		if found {
-			if cwd != "" && state.WorkspaceKey != "" && state.WorkspaceKey != session.WorkspaceKey(cwd) {
-				return nil, fmt.Errorf("session %q belongs to another workspace", sessionID)
-			}
-			if state.WorkspaceKey != "" {
-				sess.workspaceKey = state.WorkspaceKey
-			}
-			if state.WorkspaceName != "" {
-				sess.workspaceName = state.WorkspaceName
-			}
-			sess.stateRevision = state.Revision
-			sess.SetMessages(session.ToModelMessages(state.Messages))
-			mode, err := permission.ParseMode(state.PermissionMode)
-			if err != nil {
-				return nil, fmt.Errorf("session permission mode %q: %w", sessionID, err)
-			}
-			if err := sess.service.SetMode(mode); err != nil {
-				return nil, fmt.Errorf("restore session mode %q: %w", sessionID, err)
-			}
-			if strings.TrimSpace(state.ReasoningEffort) != "" {
-				effort, parseErr := sdk.ParseReasoningEffort(state.ReasoningEffort)
-				if parseErr != nil {
-					return nil, fmt.Errorf("restore session reasoning %q: %w", sessionID, parseErr)
-				}
-				if err := sess.SetReasoningEffort(effort); err != nil {
-					return nil, fmt.Errorf("restore session reasoning %q: %w", sessionID, err)
-				}
-			}
-			if err := restoreSessionRuntime(ctx, s, sess, state); err != nil {
-				return nil, fmt.Errorf("restore session runtime %q: %w", sessionID, err)
-			}
-		}
-	}
-	s.mu.Lock()
-	s.sessions[sessionID] = sess
-	s.mu.Unlock()
-	return sess, nil
-}
-
-func (s *Server) newSession(ctx context.Context, sessionID string, cwd string, mcpServers []MCPServerConfig) (*Session, error) {
-	registry := s.registry
-	var mcpResource io.Closer
-	if s.sessionRegistryFactory != nil {
-		created, err := s.sessionRegistryFactory(sessionID, cwd)
-		if err != nil {
-			return nil, fmt.Errorf("create registry for session %q: %w", sessionID, err)
-		}
-		registry = created
-	}
-	if len(mcpServers) > 0 {
-		if s.mcpRegistryConfigurer == nil {
-			return nil, fmt.Errorf("configure MCP servers for session %q: MCP server configuration is not available", sessionID)
-		}
-		resource, err := s.mcpRegistryConfigurer(ctx, cwd, registry, cloneMCPServerConfigs(mcpServers))
-		if err != nil {
-			return nil, fmt.Errorf("configure MCP servers for session %q: %w", sessionID, err)
-		}
-		mcpResource = resource
-	}
-	service, err := s.service.CloneWithRegistry(registry)
-	if err != nil {
-		if mcpResource != nil {
-			_ = mcpResource.Close()
-		}
-		return nil, fmt.Errorf("%w: clone session tool-call service: %v", ErrInvalidServer, err)
-	}
-	var runner app.Conversation
-	if s.runnerFactory != nil {
-		created, err := s.runnerFactory(service)
-		if err != nil {
-			if mcpResource != nil {
-				_ = mcpResource.Close()
-			}
-			return nil, fmt.Errorf("create runner for session %q: %w", sessionID, err)
-		}
-		runner = created
-	}
-	sess := NewSession(sessionID, cwd, service, registry, runner, s.sessionService, s.agents.ForSession(sessionID))
-	bindSessionRuntime(s, sess)
-	sess.mcpServers = cloneMCPServerConfigs(mcpServers)
-	sess.resource = mcpResource
-	return sess, nil
-}
-
-func (s *Server) listSessions(ctx context.Context, cwd string) ([]SessionInfo, error) {
-	s.mu.Lock()
-	seen := make(map[string]bool)
-	list := make([]SessionInfo, 0, len(s.sessions))
-	for id, sess := range s.sessions {
-		if cwd != "" && sess.cwd != "" && sess.cwd != cwd {
-			continue
-		}
-		seen[id] = true
-		preview := session.Preview(session.FromModelMessages(sess.Messages()))
-		list = append(list, SessionInfo{
-			SessionID:     id,
-			Cwd:           sess.cwd,
-			Title:         sessionListTitle(id, sess.workspaceName, preview),
-			WorkspaceKey:  sess.workspaceKey,
-			WorkspaceName: sess.workspaceName,
-		})
-	}
-	s.mu.Unlock()
-	if s.sessionService != nil {
-		options := app.SessionListOptions{}
-		if cwd != "" {
-			options.WorkspaceKey = session.WorkspaceKey(cwd)
-		}
-		summaries, err := s.sessionService.ListSummaries(ctx, options)
-		if err != nil {
-			return nil, fmt.Errorf("list session state: %w", err)
-		}
-		for _, summary := range summaries {
-			if seen[summary.ID] {
-				continue
-			}
-			list = append(list, SessionInfo{
-				SessionID:     summary.ID,
-				Cwd:           cwd,
-				Title:         sessionListTitle(summary.ID, summary.WorkspaceName, summary.Preview),
-				WorkspaceKey:  summary.WorkspaceKey,
-				WorkspaceName: summary.WorkspaceName,
-				UpdatedAt:     summary.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
-			})
-		}
-	}
-	return list, nil
-}
-
-func sessionListTitle(id, workspaceName, preview string) string {
-	if preview = strings.TrimSpace(preview); preview != "" {
-		return preview
-	}
-	if workspaceName = strings.TrimSpace(workspaceName); workspaceName != "" {
-		return workspaceName
-	}
-	return "Session " + id
-}
-
-func (s *Server) deleteSession(ctx context.Context, sessionID string) error {
-	s.mu.Lock()
-	sess := s.sessions[sessionID]
-	s.mu.Unlock()
-	if sess != nil {
-		sess.Cancel()
-	}
-	if _, err := s.agents.ForSession(sessionID).CancelSessionAndWait(ctx); err != nil {
-		return fmt.Errorf("cancel session subagents %q: %w", sessionID, err)
-	}
-	if s.sessionService != nil {
-		if err := s.sessionService.Delete(ctx, sessionID); err != nil {
-			return fmt.Errorf("delete session state %q: %w", sessionID, err)
-		}
-	}
-	s.mu.Lock()
-	sess = s.sessions[sessionID]
-	delete(s.sessions, sessionID)
-	s.mu.Unlock()
-	if sess != nil {
-		if err := sess.Close(); err != nil {
-			return fmt.Errorf("close session %q: %w", sessionID, err)
-		}
-	}
-	return nil
-}
-
-func (s *Server) closeSessions() {
-	s.mu.Lock()
-	sessions := make([]*Session, 0, len(s.sessions))
-	for _, sess := range s.sessions {
-		sessions = append(sessions, sess)
-	}
-	s.mu.Unlock()
-	for _, sess := range sessions {
-		_ = sess.Close()
-	}
 }

@@ -39,6 +39,7 @@ type Workspace struct {
 	mu            sync.RWMutex
 	root          string
 	rawRoot       string
+	roots         []string
 	protected     []protectedPath
 	readRoots     []string
 	internalRoots []string
@@ -77,6 +78,7 @@ func New(root string, protectedPaths []string) (*Workspace, error) {
 	return &Workspace{
 		root:          filepath.Clean(resolvedRoot),
 		rawRoot:       filepath.Clean(absoluteRoot),
+		roots:         make([]string, 0),
 		protected:     compiledProtected,
 		readRoots:     make([]string, 0),
 		internalRoots: make([]string, 0),
@@ -178,7 +180,11 @@ func (w *Workspace) IsInternalPath(path string) (bool, error) {
 }
 
 func (w *Workspace) isWithinPrimary(path string) bool {
-	return isWithin(w.root, path) || (w.rawRoot != "" && isWithin(w.rawRoot, path))
+	if isWithin(w.root, path) || (w.rawRoot != "" && isWithin(w.rawRoot, path)) {
+		return true
+	}
+	_, ok := w.additionalRootFor(path)
+	return ok
 }
 
 // Resolve converts a model-provided path to a checked absolute path.
@@ -351,6 +357,9 @@ func (w *Workspace) RelRead(path string) (string, error) {
 	}
 	if w.rawRoot != "" && isWithin(w.rawRoot, clean) {
 		return filepath.Rel(w.rawRoot, clean)
+	}
+	if root, ok := w.additionalRootFor(clean); ok {
+		return filepath.Rel(root, clean)
 	}
 	w.mu.RLock()
 	defer w.mu.RUnlock()
