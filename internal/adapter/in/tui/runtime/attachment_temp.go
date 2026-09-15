@@ -20,16 +20,6 @@ func (m *bubbleModel) discardPrompt() {
 	m.resetPrompt()
 }
 
-func (m *bubbleModel) clearQueuedInputs() {
-	if m == nil || m.conversation == nil {
-		return
-	}
-	for _, input := range m.conversation.QueuedInputs() {
-		cleanupQueuedInputAttachments(input)
-	}
-	m.conversation.ClearQueue()
-}
-
 func (m *bubbleModel) cleanupPendingImageInput() {
 	if m == nil || m.pendingImageInput == nil {
 		return
