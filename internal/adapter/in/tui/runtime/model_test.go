@@ -651,6 +651,39 @@ func TestSubmitWhileBusyQueuesDraft(t *testing.T) {
 	}
 }
 
+func TestBlockedSlashPreservesDraftAndDoesNotRecordHistory(t *testing.T) {
+	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	model.resize(80, 24)
+	model.busy = true
+	model.panes.bottom.prompt().SetValue("/model replacement")
+
+	if command := model.submit(); command != nil {
+		t.Fatalf("blocked slash command = %v, want nil", command)
+	}
+	if got := model.panes.bottom.prompt().Value(); got != "/model replacement" {
+		t.Fatalf("blocked slash draft = %q, want preserved draft", got)
+	}
+	if got := len(model.panes.bottom.composer.history); got != 0 {
+		t.Fatalf("blocked slash history entries = %d, want 0", got)
+	}
+}
+
+func TestComposerClickRestoresFocus(t *testing.T) {
+	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	model.resize(80, 24)
+	model.panes.bottom.prompt().Blur()
+	top, _, ok := model.composerMouseRegion()
+	if !ok {
+		t.Fatal("composer region is unavailable")
+	}
+
+	updated, _ := model.Update(tea.MouseClickMsg{X: 2, Y: top, Button: tea.MouseLeft})
+	model = updated.(*bubbleModel)
+	if !model.panes.bottom.prompt().Focused() {
+		t.Fatal("composer click did not restore focus")
+	}
+}
+
 func TestAppendTurnResultCoalescesAssistantText(t *testing.T) {
 	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	model.appendTurnResult([]applicationturn.Event{{Kind: applicationturn.EventTextDelta, Text: "hello"}, {Kind: applicationturn.EventTextDelta, Text: " world"}}, applicationturn.Result{Message: domainmodel.Message{Content: "hello world"}}, nil)

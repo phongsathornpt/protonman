@@ -2,11 +2,13 @@ package runtime
 
 import (
 	"os"
+	"strings"
 
 	"charm.land/bubbles/v2/cursor"
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/spinner"
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/clipboardimage"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/transientnotice"
 	turnmsg "github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/turn"
@@ -184,10 +186,54 @@ func (m *bubbleModel) updateMouseEvent(message tea.MouseMsg) tea.Cmd {
 			}
 		}
 	}
+	_, clicked := message.(tea.MouseClickMsg)
+	if clicked && mouse.Button == tea.MouseLeft && m.panes.bottom.composerVisible() {
+		if top, bottom, ok := m.composerMouseRegion(); ok && mouse.Y >= top && mouse.Y < bottom {
+			if prompt := m.panes.bottom.prompt(); prompt != nil {
+				_ = prompt.Focus()
+				return nil
+			}
+		}
+	}
 	if mouse.Y < 0 || mouse.Y >= m.viewport.Height() {
 		return nil
 	}
 	return m.updateConversationViewport(message)
+}
+
+func (m *bubbleModel) composerMouseRegion() (int, int, bool) {
+	if m == nil || m.layout.frame.composer == "" {
+		return 0, 0, false
+	}
+	composerHeight := lipgloss.Height(m.layout.frame.composer)
+	parts := make([]string, 0, 6)
+	parts = appendNonEmptyFramePart(parts, m.layout.frame.header)
+	parts = appendNonEmptyFramePart(parts, strings.Repeat(" ", m.viewport.Height()))
+	parts = appendNonEmptyFramePart(parts, m.layout.frame.divider)
+	parts = appendNonEmptyFramePart(parts, m.layout.frame.status)
+	if top := m.panes.bottom.top(); top == nil || top.PresentationMode() != paneBelowComposer {
+		parts = appendNonEmptyFramePart(parts, m.layout.frame.top)
+	}
+	top := framePartsHeight(parts)
+	return top, top + composerHeight, composerHeight > 0
+}
+
+func appendNonEmptyFramePart(parts []string, part string) []string {
+	if part == "" {
+		return parts
+	}
+	return append(parts, part)
+}
+
+func framePartsHeight(parts []string) int {
+	height := 0
+	for _, part := range parts {
+		if height > 0 {
+			height++
+		}
+		height += lipgloss.Height(part)
+	}
+	return height
 }
 
 func (m *bubbleModel) updateAnimationEvent(msg tea.Msg) (tea.Cmd, bool) {

@@ -62,6 +62,16 @@ func TestRuntimeBusyLayoutFitsCanonicalTerminalSizes(t *testing.T) {
 	}
 }
 
+func TestRuntimeTinyLayoutFitsWithMultilineComposer(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.resize(24, 8)
+	m.panes.bottom.prompt().SetValue("one\ntwo\nthree\nfour")
+	m.requestRelayout()
+	m.reconcileLayout()
+
+	assertRenderedFrameFits(t, m.View().Content, 24, 8)
+}
+
 func TestRuntimeBottomViewHeaderVisibilityBoundary(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	m.activeModel = "qwen3.8-27b"
