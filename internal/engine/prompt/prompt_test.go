@@ -168,10 +168,17 @@ func TestRenderToolDisciplineDoesNotBanLanguageRuntimes(t *testing.T) {
 			t.Fatalf("tool discipline missing positive guidance %q:\n%s", want, got)
 		}
 	}
-	for _, unavailable := range []string{"grep for content searches", "find for path discovery", "ls for directory entries", "edit for exact workspace changes"} {
+	for _, unavailable := range []string{"grep with pattern for content searches", "find for path discovery", "ls for directory entries", "edit for exact workspace changes"} {
 		if strings.Contains(got, unavailable) {
 			t.Fatalf("tool discipline advertised unavailable capability %q:\n%s", unavailable, got)
 		}
+	}
+}
+
+func TestRenderToolDisciplineNamesGrepPattern(t *testing.T) {
+	got := Render(Spec{AvailableTools: []string{"grep"}})
+	if !strings.Contains(got, "grep with pattern for content searches") {
+		t.Fatalf("tool discipline missing canonical grep argument guidance:\n%s", got)
 	}
 }
 

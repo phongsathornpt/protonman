@@ -146,7 +146,7 @@ func toolDisciplineSection(spec Spec) string {
 		routes = append(routes, "read for known file contents")
 	}
 	if has(tool.NameGrep) {
-		routes = append(routes, "grep for content searches")
+		routes = append(routes, "grep with pattern for content searches")
 	}
 	if has(tool.NameFind) {
 		routes = append(routes, "find for path discovery")

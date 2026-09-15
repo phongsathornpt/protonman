@@ -13,6 +13,15 @@ import (
 	"github.com/phongsathornpt/protonman/internal/core/workspace"
 )
 
+func TestGrepDefinitionAcceptsQueryAsCanonicalPatternAlias(t *testing.T) {
+	definition := NewGrep(nil).Definition()
+	arguments := tool.NormalizeArguments(definition, json.RawMessage(`{"query":"ThinkingMode"}`))
+
+	if got, want := string(arguments), `{"pattern":"ThinkingMode"}`; got != want {
+		t.Fatalf("normalized grep arguments = %s, want %s", got, want)
+	}
+}
+
 func TestGrepTool(t *testing.T) {
 	ctx := context.Background()
 	wsDir := t.TempDir()

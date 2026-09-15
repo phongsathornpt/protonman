@@ -85,6 +85,7 @@ func (grepHandler) Definition() tool.Definition {
 		Description:         "Search workspace file contents with a regular expression and return bounded match evidence.",
 		Kind:                tool.KindForName(tool.NameGrep),
 		Mutability:          tool.MutabilityReadOnly,
+		InputAliases:        map[string][]string{"pattern": {"query"}},
 		Safety:              tool.SafetyContract{MutationDomain: tool.MutationDomainNone, MutationSafety: tool.MutationSafetyNone, CheckpointPolicy: tool.CheckpointPolicyNone, Boundary: tool.BoundaryPolicyWorkspaceRead},
 		Evidence:            tool.EvidenceWorkspace,
 		PermissionDetailKey: "path",
