@@ -37,10 +37,10 @@ type MCPCapabilities struct {
 
 // InitializeResult is returned by ACP initialize.
 type InitializeResult struct {
-	ProtocolVersion   int               `json:"protocolVersion"`
-	AgentCapabilities AgentCapabilities `json:"agentCapabilities"`
+	ProtocolVersion   int                `json:"protocolVersion"`
+	AgentCapabilities AgentCapabilities  `json:"agentCapabilities"`
 	AgentInfo         ImplementationInfo `json:"agentInfo"`
-	AuthMethods       []any             `json:"authMethods"`
+	AuthMethods       []any              `json:"authMethods"`
 }
 
 // SessionConfigOption is one ACP session configuration control advertised by
@@ -59,6 +59,16 @@ type SessionConfigOption struct {
 type SessionConfigSelectOption struct {
 	Value string `json:"value"`
 	Name  string `json:"name"`
+}
+
+type AvailableCommand struct {
+	Name        string                 `json:"name"`
+	Description string                 `json:"description"`
+	Input       *AvailableCommandInput `json:"input,omitempty"`
+}
+
+type AvailableCommandInput struct {
+	Hint string `json:"hint"`
 }
 
 type SessionNewResult struct {
