@@ -138,9 +138,14 @@ func (a *application) resumeKnownSessions(ctx context.Context, client *acpclient
 		if len(mcpServers) > 0 {
 			params["mcpServers"] = mcpServers
 		}
-		if err := callReconnectRPC(ctx, client, "session/resume", params, nil); err != nil && ctx.Err() == nil {
-			a.setStatus("Session resume failed · " + err.Error())
+		var result acpclient.SessionResumeResult
+		if err := callReconnectRPC(ctx, client, "session/resume", params, &result); err != nil {
+			if ctx.Err() == nil {
+				a.setStatus("Session resume failed · " + err.Error())
+			}
+			continue
 		}
+		a.applySessionConfigOptions(session.ID, result.ConfigOptions)
 	}
 }
 
