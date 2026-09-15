@@ -24,9 +24,8 @@ const (
 	OriginalMaxDimension  = 6000
 	OriginalMaxPatches    = 10000
 	DefaultMaxOutputBytes = 10 * 1024 * 1024
-	// MaxSourcePixels bounds full image decode allocations. Images that already
-	// fit a model policy and can be forwarded unchanged use DecodeConfig only;
-	// images requiring transformation must remain below this hard decode cap.
+	// MaxSourcePixels bounds full image decode allocations. Metadata is checked
+	// against this limit before image.Decode can allocate a pixel buffer.
 	MaxSourcePixels = 12 * 1024 * 1024
 	// MaxSourceDimension also rejects pathological skinny images before decode.
 	MaxSourceDimension = 16384
@@ -203,12 +202,24 @@ func Prepare(mimeType, data string, policy Policy) (Prepared, error) {
 	if err := validateSourceDimensions(config.Width, config.Height); err != nil {
 		return Prepared{}, err
 	}
-	sourceWidth, sourceHeight := config.Width, config.Height
+
+	// Full decode validates the complete image, but the config check above runs
+	// first so malformed compressed input cannot request an unbounded allocation.
+	img, decodedFormat, err := image.Decode(bytes.NewReader(raw))
+	if err != nil {
+		return Prepared{}, fmt.Errorf("decode image: %w", err)
+	}
+	if decodedFormat != "" {
+		format = decodedFormat
+	}
+	bounds := img.Bounds()
+	sourceWidth, sourceHeight := bounds.Dx(), bounds.Dy()
+	if err := validateSourceDimensions(sourceWidth, sourceHeight); err != nil {
+		return Prepared{}, err
+	}
 	targetWidth, targetHeight := OutputDimensions(sourceWidth, sourceHeight, policy)
 
-	// The common screenshot path does not need a full pixel decode at all. When
-	// provider policy accepts the source dimensions and transport format, pass
-	// the source bytes through unchanged after metadata validation.
+	// Preserve source encoding and pixels when only validation was needed.
 	if targetWidth == sourceWidth && targetHeight == sourceHeight &&
 		canPreserveSource(format) && len(raw) <= policy.MaxOutputBytes {
 		prepared := Prepared{
@@ -222,22 +233,6 @@ func Prepare(mimeType, data string, policy Policy) (Prepared, error) {
 		promptImageCache.put(key, prepared)
 		return prepared, nil
 	}
-
-	// Full decoding is reserved for transformations and format normalization.
-	// Config validation above bounds the allocation before image.Decode runs.
-	img, decodedFormat, err := image.Decode(bytes.NewReader(raw))
-	if err != nil {
-		return Prepared{}, fmt.Errorf("decode image: %w", err)
-	}
-	if decodedFormat != "" {
-		format = decodedFormat
-	}
-	bounds := img.Bounds()
-	sourceWidth, sourceHeight = bounds.Dx(), bounds.Dy()
-	if err := validateSourceDimensions(sourceWidth, sourceHeight); err != nil {
-		return Prepared{}, err
-	}
-	targetWidth, targetHeight = OutputDimensions(sourceWidth, sourceHeight, policy)
 
 	working := img
 	if targetWidth != sourceWidth || targetHeight != sourceHeight {
