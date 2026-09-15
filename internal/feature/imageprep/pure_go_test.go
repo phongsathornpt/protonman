@@ -39,8 +39,8 @@ func TestImagePipelineImplementationRemainsPureGo(t *testing.T) {
 	for _, relativePath := range []string{
 		"internal/adapter/out/tool/builtin/readfile/image.go",
 		"internal/adapter/out/tool/builtin/readfile/vision.go",
-		"internal/adapter/in/tui/runtime/clipboard_image.go",
-		"internal/adapter/in/tui/runtime/image_submission.go",
+		"internal/adapter/in/tui/runtime/clipboardimage/clipboard.go",
+		"internal/adapter/in/tui/runtime/turn_runtime.go",
 	} {
 		assertPureGoImageFile(t, filepath.Join(repoRoot, filepath.FromSlash(relativePath)))
 	}
