@@ -78,6 +78,9 @@ func (m *bubbleModel) updateImageSubmissionPrepared(message imageSubmissionPrepa
 		m.requestRelayout()
 		return nil
 	}
+	if history := submissionHistoryText(message.input); history != "" {
+		m.panes.bottom.recordHistory(history)
+	}
 	m.appendUser(submissionDisplayText(message.input))
 	return m.startTurnMessage(message.message)
 }
