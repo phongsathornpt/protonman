@@ -73,3 +73,31 @@ type SessionResumeResult struct {
 type SessionSetConfigOptionResult struct {
 	ConfigOptions []SessionConfigOption `json:"configOptions,omitempty"`
 }
+
+// ContentBlock is the stable ACP v1 prompt content shape used by Desktop.
+// Images carry base64 data; text resources are embedded when the peer advertises
+// embeddedContext support.
+type ContentBlock struct {
+	Type     string                `json:"type"`
+	Text     string                `json:"text,omitempty"`
+	MIMEType string                `json:"mimeType,omitempty"`
+	Data     string                `json:"data,omitempty"`
+	URI      string                `json:"uri,omitempty"`
+	Name     string                `json:"name,omitempty"`
+	Resource *EmbeddedTextResource `json:"resource,omitempty"`
+}
+
+type EmbeddedTextResource struct {
+	URI      string `json:"uri"`
+	MIMEType string `json:"mimeType,omitempty"`
+	Text     string `json:"text,omitempty"`
+}
+
+type SessionPromptParams struct {
+	SessionID string         `json:"sessionId"`
+	Prompt    []ContentBlock `json:"prompt"`
+}
+
+type SessionPromptResult struct {
+	StopReason string `json:"stopReason"`
+}
