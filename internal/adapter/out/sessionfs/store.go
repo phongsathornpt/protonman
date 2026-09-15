@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sort"
@@ -153,6 +154,14 @@ func (s *FileStore) saveLocked(ctx context.Context, sessionID string, state Stat
 	}
 	if err := os.Rename(temporaryPath, resources.State); err != nil {
 		return fmt.Errorf("install session state: %w", err)
+	}
+	// State installation is the commit point. Sidecar cleanup happens only
+	// afterwards so a crash can leak an orphan but can never leave state.json
+	// referencing a blob that was deleted before commit. Cleanup failure is
+	// therefore non-fatal; reporting Save as failed after commit would make a
+	// retry race the already-advanced session revision.
+	if err := pruneAttachmentBlobs(resources, prepared); err != nil {
+		slog.WarnContext(ctx, "session attachment cleanup failed", "session_id", sessionID, "error", err)
 	}
 	return nil
 }
