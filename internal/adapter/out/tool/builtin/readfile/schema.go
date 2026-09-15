@@ -23,7 +23,7 @@ type readFileInput struct {
 func (readFileHandler) Definition() tool.Definition {
 	return tool.Definition{
 		Name:                tool.NameRead,
-		Description:         "Read a known workspace artifact. Text supports byte pagination or line selection; line selectors take precedence if both modes are supplied. Image, structured, and metadata views provide bounded inspection.",
+		Description:         "Read a known workspace artifact. Text supports byte pagination or line selection; line selectors take precedence if both modes are supplied. Image, structured, and metadata views provide bounded inspection. Images already attached to the current user message are directly visible to vision-capable models and should not be re-read merely for visual inspection.",
 		Kind:                tool.KindForName("read"),
 		Mutability:          tool.MutabilityReadOnly,
 		Safety:              tool.SafetyContract{MutationDomain: tool.MutationDomainNone, MutationSafety: tool.MutationSafetyNone, CheckpointPolicy: tool.CheckpointPolicyNone, Boundary: tool.BoundaryPolicyWorkspaceRead},
@@ -40,7 +40,7 @@ func (readFileHandler) Definition() tool.Definition {
 					"type":        "string",
 					"enum":        []string{"auto", "text", "image", "structured", "metadata"},
 					"default":     "auto",
-					"description": "Inspection mode; auto is the default, text reads UTF-8 content, image analyzes supported images, structured analyzes JSON/JSONL/CSV/TSV, metadata reports artifact type and size",
+					"description": "Inspection mode; auto is the default, text reads UTF-8 content, image analyzes a supported workspace image that is not already supplied as a current-message attachment, structured analyzes JSON/JSONL/CSV/TSV, metadata reports artifact type and size",
 				},
 
 				"offset": map[string]any{
