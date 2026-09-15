@@ -215,13 +215,10 @@ func (m *bubbleModel) dispatchInput(input tuiconv.QueuedInput) tea.Cmd {
 		m.restoreSubmissionToComposer(input)
 		return nil
 	}
-	m.appendUser(display)
 	if len(input.Attachments) > 0 {
-		m.imagePreparing = true
-		m.activity = "preparing image"
-		m.requestRelayout()
-		return prepareImageSubmission(input)
+		return m.beginImagePreparation(input)
 	}
+	m.appendUser(display)
 	return m.startTurn(input.Text)
 }
 
