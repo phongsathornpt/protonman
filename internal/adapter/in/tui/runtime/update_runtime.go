@@ -1,13 +1,87 @@
 package runtime
 
 import (
+	"os"
+
 	"charm.land/bubbles/v2/cursor"
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/spinner"
 	tea "charm.land/bubbletea/v2"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/clipboardimage"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/transientnotice"
 	turnmsg "github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/turn"
 )
+
+type clipboardImageLoadedMsg struct {
+	draftText        string
+	draftAttachments int
+	path             string
+	width            int
+	height           int
+	err              error
+}
+
+func writeClipboardTempPNG(raw []byte) (string, error) {
+	return clipboardimage.WriteTempPNG(raw)
+}
+
+func loadClipboardImage(draftText string, draftAttachments int) tea.Cmd {
+	return func() tea.Msg {
+		loaded := clipboardimage.Load()
+		return clipboardImageLoadedMsg{
+			draftText:        draftText,
+			draftAttachments: draftAttachments,
+			path:             loaded.Path,
+			width:            loaded.Width,
+			height:           loaded.Height,
+			err:              loaded.Err,
+		}
+	}
+}
+
+func (m *bubbleModel) beginClipboardImagePaste() tea.Cmd {
+	if m == nil || m.panes.bottom == nil || !m.panes.bottom.composerVisible() || m.panes.bottom.prompt() == nil {
+		return nil
+	}
+	if !m.currentModelAcceptsImageInput() {
+		m.appendError(m.imageInputsNotSupportedMessage())
+		m.requestRelayout()
+		return nil
+	}
+	prompt := m.panes.bottom.prompt()
+	return loadClipboardImage(prompt.Value(), len(m.panes.bottom.composer.attachments.localImages))
+}
+
+func (m *bubbleModel) updateClipboardImageLoaded(message clipboardImageLoadedMsg) tea.Cmd {
+	if m == nil || m.panes.bottom == nil || !m.panes.bottom.composerVisible() || m.panes.bottom.prompt() == nil {
+		if message.path != "" {
+			_ = os.Remove(message.path)
+		}
+		return nil
+	}
+	prompt := m.panes.bottom.prompt()
+	if prompt.Value() != message.draftText || len(m.panes.bottom.composer.attachments.localImages) != message.draftAttachments {
+		if message.path != "" {
+			_ = os.Remove(message.path)
+		}
+		return nil
+	}
+	if message.err != nil {
+		m.appendError(message.err.Error())
+		m.requestRelayout()
+		return nil
+	}
+	if !m.currentModelAcceptsImageInput() {
+		_ = os.Remove(message.path)
+		m.appendError(m.imageInputsNotSupportedMessage())
+		m.requestRelayout()
+		return nil
+	}
+	m.panes.bottom.composer.attachments.attachTemporaryImage(prompt, message.path)
+	m.syncSlashView()
+	m.requestRelayout()
+	return nil
+}
 
 func (m *bubbleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	defer m.reconcileLayout()
