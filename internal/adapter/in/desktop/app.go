@@ -29,8 +29,9 @@ type sessionItem struct {
 type application struct {
 	ctx context.Context
 
-	client     *acpclient.Client
-	desktopApp fyne.App
+	client            *acpclient.Client
+	agentCapabilities acpclient.AgentCapabilities
+	desktopApp        fyne.App
 
 	mu                    sync.Mutex
 	state                 desktopstate.State
@@ -241,6 +242,7 @@ func (a *application) sendPrompt() {
 			break
 		}
 	}
+	resumeSupported := a.agentCapabilities.SessionCapabilities.Resume != nil
 	if workspace == "" {
 		a.mu.Unlock()
 		a.setStatus("Cannot run session · workspace path is unavailable; open the workspace again instead of falling back to the Desktop process directory")
@@ -254,14 +256,17 @@ func (a *application) sendPrompt() {
 	fyne.Do(func() { a.list.Refresh() })
 
 	go func() {
-		resumeParams := map[string]any{"sessionId": sessionID, "cwd": workspace}
-		if servers := a.mcpServersPayload(); len(servers) > 0 {
-			resumeParams["mcpServers"] = servers
-		}
-		var resumeResult acpclient.SessionResumeResult
-		err := client.Call(a.ctx, "session/resume", resumeParams, &resumeResult)
-		if err == nil {
-			a.applySessionConfigOptions(sessionID, resumeResult.ConfigOptions)
+		var err error
+		if resumeSupported {
+			resumeParams := map[string]any{"sessionId": sessionID, "cwd": workspace}
+			if servers := a.mcpServersPayload(); len(servers) > 0 {
+				resumeParams["mcpServers"] = servers
+			}
+			var resumeResult acpclient.SessionResumeResult
+			err = client.Call(a.ctx, "session/resume", resumeParams, &resumeResult)
+			if err == nil && a.clientIsCurrent(client) {
+				a.applySessionConfigOptions(sessionID, resumeResult.ConfigOptions)
+			}
 		}
 		var result struct {
 			StopReason string `json:"stopReason"`
