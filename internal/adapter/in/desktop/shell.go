@@ -38,6 +38,9 @@ func (a *application) initDesktopControls() {
 	a.stop = widget.NewButtonWithIcon("", theme.MediaStopIcon(), a.cancelPrompt)
 	a.send.Disable()
 	a.stop.Disable()
+	a.attachmentStrip = container.NewHBox()
+	a.attachButton = widget.NewButton("Attach", a.openAttachmentPicker)
+	a.attachButton.Disable()
 
 	a.initPermissionControls()
 	a.initRuntimeControls()
@@ -269,8 +272,8 @@ func (a *application) buildConversationSurface() fyne.CanvasObject {
 	conversationWithDrawer := container.New(responsiveDrawerLayout{}, scroll, a.contextDrawer)
 	conversationBody := container.NewBorder(a.permissionPanel, nil, nil, nil, conversationWithDrawer)
 
-	composer := container.NewBorder(nil, nil, nil, a.send, a.composer)
-	footer := container.NewVBox(composer, a.status)
+	composer := container.NewBorder(nil, nil, a.attachButton, a.send, a.composer)
+	footer := container.NewVBox(attachmentContainer(a.attachmentStrip), composer, a.status)
 
 	return container.NewBorder(
 		container.NewVBox(header, a.runtimePanel, a.integrationPanel, widget.NewSeparator()),
