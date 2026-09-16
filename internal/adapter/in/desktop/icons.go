@@ -17,6 +17,7 @@ type icon string
 const (
 	iconRocket     icon = "◆"
 	iconFolder     icon = "▸"
+	iconCollapsed  icon = "▹"
 	iconSession    icon = "●"
 	iconReady      icon = "○"
 	iconQueued     icon = "◌"
@@ -50,6 +51,34 @@ func setIconText(row *fyne.Container, icon icon, text string) {
 	glyph.Text = string(icon)
 	canvas.Refresh(glyph)
 	label.SetText(text)
+}
+
+func titleLabel(row *fyne.Container) *widget.Label {
+	if row == nil || len(row.Objects) < 2 {
+		return nil
+	}
+	label, _ := row.Objects[1].(*widget.Label)
+	return label
+}
+
+func setImportance(row *fyne.Container, importance widget.Importance) {
+	if label := titleLabel(row); label != nil {
+		label.Importance = importance
+		label.Refresh()
+	}
+}
+
+func statusImportance(status desktopstate.TaskStatus) widget.Importance {
+	switch status {
+	case desktopstate.TaskFailed:
+		return widget.DangerImportance
+	case desktopstate.TaskWaitingPermission, desktopstate.TaskWaitingUser, desktopstate.TaskPaused:
+		return widget.WarningImportance
+	case desktopstate.TaskCompleted:
+		return widget.SuccessImportance
+	default:
+		return widget.MediumImportance
+	}
 }
 
 func taskStatusIcon(status desktopstate.TaskStatus) icon {

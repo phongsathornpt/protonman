@@ -25,7 +25,7 @@ type sidebarRow struct {
 }
 
 func (a *application) rebuildSidebarRowsLocked() {
-	a.sidebarRows = buildSidebarRows(filterSessions(a.state.Sessions, a.sidebarQuery))
+	a.sidebarRows = buildSidebarRowsWithCollapsed(filterSessions(a.state.Sessions, a.sidebarQuery), a.collapsedWorkspaces)
 }
 
 func filterSessions(sessions []desktopstate.SessionState, query string) []desktopstate.SessionState {
@@ -51,6 +51,10 @@ func filterSessions(sessions []desktopstate.SessionState, query string) []deskto
 }
 
 func buildSidebarRows(sessions []desktopstate.SessionState) []sidebarRow {
+	return buildSidebarRowsWithCollapsed(sessions, nil)
+}
+
+func buildSidebarRowsWithCollapsed(sessions []desktopstate.SessionState, collapsed map[string]bool) []sidebarRow {
 	sorted := append([]desktopstate.SessionState(nil), sessions...)
 	sort.SliceStable(sorted, func(i, j int) bool {
 		leftWorkspace := strings.ToLower(strings.TrimSpace(sorted[i].WorkspaceName))
@@ -70,6 +74,9 @@ func buildSidebarRows(sessions []desktopstate.SessionState) []sidebarRow {
 			WorkspaceName: group.Name,
 			SessionCount:  len(group.Sessions),
 		})
+		if collapsed[group.Key] {
+			continue
+		}
 		for _, session := range group.Sessions {
 			rows = append(rows, sidebarRow{
 				Kind:          sidebarSessionRow,

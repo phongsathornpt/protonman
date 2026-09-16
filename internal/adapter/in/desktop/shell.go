@@ -142,6 +142,8 @@ func (a *application) bindSessionRow(id widget.ListItemID, object fyne.CanvasObj
 		return
 	}
 	row := a.sidebarRows[id]
+	collapsed := false
+	activeSessionID := a.state.ActiveSessionID
 	var session desktopstate.SessionState
 	if row.Kind == sidebarSessionRow {
 		for _, candidate := range a.state.Sessions {
@@ -150,6 +152,8 @@ func (a *application) bindSessionRow(id widget.ListItemID, object fyne.CanvasObj
 				break
 			}
 		}
+	} else {
+		collapsed = a.collapsedWorkspaces[row.WorkspaceKey]
 	}
 	a.mu.Unlock()
 
@@ -157,8 +161,17 @@ func (a *application) bindSessionRow(id widget.ListItemID, object fyne.CanvasObj
 	title := box.Objects[0].(*fyne.Container)
 	subtitle := box.Objects[1].(*fyne.Container)
 	if row.Kind == sidebarWorkspaceRow {
-		setIconText(title, iconFolder, compactText(row.WorkspaceName, sidebarTitleMaxRunes))
+		workspaceIcon := iconFolder
+		if collapsed {
+			workspaceIcon = iconCollapsed
+		}
+		setIconText(title, workspaceIcon, compactText(row.WorkspaceName, sidebarTitleMaxRunes))
 		setIconText(subtitle, iconSession, fmt.Sprintf("%d sessions", row.SessionCount))
+		setImportance(subtitle, widget.LowImportance)
+		if label := titleLabel(title); label != nil {
+			label.TextStyle = fyne.TextStyle{Bold: true}
+			label.Refresh()
+		}
 		return
 	}
 
@@ -167,9 +180,18 @@ func (a *application) bindSessionRow(id widget.ListItemID, object fyne.CanvasObj
 		titleText = "Session " + shortID(session.ID)
 	}
 	setIconText(title, iconSession, compactText(titleText, sidebarTitleMaxRunes))
+	if label := titleLabel(title); label != nil {
+		if activeSessionID == session.ID {
+			label.TextStyle = fyne.TextStyle{Bold: true}
+		} else {
+			label.TextStyle = fyne.TextStyle{}
+		}
+		label.Refresh()
+	}
 
 	if session.Status != desktopstate.TaskIdle {
 		setIconText(subtitle, taskStatusIcon(session.Status), string(session.Status))
+		setImportance(subtitle, statusImportance(session.Status))
 		return
 	}
 	workspace := strings.TrimSpace(session.WorkspaceName)
@@ -177,6 +199,7 @@ func (a *application) bindSessionRow(id widget.ListItemID, object fyne.CanvasObj
 		workspace = "workspace"
 	}
 	setIconText(subtitle, iconFolder, compactText(workspace, sidebarMetaMaxRunes))
+	setImportance(subtitle, widget.LowImportance)
 }
 
 func (a *application) selectSessionRow(id widget.ListItemID) {
@@ -187,10 +210,16 @@ func (a *application) selectSessionRow(id widget.ListItemID) {
 	}
 	row := a.sidebarRows[id]
 	if row.Kind != sidebarSessionRow {
+		a.collapsedWorkspaces[row.WorkspaceKey] = !a.collapsedWorkspaces[row.WorkspaceKey]
+		a.rebuildSidebarRowsLocked()
 		activeIndex := sidebarRowIndexForSession(a.sidebarRows, a.state.ActiveSessionID)
 		a.mu.Unlock()
+		a.list.Refresh()
+		a.refreshSidebarEmptyState()
 		if activeIndex >= 0 {
-			fyne.Do(func() { a.list.Select(widget.ListItemID(activeIndex)) })
+			a.list.Select(widget.ListItemID(activeIndex))
+		} else {
+			a.list.UnselectAll()
 		}
 		return
 	}
@@ -209,6 +238,7 @@ func (a *application) applySidebarQuery(query string) {
 	a.mu.Unlock()
 
 	a.list.Refresh()
+	a.refreshSidebarEmptyState()
 	if activeIndex >= 0 {
 		a.list.Select(widget.ListItemID(activeIndex))
 		return
@@ -227,9 +257,9 @@ func (a *application) buildDesktopShell() fyne.CanvasObject {
 
 func (a *application) buildSidebar() fyne.CanvasObject {
 	a.sessionSearch = widget.NewEntry()
-	a.sessionSearch.SetPlaceHolder("Search sessions")
+	a.sessionSearch.SetPlaceHolder("Search sessions or workspaces")
 	a.sessionSearch.OnChanged = a.applySidebarQuery
-	newTask := widget.NewButtonWithIcon("", theme.ContentAddIcon(), func() {
+	newTask := widget.NewButtonWithIcon("New session", theme.ContentAddIcon(), func() {
 		if a.sessionSearch.Text != "" {
 			a.sessionSearch.SetText("")
 		}
@@ -243,13 +273,40 @@ func (a *application) buildSidebar() fyne.CanvasObject {
 		widget.NewSeparator(),
 		container.NewHBox(a.integrationButton, a.permissionInbox),
 	)
+	a.sidebarEmpty = widget.NewLabel("")
+	a.sidebarEmpty.Alignment = fyne.TextAlignCenter
+	a.sidebarEmpty.Wrapping = fyne.TextWrapWord
+	a.sidebarEmpty.Importance = widget.LowImportance
+	a.sidebarEmpty.Hide()
+	listContent := container.NewMax(a.list, a.sidebarEmpty)
+
 	return container.NewBorder(
 		container.NewVBox(sidebarHeader, a.sessionSearch),
 		secondary,
 		nil,
 		nil,
-		a.list,
+		listContent,
 	)
+}
+
+func (a *application) refreshSidebarEmptyState() {
+	if a.sidebarEmpty == nil {
+		return
+	}
+	a.mu.Lock()
+	empty := len(a.sidebarRows) == 0
+	query := a.sidebarQuery != ""
+	a.mu.Unlock()
+	if !empty {
+		a.sidebarEmpty.Hide()
+		return
+	}
+	if query {
+		a.sidebarEmpty.SetText("No matching sessions")
+	} else {
+		a.sidebarEmpty.SetText("No sessions yet\nStart a new session to begin")
+	}
+	a.sidebarEmpty.Show()
 }
 
 func (a *application) buildConversationSurface() fyne.CanvasObject {

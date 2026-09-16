@@ -29,6 +29,25 @@ func TestMakefileEnforcesBinaryStripping(t *testing.T) {
 	}
 }
 
+func TestBinarySizeReportIsAvailable(t *testing.T) {
+	repoRoot := repositoryRoot(t)
+	info, err := os.Stat(filepath.Join(repoRoot, "scripts", "report_binary_size.sh"))
+	if err != nil {
+		t.Fatalf("binary size report is missing: %v", err)
+	}
+	if info.Mode()&0111 == 0 {
+		t.Fatal("binary size report must be executable")
+	}
+
+	makefile, err := os.ReadFile(filepath.Join(repoRoot, "Makefile"))
+	if err != nil {
+		t.Fatalf("failed to read Makefile: %v", err)
+	}
+	if !strings.Contains(string(makefile), "size: ") {
+		t.Fatal("Makefile must expose the binary size report through the size target")
+	}
+}
+
 // TestCLIBinarySizeBudget guards against unintended binary bloat caused by
 // heavy dependencies, large static assets, or transitive compiler additions.
 func TestCLIBinarySizeBudget(t *testing.T) {

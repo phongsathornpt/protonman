@@ -57,3 +57,25 @@ func TestBuildSidebarRowsOrdersWorkspacesAndNewestSessionFirst(t *testing.T) {
 		t.Fatalf("expected zeta workspace second, got %#v", rows[3])
 	}
 }
+
+func TestBuildSidebarRowsWithCollapsedWorkspaceHidesItsSessions(t *testing.T) {
+	sessions := []desktopstate.SessionState{
+		{ID: "a-2", WorkspaceKey: "a", WorkspaceName: "alpha"},
+		{ID: "a-1", WorkspaceKey: "a", WorkspaceName: "alpha"},
+		{ID: "b-1", WorkspaceKey: "b", WorkspaceName: "beta"},
+	}
+
+	rows := buildSidebarRowsWithCollapsed(sessions, map[string]bool{"key:a": true})
+	if len(rows) != 3 {
+		t.Fatalf("expected two workspace rows and one expanded session, got %d", len(rows))
+	}
+	if rows[0].Kind != sidebarWorkspaceRow || rows[0].WorkspaceKey != "key:a" {
+		t.Fatalf("expected collapsed alpha workspace row, got %#v", rows[0])
+	}
+	if rows[1].Kind != sidebarWorkspaceRow || rows[1].WorkspaceKey != "key:b" {
+		t.Fatalf("expected beta workspace row after collapsed alpha, got %#v", rows[1])
+	}
+	if rows[2].Kind != sidebarSessionRow || rows[2].SessionID != "b-1" {
+		t.Fatalf("expected beta session row, got %#v", rows[2])
+	}
+}

@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := tui
 
-.PHONY: all tui desktop desktop-run run dev build install run-bin clean test test-architecture test-architecture-desktop test-desktop test-race test-e2e test-install bench bench-cpu bench-mem fmt vet lint tag tag-push help
+.PHONY: all tui desktop desktop-run run dev build size install run-bin clean test test-architecture test-architecture-desktop test-desktop test-race test-e2e test-install bench bench-cpu bench-mem fmt vet lint tag tag-push help
 
 # Binary configuration
 BIN_DIR := bin
@@ -41,6 +41,10 @@ dev:
 
 ## build: Build the protonman binary when sources or resolved version changed
 build: $(BINARY)
+
+## size: Report release-style CLI size; set SIZE_INCLUDE_DESKTOP=1 to include desktop
+size:
+	./scripts/report_binary_size.sh
 
 $(VERSION_STAMP):
 	@mkdir -p "$(BIN_DIR)"

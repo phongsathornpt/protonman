@@ -1,5 +1,6 @@
 # Binaries & build artifacts
 /bin/
+/protonman
 /.gobin/
 /proton
 *.exe

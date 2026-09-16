@@ -36,6 +36,7 @@ type application struct {
 	state                 desktopstate.State
 	sidebarRows           []sidebarRow
 	sidebarQuery          string
+	collapsedWorkspaces   map[string]bool
 	transcripts           map[string]*strings.Builder
 	conversationSessionID string
 	permissionWaiters     map[string]chan string
@@ -44,6 +45,7 @@ type application struct {
 	status             *widget.Label
 	list               *widget.List
 	sessionSearch      *widget.Entry
+	sidebarEmpty       *widget.Label
 	chat               *widget.RichText
 	conversationScroll fyne.CanvasObject
 	composer           *widget.Entry
@@ -90,11 +92,12 @@ func Run(ctx context.Context) error {
 	window.Resize(fyne.NewSize(1220, 780))
 
 	ui := &application{
-		ctx:               ctx,
-		desktopApp:        desktopApp,
-		transcripts:       make(map[string]*strings.Builder),
-		permissionWaiters: make(map[string]chan string),
-		preferences:       desktopApp.Preferences(),
+		ctx:                 ctx,
+		desktopApp:          desktopApp,
+		transcripts:         make(map[string]*strings.Builder),
+		collapsedWorkspaces: make(map[string]bool),
+		permissionWaiters:   make(map[string]chan string),
+		preferences:         desktopApp.Preferences(),
 	}
 	ui.initDesktopControls()
 	window.SetContent(ui.buildDesktopShell())
@@ -169,7 +172,10 @@ func (a *application) refreshSessions() {
 	a.state = desktopstate.Reduce(a.state, desktopstate.Event{Kind: desktopstate.EventSessionsReplaced, Sessions: sessions})
 	a.rebuildSidebarRowsLocked()
 	a.mu.Unlock()
-	fyne.Do(func() { a.list.Refresh() })
+	fyne.Do(func() {
+		a.list.Refresh()
+		a.refreshSidebarEmptyState()
+	})
 	a.refreshActiveView()
 	a.refreshPermissionView()
 }

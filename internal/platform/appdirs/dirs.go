@@ -15,11 +15,11 @@ const (
 	RootDirName        = ".protonman"
 	ConfigFileName     = "config.json"
 	SessionsDir        = "sessions"
-	CheckpointsDir       = "checkpoints"
-	SkillsDir            = "skills"
-	MemoryDir            = "memory"
-	LogsDir              = "logs"
-	SkillsLockFileName   = "skills-lock.json"
+	CheckpointsDir     = "checkpoints"
+	SkillsDir          = "skills"
+	MemoryDir          = "memory"
+	LogsDir            = "logs"
+	SkillsLockFileName = "skills-lock.json"
 )
 
 // Dirs is the resolved Protonman filesystem layout for one user home.
