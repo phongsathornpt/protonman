@@ -54,8 +54,8 @@ func memoryTrackerFor(a *application) *memoryRefreshTracker {
 
 func (a *application) refreshSessionMemory(sessionID string, force bool) {
 	sessionID = strings.TrimSpace(sessionID)
-	client := a.currentClient()
-	if sessionID == "" || client == nil {
+	client := a.clientForSession(sessionID)
+	if sessionID == "" || client == nil || !a.protonmanExtensionsAvailable() {
 		return
 	}
 	tracker := memoryTrackerFor(a)

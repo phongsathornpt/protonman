@@ -30,13 +30,16 @@ func (a *application) renderSessionChrome() {
 	}
 	a.mu.Unlock()
 
-	title := "protonMAN"
+	title := "Welcome to Protonman Desktop"
 	meta := "Select a session"
 	inspector := "_No session context loaded._"
 	contextLabel := "Context"
 	if found {
 		title = sessionDisplayTitle(active)
 		meta = sessionDisplayMeta(active)
+		if agent := a.agentNameFor(active.AgentID); agent != "" {
+			meta = agent + " · " + meta
+		}
 		inspector = renderInspector(active)
 		contextLabel = contextSummaryLabel(active)
 	}
@@ -48,6 +51,15 @@ func (a *application) renderSessionChrome() {
 		a.contextContent.Refresh()
 		a.contextToggle.SetText(contextLabel)
 	})
+}
+
+func (a *application) agentNameFor(agentID string) string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if profile, ok := a.profiles[strings.TrimSpace(agentID)]; ok {
+		return profile.DisplayName
+	}
+	return ""
 }
 
 func sessionDisplayTitle(session desktopstate.SessionState) string {

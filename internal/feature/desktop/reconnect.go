@@ -5,8 +5,17 @@ package desktop
 // replayed automatically after reconnect because tool side effects may already
 // have occurred before the transport died.
 func MarkDisconnected(current State) State {
+	return MarkAgentDisconnected(current, "")
+}
+
+// MarkAgentDisconnected pauses only sessions owned by the disconnected ACP
+// process. Other agents may continue serving their sessions.
+func MarkAgentDisconnected(current State, agentID string) State {
 	next := cloneState(current)
 	for i := range next.Sessions {
+		if agentID != "" && next.Sessions[i].AgentID != agentID {
+			continue
+		}
 		switch next.Sessions[i].Status {
 		case TaskQueued, TaskRunning, TaskWaitingPermission, TaskWaitingUser:
 			next.Sessions[i].Status = TaskPaused

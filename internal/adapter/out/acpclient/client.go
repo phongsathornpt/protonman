@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
 	"sync"
 	"sync/atomic"
@@ -48,6 +49,15 @@ type Request struct {
 // RequestHandler handles server-to-client ACP requests such as permission prompts.
 type RequestHandler func(context.Context, Request) (any, error)
 
+// CommandSpec describes an ACP agent process. Args are passed directly to the
+// executable; no shell is involved. A nil Env inherits the parent process
+// environment, while non-empty entries are appended as overrides.
+type CommandSpec struct {
+	Path string
+	Args []string
+	Env  []string
+}
+
 type Client struct {
 	ctx    context.Context
 	cmd    *exec.Cmd
@@ -79,11 +89,21 @@ type envelope struct {
 }
 
 func Start(ctx context.Context, binary string, onEvent func(Event)) (*Client, error) {
-	if binary == "" {
-		return nil, errors.New("ACP binary is required")
+	return StartCommand(ctx, CommandSpec{Path: binary, Args: []string{"--acp"}}, onEvent)
+}
+
+// StartCommand starts an ACP agent using the supplied executable and argument
+// vector. This is the generic entry point used by Desktop integrations whose
+// launcher does not accept Protonman's --acp flag.
+func StartCommand(ctx context.Context, spec CommandSpec, onEvent func(Event)) (*Client, error) {
+	if spec.Path == "" {
+		return nil, errors.New("ACP executable is required")
 	}
 	procCtx, cancel := context.WithCancel(ctx)
-	cmd := exec.CommandContext(procCtx, binary, "--acp")
+	cmd := exec.CommandContext(procCtx, spec.Path, spec.Args...)
+	if len(spec.Env) > 0 {
+		cmd.Env = append(os.Environ(), spec.Env...)
+	}
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		cancel()
@@ -101,7 +121,7 @@ func Start(ctx context.Context, binary string, onEvent func(Event)) (*Client, er
 	}
 	if err := cmd.Start(); err != nil {
 		cancel()
-		return nil, fmt.Errorf("start %s --acp: %w", binary, err)
+		return nil, fmt.Errorf("start ACP agent %s: %w", spec.Path, err)
 	}
 
 	client := &Client{

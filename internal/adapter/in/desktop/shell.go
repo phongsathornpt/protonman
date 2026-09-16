@@ -24,22 +24,24 @@ const (
 )
 
 func (a *application) initDesktopControls() {
-	a.status = widget.NewLabel("Connecting to Protonman…")
+	a.status = widget.NewLabel("Connecting to ACP agents…")
 	a.status.Wrapping = fyne.TextWrapWord
+	a.status.Importance = widget.LowImportance
 
 	a.chat = widget.NewRichTextFromMarkdown("")
 	a.chat.Wrapping = fyne.TextWrapWord
 	a.composer = widget.NewMultiLineEntry()
-	a.composer.SetPlaceHolder("Ask protonMAN… · Shift+Enter to send")
+	a.composer.SetPlaceHolder("Ask the agent… · Shift+Enter to send")
 	a.composer.SetMinRowsVisible(3)
 	a.composer.Wrapping = fyne.TextWrapWord
 	a.composer.OnSubmitted = func(_ string) { a.submitPrompt() }
 	a.send = widget.NewButton("Send", a.submitPrompt)
-	a.stop = widget.NewButtonWithIcon("", theme.MediaStopIcon(), a.cancelPrompt)
+	a.stop = widget.NewButtonWithIcon("Stop", theme.MediaStopIcon(), a.cancelPrompt)
 	a.send.Disable()
 	a.stop.Disable()
 
 	a.initPermissionControls()
+	a.initACPAgentControls()
 	a.initRuntimeControls()
 	a.initInspectorControls()
 	a.initIntegrationControls()
@@ -84,7 +86,7 @@ func (a *application) initRuntimeControls() {
 	a.runtimeSummary = widget.NewButton("Model", a.toggleRuntimePanel)
 	a.runtimePanel = container.NewVBox(
 		widget.NewSeparator(),
-		widget.NewLabelWithStyle("Runtime", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+		widget.NewLabelWithStyle("Runtime controls", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
 		container.NewGridWithColumns(2, widget.NewLabel("Provider"), a.modelProvider),
 		container.NewGridWithColumns(2, widget.NewLabel("Model"), a.modelID),
 		a.applyModel,
@@ -198,6 +200,9 @@ func (a *application) bindSessionRow(id widget.ListItemID, object fyne.CanvasObj
 	if workspace == "" {
 		workspace = "workspace"
 	}
+	if agent := a.agentNameFor(session.AgentID); agent != "" {
+		workspace += " · " + agent
+	}
 	setIconText(subtitle, iconFolder, compactText(workspace, sidebarMetaMaxRunes))
 	setImportance(subtitle, widget.LowImportance)
 }
@@ -266,12 +271,12 @@ func (a *application) buildSidebar() fyne.CanvasObject {
 		a.newSession()
 	})
 	sidebarHeader := container.NewBorder(nil, nil, nil, newTask,
-		newIconText(iconRocket, "protonMAN", fyne.TextStyle{Bold: true}, false),
+		newIconText(iconRocket, "Protonman Desktop", fyne.TextStyle{Bold: true}, false),
 	)
 
 	secondary := container.NewVBox(
 		widget.NewSeparator(),
-		container.NewHBox(a.integrationButton, a.permissionInbox),
+		container.NewHBox(a.agentSettingsButton, a.integrationButton, a.permissionInbox),
 	)
 	a.sidebarEmpty = widget.NewLabel("")
 	a.sidebarEmpty.Alignment = fyne.TextAlignCenter
@@ -314,7 +319,10 @@ func (a *application) buildConversationSurface() fyne.CanvasObject {
 	a.sessionMeta = widget.NewLabel("Select a session")
 	a.sessionMeta.Wrapping = fyne.TextWrapWord
 
-	headerActions := container.NewHBox(a.stop, a.runtimeSummary, a.contextToggle)
+	agentLabel := widget.NewLabelWithStyle("Agent", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
+	agentControl := container.New(fixedWidthLayout{width: 150}, a.agentSelect)
+	stopControl := container.New(fixedWidthLayout{width: 76}, a.stop)
+	headerActions := container.NewHBox(agentLabel, agentControl, stopControl, a.runtimeSummary, a.contextToggle)
 	header := container.NewBorder(nil, nil, nil, headerActions,
 		container.NewVBox(a.sessionTitle, a.sessionMeta),
 	)
@@ -322,18 +330,14 @@ func (a *application) buildConversationSurface() fyne.CanvasObject {
 	scroll := container.NewVScroll(a.chat)
 	a.conversationScroll = scroll
 	conversationWithDrawer := container.New(responsiveDrawerLayout{}, scroll, a.contextDrawer)
-	conversationBody := container.NewBorder(a.permissionPanel, nil, nil, nil, conversationWithDrawer)
+	conversationBody := container.NewMax(conversationWithDrawer)
+	auxiliaryContent := container.NewVBox(a.permissionPanel, a.agentSettingsPanel, a.runtimePanel, a.integrationPanel, widget.NewSeparator())
+	auxiliaryScroll := container.NewVScroll(auxiliaryContent)
 
 	composer := container.NewBorder(nil, nil, nil, a.send, a.composer)
 	footer := container.NewVBox(composer, a.status)
 
-	return container.NewBorder(
-		container.NewVBox(header, a.runtimePanel, a.integrationPanel, widget.NewSeparator()),
-		footer,
-		nil,
-		nil,
-		conversationBody,
-	)
+	return container.New(desktopSurfaceLayout{}, header, auxiliaryScroll, footer, conversationBody)
 }
 
 func (a *application) shouldFollowConversationTail() bool {

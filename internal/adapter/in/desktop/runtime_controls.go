@@ -43,8 +43,8 @@ func runtimeTrackerFor(a *application) *runtimeRefreshTracker {
 
 func (a *application) refreshSessionRuntime(sessionID string, force bool) {
 	sessionID = strings.TrimSpace(sessionID)
-	client := a.currentClient()
-	if sessionID == "" || client == nil {
+	client := a.clientForSession(sessionID)
+	if sessionID == "" || client == nil || !a.protonmanExtensionsAvailable() {
 		return
 	}
 	tracker := runtimeTrackerFor(a)
@@ -151,6 +151,14 @@ func (a *application) setRuntimeChoice(method, field, value string) {
 }
 
 func (a *application) renderRuntimeControls() {
+	if !a.protonmanExtensionsAvailable() {
+		fyne.Do(func() {
+			a.runtimeSummary.SetText("Runtime unavailable")
+			a.runtimeSummary.Disable()
+			a.runtimePanel.Hide()
+		})
+		return
+	}
 	a.mu.Lock()
 	activeID := a.state.ActiveSessionID
 	busy := a.sessionBusyLocked(activeID)
@@ -175,6 +183,7 @@ func (a *application) renderRuntimeControls() {
 			a.lowSelect.SetSelected(runtime.LowConcurrency)
 		}
 		a.runtimeSummary.SetText(summary)
+		a.runtimeSummary.Enable()
 		a.runtimeSync = false
 		if activeID == "" || busy {
 			a.modelProvider.Disable()

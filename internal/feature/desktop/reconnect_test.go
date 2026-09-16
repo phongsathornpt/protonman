@@ -40,3 +40,13 @@ func TestMarkDisconnectedDoesNotAliasOriginal(t *testing.T) {
 		t.Fatalf("next state = %#v", next.Sessions[0])
 	}
 }
+
+func TestMarkAgentDisconnectedOnlyPausesOwnedSessions(t *testing.T) {
+	state := State{Sessions: []SessionState{
+		{ID: "proton", AgentID: "protonman", Status: TaskRunning},
+		{ID: "agy", AgentID: "antigravity", Status: TaskRunning},
+	}}
+	next := MarkAgentDisconnected(state, "antigravity")
+	assertStatus(t, next, "proton", TaskRunning)
+	assertStatus(t, next, "agy", TaskPaused)
+}

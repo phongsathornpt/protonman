@@ -124,7 +124,7 @@ func (a *application) submitPrompt() {
 
 func (a *application) loadSessionHistory(sessionID string) {
 	sessionID = strings.TrimSpace(sessionID)
-	client := a.currentClient()
+	client := a.clientForSession(sessionID)
 	if sessionID == "" || client == nil {
 		return
 	}
@@ -161,6 +161,11 @@ func (a *application) loadSessionHistory(sessionID string) {
 			params["mcpServers"] = servers
 		}
 		err := client.Call(a.ctx, "session/load", params, nil)
+		if isACPMethodNotFound(err) {
+			// Resume-only ACP agents keep history in the remote session. The
+			// Desktop transcript remains the authoritative local presentation.
+			err = nil
+		}
 		if !a.clientIsCurrent(client) {
 			if err == nil {
 				err = errSessionHistoryClientChanged

@@ -119,6 +119,7 @@ type PermissionRequest struct {
 // SessionState is the desktop projection of one ACP session.
 type SessionState struct {
 	ID            string
+	AgentID       string
 	Title         string
 	Workspace     string
 	WorkspaceKey  string

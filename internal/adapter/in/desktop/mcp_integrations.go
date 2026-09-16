@@ -13,6 +13,7 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/widget"
 
+	"github.com/phongsathornpt/protonman/internal/adapter/out/acpclient"
 	desktopstate "github.com/phongsathornpt/protonman/internal/feature/desktop"
 )
 
@@ -170,13 +171,22 @@ func (a *application) reconnectWithIntegrations() {
 		a.setStatus("Cannot reconnect ACP while a session is active")
 		return
 	}
-	client := a.currentClient()
-	if client == nil {
+	a.mu.Lock()
+	clients := make([]*acpclient.Client, 0, len(a.clients))
+	for _, client := range a.clients {
+		clients = append(clients, client)
+	}
+	a.mu.Unlock()
+	if len(clients) == 0 {
 		a.setStatus("MCP integrations saved · waiting for ACP")
 		return
 	}
 	a.setStatus("Reconnecting ACP with MCP integrations…")
-	go func() { _ = client.Close() }()
+	go func() {
+		for _, client := range clients {
+			_ = client.Close()
+		}
+	}()
 }
 
 func (a *application) persistIntegrations(items []desktopstate.MCPIntegrationState) error {

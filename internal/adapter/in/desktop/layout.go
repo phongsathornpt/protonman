@@ -2,7 +2,71 @@
 
 package desktop
 
-import "fyne.io/fyne/v2"
+import (
+	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/theme"
+)
+
+const auxiliarySectionsMaxHeight = 220
+
+// desktopSurfaceLayout keeps the session header and composer fixed while
+// giving expandable permission/runtime/MCP sections their own bounded scroll
+// viewport. The conversation remains the primary flexible surface.
+type desktopSurfaceLayout struct{}
+
+func (desktopSurfaceLayout) Layout(objects []fyne.CanvasObject, size fyne.Size) {
+	if len(objects) < 4 {
+		return
+	}
+	gap := theme.Padding()
+	header, auxiliary, footer, conversation := objects[0], objects[1], objects[2], objects[3]
+	headerHeight := header.MinSize().Height
+	footerHeight := footer.MinSize().Height
+	auxiliaryHeight := float32(0)
+	if auxiliary.Visible() {
+		auxiliaryHeight = auxiliaryContentHeight(auxiliary)
+	}
+	available := size.Height - headerHeight - footerHeight - 3*gap
+	if auxiliaryHeight > available {
+		auxiliaryHeight = fyne.Max(0, available)
+	}
+	conversationHeight := fyne.Max(0, available-auxiliaryHeight)
+
+	header.Move(fyne.NewPos(0, 0))
+	header.Resize(fyne.NewSize(size.Width, headerHeight))
+	y := headerHeight + gap
+	auxiliary.Move(fyne.NewPos(0, y))
+	auxiliary.Resize(fyne.NewSize(size.Width, auxiliaryHeight))
+	y += auxiliaryHeight + gap
+	conversation.Move(fyne.NewPos(0, y))
+	conversation.Resize(fyne.NewSize(size.Width, conversationHeight))
+	footer.Move(fyne.NewPos(0, size.Height-footerHeight))
+	footer.Resize(fyne.NewSize(size.Width, footerHeight))
+}
+
+func (desktopSurfaceLayout) MinSize(objects []fyne.CanvasObject) fyne.Size {
+	if len(objects) < 4 {
+		return fyne.NewSize(0, 0)
+	}
+	width := fyne.Max(objects[0].MinSize().Width, objects[1].MinSize().Width)
+	width = fyne.Max(width, objects[2].MinSize().Width)
+	width = fyne.Max(width, objects[3].MinSize().Width)
+	height := objects[0].MinSize().Height + objects[2].MinSize().Height + objects[3].MinSize().Height + 3*theme.Padding()
+	return fyne.NewSize(width, height)
+}
+
+func auxiliaryContentHeight(object fyne.CanvasObject) float32 {
+	scroll, ok := object.(*container.Scroll)
+	if !ok || scroll.Content == nil {
+		return 0
+	}
+	height := scroll.Content.MinSize().Height
+	if height > auxiliarySectionsMaxHeight {
+		return auxiliarySectionsMaxHeight
+	}
+	return height
+}
 
 // fixedWidthLayout constrains inspector-like side surfaces so their content
 // cannot grow the window's minimum width or height. The child is always resized

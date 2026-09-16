@@ -28,14 +28,27 @@ func (a *application) superviseConnection() {
 	if a.desktopApp != nil {
 		a.desktopApp.Lifecycle().SetOnStopped(cancel)
 	}
-	binary := resolveACPBinary()
+	a.mu.Lock()
+	profiles := make([]agentProfile, 0, len(a.profiles))
+	for _, profile := range a.profiles {
+		profiles = append(profiles, profile)
+	}
+	a.mu.Unlock()
+	for _, profile := range profiles {
+		go a.superviseAgentConnection(ctx, profile)
+	}
+	<-ctx.Done()
+}
 
+func (a *application) superviseAgentConnection(ctx context.Context, profile agentProfile) {
 	delay := reconnectInitialDelay
 	for {
 		if ctx.Err() != nil {
 			return
 		}
-		client, err := acpclient.Start(ctx, binary, a.handleEvent)
+		client, err := acpclient.StartCommand(ctx, profile.Command, func(event acpclient.Event) {
+			a.handleAgentEvent(profile.ID, event)
+		})
 		if err != nil {
 			a.setStatus("Disconnected · retrying · " + err.Error())
 			if !waitReconnect(ctx, delay) {
@@ -44,7 +57,9 @@ func (a *application) superviseConnection() {
 			delay = nextReconnectDelay(delay)
 			continue
 		}
-		client.SetRequestHandler(a.handleRequest)
+		client.SetRequestHandler(func(requestCtx context.Context, request acpclient.Request) (any, error) {
+			return a.handleAgentRequest(profile.ID, requestCtx, request)
+		})
 		if err := a.initializeClient(ctx, client); err != nil {
 			_ = client.Close()
 			if ctx.Err() != nil {
@@ -58,9 +73,9 @@ func (a *application) superviseConnection() {
 			continue
 		}
 
-		a.setClient(client)
+		a.setClient(profile.ID, client)
 		delay = reconnectInitialDelay
-		a.resumeKnownSessions(ctx, client)
+		a.resumeKnownSessions(ctx, profile.ID, client)
 		go a.refreshSessions()
 
 		select {
@@ -71,7 +86,7 @@ func (a *application) superviseConnection() {
 			if ctx.Err() != nil {
 				return
 			}
-			a.markDisconnected(client)
+			a.markDisconnected(profile.ID, client)
 		}
 	}
 }
@@ -101,6 +116,8 @@ func (a *application) initializeClient(ctx context.Context, client *acpclient.Cl
 	var result struct {
 		ProtocolVersion int `json:"protocolVersion"`
 		AgentInfo       struct {
+			Name    string `json:"name"`
+			Title   string `json:"title"`
 			Version string `json:"version"`
 		} `json:"agentInfo"`
 	}
@@ -118,17 +135,35 @@ func (a *application) initializeClient(ctx context.Context, client *acpclient.Cl
 	if version == "" {
 		version = "connected"
 	}
-	a.setStatus("Protonman " + version + " · ACP v1")
+	agentName := strings.TrimSpace(result.AgentInfo.Title)
+	if agentName == "" {
+		agentName = strings.TrimSpace(result.AgentInfo.Name)
+	}
+	if agentName == "" {
+		a.mu.Lock()
+		agentName = a.agent.DisplayName
+		a.mu.Unlock()
+	}
+	if agentName == "" {
+		agentName = "ACP agent"
+	}
+	a.setStatus(agentName + " " + version + " · ACP v1")
 	return nil
 }
 
-func (a *application) resumeKnownSessions(ctx context.Context, client *acpclient.Client) {
+func (a *application) resumeKnownSessions(ctx context.Context, agentID string, client *acpclient.Client) {
 	a.mu.Lock()
 	sessions := append([]desktopstate.SessionState(nil), a.state.Sessions...)
 	a.mu.Unlock()
 	mcpServers := a.mcpServersPayload()
 	for _, session := range sessions {
 		if strings.TrimSpace(session.ID) == "" {
+			continue
+		}
+		if session.AgentID != "" && session.AgentID != agentID {
+			continue
+		}
+		if session.AgentID == "" && agentID != defaultAgentID {
 			continue
 		}
 		workspace := a.resolveWorkspacePath(session.WorkspaceKey, session.Workspace)
@@ -152,14 +187,17 @@ func callReconnectRPC(ctx context.Context, client *acpclient.Client, method stri
 	return client.Call(callCtx, method, params, result)
 }
 
-func (a *application) markDisconnected(client *acpclient.Client) {
+func (a *application) markDisconnected(agentID string, client *acpclient.Client) {
 	a.mu.Lock()
-	if a.client != client {
+	if a.clients[agentID] != client {
 		a.mu.Unlock()
 		return
 	}
-	a.client = nil
-	a.state = desktopstate.MarkDisconnected(a.state)
+	delete(a.clients, agentID)
+	if a.activeAgentID == agentID {
+		a.client = nil
+	}
+	a.state = desktopstate.MarkAgentDisconnected(a.state, agentID)
 	a.permissionWaiters = make(map[string]chan string)
 	a.mu.Unlock()
 	resetLoadingSessionHistories(a)
@@ -169,16 +207,41 @@ func (a *application) markDisconnected(client *acpclient.Client) {
 	a.refreshPermissionView()
 }
 
-func (a *application) setClient(client *acpclient.Client) {
+func (a *application) setClient(agentID string, client *acpclient.Client) {
 	a.mu.Lock()
-	a.client = client
+	if a.clients == nil {
+		a.clients = make(map[string]*acpclient.Client)
+	}
+	a.clients[agentID] = client
+	if a.activeAgentID == agentID {
+		a.client = client
+		a.agent = a.profiles[agentID]
+	}
 	a.mu.Unlock()
 }
 
 func (a *application) currentClient() *acpclient.Client {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	if a.activeAgentID != "" {
+		return a.clients[a.activeAgentID]
+	}
 	return a.client
+}
+
+func (a *application) clientForSession(sessionID string) *acpclient.Client {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.clientForSessionLocked(sessionID)
+}
+
+func (a *application) clientForSessionLocked(sessionID string) *acpclient.Client {
+	for _, session := range a.state.Sessions {
+		if session.ID == sessionID && session.AgentID != "" {
+			return a.clients[session.AgentID]
+		}
+	}
+	return a.clients[a.activeAgentID]
 }
 
 func (a *application) clientIsCurrent(client *acpclient.Client) bool {
@@ -192,7 +255,22 @@ func (a *application) clientIsCurrent(client *acpclient.Client) bool {
 	}
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	return a.client == client
+	for _, current := range a.clients {
+		if current == client {
+			return true
+		}
+	}
+	return false
+}
+
+func (a *application) handleAgentEvent(agentID string, event acpclient.Event) {
+	// ACP session IDs are the routing key for updates. The agent ID is retained
+	// by the session record and is used for subsequent client-to-agent calls.
+	a.handleEvent(event)
+}
+
+func (a *application) handleAgentRequest(_ string, ctx context.Context, request acpclient.Request) (any, error) {
+	return a.handleRequest(ctx, request)
 }
 
 func waitReconnect(ctx context.Context, delay time.Duration) bool {

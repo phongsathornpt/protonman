@@ -60,3 +60,12 @@ func TestHandleRequestWithoutHandlerWritesMethodNotFound(t *testing.T) {
 		t.Fatalf("error = %#v", got.Error)
 	}
 }
+
+func TestCommandSpecIsIndependentFromLegacyStart(t *testing.T) {
+	// Keep this contract test close to the transport: integrations must be able
+	// to provide an ACP executable that does not accept Protonman's --acp flag.
+	spec := CommandSpec{Path: "/opt/agy/agy_acp_server.par", Args: []string{"--uid=desktop"}}
+	if len(spec.Args) != 1 || spec.Args[0] == "--acp" {
+		t.Fatalf("command spec = %#v", spec)
+	}
+}

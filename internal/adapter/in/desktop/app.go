@@ -4,6 +4,7 @@ package desktop
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -20,6 +21,7 @@ import (
 
 type sessionItem struct {
 	ID            string `json:"sessionId"`
+	AgentID       string `json:"agentId"`
 	Title         string `json:"title"`
 	Cwd           string `json:"cwd"`
 	WorkspaceKey  string `json:"workspaceKey"`
@@ -29,8 +31,12 @@ type sessionItem struct {
 type application struct {
 	ctx context.Context
 
-	client     *acpclient.Client
-	desktopApp fyne.App
+	client        *acpclient.Client // compatibility alias for the active agent
+	agent         agentProfile
+	profiles      map[string]agentProfile
+	clients       map[string]*acpclient.Client
+	activeAgentID string
+	desktopApp    fyne.App
 
 	mu                    sync.Mutex
 	state                 desktopstate.State
@@ -64,12 +70,20 @@ type application struct {
 	permissionDetail   *widget.Label
 	permissionActions  *fyne.Container
 
-	modelProvider   *widget.Entry
-	modelID         *widget.Entry
-	applyModel      *widget.Button
-	reasoningSelect *widget.Select
-	lowSelect       *widget.Select
-	runtimeSync     bool
+	modelProvider        *widget.Entry
+	modelID              *widget.Entry
+	applyModel           *widget.Button
+	reasoningSelect      *widget.Select
+	lowSelect            *widget.Select
+	agentSelect          *widget.Select
+	agentSettingsButton  *widget.Button
+	agentSettingsPanel   *fyne.Container
+	agentSettingsSummary *widget.Label
+	agentIDEntry         *widget.Entry
+	agentNameEntry       *widget.Entry
+	agentCommandEntry    *widget.Entry
+	agentArgsEntry       *widget.Entry
+	runtimeSync          bool
 
 	integrationButton    *widget.Button
 	integrationPanel     *fyne.Container
@@ -87,19 +101,45 @@ type application struct {
 // the Protonman CLI remains the single runtime for sessions, tools and models.
 func Run(ctx context.Context) error {
 	desktopApp := app.NewWithID("ai.protonman.desktop")
+	profiles, err := resolveAgentProfilesForPreferences(desktopApp.Preferences())
+	if err != nil {
+		return err
+	}
 	desktopApp.Settings().SetTheme(theme.DarkTheme())
 	window := desktopApp.NewWindow("Protonman")
 	window.Resize(fyne.NewSize(1220, 780))
 
+	profileMap := make(map[string]agentProfile, len(profiles))
+	profileIDs := make([]string, 0, len(profiles))
+	for _, profile := range profiles {
+		profileMap[profile.ID] = profile
+		profileIDs = append(profileIDs, profile.ID)
+	}
 	ui := &application{
 		ctx:                 ctx,
 		desktopApp:          desktopApp,
+		profiles:            profileMap,
+		clients:             make(map[string]*acpclient.Client),
+		activeAgentID:       profileIDs[0],
 		transcripts:         make(map[string]*strings.Builder),
 		collapsedWorkspaces: make(map[string]bool),
 		permissionWaiters:   make(map[string]chan string),
 		preferences:         desktopApp.Preferences(),
 	}
+	ui.agentSelect = widget.NewSelect(profileIDs, func(value string) {
+		ui.mu.Lock()
+		if _, ok := ui.profiles[value]; ok {
+			ui.activeAgentID = value
+		}
+		ui.mu.Unlock()
+		ui.populateACPAgentEditor(value)
+		ui.renderACPAgentSettings()
+		ui.setStatus("ACP agent selected · " + value)
+	})
 	ui.initDesktopControls()
+	// Select invokes its callback synchronously, so all callback targets must
+	// exist before selecting the initial value.
+	ui.agentSelect.SetSelected(profileIDs[0])
 	window.SetContent(ui.buildDesktopShell())
 
 	go ui.connect()
@@ -107,6 +147,13 @@ func Run(ctx context.Context) error {
 	if client := ui.currentClient(); client != nil {
 		_ = client.Close()
 	}
+	ui.mu.Lock()
+	for agentID, client := range ui.clients {
+		if agentID != ui.activeAgentID {
+			_ = client.Close()
+		}
+	}
+	ui.mu.Unlock()
 	return nil
 }
 
@@ -115,7 +162,18 @@ func (a *application) connect() {
 }
 
 func (a *application) refreshSessions() {
-	client := a.currentClient()
+	a.mu.Lock()
+	clients := make(map[string]*acpclient.Client, len(a.clients))
+	for agentID, client := range a.clients {
+		clients[agentID] = client
+	}
+	a.mu.Unlock()
+	for agentID, client := range clients {
+		a.refreshSessionsFor(agentID, client)
+	}
+}
+
+func (a *application) refreshSessionsFor(agentID string, client *acpclient.Client) {
 	if client == nil {
 		return
 	}
@@ -123,6 +181,11 @@ func (a *application) refreshSessions() {
 		Sessions []sessionItem `json:"sessions"`
 	}
 	if err := client.Call(a.ctx, "session/list", map[string]any{}, &result); err != nil {
+		if isACPMethodNotFound(err) {
+			// session/list is not required for an ACP agent. Keep the local
+			// session index; new sessions are inserted from session/new below.
+			return
+		}
 		if a.clientIsCurrent(client) {
 			a.setStatus("Session list failed · " + err.Error())
 		}
@@ -138,11 +201,15 @@ func (a *application) refreshSessions() {
 	for _, session := range result.Sessions {
 		projected := desktopstate.SessionState{
 			ID:            session.ID,
+			AgentID:       strings.TrimSpace(session.AgentID),
 			Title:         session.Title,
 			Workspace:     session.Cwd,
 			WorkspaceKey:  strings.TrimSpace(session.WorkspaceKey),
 			WorkspaceName: strings.TrimSpace(session.WorkspaceName),
 			Status:        desktopstate.TaskIdle,
+		}
+		if projected.AgentID == "" {
+			projected.AgentID = agentID
 		}
 		if previous, ok := old[session.ID]; ok {
 			projected.Status = previous.Status
@@ -169,6 +236,11 @@ func (a *application) refreshSessions() {
 			a.transcripts[session.ID] = &strings.Builder{}
 		}
 	}
+	for _, previous := range old {
+		if previous.AgentID != "" && previous.AgentID != agentID {
+			sessions = append(sessions, previous)
+		}
+	}
 	a.state = desktopstate.Reduce(a.state, desktopstate.Event{Kind: desktopstate.EventSessionsReplaced, Sessions: sessions})
 	a.rebuildSidebarRowsLocked()
 	a.mu.Unlock()
@@ -185,6 +257,9 @@ func (a *application) newSession() {
 	if client == nil {
 		return
 	}
+	a.mu.Lock()
+	agentID := a.activeAgentID
+	a.mu.Unlock()
 	cwd := a.activeWorkspacePath()
 	if cwd == "" {
 		workingDirectory, err := os.Getwd()
@@ -216,6 +291,24 @@ func (a *application) newSession() {
 			return
 		}
 		markSessionHistoryLoaded(a, result.SessionID)
+		a.mu.Lock()
+		// The remote ACP server owns the session ID; Desktop owns the routing
+		// association needed when several ACP processes are connected.
+		found := false
+		for i := range a.state.Sessions {
+			if a.state.Sessions[i].ID == result.SessionID {
+				a.state.Sessions[i].AgentID = agentID
+				found = true
+			}
+		}
+		if !found {
+			a.state.Sessions = append(a.state.Sessions, desktopstate.SessionState{
+				ID: result.SessionID, AgentID: agentID, Title: "Session " + shortID(result.SessionID),
+				Workspace: cwd, Status: desktopstate.TaskIdle,
+			})
+			a.rebuildSidebarRowsLocked()
+		}
+		a.mu.Unlock()
 		a.refreshSessions()
 		a.mu.Lock()
 		a.state = desktopstate.Reduce(a.state, desktopstate.Event{Kind: desktopstate.EventSessionSelected, SessionID: result.SessionID})
@@ -229,16 +322,24 @@ func (a *application) newSession() {
 	}()
 }
 
+func isACPMethodNotFound(err error) bool {
+	var rpcErr *acpclient.RPCError
+	return errors.As(err, &rpcErr) && rpcErr.Code == -32601
+}
+
 func (a *application) sendPrompt() {
 	text := strings.TrimSpace(a.composer.Text)
-	client := a.currentClient()
-	if text == "" || client == nil {
+	if text == "" {
 		return
 	}
 	a.mu.Lock()
 	sessionID := a.state.ActiveSessionID
-	if sessionID == "" || a.sessionBusyLocked(sessionID) {
+	client := a.clientForSessionLocked(sessionID)
+	if sessionID == "" || a.sessionBusyLocked(sessionID) || client == nil {
 		a.mu.Unlock()
+		if sessionID != "" && client == nil {
+			a.setStatus("ACP agent is disconnected for this session")
+		}
 		return
 	}
 	workspace := ""
@@ -296,12 +397,9 @@ func (a *application) sendPrompt() {
 }
 
 func (a *application) cancelPrompt() {
-	client := a.currentClient()
-	if client == nil {
-		return
-	}
 	a.mu.Lock()
 	sessionID := a.state.ActiveSessionID
+	client := a.clientForSessionLocked(sessionID)
 	busy := a.sessionBusyLocked(sessionID)
 	a.mu.Unlock()
 	if sessionID == "" || !busy {

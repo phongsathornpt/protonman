@@ -19,6 +19,42 @@ protonman-desktop (Fyne)
 
 The CLI runtime remains the source of truth for execution. Desktop-owned state is limited to presentation state and client preferences such as the MCP server definitions supplied to ACP sessions.
 
+## ACP agent selection
+
+Desktop connects to Protonman by default. To connect to Google Antigravity's
+official ACP server, install the platform archive and launch Desktop with:
+
+```sh
+PROTONMAN_AGENT=antigravity \
+ANTIGRAVITY_ACP_COMMAND=/path/to/agy_acp_server.par \
+protonman-desktop
+```
+
+The command is executed directly with an argument vector. Optional launcher
+arguments can be supplied as a JSON string array:
+
+```sh
+ANTIGRAVITY_ACP_ARGS_JSON='["--uid=desktop"]'
+```
+
+`PROTONMAN_BINARY` continues to override the bundled Protonman executable when
+`PROTONMAN_AGENT` is unset. Antigravity support currently covers the standard
+ACP chat, tool, permission, cancellation, MCP, and reconnect path. Protonman
+extensions such as Goal/TODO/Memory and runtime controls are unavailable for
+non-Protonman agents until capability-aware session support is added.
+
+To run multiple ACP agents at once, provide a JSON profile list. Desktop starts
+one supervised ACP process per profile; new sessions use the agent selected in
+the conversation header, while existing sessions continue using their owning
+agent process.
+
+```sh
+PROTONMAN_ACP_AGENTS_JSON='[
+  {"id":"protonman","displayName":"Protonman","command":"protonman","args":["--acp"]},
+  {"id":"antigravity","displayName":"Google Antigravity","command":"/path/to/agy_acp_server.par"}
+]' protonman-desktop
+```
+
 ## Session behavior
 
 Desktop can keep multiple ACP sessions visible while work continues in the background. Session lifecycle is projected as `queued`, `running`, `waiting_permission`, `waiting_user`, `paused`, `completed`, or `failed`.
@@ -96,6 +132,11 @@ make desktop-run
 ```
 
 Linux Fyne builds require the normal OpenGL, X11, and Wayland development packages. Release packaging builds the CLI and Desktop from the same Git tag/version so the bundled ACP runtime and UI stay aligned.
+
+Agents that do not implement `session/list` are supported through Desktop's
+local session index. Newly created sessions appear immediately and are resumed
+through their owning ACP process after reconnect. Agents without `session/load`
+retain the local transcript and can still use `session/resume`.
 
 ## Scope
 
