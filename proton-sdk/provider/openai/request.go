@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	"github.com/phongsathornpt/protonman/proton-sdk/domain"
 	"github.com/phongsathornpt/protonman/proton-sdk/internal/providerutil"
 )
 
@@ -46,14 +46,14 @@ func (f chatFunction) MarshalJSON() ([]byte, error) {
 }
 
 type chatRequest struct {
-	Model           string              `json:"model"`
-	Messages        []chatMessage       `json:"messages"`
-	Stream          bool                `json:"stream"`
-	Tools           []chatTool          `json:"tools,omitempty"`
-	ToolChoice      string              `json:"tool_choice,omitempty"`
-	MaxTokens       int                 `json:"max_tokens,omitempty"`
-	ReasoningEffort sdk.ReasoningEffort `json:"reasoning_effort,omitempty"`
-	EnableThinking  *bool               `json:"enable_thinking,omitempty"`
+	Model           string                 `json:"model"`
+	Messages        []chatMessage          `json:"messages"`
+	Stream          bool                   `json:"stream"`
+	Tools           []chatTool             `json:"tools,omitempty"`
+	ToolChoice      string                 `json:"tool_choice,omitempty"`
+	MaxTokens       int                    `json:"max_tokens,omitempty"`
+	ReasoningEffort domain.ReasoningEffort `json:"reasoning_effort,omitempty"`
+	EnableThinking  *bool                  `json:"enable_thinking,omitempty"`
 }
 
 type responsesTool struct {
@@ -75,7 +75,7 @@ func (t responsesTool) MarshalJSON() ([]byte, error) {
 }
 
 type reasoningConfig struct {
-	Effort sdk.ReasoningEffort `json:"effort"`
+	Effort domain.ReasoningEffort `json:"effort"`
 }
 
 type responsesRequest struct {
@@ -88,7 +88,7 @@ type responsesRequest struct {
 	Reasoning       *reasoningConfig `json:"reasoning,omitempty"`
 }
 
-func (m *LanguageModel) encodeRequest(request sdk.Request) (string, []byte, error) {
+func (m *LanguageModel) encodeRequest(request domain.Request) (string, []byte, error) {
 	if m.useResponsesAPI || strings.HasSuffix(m.provider.options.BaseURL, "/responses") {
 		endpoint := m.provider.options.BaseURL
 		if strings.HasSuffix(endpoint, "/chat/completions") {
@@ -99,9 +99,9 @@ func (m *LanguageModel) encodeRequest(request sdk.Request) (string, []byte, erro
 		input := make([]any, 0, len(request.Messages))
 		for _, message := range request.Messages {
 			switch message.Role {
-			case sdk.RoleUser, sdk.RoleSystem:
+			case domain.RoleUser, domain.RoleSystem:
 				input = append(input, map[string]any{"role": string(message.Role), "content": responsesMessageContent(message)})
-			case sdk.RoleAssistant:
+			case domain.RoleAssistant:
 				if isDeepSeekResponsesModel(m.provider.options.ProviderName, m.provider.options.BaseURL, m.modelID) &&
 					strings.TrimSpace(message.ReasoningContent) != "" {
 					input = append(input, map[string]any{
@@ -118,7 +118,7 @@ func (m *LanguageModel) encodeRequest(request sdk.Request) (string, []byte, erro
 				for _, call := range message.ToolCalls {
 					input = append(input, map[string]any{"type": "function_call", "name": call.Name, "call_id": call.ID, "arguments": string(call.Arguments)})
 				}
-			case sdk.RoleTool:
+			case domain.RoleTool:
 				input = append(input, map[string]any{"type": "function_call_output", "call_id": message.ToolCallID, "output": message.TextContent()})
 			}
 		}
@@ -139,7 +139,7 @@ func (m *LanguageModel) encodeRequest(request sdk.Request) (string, []byte, erro
 	}
 	messages := make([]chatMessage, 0, len(request.Messages))
 	for _, message := range request.Messages {
-		if message.Role == sdk.RoleAssistant && len(message.ToolCalls) > 0 {
+		if message.Role == domain.RoleAssistant && len(message.ToolCalls) > 0 {
 			calls := make([]chatToolCall, 0, len(message.ToolCalls))
 			for _, call := range message.ToolCalls {
 				calls = append(calls, chatToolCall{ID: call.ID, Type: "function", Function: chatFunctionCall{Name: call.Name, Arguments: string(call.Arguments)}})
@@ -159,7 +159,7 @@ func (m *LanguageModel) encodeRequest(request sdk.Request) (string, []byte, erro
 			content := message.Content
 			msg.Content = &content
 		}
-		if message.Role == sdk.RoleTool {
+		if message.Role == domain.RoleTool {
 			msg.ToolCallID = message.ToolCallID
 		}
 		messages = append(messages, msg)
@@ -176,18 +176,18 @@ func (m *LanguageModel) encodeRequest(request sdk.Request) (string, []byte, erro
 	return endpoint, encoded, nil
 }
 
-func responsesMessageContent(message sdk.Message) any {
+func responsesMessageContent(message domain.Message) any {
 	if len(message.Parts) == 0 {
 		return message.TextContent()
 	}
 	content := make([]map[string]any, 0, len(message.Parts))
 	for _, part := range message.Parts {
 		switch part.Type {
-		case sdk.ContentPartText:
+		case domain.ContentPartText:
 			if part.Text != "" {
 				content = append(content, map[string]any{"type": "input_text", "text": part.Text})
 			}
-		case sdk.ContentPartImage:
+		case domain.ContentPartImage:
 			if part.Data == "" {
 				continue
 			}
@@ -207,12 +207,12 @@ func responsesMessageContent(message sdk.Message) any {
 	return content
 }
 
-func (m *LanguageModel) qwenChatReasoning(effort sdk.ReasoningEffort) (sdk.ReasoningEffort, *bool) {
-	if effort != sdk.ReasoningNone || !isDashScopeBaseURL(m.provider.options.BaseURL) || !isQwenHybridThinkingModel(m.modelID) {
+func (m *LanguageModel) qwenChatReasoning(effort domain.ReasoningEffort) (domain.ReasoningEffort, *bool) {
+	if effort != domain.ReasoningNone || !isDashScopeBaseURL(m.provider.options.BaseURL) || !isQwenHybridThinkingModel(m.modelID) {
 		return effort, nil
 	}
 	disabled := false
-	return sdk.ReasoningDefault, &disabled
+	return domain.ReasoningDefault, &disabled
 }
 
 func isDashScopeBaseURL(baseURL string) bool {
@@ -243,15 +243,15 @@ func isDeepSeekResponsesModel(providerName, baseURL, modelID string) bool {
 	return false
 }
 
-func chatContentParts(parts []sdk.ContentPart) []map[string]any {
+func chatContentParts(parts []domain.ContentPart) []map[string]any {
 	content := make([]map[string]any, 0, len(parts))
 	for _, part := range parts {
 		switch part.Type {
-		case sdk.ContentPartText:
+		case domain.ContentPartText:
 			if part.Text != "" {
 				content = append(content, map[string]any{"type": "text", "text": part.Text})
 			}
-		case sdk.ContentPartImage:
+		case domain.ContentPartImage:
 			mime := part.MIMEType
 			if mime == "" {
 				mime = "image/png"
@@ -262,18 +262,18 @@ func chatContentParts(parts []sdk.ContentPart) []map[string]any {
 	return content
 }
 
-func responseReasoning(effort sdk.ReasoningEffort) *reasoningConfig {
-	if effort == sdk.ReasoningDefault {
+func responseReasoning(effort domain.ReasoningEffort) *reasoningConfig {
+	if effort == domain.ReasoningDefault {
 		return nil
 	}
 	return &reasoningConfig{Effort: effort}
 }
 
-func toolChoice(count int, choice sdk.ToolChoice) string {
+func toolChoice(count int, choice domain.ToolChoice) string {
 	if count == 0 {
 		return "none"
 	}
-	if choice == sdk.ToolChoiceRequired {
+	if choice == domain.ToolChoiceRequired {
 		return "required"
 	}
 	return ""

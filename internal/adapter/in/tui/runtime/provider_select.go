@@ -158,6 +158,7 @@ func newProviderSelectPaneView(m *bubbleModel) *providerSelectPaneView {
 	view := &providerSelectPaneView{items: items}
 	view.initPicker()
 	view.picker.Select(providerdomain.ActiveSelectionIndex(entries))
+	view.resize(defaultBubbleWidth, defaultBubbleHeight)
 	return view
 }
 
@@ -177,9 +178,15 @@ func (v *providerSelectPaneView) selectedItem() (providerSelectItem, bool) {
 	return item, ok
 }
 
-func (v *providerSelectPaneView) Render(ctx paneRenderContext) string {
+func (v *providerSelectPaneView) resize(width, height int) {
+	if v == nil {
+		return
+	}
 	v.initPicker()
-	v.picker.SetSize(maxInt(12, ctx.width-8), maxInt(4, minInt(maxProviderListRows, ctx.height-6)))
+	v.picker.SetSize(maxInt(1, width-8), maxInt(1, minInt(maxProviderListRows, height-6)))
+}
+
+func (v *providerSelectPaneView) Render(ctx paneRenderContext) string {
 	if v.deleteConfirm {
 		item, ok := v.selectedItem()
 		if ok && item.isConfigured {

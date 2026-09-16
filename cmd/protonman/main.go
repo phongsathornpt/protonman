@@ -2,9 +2,9 @@
 package main
 
 import (
-	"github.com/phongsathornpt/protonman/internal/feature/todo"
 	"context"
 	"fmt"
+	"github.com/phongsathornpt/protonman/internal/feature/todo"
 	"io"
 	"log/slog"
 	"os"
@@ -23,7 +23,7 @@ import (
 	coretelemetry "github.com/phongsathornpt/protonman/internal/core/telemetry"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/platform/telemetry"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	"github.com/phongsathornpt/protonman/proton-sdk/domain"
 )
 
 func configureACPMCP(ctx context.Context, cwd string, registry tool.Registry, configs []acp.MCPServerConfig) (io.Closer, error) {
@@ -215,8 +215,8 @@ func configuredTelemetryObserver() (coretelemetry.Observer, error) {
 	}
 }
 
-func reasoningSetting(effort sdk.ReasoningEffort) string {
-	if effort == sdk.ReasoningDefault {
+func reasoningSetting(effort domain.ReasoningEffort) string {
+	if effort == domain.ReasoningDefault {
 		return "auto"
 	}
 	return string(effort)

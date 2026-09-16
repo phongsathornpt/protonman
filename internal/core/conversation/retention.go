@@ -11,7 +11,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/base/runtimepolicy"
 	"github.com/phongsathornpt/protonman/internal/base/strutil"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	"github.com/phongsathornpt/protonman/proton-sdk/domain"
 )
 
 // RetentionPolicy bounds live provider-neutral conversation history. Limits are
@@ -45,7 +45,7 @@ type messageSpan struct {
 // is required it returns the input slice unchanged; callers that need ownership
 // isolation should clone before calling. Assistant tool-call messages and their
 // following tool results are retained or dropped as one unit.
-func Retain(messages []sdk.Message, policy RetentionPolicy) []sdk.Message {
+func Retain(messages []domain.Message, policy RetentionPolicy) []domain.Message {
 	if len(messages) == 0 {
 		return nil
 	}
@@ -60,13 +60,13 @@ func Retain(messages []sdk.Message, policy RetentionPolicy) []sdk.Message {
 	}
 	leadingSystems := 0
 	protectedBytes := 0
-	for leadingSystems < len(messages) && messages[leadingSystems].Role == sdk.RoleSystem {
+	for leadingSystems < len(messages) && messages[leadingSystems].Role == domain.RoleSystem {
 		protectedBytes += messageBytes(messages[leadingSystems])
 		leadingSystems++
 	}
 	spans := buildSpans(messages, leadingSystems)
 	if len(spans) == 0 {
-		return append([]sdk.Message(nil), messages...)
+		return append([]domain.Message(nil), messages...)
 	}
 
 	retainedMessages := len(messages)
@@ -83,7 +83,7 @@ func Retain(messages []sdk.Message, policy RetentionPolicy) []sdk.Message {
 	}
 
 	start := spans[drop].start
-	out := make([]sdk.Message, 0, leadingSystems+len(messages)-start)
+	out := make([]domain.Message, 0, leadingSystems+len(messages)-start)
 	out = append(out, messages[:leadingSystems]...)
 	out = append(out, messages[start:]...)
 	return out
@@ -94,19 +94,19 @@ func exceeds(policy RetentionPolicy, messages, bytes int) bool {
 		policy.MaxBytes > 0 && bytes > policy.MaxBytes
 }
 
-func compactHistoricalToolGroups(messages []sdk.Message, recentMessages, resultLimit int) []sdk.Message {
+func compactHistoricalToolGroups(messages []domain.Message, recentMessages, resultLimit int) []domain.Message {
 	if recentMessages <= 0 || len(messages) <= recentMessages {
 		return messages
 	}
 	leadingSystems := 0
-	for leadingSystems < len(messages) && messages[leadingSystems].Role == sdk.RoleSystem {
+	for leadingSystems < len(messages) && messages[leadingSystems].Role == domain.RoleSystem {
 		leadingSystems++
 	}
 	recentStart := len(messages) - recentMessages
 	if recentStart < leadingSystems {
 		recentStart = leadingSystems
 	}
-	for recentStart > leadingSystems && messages[recentStart].Role == sdk.RoleTool {
+	for recentStart > leadingSystems && messages[recentStart].Role == domain.RoleTool {
 		recentStart--
 	}
 	if recentStart <= leadingSystems {
@@ -115,7 +115,7 @@ func compactHistoricalToolGroups(messages []sdk.Message, recentMessages, resultL
 	hasCompactableToolHistory := false
 	for index := leadingSystems; index < recentStart; index++ {
 		message := messages[index]
-		if message.Role == sdk.RoleTool || message.Role == sdk.RoleAssistant && len(message.ToolCalls) > 0 {
+		if message.Role == domain.RoleTool || message.Role == domain.RoleAssistant && len(message.ToolCalls) > 0 {
 			hasCompactableToolHistory = true
 			break
 		}
@@ -124,25 +124,25 @@ func compactHistoricalToolGroups(messages []sdk.Message, recentMessages, resultL
 		return messages
 	}
 
-	out := make([]sdk.Message, 0, len(messages))
+	out := make([]domain.Message, 0, len(messages))
 	out = append(out, messages[:leadingSystems]...)
 	for index := leadingSystems; index < recentStart; {
 		message := messages[index]
-		if message.Role == sdk.RoleAssistant && len(message.ToolCalls) > 0 {
+		if message.Role == domain.RoleAssistant && len(message.ToolCalls) > 0 {
 			if strings.TrimSpace(message.Content) != "" || len(message.Parts) > 0 {
 				text := message
 				text.ToolCalls = nil
 				out = append(out, text)
 			}
 			next := index + 1
-			for next < recentStart && messages[next].Role == sdk.RoleTool {
+			for next < recentStart && messages[next].Role == domain.RoleTool {
 				next++
 			}
 			results := messages[index+1 : next]
 			for _, call := range message.ToolCalls {
 				resultIndex := toolResultIndex(results, call.ID)
 				if resultIndex < 0 {
-					out = append(out, historicalToolMessage(call.Name, sdk.Message{}, false, resultLimit))
+					out = append(out, historicalToolMessage(call.Name, domain.Message{}, false, resultLimit))
 					continue
 				}
 				out = append(out, historicalToolMessage(call.Name, results[resultIndex], true, resultLimit))
@@ -156,7 +156,7 @@ func compactHistoricalToolGroups(messages []sdk.Message, recentMessages, resultL
 			index = next
 			continue
 		}
-		if message.Role == sdk.RoleTool {
+		if message.Role == domain.RoleTool {
 			out = append(out, historicalToolMessage(message.ToolName, message, true, resultLimit))
 			index++
 			continue
@@ -168,7 +168,7 @@ func compactHistoricalToolGroups(messages []sdk.Message, recentMessages, resultL
 	return out
 }
 
-func toolCallIndex(calls []sdk.ToolCall, callID string) int {
+func toolCallIndex(calls []domain.ToolCall, callID string) int {
 	for index, call := range calls {
 		if call.ID == callID {
 			return index
@@ -177,7 +177,7 @@ func toolCallIndex(calls []sdk.ToolCall, callID string) int {
 	return -1
 }
 
-func toolResultIndex(results []sdk.Message, callID string) int {
+func toolResultIndex(results []domain.Message, callID string) int {
 	for index, result := range results {
 		if result.ToolCallID == callID {
 			return index
@@ -186,15 +186,15 @@ func toolResultIndex(results []sdk.Message, callID string) int {
 	return -1
 }
 
-func historicalToolMessage(toolName string, message sdk.Message, found bool, limit int) sdk.Message {
+func historicalToolMessage(toolName string, message domain.Message, found bool, limit int) domain.Message {
 	name := strings.TrimSpace(toolName)
 	if name == "" {
 		name = "unknown"
 	}
 	if !found {
-		return sdk.Message{ID: sdk.NewMessageID(), Role: sdk.RoleAssistant, Content: fmt.Sprintf("Historical tool %s was requested, but its result is no longer retained.", name)}
+		return domain.Message{ID: domain.NewMessageID(), Role: domain.RoleAssistant, Content: fmt.Sprintf("Historical tool %s was requested, but its result is no longer retained.", name)}
 	}
-	return sdk.Message{ID: message.ID, Role: sdk.RoleAssistant, Content: historicalToolResultText(name, message.Content, limit)}
+	return domain.Message{ID: message.ID, Role: domain.RoleAssistant, Content: historicalToolResultText(name, message.Content, limit)}
 }
 
 func historicalToolResultText(name, content string, limit int) string {
@@ -418,12 +418,12 @@ func truncateUTF8(value string, limit int, marker string) string {
 	return strutil.TruncateBytesWithMarker(value, limit, marker)
 }
 
-func buildSpans(messages []sdk.Message, start int) []messageSpan {
+func buildSpans(messages []domain.Message, start int) []messageSpan {
 	spans := make([]messageSpan, 0, len(messages)-start)
 	for index := start; index < len(messages); {
 		end := index + 1
-		if messages[index].Role == sdk.RoleAssistant && len(messages[index].ToolCalls) > 0 {
-			for end < len(messages) && messages[end].Role == sdk.RoleTool {
+		if messages[index].Role == domain.RoleAssistant && len(messages[index].ToolCalls) > 0 {
+			for end < len(messages) && messages[end].Role == domain.RoleTool {
 				end++
 			}
 		}
@@ -437,7 +437,7 @@ func buildSpans(messages []sdk.Message, start int) []messageSpan {
 	return spans
 }
 
-func messageBytes(message sdk.Message) int {
+func messageBytes(message domain.Message) int {
 	const messageOverhead = 128
 	total := messageOverhead + len(message.Content) + len(message.ToolCallID) + len(message.ToolName)
 	for _, part := range message.Parts {
@@ -450,7 +450,7 @@ func messageBytes(message sdk.Message) int {
 }
 
 // EstimatedBytes reports the retention payload estimate used by Retain.
-func EstimatedBytes(messages []sdk.Message) int {
+func EstimatedBytes(messages []domain.Message) int {
 	total := 0
 	for _, message := range messages {
 		total += messageBytes(message)

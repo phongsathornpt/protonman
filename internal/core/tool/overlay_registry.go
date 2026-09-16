@@ -3,7 +3,7 @@ package tool
 import (
 	"fmt"
 
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	"github.com/phongsathornpt/protonman/proton-sdk/usecase"
 )
 
 // OverlayRegistry replaces selected handlers while preserving the base
@@ -67,7 +67,7 @@ func (r *OverlayRegistry) Lookup(name string) (Handler, bool) {
 	return r.base.Lookup(name)
 }
 
-func (r *OverlayRegistry) CompiledValidators(name string) (input, output *sdk.ToolSchemaValidator, ok bool) {
+func (r *OverlayRegistry) CompiledValidators(name string) (input, output *usecase.ToolSchemaValidator, ok bool) {
 	if r == nil || r.base == nil {
 		return nil, nil, false
 	}
@@ -75,7 +75,7 @@ func (r *OverlayRegistry) CompiledValidators(name string) (input, output *sdk.To
 		return nil, nil, false
 	}
 	type compiledRegistry interface {
-		CompiledValidators(string) (*sdk.ToolSchemaValidator, *sdk.ToolSchemaValidator, bool)
+		CompiledValidators(string) (*usecase.ToolSchemaValidator, *usecase.ToolSchemaValidator, bool)
 	}
 	compiled, ok := r.base.(compiledRegistry)
 	if !ok {

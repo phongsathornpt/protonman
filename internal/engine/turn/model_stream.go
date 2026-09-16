@@ -11,17 +11,18 @@ import (
 	"time"
 
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	"github.com/phongsathornpt/protonman/proton-sdk/domain"
+	"github.com/phongsathornpt/protonman/proton-sdk/port"
 )
 
 func (l *Loop) streamRound(
 	ctx context.Context,
 	round int,
-	request sdk.Request,
+	request domain.Request,
 	sink Sink,
 ) (model.Message, []model.ToolCall, error) {
 	startedAt := time.Now()
-	ctx = sdk.WithRetryObserver(ctx, func(retryCtx context.Context, retry sdk.RetryEvent) {
+	ctx = domain.WithRetryObserver(ctx, func(retryCtx context.Context, retry domain.RetryEvent) {
 		_ = emit(retryCtx, sink, Event{Kind: EventRetryScheduled, Round: round, Retry: retry})
 	})
 	slog.DebugContext(ctx, "model round stream opening",
@@ -60,14 +61,14 @@ func (l *Loop) streamRound(
 	return assistant, calls, nil
 }
 
-func promptCacheHitPercent(usage sdk.Usage) float64 {
+func promptCacheHitPercent(usage domain.Usage) float64 {
 	if usage.InputTokens <= 0 || usage.CachedInputTokens <= 0 {
 		return 0
 	}
 	return float64(usage.CachedInputTokens) * 100 / float64(usage.InputTokens)
 }
 
-func consumeSDKStream(ctx context.Context, round int, stream sdk.Stream, sink Sink) (model.Message, []model.ToolCall, error) {
+func consumeSDKStream(ctx context.Context, round int, stream port.Stream, sink Sink) (model.Message, []model.ToolCall, error) {
 	var text strings.Builder
 	var reasoning strings.Builder
 	calls := make([]model.ToolCall, 0)
@@ -83,18 +84,18 @@ func consumeSDKStream(ctx context.Context, round int, stream sdk.Stream, sink Si
 			return model.Message{}, nil, fmt.Errorf("validate model stream round %d: %w", round, err)
 		}
 		switch event.Kind {
-		case sdk.EventReasoningDelta:
+		case domain.EventReasoningDelta:
 			reasoning.WriteString(event.ReasoningContent)
-		case sdk.EventTextDelta:
+		case domain.EventTextDelta:
 			text.WriteString(event.Text)
 			if err := emit(ctx, sink, Event{Kind: EventTextDelta, Round: round, Text: event.Text}); err != nil {
 				return model.Message{}, nil, err
 			}
-		case sdk.EventToolCall:
+		case domain.EventToolCall:
 			call := event.ToolCall
 			call.Arguments = append(json.RawMessage(nil), call.Arguments...)
 			calls = append(calls, call)
-		case sdk.EventUsage:
+		case domain.EventUsage:
 			slog.DebugContext(ctx, "model round token usage",
 				"round", round,
 				"input_tokens", event.Usage.InputTokens,
@@ -103,12 +104,12 @@ func consumeSDKStream(ctx context.Context, round int, stream sdk.Stream, sink Si
 				"output_tokens", event.Usage.OutputTokens,
 				"total_tokens", event.Usage.TotalTokens,
 			)
-		case sdk.EventFinish:
+		case domain.EventFinish:
 			if text.Len() == 0 && len(calls) == 0 {
 				return model.Message{}, nil, fmt.Errorf("model stream round %d: %w", round, ErrEmptyResponse)
 			}
 			return model.Message{ID: model.NewMessageID(), Role: model.RoleAssistant, Content: text.String(), ReasoningContent: reasoning.String(), ToolCalls: calls}, calls, nil
 		}
 	}
-	return model.Message{}, nil, fmt.Errorf("read model stream round %d: %w", round, sdk.ErrIncompleteStream)
+	return model.Message{}, nil, fmt.Errorf("read model stream round %d: %w", round, domain.ErrIncompleteStream)
 }

@@ -20,7 +20,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/app"
 	"github.com/phongsathornpt/protonman/internal/base/runtimepolicy"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	"github.com/phongsathornpt/protonman/proton-sdk/domain"
 )
 
 const modelSetupViewID = "model_setup"
@@ -30,7 +30,7 @@ type modelSetupAppliedMsg struct {
 	operationID  asyncOperationID
 	providerName string
 	modelID      string
-	reasoning    sdk.ReasoningEffort
+	reasoning    domain.ReasoningEffort
 	unverified   bool
 	err          error
 }
@@ -46,9 +46,9 @@ type modelSetupPaneView struct {
 	fetchCancel         context.CancelFunc
 	loading             bool
 	err                 error
-	reasoningChoices    []sdk.ReasoningEffort
+	reasoningChoices    []domain.ReasoningEffort
 	reasoningIndex      int
-	reasoningPreference sdk.ReasoningEffort
+	reasoningPreference domain.ReasoningEffort
 	layoutWidth         int
 	layoutHeight        int
 }
@@ -168,6 +168,11 @@ func (v *modelSetupPaneView) resize(width, height int) {
 	v.initPicker()
 	v.layoutWidth = width
 	v.layoutHeight = height
+	v.picker.SetShowTitle(false)
+	v.picker.SetShowFilter(v.picker.SettingFilter())
+	v.picker.SetShowStatusBar(false)
+	v.picker.SetShowPagination(false)
+	v.picker.SetShowHelp(false)
 	visibleRows := len(v.picker.VisibleItems())
 	if visibleRows == 0 {
 		visibleRows = 1
@@ -176,7 +181,7 @@ func (v *modelSetupPaneView) resize(width, height int) {
 	if v.picker.SettingFilter() {
 		visibleRows++
 	}
-	v.picker.SetSize(maxInt(12, width-8), visibleRows)
+	v.picker.SetSize(maxInt(1, width-8), visibleRows)
 }
 
 func (v *modelSetupPaneView) setModels(models []model.RemoteModel, activeProvider, activeModel string) {
@@ -270,27 +275,27 @@ func (v *modelSetupPaneView) selectedRemoteModel() (model.RemoteModel, bool) {
 	return item.model, true
 }
 
-func (v *modelSetupPaneView) syncReasoningForSelection(desired sdk.ReasoningEffort) {
+func (v *modelSetupPaneView) syncReasoningForSelection(desired domain.ReasoningEffort) {
 	if v == nil {
 		return
 	}
 	md, ok := v.selectedRemoteModel()
 	if !ok {
-		v.reasoningChoices = []sdk.ReasoningEffort{sdk.ReasoningDefault}
+		v.reasoningChoices = []domain.ReasoningEffort{domain.ReasoningDefault}
 		v.reasoningIndex = 0
 		return
 	}
 	choices := modelsetup.ReasoningChoices(v.activeProviderName(), md)
 	if len(choices) == 0 {
-		choices = []sdk.ReasoningEffort{sdk.ReasoningDefault}
+		choices = []domain.ReasoningEffort{domain.ReasoningDefault}
 	}
 	v.reasoningChoices = choices
 	v.reasoningIndex = modelsetup.ReasoningIndex(choices, desired)
 }
 
-func (v *modelSetupPaneView) selectedReasoning() sdk.ReasoningEffort {
+func (v *modelSetupPaneView) selectedReasoning() domain.ReasoningEffort {
 	if v == nil {
-		return sdk.ReasoningDefault
+		return domain.ReasoningDefault
 	}
 	return modelsetup.SelectedReasoning(v.reasoningChoices, v.reasoningIndex)
 }
@@ -319,13 +324,7 @@ var modelSetupKeys = struct {
 }
 
 func (v *modelSetupPaneView) Render(ctx paneRenderContext) string {
-	v.initPicker()
 	mode := layoutModeForHeight(ctx.height)
-	v.picker.SetShowTitle(false)
-	v.picker.SetShowFilter(v.picker.SettingFilter())
-	v.picker.SetShowStatusBar(false)
-	v.picker.SetShowPagination(false)
-	v.picker.SetShowHelp(false)
 
 	rows := []string{brandStyle.Render("Switch Model")}
 	if len(v.providerNames) > 1 {
@@ -337,7 +336,7 @@ func (v *modelSetupPaneView) Render(ctx paneRenderContext) string {
 	case v.loading:
 		rows = append(rows, mutedStyle.Render("Loading models…"))
 	case v.err != nil:
-		rows = append(rows, errorStyle.Render("Failed to load models"), mutedStyle.Render(truncateWithEllipsis(v.err.Error(), maxInt(8, ctx.width-8))))
+		rows = append(rows, errorStyle.Render("Failed to load models"), mutedStyle.Render(truncateWithEllipsis(v.err.Error(), maxInt(1, ctx.width-8))))
 	case len(v.picker.Items()) == 0 && !v.picker.SettingFilter() && !v.picker.IsFiltered():
 		rows = append(rows, mutedStyle.Render("No models available."))
 	case len(v.picker.VisibleItems()) == 0 && strings.TrimSpace(v.picker.FilterValue()) != "":
@@ -443,7 +442,7 @@ func modelSetupHelp(width int, adjustableEffort bool) string {
 func (v *modelSetupPaneView) effortLayout() (string, string) {
 	choices := v.reasoningChoices
 	if len(choices) == 0 {
-		choices = []sdk.ReasoningEffort{sdk.ReasoningDefault}
+		choices = []domain.ReasoningEffort{domain.ReasoningDefault}
 	}
 	if len(choices) <= 1 {
 		return "Effort    " + brandStyle.Render(reasoningpolicy.EffortLabel(choices[0])), ""
@@ -593,7 +592,7 @@ func (v *modelSetupPaneView) HandlePaneKey(_ paneRenderContext, message tea.KeyP
 	}
 }
 
-func persistModelSetupCmd(providers app.Providers, operationID asyncOperationID, gate *asyncOperationGate, providerName, modelID string, reasoning sdk.ReasoningEffort, unverified bool) tea.Cmd {
+func persistModelSetupCmd(providers app.Providers, operationID asyncOperationID, gate *asyncOperationGate, providerName, modelID string, reasoning domain.ReasoningEffort, unverified bool) tea.Cmd {
 	return func() tea.Msg {
 		if gate != nil && !gate.current(operationID) {
 			return modelSetupAppliedMsg{operationID: operationID, providerName: providerName, modelID: modelID, reasoning: reasoning, unverified: unverified, err: errStaleConfigMutation}

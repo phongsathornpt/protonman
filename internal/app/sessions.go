@@ -9,7 +9,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/core/session"
 	tododomain "github.com/phongsathornpt/protonman/internal/core/todo"
 	"github.com/phongsathornpt/protonman/internal/platform/appdirs"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	"github.com/phongsathornpt/protonman/proton-sdk/domain"
 )
 
 // TodoStoreOpener opens the durable session TODO store behind the core-owned
@@ -70,7 +70,7 @@ type SessionDetail struct {
 	AgentProfile       string
 	ReasoningEffort    string
 	LowConcurrencyMode string
-	Messages           []sdk.Message
+	Messages           []domain.Message
 	UpdatedAt          time.Time
 }
 

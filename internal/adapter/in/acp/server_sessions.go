@@ -9,7 +9,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/app"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 	"github.com/phongsathornpt/protonman/internal/core/session"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	"github.com/phongsathornpt/protonman/proton-sdk/domain"
 )
 
 func (s *Server) lookupSession(sessionID string) (*Session, bool) {
@@ -82,7 +82,7 @@ func (s *Server) loadOrCreateSession(ctx context.Context, sessionID string, cwd 
 				return nil, fmt.Errorf("restore session mode %q: %w", sessionID, err)
 			}
 			if strings.TrimSpace(state.ReasoningEffort) != "" {
-				effort, parseErr := sdk.ParseReasoningEffort(state.ReasoningEffort)
+				effort, parseErr := domain.ParseReasoningEffort(state.ReasoningEffort)
 				if parseErr != nil {
 					return nil, fmt.Errorf("restore session reasoning %q: %w", sessionID, parseErr)
 				}

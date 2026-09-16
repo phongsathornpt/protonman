@@ -1,6 +1,6 @@
 package modelprofile
 
-import sdk "github.com/phongsathornpt/protonman/proton-sdk"
+import "github.com/phongsathornpt/protonman/proton-sdk/domain"
 
 var builtinRegistry = mustRegistry(
 	Profile{
@@ -11,8 +11,8 @@ var builtinRegistry = mustRegistry(
 		},
 		Reasoning: Reasoning{
 			Support: SupportYes,
-			Levels:  []sdk.ReasoningEffort{sdk.ReasoningLow, sdk.ReasoningMedium, sdk.ReasoningHigh},
-			Default: sdk.ReasoningMedium,
+			Levels:  []domain.ReasoningEffort{domain.ReasoningLow, domain.ReasoningMedium, domain.ReasoningHigh},
+			Default: domain.ReasoningMedium,
 		},
 		ContextWindow: 1_048_576,
 		Compatibility: CompatibilityPolicy{ToolSchemaDialect: ToolSchemaGeminiSubset},
@@ -27,8 +27,8 @@ var builtinRegistry = mustRegistry(
 		Capabilities: Capabilities{Reasoning: SupportYes},
 		Reasoning: Reasoning{
 			Support: SupportYes,
-			Levels:  []sdk.ReasoningEffort{sdk.ReasoningLow, sdk.ReasoningHigh, sdk.ReasoningMax},
-			Default: sdk.ReasoningMax,
+			Levels:  []domain.ReasoningEffort{domain.ReasoningLow, domain.ReasoningHigh, domain.ReasoningMax},
+			Default: domain.ReasoningMax,
 		},
 	},
 	Profile{
@@ -42,8 +42,8 @@ var builtinRegistry = mustRegistry(
 		},
 		Reasoning: Reasoning{
 			Support: SupportYes,
-			Levels:  []sdk.ReasoningEffort{sdk.ReasoningLow, sdk.ReasoningHigh, sdk.ReasoningMax},
-			Default: sdk.ReasoningMax,
+			Levels:  []domain.ReasoningEffort{domain.ReasoningLow, domain.ReasoningHigh, domain.ReasoningMax},
+			Default: domain.ReasoningMax,
 		},
 		ContextWindow:   1_048_576,
 		MaxOutputTokens: 131_072,
@@ -56,7 +56,7 @@ var builtinRegistry = mustRegistry(
 		Capabilities: Capabilities{Reasoning: SupportYes},
 		Reasoning: Reasoning{
 			Support: SupportYes,
-			Levels:  []sdk.ReasoningEffort{sdk.ReasoningNone},
+			Levels:  []domain.ReasoningEffort{domain.ReasoningNone},
 		},
 	},
 	Profile{
@@ -67,8 +67,8 @@ var builtinRegistry = mustRegistry(
 		},
 		Reasoning: Reasoning{
 			Support: SupportYes,
-			Levels:  []sdk.ReasoningEffort{sdk.ReasoningNone, sdk.ReasoningLow, sdk.ReasoningMedium, sdk.ReasoningXHigh},
-			Default: sdk.ReasoningXHigh,
+			Levels:  []domain.ReasoningEffort{domain.ReasoningNone, domain.ReasoningLow, domain.ReasoningMedium, domain.ReasoningXHigh},
+			Default: domain.ReasoningXHigh,
 		},
 	},
 	Profile{
@@ -79,10 +79,10 @@ var builtinRegistry = mustRegistry(
 		},
 		Reasoning: Reasoning{
 			Support: SupportYes,
-			Levels: []sdk.ReasoningEffort{
-				sdk.ReasoningLow, sdk.ReasoningMedium, sdk.ReasoningXHigh,
+			Levels: []domain.ReasoningEffort{
+				domain.ReasoningLow, domain.ReasoningMedium, domain.ReasoningXHigh,
 			},
-			Default: sdk.ReasoningMedium,
+			Default: domain.ReasoningMedium,
 		},
 	},
 	Profile{
@@ -94,7 +94,7 @@ var builtinRegistry = mustRegistry(
 		Capabilities: Capabilities{Tools: SupportYes, Reasoning: SupportYes},
 		Reasoning: Reasoning{
 			Support: SupportYes,
-			Levels:  []sdk.ReasoningEffort{sdk.ReasoningNone},
+			Levels:  []domain.ReasoningEffort{domain.ReasoningNone},
 		},
 	},
 	Profile{
@@ -103,7 +103,7 @@ var builtinRegistry = mustRegistry(
 		Capabilities: Capabilities{Reasoning: SupportYes},
 		Reasoning: Reasoning{
 			Support: SupportYes,
-			Levels:  []sdk.ReasoningEffort{sdk.ReasoningNone},
+			Levels:  []domain.ReasoningEffort{domain.ReasoningNone},
 		},
 	},
 	Profile{
@@ -114,10 +114,10 @@ var builtinRegistry = mustRegistry(
 		},
 		Reasoning: Reasoning{
 			Support: SupportYes,
-			Levels: []sdk.ReasoningEffort{
-				sdk.ReasoningNone, sdk.ReasoningLow, sdk.ReasoningHigh, sdk.ReasoningMax,
+			Levels: []domain.ReasoningEffort{
+				domain.ReasoningNone, domain.ReasoningLow, domain.ReasoningHigh, domain.ReasoningMax,
 			},
-			Default: sdk.ReasoningHigh,
+			Default: domain.ReasoningHigh,
 		},
 	},
 	Profile{
@@ -131,10 +131,10 @@ var builtinRegistry = mustRegistry(
 		},
 		Reasoning: Reasoning{
 			Support: SupportYes,
-			Levels: []sdk.ReasoningEffort{
-				sdk.ReasoningNone, sdk.ReasoningLow, sdk.ReasoningHigh, sdk.ReasoningMax,
+			Levels: []domain.ReasoningEffort{
+				domain.ReasoningNone, domain.ReasoningLow, domain.ReasoningHigh, domain.ReasoningMax,
 			},
-			Default: sdk.ReasoningHigh,
+			Default: domain.ReasoningHigh,
 		},
 	},
 	Profile{
@@ -152,11 +152,11 @@ var builtinRegistry = mustRegistry(
 		},
 		Reasoning: Reasoning{
 			Support: SupportYes,
-			Levels: []sdk.ReasoningEffort{
-				sdk.ReasoningMinimal, sdk.ReasoningLow, sdk.ReasoningMedium,
-				sdk.ReasoningHigh, sdk.ReasoningXHigh, sdk.ReasoningMax,
+			Levels: []domain.ReasoningEffort{
+				domain.ReasoningMinimal, domain.ReasoningLow, domain.ReasoningMedium,
+				domain.ReasoningHigh, domain.ReasoningXHigh, domain.ReasoningMax,
 			},
-			Default: sdk.ReasoningHigh,
+			Default: domain.ReasoningHigh,
 		},
 		VisionPolicy: DefaultVisionPolicy(),
 	},
@@ -174,8 +174,8 @@ var builtinRegistry = mustRegistry(
 		},
 		Reasoning: Reasoning{
 			Support: SupportYes,
-			Levels:  []sdk.ReasoningEffort{sdk.ReasoningLow, sdk.ReasoningMedium, sdk.ReasoningHigh, sdk.ReasoningXHigh},
-			Default: sdk.ReasoningHigh,
+			Levels:  []domain.ReasoningEffort{domain.ReasoningLow, domain.ReasoningMedium, domain.ReasoningHigh, domain.ReasoningXHigh},
+			Default: domain.ReasoningHigh,
 		},
 		VisionPolicy: DefaultVisionPolicy(),
 	},
@@ -224,11 +224,11 @@ func gpt56Profile(name string, exactIDs []string) Profile {
 		},
 		Reasoning: Reasoning{
 			Support: SupportYes,
-			Levels: []sdk.ReasoningEffort{
-				sdk.ReasoningNone, sdk.ReasoningLow, sdk.ReasoningMedium,
-				sdk.ReasoningHigh, sdk.ReasoningXHigh, sdk.ReasoningMax,
+			Levels: []domain.ReasoningEffort{
+				domain.ReasoningNone, domain.ReasoningLow, domain.ReasoningMedium,
+				domain.ReasoningHigh, domain.ReasoningXHigh, domain.ReasoningMax,
 			},
-			Default: sdk.ReasoningMedium,
+			Default: domain.ReasoningMedium,
 		},
 		ContextWindow:   1_050_000,
 		MaxOutputTokens: 131_072,

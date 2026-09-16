@@ -28,13 +28,13 @@ import (
 	"github.com/phongsathornpt/protonman/internal/engine/toolcall"
 	"github.com/phongsathornpt/protonman/internal/feature/agent"
 	memoryfeature "github.com/phongsathornpt/protonman/internal/feature/memory"
+	"github.com/phongsathornpt/protonman/internal/feature/project"
 	"github.com/phongsathornpt/protonman/internal/feature/skill"
 	tododomain "github.com/phongsathornpt/protonman/internal/feature/todo"
-	"github.com/phongsathornpt/protonman/internal/feature/project"
 	"github.com/phongsathornpt/protonman/internal/platform/appdirs"
 	"github.com/phongsathornpt/protonman/internal/platform/checkpoint"
 	"github.com/phongsathornpt/protonman/internal/platform/sandbox"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	"github.com/phongsathornpt/protonman/proton-sdk/domain"
 )
 
 type appRuntime struct {
@@ -69,6 +69,11 @@ func reconcileDelegatedTaskStatus(ctx context.Context, sessionsRoot, sessionID, 
 }
 
 func (r *appRuntime) Close() {
+	if r != nil && r.application.ModelFactory != nil {
+		if closer, ok := r.application.ModelFactory.(interface{ Close() }); ok {
+			closer.Close()
+		}
+	}
 	if r != nil && r.coordinator != nil {
 		_ = r.coordinator.Close()
 	}
@@ -350,7 +355,7 @@ func buildRuntime(ctx context.Context, options cliOptions) (*appRuntime, error) 
 		return nil, err
 	}
 	if found && strings.TrimSpace(state.ReasoningEffort) != "" {
-		effort, parseErr := sdk.ParseReasoningEffort(state.ReasoningEffort)
+		effort, parseErr := domain.ParseReasoningEffort(state.ReasoningEffort)
 		if parseErr != nil {
 			return nil, fmt.Errorf("restore session %q reasoning effort: %w", sessionID, parseErr)
 		}

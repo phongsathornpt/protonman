@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/phongsathornpt/protonman/internal/core/permission"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	"github.com/phongsathornpt/protonman/proton-sdk/domain"
 )
 
 // ValidateID rejects session identifiers that could escape a persistence root.
@@ -114,7 +114,7 @@ func PrepareStateForSave(sessionID string, state State, existing *State, now tim
 // Preview returns the first bounded user-message summary for session discovery.
 func Preview(messages []Message) string {
 	for _, message := range messages {
-		if message.Role != sdk.RoleUser {
+		if message.Role != domain.RoleUser {
 			continue
 		}
 		text := strings.Join(strings.Fields(message.Content), " ")

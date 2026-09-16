@@ -65,14 +65,9 @@ const (
 // MemoryPolicy is the single source of truth for durable-memory retrieval,
 // promotion, and bounded startup extraction work.
 type MemoryPolicy struct {
-	MaxEntriesPerTurn int
-	MaxContextBytes   int
-	MaxIndexEntries   int
-	// MaxForgottenEntries bounds the per-scope tombstone set that keeps a
-	// forgotten memory from being recreated by a later extraction pass. It is
-	// intentionally larger than MaxIndexEntries because a tombstone is far
-	// smaller than an entry and outlives the entry it suppresses.
-	MaxForgottenEntries        int
+	MaxEntriesPerTurn          int
+	MaxContextBytes            int
+	MaxIndexEntries            int
 	MaxExtractionSessions      int
 	MaxExtractionInputBytes    int
 	ExtractionIdleAge          time.Duration
@@ -87,7 +82,6 @@ func DurableMemory() MemoryPolicy {
 		MaxEntriesPerTurn:          6,
 		MaxContextBytes:            6 * 1024,
 		MaxIndexEntries:            4096,
-		MaxForgottenEntries:        8192,
 		MaxExtractionSessions:      4,
 		MaxExtractionInputBytes:    64 * 1024,
 		ExtractionIdleAge:          2 * time.Minute,

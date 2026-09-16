@@ -28,7 +28,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/feature/agent"
 	"github.com/phongsathornpt/protonman/internal/feature/skill"
 	tododomain "github.com/phongsathornpt/protonman/internal/feature/todo"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	"github.com/phongsathornpt/protonman/proton-sdk/domain"
 )
 
 const (
@@ -56,7 +56,7 @@ type agentLifecycleMsg struct{ event agent.Event }
 type turnProgress struct {
 	Round     int
 	ToolCalls int
-	Retry     sdk.RetryEvent
+	Retry     domain.RetryEvent
 }
 
 type reasoningPreferenceSource uint8
@@ -74,8 +74,8 @@ type agentModelState struct {
 	agentHistory                   agentui.Tracker
 	agentProfile                   string
 	subagentsEnabled               bool
-	reasoningEffort                sdk.ReasoningEffort
-	reasoningPreference            sdk.ReasoningEffort
+	reasoningEffort                domain.ReasoningEffort
+	reasoningPreference            domain.ReasoningEffort
 	reasoningPreferenceSet         bool
 	reasoningPreferenceSource      reasoningPreferenceSource
 	reasoningCompatibilityFallback bool

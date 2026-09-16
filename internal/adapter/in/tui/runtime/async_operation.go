@@ -7,7 +7,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	"github.com/phongsathornpt/protonman/proton-sdk/domain"
 )
 
 type asyncOperationID uint64
@@ -87,7 +87,7 @@ func (m *bubbleModel) beginModelSetup(providerName, modelID string, unverified b
 	return m.beginModelSetupSelect(providerName, modelID, m.reasoningPreferenceValue(), unverified)
 }
 
-func (m *bubbleModel) beginModelSetupSelect(providerName, modelID string, reasoning sdk.ReasoningEffort, unverified bool) tea.Cmd {
+func (m *bubbleModel) beginModelSetupSelect(providerName, modelID string, reasoning domain.ReasoningEffort, unverified bool) tea.Cmd {
 	id := nextAsyncOperationID()
 	m.activeModelSetup = id
 	m.configMutationGate.activate(id)

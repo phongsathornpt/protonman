@@ -3,7 +3,6 @@ package memoryfs
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -11,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/phongsathornpt/protonman/internal/base/runtimepolicy"
 	"github.com/phongsathornpt/protonman/internal/core/memory"
 )
 
@@ -347,32 +345,24 @@ func TestFileStoreForgetTombstoneIsWrittenToIndex(t *testing.T) {
 	}
 }
 
-// TestMergeForgottenBoundsTombstoneSet verifies the tombstone set cannot grow
-// without bound, and that eviction drops the oldest forgets rather than an
-// arbitrary ID (the newest correction must always be honored).
-func TestMergeForgottenBoundsTombstoneSet(t *testing.T) {
-	limit := runtimepolicy.DurableMemory().MaxForgottenEntries
-	if limit <= 0 {
-		t.Fatal("expected a positive tombstone bound")
+// TestMergeForgottenRetainsOlderTombstones verifies that an old correction is
+// not evicted and later recreated by extraction.
+func TestMergeForgottenRetainsOlderTombstones(t *testing.T) {
+	existing := []string{"old-000000"}
+	got := mergeForgotten(existing, map[string]struct{}{"newest": {}})
+	if len(got) != 2 {
+		t.Fatalf("tombstone set = %d, want 2", len(got))
 	}
-	existing := make([]string, 0, limit)
-	for i := 0; i < limit; i++ {
-		existing = append(existing, fmt.Sprintf("old-%06d", i))
-	}
-	newest := map[string]struct{}{"newest": {}}
-	got := mergeForgotten(existing, newest)
-	if len(got) != limit {
-		t.Fatalf("tombstone set = %d, want bounded to %d", len(got), limit)
-	}
-	if got[len(got)-1] != "newest" {
-		t.Fatalf("newest tombstone was evicted: %q", got[len(got)-1])
-	}
-	if got[0] == "old-000000" {
-		t.Fatal("expected the oldest tombstone to be evicted first")
-	}
-	for _, id := range got {
-		if id == "old-000000" {
-			t.Fatal("oldest tombstone survived eviction")
+	for _, want := range []string{"old-000000", "newest"} {
+		found := false
+		for _, id := range got {
+			if id == want {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("tombstone %q was evicted: %v", want, got)
 		}
 	}
 }

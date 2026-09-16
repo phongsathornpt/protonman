@@ -9,7 +9,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/app"
 	"github.com/phongsathornpt/protonman/internal/engine/toolcall"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	"github.com/phongsathornpt/protonman/proton-sdk/domain"
 )
 
 func acpSessionRuntimeOption(runtimeState *appRuntime) acp.Option {
@@ -40,7 +40,7 @@ func acpSessionRuntimeOption(runtimeState *appRuntime) acp.Option {
 		if modelID == "" {
 			return nil, fmt.Errorf("model is required")
 		}
-		effort, err := sdk.ParseReasoningEffort(settings.Reasoning)
+		effort, err := domain.ParseReasoningEffort(settings.Reasoning)
 		if err != nil {
 			return nil, err
 		}

@@ -12,7 +12,9 @@ import (
 	"github.com/phongsathornpt/protonman/internal/core/modelclient"
 	"github.com/phongsathornpt/protonman/internal/core/modelprofile"
 	"github.com/phongsathornpt/protonman/internal/core/session"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	"github.com/phongsathornpt/protonman/proton-sdk/domain"
+	"github.com/phongsathornpt/protonman/proton-sdk/port"
+	"github.com/phongsathornpt/protonman/proton-sdk/usecase"
 )
 
 // NewModelFactory decorates a model factory with bounded memory retrieval only.
@@ -41,12 +43,15 @@ func newModelFactory(next modelclient.Factory, repository corememory.Repository,
 	// A session-bound factory starts unbound until BindSession supplies the
 	// active workspace, so it never retrieves from a workspace it was not given.
 	bound := workspaceKey != ""
+	backgroundCtx, cancelBackground := context.WithCancel(context.Background())
 	return &modelFactory{
-		next:       next,
-		repository: repository,
-		sessions:   sessions,
-		retriever:  NewRetriever(repository, policy),
-		policy:     policy,
+		next:             next,
+		repository:       repository,
+		sessions:         sessions,
+		retriever:        NewRetriever(repository, policy),
+		policy:           policy,
+		backgroundCtx:    backgroundCtx,
+		cancelBackground: cancelBackground,
 		binding: sessionBinding{
 			bound:        bound,
 			currentID:    strings.TrimSpace(currentSessionID),
@@ -97,12 +102,23 @@ func (b *sessionBinding) claimExtraction(sessionID string) bool {
 }
 
 type modelFactory struct {
-	next       modelclient.Factory
-	repository corememory.Repository
-	sessions   session.Repository
-	retriever  *Retriever
-	policy     runtimepolicy.MemoryPolicy
-	binding    sessionBinding
+	next             modelclient.Factory
+	repository       corememory.Repository
+	sessions         session.Repository
+	retriever        *Retriever
+	policy           runtimepolicy.MemoryPolicy
+	backgroundCtx    context.Context
+	cancelBackground context.CancelFunc
+	binding          sessionBinding
+}
+
+// Close stops extraction work started by this factory. The factory is shared
+// by the runtime, so its lifetime is longer than any individual model.
+func (f *modelFactory) Close() {
+	if f == nil || f.cancelBackground == nil {
+		return
+	}
+	f.cancelBackground()
 }
 
 // BindSession points a root model factory at the active session. It is a no-op
@@ -124,14 +140,14 @@ func (f *modelFactory) BaseFactory() modelclient.Factory {
 	return f.next
 }
 
-func (f *modelFactory) Build(request modelclient.Request) sdk.LanguageModel {
+func (f *modelFactory) Build(request modelclient.Request) port.LanguageModel {
 	base := f.next.Build(request)
 	if base == nil {
 		return nil
 	}
 	bound, currentSessionID, workspaceKey := f.binding.snapshot()
 	if f.sessions != nil && bound && f.binding.claimExtraction(currentSessionID) {
-		NewExtractor(f.sessions, f.repository, base, currentSessionID, workspaceKey, f.policy).StartBackground()
+		NewExtractor(f.sessions, f.repository, base, currentSessionID, workspaceKey, f.policy).StartBackground(f.backgroundCtx)
 	}
 	model := &memoryLanguageModel{
 		base:      base,
@@ -146,7 +162,7 @@ func (f *modelFactory) Build(request modelclient.Request) sdk.LanguageModel {
 }
 
 type memoryLanguageModel struct {
-	base      sdk.LanguageModel
+	base      port.LanguageModel
 	retriever *Retriever
 	binding   *sessionBinding
 	policy    runtimepolicy.MemoryPolicy
@@ -156,22 +172,35 @@ type memoryLanguageModel struct {
 	lastContext  string
 }
 
-func (m *memoryLanguageModel) Provider() string                    { return m.base.Provider() }
-func (m *memoryLanguageModel) ModelID() string                     { return m.base.ModelID() }
-func (m *memoryLanguageModel) Capabilities() sdk.ModelCapabilities { return m.base.Capabilities() }
-func (m *memoryLanguageModel) ContextWindow() int                  { return sdk.ModelContextWindow(m.base) }
-func (m *memoryLanguageModel) TokenLimits() sdk.TokenLimits        { return sdk.ModelTokenLimits(m.base) }
+func (m *memoryLanguageModel) Provider() string                       { return m.base.Provider() }
+func (m *memoryLanguageModel) ModelID() string                        { return m.base.ModelID() }
+func (m *memoryLanguageModel) Capabilities() domain.ModelCapabilities { return m.base.Capabilities() }
+func (m *memoryLanguageModel) ContextWindow() int                     { return usecase.ModelContextWindow(m.base) }
+func (m *memoryLanguageModel) TokenLimits() domain.TokenLimits {
+	return usecase.ModelTokenLimits(m.base)
+}
 
-func (m *memoryLanguageModel) Stream(ctx context.Context, request sdk.Request) (sdk.Stream, error) {
+func (m *memoryLanguageModel) Stream(ctx context.Context, request domain.Request) (port.Stream, error) {
+	prepared, err := m.PrepareRequest(ctx, request)
+	if err != nil {
+		return nil, err
+	}
+	return m.base.Stream(ctx, prepared)
+}
+
+// PrepareRequest injects retrieved memory before the turn engine budgets the
+// request. It is safe to call repeatedly because decorated user messages are
+// recognized by currentUserQuery.
+func (m *memoryLanguageModel) PrepareRequest(ctx context.Context, request domain.Request) (domain.Request, error) {
 	index, queryKey, queryText := currentUserQuery(request.Messages)
 	if index < 0 || queryText == "" {
-		return m.base.Stream(ctx, request)
+		return request, nil
 	}
 	memoryContext := m.contextFor(ctx, queryKey, queryText)
 	if memoryContext == "" {
-		return m.base.Stream(ctx, request)
+		return request, nil
 	}
-	request.Messages = sdk.CloneMessages(request.Messages)
+	request.Messages = domain.CloneMessages(request.Messages)
 	current := &request.Messages[index]
 	current.Content = strings.Join([]string{
 		"<proton-memory-context>",
@@ -181,7 +210,7 @@ func (m *memoryLanguageModel) Stream(ctx context.Context, request sdk.Request) (
 		"",
 		current.Content,
 	}, "\n")
-	return m.base.Stream(ctx, request)
+	return request, nil
 }
 
 func (m *memoryLanguageModel) contextFor(ctx context.Context, queryKey, queryText string) string {
@@ -223,10 +252,10 @@ func (m *profiledMemoryLanguageModel) ResolvedModelProfile() modelprofile.Resolv
 	return m.profile.ResolvedModelProfile()
 }
 
-func currentUserQuery(messages []sdk.Message) (int, string, string) {
+func currentUserQuery(messages []domain.Message) (int, string, string) {
 	for i := len(messages) - 1; i >= 0; i-- {
 		message := messages[i]
-		if message.Role != sdk.RoleUser {
+		if message.Role != domain.RoleUser {
 			continue
 		}
 		text := strings.TrimSpace(message.Content)

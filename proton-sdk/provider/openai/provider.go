@@ -6,8 +6,9 @@ import (
 	"strings"
 	"time"
 
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	"github.com/phongsathornpt/protonman/proton-sdk/domain"
 	"github.com/phongsathornpt/protonman/proton-sdk/internal/providerutil"
+	"github.com/phongsathornpt/protonman/proton-sdk/port"
 )
 
 const DefaultBaseURL = "https://api.openai.com/v1"
@@ -101,13 +102,13 @@ type LanguageModel struct {
 }
 
 var (
-	_ sdk.LanguageModel = (*LanguageModel)(nil)
-	_ sdk.MetadataModel = (*LanguageModel)(nil)
+	_ port.LanguageModel = (*LanguageModel)(nil)
+	_ port.MetadataModel = (*LanguageModel)(nil)
 )
 
 func (m *LanguageModel) Provider() string { return m.provider.options.ProviderName }
 func (m *LanguageModel) ModelID() string  { return m.modelID }
-func (m *LanguageModel) Capabilities() sdk.ModelCapabilities {
-	return sdk.ModelCapabilities{Streaming: true, Tools: true, Vision: true, ProviderOptions: true, RawChunks: true}
+func (m *LanguageModel) Capabilities() domain.ModelCapabilities {
+	return domain.ModelCapabilities{Streaming: true, Tools: true, Vision: true, ProviderOptions: true, RawChunks: true}
 }
-func (m *LanguageModel) Metadata() sdk.ModelMetadata { return sdk.ModelMetadata{} }
+func (m *LanguageModel) Metadata() domain.ModelMetadata { return domain.ModelMetadata{} }

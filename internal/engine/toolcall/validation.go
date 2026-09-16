@@ -5,16 +5,17 @@ import (
 	"encoding/json"
 
 	"github.com/phongsathornpt/protonman/internal/core/tool"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	"github.com/phongsathornpt/protonman/proton-sdk/domain"
+	"github.com/phongsathornpt/protonman/proton-sdk/usecase"
 )
 
 type compiledToolValidators struct {
-	input  *sdk.ToolSchemaValidator
-	output *sdk.ToolSchemaValidator
+	input  *usecase.ToolSchemaValidator
+	output *usecase.ToolSchemaValidator
 }
 
 type compiledValidatorRegistry interface {
-	CompiledValidators(name string) (input, output *sdk.ToolSchemaValidator, ok bool)
+	CompiledValidators(name string) (input, output *usecase.ToolSchemaValidator, ok bool)
 }
 
 func validatorsForRegistry(registry tool.Registry, definition tool.Definition) (compiledToolValidators, error) {
@@ -52,12 +53,12 @@ func structuredJSONType(raw json.RawMessage) string {
 }
 
 func compileDefinitionValidators(definition tool.Definition) (compiledToolValidators, error) {
-	sdkTool := sdk.Tool{Name: definition.Name, Description: definition.Description, InputSchema: definition.InputSchema, OutputSchema: definition.OutputSchema}
-	input, err := sdk.CompileToolInputValidator(sdkTool)
+	sdkTool := domain.Tool{Name: definition.Name, Description: definition.Description, InputSchema: definition.InputSchema, OutputSchema: definition.OutputSchema}
+	input, err := usecase.CompileToolInputValidator(sdkTool)
 	if err != nil {
 		return compiledToolValidators{}, err
 	}
-	output, err := sdk.CompileToolOutputValidator(sdkTool)
+	output, err := usecase.CompileToolOutputValidator(sdkTool)
 	if err != nil {
 		return compiledToolValidators{}, err
 	}

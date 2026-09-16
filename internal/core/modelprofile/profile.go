@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	"github.com/phongsathornpt/protonman/proton-sdk/domain"
 )
 
 type Support uint8
@@ -127,7 +127,7 @@ type Capabilities struct {
 // Apply overlays model-level capability knowledge onto the capabilities
 // published by the transport adapter. Unknown model fields deliberately keep
 // the adapter value; explicit model metadata always wins.
-func (c Capabilities) Apply(base sdk.ModelCapabilities) sdk.ModelCapabilities {
+func (c Capabilities) Apply(base domain.ModelCapabilities) domain.ModelCapabilities {
 	if value, known := c.Tools.Bool(); known {
 		base.Tools = value
 	}
@@ -139,8 +139,8 @@ func (c Capabilities) Apply(base sdk.ModelCapabilities) sdk.ModelCapabilities {
 
 type Reasoning struct {
 	Support Support
-	Levels  []sdk.ReasoningEffort
-	Default sdk.ReasoningEffort
+	Levels  []domain.ReasoningEffort
+	Default domain.ReasoningEffort
 }
 
 type Sampling struct {
@@ -181,9 +181,9 @@ type Profile struct {
 }
 
 type CatalogReasoning struct {
-	Supported *bool                 `json:"supported,omitempty"`
-	Levels    []sdk.ReasoningEffort `json:"levels,omitempty"`
-	Default   sdk.ReasoningEffort   `json:"default,omitempty"`
+	Supported *bool                    `json:"supported,omitempty"`
+	Levels    []domain.ReasoningEffort `json:"levels,omitempty"`
+	Default   domain.ReasoningEffort   `json:"default,omitempty"`
 }
 
 func NormalizeCatalogReasoning(value *CatalogReasoning) *CatalogReasoning {
@@ -194,9 +194,9 @@ func NormalizeCatalogReasoning(value *CatalogReasoning) *CatalogReasoning {
 	if value.Supported != nil && !*value.Supported {
 		return normalized
 	}
-	seen := make(map[sdk.ReasoningEffort]struct{}, len(value.Levels))
+	seen := make(map[domain.ReasoningEffort]struct{}, len(value.Levels))
 	for _, effort := range value.Levels {
-		if !effort.Valid() || effort == sdk.ReasoningDefault {
+		if !effort.Valid() || effort == domain.ReasoningDefault {
 			continue
 		}
 		if _, ok := seen[effort]; ok {
@@ -205,7 +205,7 @@ func NormalizeCatalogReasoning(value *CatalogReasoning) *CatalogReasoning {
 		seen[effort] = struct{}{}
 		normalized.Levels = append(normalized.Levels, effort)
 	}
-	if value.Default.Valid() && value.Default != sdk.ReasoningDefault {
+	if value.Default.Valid() && value.Default != domain.ReasoningDefault {
 		normalized.Default = value.Default
 	}
 	return normalized

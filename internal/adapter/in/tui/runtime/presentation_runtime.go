@@ -22,7 +22,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/feature/agent"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	"github.com/phongsathornpt/protonman/proton-sdk/domain"
 )
 
 func promptPlaceholder(hasRunner bool, mode permission.Mode, planMode bool) string {
@@ -471,7 +471,7 @@ func formatElapsed(duration time.Duration) string {
 
 // modelRetryStatus is retained as a compatibility seam for focused runtime
 // tests; retry wording itself is owned by state/runtimeui.
-func modelRetryStatus(retry sdk.RetryEvent, now time.Time) (string, string, bool) {
+func modelRetryStatus(retry domain.RetryEvent, now time.Time) (string, string, bool) {
 	activity, metaParts, ok := runtimeui.RetryStatus(retry, now)
 	if !ok {
 		return "", "", false

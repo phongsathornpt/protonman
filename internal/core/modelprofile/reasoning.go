@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	"github.com/phongsathornpt/protonman/proton-sdk/domain"
 )
 
 // ReasoningSource identifies the policy layer that selected the effective effort.
@@ -18,16 +18,16 @@ const (
 
 // ReasoningResolution records the requested and effective effort plus provenance.
 type ReasoningResolution struct {
-	Requested sdk.ReasoningEffort
-	Effective sdk.ReasoningEffort
+	Requested domain.ReasoningEffort
+	Effective domain.ReasoningEffort
 	Source    ReasoningSource
 	Clamped   bool
 }
 
 // ResolveReasoning applies explicit or portable profile semantics in one place.
-func (r Resolved) ResolveReasoning(requested sdk.ReasoningEffort, explicit bool) (ReasoningResolution, error) {
+func (r Resolved) ResolveReasoning(requested domain.ReasoningEffort, explicit bool) (ReasoningResolution, error) {
 	resolution := ReasoningResolution{Requested: requested, Source: ReasoningSourceProviderDefault}
-	if requested == sdk.ReasoningDefault {
+	if requested == domain.ReasoningDefault {
 		return resolution, nil
 	}
 	if explicit {
@@ -52,9 +52,9 @@ func (r Resolved) ResolveReasoning(requested sdk.ReasoningEffort, explicit bool)
 // ResolveProfileReasoning maps a portable agent-profile preference onto the
 // levels known to be supported by this model. Unknown/unsupported profiles
 // preserve the provider default by returning ok=false.
-func (r Resolved) ResolveProfileReasoning(requested sdk.ReasoningEffort) (effective sdk.ReasoningEffort, ok bool) {
-	if requested == sdk.ReasoningDefault || r.Reasoning.Support != SupportYes {
-		return sdk.ReasoningDefault, false
+func (r Resolved) ResolveProfileReasoning(requested domain.ReasoningEffort) (effective domain.ReasoningEffort, ok bool) {
+	if requested == domain.ReasoningDefault || r.Reasoning.Support != SupportYes {
+		return domain.ReasoningDefault, false
 	}
 	if len(r.Reasoning.Levels) == 0 {
 		return requested, true
@@ -66,9 +66,9 @@ func (r Resolved) ResolveProfileReasoning(requested sdk.ReasoningEffort) (effect
 	}
 	requestedRank, ranked := reasoningRank(requested)
 	if !ranked {
-		return sdk.ReasoningDefault, false
+		return domain.ReasoningDefault, false
 	}
-	best := sdk.ReasoningDefault
+	best := domain.ReasoningDefault
 	bestDistance := int(^uint(0) >> 1)
 	bestRank := -1
 	for _, level := range r.Reasoning.Levels {
@@ -84,25 +84,25 @@ func (r Resolved) ResolveProfileReasoning(requested sdk.ReasoningEffort) (effect
 			best, bestDistance, bestRank = level, distance, rank
 		}
 	}
-	if best == sdk.ReasoningDefault {
-		return sdk.ReasoningDefault, false
+	if best == domain.ReasoningDefault {
+		return domain.ReasoningDefault, false
 	}
 	return best, true
 }
 
-func reasoningRank(effort sdk.ReasoningEffort) (int, bool) {
+func reasoningRank(effort domain.ReasoningEffort) (int, bool) {
 	switch effort {
-	case sdk.ReasoningNone:
+	case domain.ReasoningNone:
 		return 0, true
-	case sdk.ReasoningLow:
+	case domain.ReasoningLow:
 		return 1, true
-	case sdk.ReasoningMedium:
+	case domain.ReasoningMedium:
 		return 2, true
-	case sdk.ReasoningHigh:
+	case domain.ReasoningHigh:
 		return 3, true
-	case sdk.ReasoningXHigh:
+	case domain.ReasoningXHigh:
 		return 4, true
-	case sdk.ReasoningMax:
+	case domain.ReasoningMax:
 		return 5, true
 	default:
 		return 0, false
@@ -111,16 +111,16 @@ func reasoningRank(effort sdk.ReasoningEffort) (int, bool) {
 
 // ResolveExplicitReasoning validates a user-selected effort. Unlike portable
 // profile preferences, explicit selections are never silently clamped.
-func (r Resolved) ResolveExplicitReasoning(requested sdk.ReasoningEffort) (sdk.ReasoningEffort, error) {
-	if requested == sdk.ReasoningDefault {
-		return sdk.ReasoningDefault, nil
+func (r Resolved) ResolveExplicitReasoning(requested domain.ReasoningEffort) (domain.ReasoningEffort, error) {
+	if requested == domain.ReasoningDefault {
+		return domain.ReasoningDefault, nil
 	}
 	if !requested.Valid() {
-		return sdk.ReasoningDefault, fmt.Errorf("invalid reasoning effort %q", requested)
+		return domain.ReasoningDefault, fmt.Errorf("invalid reasoning effort %q", requested)
 	}
 	switch r.Reasoning.Support {
 	case SupportNo:
-		return sdk.ReasoningDefault, fmt.Errorf("model %q does not support reasoning effort", r.ModelID)
+		return domain.ReasoningDefault, fmt.Errorf("model %q does not support reasoning effort", r.ModelID)
 	case SupportUnknown:
 		return requested, nil
 	}
@@ -132,10 +132,10 @@ func (r Resolved) ResolveExplicitReasoning(requested sdk.ReasoningEffort) (sdk.R
 			return requested, nil
 		}
 	}
-	return sdk.ReasoningDefault, fmt.Errorf("model %q does not support reasoning effort %q; supported levels: %s", r.ModelID, requested, formatReasoningLevels(r.Reasoning.Levels))
+	return domain.ReasoningDefault, fmt.Errorf("model %q does not support reasoning effort %q; supported levels: %s", r.ModelID, requested, formatReasoningLevels(r.Reasoning.Levels))
 }
 
-func formatReasoningLevels(levels []sdk.ReasoningEffort) string {
+func formatReasoningLevels(levels []domain.ReasoningEffort) string {
 	parts := make([]string, 0, len(levels))
 	for _, level := range levels {
 		parts = append(parts, string(level))

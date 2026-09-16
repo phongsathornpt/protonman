@@ -8,11 +8,12 @@ import (
 	"strings"
 	"time"
 
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	"github.com/phongsathornpt/protonman/proton-sdk/domain"
 	"github.com/phongsathornpt/protonman/proton-sdk/internal/providerutil"
+	"github.com/phongsathornpt/protonman/proton-sdk/port"
 )
 
-func (m *LanguageModel) Stream(ctx context.Context, request sdk.Request) (sdk.Stream, error) {
+func (m *LanguageModel) Stream(ctx context.Context, request domain.Request) (port.Stream, error) {
 	body, err := buildRequest(m.modelID, request, m.provider.options.DefaultMaxTokens)
 	if err != nil {
 		return nil, err
@@ -42,18 +43,18 @@ func (m *LanguageModel) Stream(ctx context.Context, request sdk.Request) (sdk.St
 				httpReq.Header.Set("User-Agent", base.UserAgent)
 			}
 		},
-		ParseError: func(status int, body []byte, headers http.Header) *sdk.ProviderError {
+		ParseError: func(status int, body []byte, headers http.Header) *domain.ProviderError {
 			err := anthropicHTTPError(status, body)
-			err.RateLimit = sdk.ParseRateLimitHeaders(headers, time.Now())
+			err.RateLimit = providerutil.ParseRateLimitHeaders(headers, time.Now())
 			return err
 		},
-		OnSuccess: func(resp *http.Response) (sdk.Stream, error) {
+		OnSuccess: func(resp *http.Response) (port.Stream, error) {
 			return newStream(resp.Body, anthropicResponseMetadata(resp.Header), request.Options.IncludeRawChunks), nil
 		},
 	})
 }
 
-func anthropicResponseMetadata(headers http.Header) sdk.ProviderMetadata {
+func anthropicResponseMetadata(headers http.Header) domain.ProviderMetadata {
 	values := map[string]any{}
 	requestID := strings.TrimSpace(headers.Get("request-id"))
 	if requestID == "" {
@@ -62,7 +63,7 @@ func anthropicResponseMetadata(headers http.Header) sdk.ProviderMetadata {
 	if requestID != "" {
 		values["request_id"] = requestID
 	}
-	if rateLimit := sdk.ParseRateLimitHeaders(headers, time.Now()); rateLimit != nil {
+	if rateLimit := providerutil.ParseRateLimitHeaders(headers, time.Now()); rateLimit != nil {
 		values["rate_limit"] = rateLimit
 	}
 	if len(values) == 0 {
@@ -72,7 +73,7 @@ func anthropicResponseMetadata(headers http.Header) sdk.ProviderMetadata {
 	if err != nil {
 		return nil
 	}
-	return sdk.ProviderMetadata{"anthropic": raw}
+	return domain.ProviderMetadata{"anthropic": raw}
 }
 
 func messagesEndpoint(baseURL string) string {

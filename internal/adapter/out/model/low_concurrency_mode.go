@@ -9,7 +9,9 @@ import (
 	"time"
 
 	"github.com/phongsathornpt/protonman/internal/base/runtimepolicy"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	"github.com/phongsathornpt/protonman/proton-sdk/domain"
+	"github.com/phongsathornpt/protonman/proton-sdk/port"
+	"github.com/phongsathornpt/protonman/proton-sdk/usecase"
 )
 
 type lowConcurrencyOutcome uint8
@@ -70,8 +72,8 @@ func (c *lowConcurrencyController) acquire(ctx context.Context) error {
 	select {
 	case c.admission <- struct{}{}:
 	default:
-		return &sdk.ProviderError{
-			Provider: c.provider, Kind: sdk.ErrorOverloaded,
+		return &domain.ProviderError{
+			Provider: c.provider, Kind: domain.ErrorOverloaded,
 			Code: "low_concurrency_queue_full", Message: "low concurrency request queue is full", Retryable: false,
 		}
 	}
@@ -209,11 +211,11 @@ func scaleLowConcurrencyDuration(value time.Duration, percent int, floor, ceilin
 }
 
 type lowConcurrencyModel struct {
-	base       sdk.LanguageModel
+	base       port.LanguageModel
 	controller *lowConcurrencyController
 }
 
-func withLowConcurrencyMode(base sdk.LanguageModel, provider, route string, policy runtimepolicy.LowConcurrencyPolicy) sdk.LanguageModel {
+func withLowConcurrencyMode(base port.LanguageModel, provider, route string, policy runtimepolicy.LowConcurrencyPolicy) port.LanguageModel {
 	if base == nil {
 		return nil
 	}
@@ -222,15 +224,15 @@ func withLowConcurrencyMode(base sdk.LanguageModel, provider, route string, poli
 
 func (m *lowConcurrencyModel) Provider() string { return m.base.Provider() }
 func (m *lowConcurrencyModel) ModelID() string  { return m.base.ModelID() }
-func (m *lowConcurrencyModel) Capabilities() sdk.ModelCapabilities {
+func (m *lowConcurrencyModel) Capabilities() domain.ModelCapabilities {
 	return m.base.Capabilities()
 }
-func (m *lowConcurrencyModel) ContextWindow() int { return sdk.ModelContextWindow(m.base) }
-func (m *lowConcurrencyModel) TokenLimits() sdk.TokenLimits {
-	return sdk.ModelTokenLimits(m.base)
+func (m *lowConcurrencyModel) ContextWindow() int { return usecase.ModelContextWindow(m.base) }
+func (m *lowConcurrencyModel) TokenLimits() domain.TokenLimits {
+	return usecase.ModelTokenLimits(m.base)
 }
 
-func (m *lowConcurrencyModel) Stream(ctx context.Context, request sdk.Request) (sdk.Stream, error) {
+func (m *lowConcurrencyModel) Stream(ctx context.Context, request domain.Request) (port.Stream, error) {
 	if err := m.controller.acquire(ctx); err != nil {
 		return nil, err
 	}
@@ -247,12 +249,12 @@ func (m *lowConcurrencyModel) Stream(ctx context.Context, request sdk.Request) (
 }
 
 type lowConcurrencyStream struct {
-	base       sdk.Stream
+	base       port.Stream
 	controller *lowConcurrencyController
 	once       sync.Once
 }
 
-func (s *lowConcurrencyStream) Next(ctx context.Context) (sdk.Event, error) {
+func (s *lowConcurrencyStream) Next(ctx context.Context) (domain.Event, error) {
 	event, err := s.base.Next(ctx)
 	if err != nil {
 		completion := classifyLowConcurrencyCompletion(err)
@@ -262,7 +264,7 @@ func (s *lowConcurrencyStream) Next(ctx context.Context) (sdk.Event, error) {
 		s.finish(completion)
 		return event, err
 	}
-	if event.Kind == sdk.EventFinish {
+	if event.Kind == domain.EventFinish {
 		s.finish(lowConcurrencyCompletion{outcome: lowConcurrencySuccess})
 	}
 	return event, nil
@@ -278,11 +280,11 @@ func (s *lowConcurrencyStream) finish(completion lowConcurrencyCompletion) {
 }
 
 func classifyLowConcurrencyCompletion(err error) lowConcurrencyCompletion {
-	var providerErr *sdk.ProviderError
+	var providerErr *domain.ProviderError
 	if !errors.As(err, &providerErr) || providerErr == nil {
 		return lowConcurrencyCompletion{outcome: lowConcurrencyFailure}
 	}
-	if providerErr.Kind != sdk.ErrorRateLimit && providerErr.Kind != sdk.ErrorOverloaded {
+	if providerErr.Kind != domain.ErrorRateLimit && providerErr.Kind != domain.ErrorOverloaded {
 		return lowConcurrencyCompletion{outcome: lowConcurrencyFailure}
 	}
 	completion := lowConcurrencyCompletion{outcome: lowConcurrencyCongested}

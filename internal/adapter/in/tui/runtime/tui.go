@@ -14,7 +14,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/engine/toolcall"
 	"github.com/phongsathornpt/protonman/internal/feature/skill"
 	tododomain "github.com/phongsathornpt/protonman/internal/feature/todo"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	"github.com/phongsathornpt/protonman/proton-sdk/domain"
 )
 
 // BubbleTeaUI is the Bubble Tea terminal adapter over Protonman services.
@@ -34,7 +34,7 @@ type BubbleTeaUI struct {
 	finalActiveGoal         string
 	finalMessages           []model.Message
 	finalAgentProfile       string
-	finalReasoningEffort    sdk.ReasoningEffort
+	finalReasoningEffort    domain.ReasoningEffort
 	lowConcurrencyMode      model.LowConcurrencySetting
 	modelConfig             config.ModelConfig
 	agentConfig             config.AgentConfig
@@ -111,7 +111,7 @@ func (ui *BubbleTeaUI) AgentProfile() string {
 }
 
 // ReasoningEffort returns the latest explicit session reasoning override.
-func (ui *BubbleTeaUI) ReasoningEffort() sdk.ReasoningEffort {
+func (ui *BubbleTeaUI) ReasoningEffort() domain.ReasoningEffort {
 	return ui.finalReasoningEffort
 }
 

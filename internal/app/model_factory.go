@@ -4,7 +4,7 @@ import (
 	"strings"
 
 	"github.com/phongsathornpt/protonman/internal/core/modelclient"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	"github.com/phongsathornpt/protonman/proton-sdk/port"
 )
 
 // LanguageModelRequest is the application alias for the core model-client request.
@@ -45,7 +45,7 @@ type subagentBaseFactory interface {
 // Root-only decorators expose their base factory; when they do, the base is
 // built with the same request so children never receive root-session context
 // such as durable memory. Factories without the capability are returned as-is.
-func subagentLanguageModel(factory LanguageModelFactory, request LanguageModelRequest, decorated sdk.LanguageModel) sdk.LanguageModel {
+func subagentLanguageModel(factory LanguageModelFactory, request LanguageModelRequest, decorated port.LanguageModel) port.LanguageModel {
 	carrier, ok := factory.(subagentBaseFactory)
 	if !ok || carrier == nil {
 		return decorated

@@ -12,7 +12,7 @@ import (
 	"strings"
 
 	"github.com/phongsathornpt/protonman/internal/core/session"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	"github.com/phongsathornpt/protonman/proton-sdk/domain"
 )
 
 const maxSessionAttachmentBytes = 32 * 1024 * 1024
@@ -22,7 +22,7 @@ func externalizeImageParts(resources session.Resources, state State) (State, err
 	for messageIndex := range state.Messages {
 		for partIndex := range state.Messages[messageIndex].Parts {
 			part := &state.Messages[messageIndex].Parts[partIndex]
-			if part.Type != sdk.ContentPartImage {
+			if part.Type != domain.ContentPartImage {
 				continue
 			}
 			if strings.TrimSpace(part.Data) == "" {
@@ -59,7 +59,7 @@ func hydrateImageParts(resources session.Resources, state State) (State, error) 
 	for messageIndex := range state.Messages {
 		for partIndex := range state.Messages[messageIndex].Parts {
 			part := &state.Messages[messageIndex].Parts[partIndex]
-			if part.Type != sdk.ContentPartImage || strings.TrimSpace(part.Data) != "" {
+			if part.Type != domain.ContentPartImage || strings.TrimSpace(part.Data) != "" {
 				continue
 			}
 			name := strings.TrimSpace(part.Blob)
@@ -158,7 +158,7 @@ func pruneAttachmentBlobs(resources session.Resources, state State) error {
 	referenced := make(map[string]struct{})
 	for _, message := range state.Messages {
 		for _, part := range message.Parts {
-			if part.Type != sdk.ContentPartImage {
+			if part.Type != domain.ContentPartImage {
 				continue
 			}
 			name := strings.TrimSpace(part.Blob)

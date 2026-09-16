@@ -17,7 +17,7 @@ func FormatGrepView(lines []string, target string, width int) []string {
 
 	terms := extractGrepQueryTerms(target)
 	formatted := make([]string, 0, len(lines))
-	contentWidth := max(20, width-6)
+	contentWidth := max(1, width-6)
 
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
@@ -36,7 +36,7 @@ func FormatGrepView(lines []string, target string, width int) []string {
 
 			avail := contentWidth - ansi.StringWidth(file) - len(lineNum) - 4
 			cleanContent := strings.TrimSpace(content)
-			if avail > 10 && ansi.StringWidth(cleanContent) > avail {
+			if avail > 0 && ansi.StringWidth(cleanContent) > avail {
 				cleanContent = textview.TruncateEllipsis(cleanContent, avail)
 			}
 

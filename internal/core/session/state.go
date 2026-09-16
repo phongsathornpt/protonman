@@ -11,7 +11,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/phongsathornpt/protonman/internal/core/tool"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	"github.com/phongsathornpt/protonman/proton-sdk/domain"
 )
 
 const (
@@ -68,36 +68,36 @@ type ToolCall struct {
 // process state and is externalized by the filesystem adapter into a bounded
 // sidecar; only Blob is written to state.json.
 type Part struct {
-	Type     sdk.ContentPartType `json:"type"`
-	Text     string              `json:"text,omitempty"`
-	MIMEType string              `json:"mime_type,omitempty"`
-	Data     string              `json:"-"`
-	Blob     string              `json:"blob,omitempty"`
+	Type     domain.ContentPartType `json:"type"`
+	Text     string                 `json:"text,omitempty"`
+	MIMEType string                 `json:"mime_type,omitempty"`
+	Data     string                 `json:"-"`
+	Blob     string                 `json:"blob,omitempty"`
 }
 
 // Message is one persisted conversation turn without tool arguments.
 type Message struct {
-	ID         string     `json:"id,omitempty"`
-	Role       sdk.Role   `json:"role"`
-	Content    string     `json:"content,omitempty"`
-	Parts      []Part     `json:"parts,omitempty"`
-	ToolName   string     `json:"tool_name,omitempty"`
-	ToolCallID string     `json:"tool_call_id,omitempty"`
-	ToolCalls  []ToolCall `json:"tool_calls,omitempty"`
+	ID         string      `json:"id,omitempty"`
+	Role       domain.Role `json:"role"`
+	Content    string      `json:"content,omitempty"`
+	Parts      []Part      `json:"parts,omitempty"`
+	ToolName   string      `json:"tool_name,omitempty"`
+	ToolCallID string      `json:"tool_call_id,omitempty"`
+	ToolCalls  []ToolCall  `json:"tool_calls,omitempty"`
 }
 
 // ToModelMessages converts persisted session messages to provider-neutral model messages.
 // Legacy redacted tool protocol groups are compacted to plain assistant history
 // so resume never fabricates empty tool arguments.
-func ToModelMessages(stored []Message) []sdk.Message {
+func ToModelMessages(stored []Message) []domain.Message {
 	stored = ensureStoredMessageIDs(stored)
 	stored = compactToolHistory(stored)
-	messages := make([]sdk.Message, 0, len(stored))
+	messages := make([]domain.Message, 0, len(stored))
 	for _, message := range stored {
-		if message.Role == sdk.RoleSystem && isManagedSystemPrompt(message.Content) {
+		if message.Role == domain.RoleSystem && isManagedSystemPrompt(message.Content) {
 			continue
 		}
-		messages = append(messages, sdk.Message{
+		messages = append(messages, domain.Message{
 			ID:      message.ID,
 			Role:    message.Role,
 			Content: message.Content,
@@ -110,11 +110,11 @@ func ToModelMessages(stored []Message) []sdk.Message {
 // FromModelMessages converts provider-neutral model messages to persisted session messages.
 // Tool arguments are never copied into the stored representation. Tool protocol
 // groups are compacted to plain text before they leave process memory.
-func FromModelMessages(messages []sdk.Message) []Message {
-	messages = sdk.EnsureMessageIDs(messages)
+func FromModelMessages(messages []domain.Message) []Message {
+	messages = domain.EnsureMessageIDs(messages)
 	out := make([]Message, 0, len(messages))
 	for _, message := range messages {
-		if message.Role == sdk.RoleSystem && isManagedSystemPrompt(message.Content) {
+		if message.Role == domain.RoleSystem && isManagedSystemPrompt(message.Content) {
 			continue
 		}
 		out = append(out, Message{
@@ -130,20 +130,20 @@ func FromModelMessages(messages []sdk.Message) []Message {
 	return compactToolHistory(out)
 }
 
-func toModelParts(parts []Part) []sdk.ContentPart {
+func toModelParts(parts []Part) []domain.ContentPart {
 	if len(parts) == 0 {
 		return nil
 	}
-	out := make([]sdk.ContentPart, 0, len(parts))
+	out := make([]domain.ContentPart, 0, len(parts))
 	for _, part := range parts {
-		out = append(out, sdk.ContentPart{
+		out = append(out, domain.ContentPart{
 			Type: part.Type, Text: part.Text, MIMEType: part.MIMEType, Data: part.Data,
 		})
 	}
 	return out
 }
 
-func fromModelParts(parts []sdk.ContentPart) []Part {
+func fromModelParts(parts []domain.ContentPart) []Part {
 	if len(parts) == 0 {
 		return nil
 	}
@@ -220,7 +220,7 @@ func ensureStoredMessageIDs(messages []Message) []Message {
 	out := append([]Message(nil), messages...)
 	for i := range out {
 		if strings.TrimSpace(out[i].ID) == "" {
-			out[i].ID = sdk.NewMessageID()
+			out[i].ID = domain.NewMessageID()
 		}
 	}
 	return out
@@ -234,14 +234,14 @@ func compactToolHistory(messages []Message) []Message {
 	compacted := make([]Message, 0, len(messages))
 	for index := 0; index < len(messages); {
 		message := messages[index]
-		if message.Role == sdk.RoleAssistant && len(message.ToolCalls) > 0 {
+		if message.Role == domain.RoleAssistant && len(message.ToolCalls) > 0 {
 			if text := strings.TrimSpace(message.Content); text != "" {
-				compacted = append(compacted, Message{ID: message.ID, Role: sdk.RoleAssistant, Content: text})
+				compacted = append(compacted, Message{ID: message.ID, Role: domain.RoleAssistant, Content: text})
 			}
 
 			results := make(map[string]Message, len(message.ToolCalls))
 			next := index + 1
-			for next < len(messages) && messages[next].Role == sdk.RoleTool {
+			for next < len(messages) && messages[next].Role == domain.RoleTool {
 				results[messages[next].ToolCallID] = messages[next]
 				next++
 			}
@@ -249,11 +249,11 @@ func compactToolHistory(messages []Message) []Message {
 				result, ok := results[call.ID]
 				resultID := result.ID
 				if resultID == "" {
-					resultID = sdk.NewMessageID()
+					resultID = domain.NewMessageID()
 				}
 				compacted = append(compacted, Message{
 					ID:      resultID,
-					Role:    sdk.RoleAssistant,
+					Role:    domain.RoleAssistant,
 					Content: compactToolResult(call.Name, result, ok),
 				})
 				delete(results, call.ID)
@@ -261,17 +261,17 @@ func compactToolHistory(messages []Message) []Message {
 			for _, result := range results {
 				compacted = append(compacted, Message{
 					ID:      result.ID,
-					Role:    sdk.RoleAssistant,
+					Role:    domain.RoleAssistant,
 					Content: compactToolResult(result.ToolName, result, true),
 				})
 			}
 			index = next
 			continue
 		}
-		if message.Role == sdk.RoleTool {
+		if message.Role == domain.RoleTool {
 			compacted = append(compacted, Message{
 				ID:      message.ID,
-				Role:    sdk.RoleAssistant,
+				Role:    domain.RoleAssistant,
 				Content: compactToolResult(message.ToolName, message, true),
 			})
 			index++
@@ -347,7 +347,7 @@ func sanitizeParts(parts []Part) []Part {
 	}
 	out := make([]Part, 0, len(parts))
 	for _, part := range parts {
-		if part.Type == sdk.ContentPartText {
+		if part.Type == domain.ContentPartText {
 			part.Text = truncateStoredContent(part.Text)
 		}
 		out = append(out, part)
@@ -382,13 +382,13 @@ func validateReasoningSetting(value string) error {
 	if strings.TrimSpace(value) == "" {
 		return nil
 	}
-	_, err := sdk.ParseReasoningEffort(value)
+	_, err := domain.ParseReasoningEffort(value)
 	return err
 }
 
 func validateMessages(messages []Message) error {
 	for _, message := range messages {
-		if err := (sdk.Message{
+		if err := (domain.Message{
 			ID:         message.ID,
 			Role:       message.Role,
 			Content:    message.Content,
@@ -403,13 +403,13 @@ func validateMessages(messages []Message) error {
 	return nil
 }
 
-func toModelToolCalls(calls []ToolCall) []sdk.ToolCall {
+func toModelToolCalls(calls []ToolCall) []domain.ToolCall {
 	if len(calls) == 0 {
 		return nil
 	}
-	converted := make([]sdk.ToolCall, 0, len(calls))
+	converted := make([]domain.ToolCall, 0, len(calls))
 	for _, call := range calls {
-		converted = append(converted, sdk.ToolCall{
+		converted = append(converted, domain.ToolCall{
 			ID:        call.ID,
 			Name:      call.Name,
 			Arguments: []byte(`{}`),
@@ -418,7 +418,7 @@ func toModelToolCalls(calls []ToolCall) []sdk.ToolCall {
 	return converted
 }
 
-func fromModelToolCalls(calls []sdk.ToolCall) []ToolCall {
+func fromModelToolCalls(calls []domain.ToolCall) []ToolCall {
 	if len(calls) == 0 {
 		return nil
 	}

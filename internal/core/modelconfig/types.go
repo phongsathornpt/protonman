@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	"github.com/phongsathornpt/protonman/proton-sdk/domain"
 )
 
 // ProviderName identifies a configured model provider. It is distinct from
@@ -56,7 +56,7 @@ type Selection struct {
 
 // SubagentRoute contains a per-profile model/reasoning override.
 type SubagentRoute struct {
-	Provider        ProviderName        `toml:"provider"`
-	Model           ModelID             `toml:"model"`
-	ReasoningEffort sdk.ReasoningEffort `toml:"reasoning_effort"`
+	Provider        ProviderName           `toml:"provider"`
+	Model           ModelID                `toml:"model"`
+	ReasoningEffort domain.ReasoningEffort `toml:"reasoning_effort"`
 }

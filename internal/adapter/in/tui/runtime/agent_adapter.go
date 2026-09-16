@@ -12,7 +12,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/feature/agent"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	"github.com/phongsathornpt/protonman/proton-sdk/domain"
 )
 
 const agentsViewID = "agents"
@@ -21,7 +21,7 @@ type AgentActivity = agentui.Activity
 
 type agentRuntimeState struct {
 	state                          agentui.RuntimeState
-	reasoningPreference            sdk.ReasoningEffort
+	reasoningPreference            domain.ReasoningEffort
 	reasoningPreferenceSet         bool
 	reasoningPreferenceSource      reasoningPreferenceSource
 	reasoningCompatibilityFallback bool

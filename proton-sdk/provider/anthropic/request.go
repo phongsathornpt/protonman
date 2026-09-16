@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	"github.com/phongsathornpt/protonman/proton-sdk/domain"
 	"github.com/phongsathornpt/protonman/proton-sdk/internal/providerutil"
 )
 
@@ -26,7 +26,7 @@ type thinking struct {
 }
 
 type outputConfig struct {
-	Effort sdk.ReasoningEffort `json:"effort"`
+	Effort domain.ReasoningEffort `json:"effort"`
 }
 
 type toolChoice struct {
@@ -72,12 +72,12 @@ func (t toolDef) MarshalJSON() ([]byte, error) {
 	return providerutil.MarshalWithOptions(base, t.ProviderOptions, "name", "description", "input_schema")
 }
 
-func buildRequest(modelID string, request sdk.Request, defaultMaxTokens int) (requestBody, error) {
+func buildRequest(modelID string, request domain.Request, defaultMaxTokens int) (requestBody, error) {
 	if err := request.Validate(); err != nil {
 		return requestBody{}, err
 	}
 	if strings.TrimSpace(modelID) == "" {
-		return requestBody{}, fmt.Errorf("%w: model id is required", sdk.ErrInvalidRequest)
+		return requestBody{}, fmt.Errorf("%w: model id is required", domain.ErrInvalidRequest)
 	}
 
 	maxTokens := request.Options.MaxOutputTokens
@@ -85,12 +85,12 @@ func buildRequest(modelID string, request sdk.Request, defaultMaxTokens int) (re
 		maxTokens = defaultMaxTokens
 	}
 	body := requestBody{Model: modelID, MaxTokens: maxTokens, Stream: true}
-	if effort := request.Options.ReasoningEffort; effort != sdk.ReasoningDefault {
-		if effort == sdk.ReasoningNone {
-			return requestBody{}, fmt.Errorf("%w: anthropic adaptive thinking does not support reasoning effort %q", sdk.ErrInvalidRequest, effort)
+	if effort := request.Options.ReasoningEffort; effort != domain.ReasoningDefault {
+		if effort == domain.ReasoningNone {
+			return requestBody{}, fmt.Errorf("%w: anthropic adaptive thinking does not support reasoning effort %q", domain.ErrInvalidRequest, effort)
 		}
 		if !supportsAdaptiveThinking(modelID) {
-			return requestBody{}, fmt.Errorf("%w: model %q does not support adaptive thinking; use provider-native extended thinking options for older models", sdk.ErrInvalidRequest, modelID)
+			return requestBody{}, fmt.Errorf("%w: model %q does not support adaptive thinking; use provider-native extended thinking options for older models", domain.ErrInvalidRequest, modelID)
 		}
 		body.Thinking = &thinking{Type: "adaptive"}
 		body.OutputConfig = &outputConfig{Effort: effort}
@@ -98,24 +98,24 @@ func buildRequest(modelID string, request sdk.Request, defaultMaxTokens int) (re
 	systems := []string{}
 	for _, source := range request.Messages {
 		switch source.Role {
-		case sdk.RoleSystem:
+		case domain.RoleSystem:
 			if text := strings.TrimSpace(source.TextContent()); text != "" {
 				systems = append(systems, text)
 			}
-		case sdk.RoleUser:
+		case domain.RoleUser:
 			body.Messages = append(body.Messages, message{Role: "user", Content: userContent(source)})
-		case sdk.RoleAssistant:
+		case domain.RoleAssistant:
 			body.Messages = append(body.Messages, message{Role: "assistant", Content: assistantContent(source)})
-		case sdk.RoleTool:
+		case domain.RoleTool:
 			body.Messages = append(body.Messages, message{Role: "user", Content: []contentBlock{{
 				Type: "tool_result", ToolUseID: source.ToolCallID, Content: toolResultContent(source), IsError: source.ToolResultIsError,
 			}}})
 		}
 	}
 	body.System = strings.Join(systems, "\n\n")
-	if len(request.Tools) > 0 && request.Options.ToolChoice == sdk.ToolChoiceRequired {
+	if len(request.Tools) > 0 && request.Options.ToolChoice == domain.ToolChoiceRequired {
 		if !supportsForcedToolChoice(modelID) {
-			return requestBody{}, fmt.Errorf("%w: model %q does not support forced tool choice", sdk.ErrInvalidRequest, modelID)
+			return requestBody{}, fmt.Errorf("%w: model %q does not support forced tool choice", domain.ErrInvalidRequest, modelID)
 		}
 		body.ToolChoice = &toolChoice{Type: "any"}
 	}
@@ -129,18 +129,18 @@ func buildRequest(modelID string, request sdk.Request, defaultMaxTokens int) (re
 	return body, nil
 }
 
-func userContent(source sdk.Message) []contentBlock {
+func userContent(source domain.Message) []contentBlock {
 	if len(source.Parts) == 0 {
 		return []contentBlock{{Type: "text", Text: source.Content}}
 	}
 	blocks := make([]contentBlock, 0, len(source.Parts))
 	for _, part := range source.Parts {
 		switch part.Type {
-		case sdk.ContentPartText:
+		case domain.ContentPartText:
 			if part.Text != "" {
 				blocks = append(blocks, contentBlock{Type: "text", Text: part.Text})
 			}
-		case sdk.ContentPartImage:
+		case domain.ContentPartImage:
 			mediaType := strings.TrimSpace(part.MIMEType)
 			if mediaType == "" {
 				mediaType = "image/png"
@@ -151,13 +151,13 @@ func userContent(source sdk.Message) []contentBlock {
 	return blocks
 }
 
-func toolResultContent(source sdk.Message) any {
+func toolResultContent(source domain.Message) any {
 	if len(source.Parts) == 0 {
 		return source.TextContent()
 	}
 	hasImage := false
 	for _, part := range source.Parts {
-		if part.Type == sdk.ContentPartImage {
+		if part.Type == domain.ContentPartImage {
 			hasImage = true
 			break
 		}
@@ -168,11 +168,11 @@ func toolResultContent(source sdk.Message) any {
 	blocks := make([]contentBlock, 0, len(source.Parts))
 	for _, part := range source.Parts {
 		switch part.Type {
-		case sdk.ContentPartText:
+		case domain.ContentPartText:
 			if part.Text != "" {
 				blocks = append(blocks, contentBlock{Type: "text", Text: part.Text})
 			}
-		case sdk.ContentPartImage:
+		case domain.ContentPartImage:
 			mediaType := strings.TrimSpace(part.MIMEType)
 			if mediaType == "" {
 				mediaType = "image/png"
@@ -193,7 +193,7 @@ func toolResultContent(source sdk.Message) any {
 	return blocks
 }
 
-func assistantContent(source sdk.Message) []contentBlock {
+func assistantContent(source domain.Message) []contentBlock {
 	blocks := make([]contentBlock, 0, 1+len(source.ToolCalls))
 	if text := source.TextContent(); text != "" {
 		blocks = append(blocks, contentBlock{Type: "text", Text: text})

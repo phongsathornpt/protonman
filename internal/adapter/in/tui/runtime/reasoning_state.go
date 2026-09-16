@@ -4,25 +4,25 @@ import (
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/reasoningpolicy"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/core/modelprofile"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	"github.com/phongsathornpt/protonman/proton-sdk/domain"
 )
 
-func (m *bubbleModel) validateReasoningEffort(effort sdk.ReasoningEffort) error {
-	if effort == sdk.ReasoningDefault {
+func (m *bubbleModel) validateReasoningEffort(effort domain.ReasoningEffort) error {
+	if effort == domain.ReasoningDefault {
 		return nil
 	}
 	_, err := m.activeResolvedModelProfile().ResolveExplicitReasoning(effort)
 	return err
 }
 
-func (m *bubbleModel) reasoningPreferenceValue() sdk.ReasoningEffort {
+func (m *bubbleModel) reasoningPreferenceValue() domain.ReasoningEffort {
 	if m.reasoningPreferenceSet {
 		return m.reasoningPreference
 	}
 	return m.reasoningEffort
 }
 
-func (m *bubbleModel) applyReasoningPreference(effort sdk.ReasoningEffort, source reasoningPreferenceSource) {
+func (m *bubbleModel) applyReasoningPreference(effort domain.ReasoningEffort, source reasoningPreferenceSource) {
 	m.reasoningPreference = effort
 	m.reasoningPreferenceSet = true
 	m.reasoningPreferenceSource = source
@@ -49,12 +49,12 @@ func (m *bubbleModel) reconcileReasoningForActiveModel() bool {
 		m.reasoningCompatibilityFallback = false
 		return false
 	}
-	if m.reasoningCompatibilityFallback && m.reasoningEffort == sdk.ReasoningDefault {
+	if m.reasoningCompatibilityFallback && m.reasoningEffort == domain.ReasoningDefault {
 		return false
 	}
-	m.reasoningEffort = sdk.ReasoningDefault
+	m.reasoningEffort = domain.ReasoningDefault
 	m.reasoningCompatibilityFallback = true
-	m.agents.SetReasoningEffort(sdk.ReasoningDefault)
+	m.agents.SetReasoningEffort(domain.ReasoningDefault)
 	m.appendLine(mutedStyle.Render("  Reset thinking level to auto (requested level " + reasoningpolicy.EffortLabel(desired) + " is unsupported by " + m.activeModel + ")"))
 	return true
 }

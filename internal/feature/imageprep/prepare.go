@@ -13,7 +13,7 @@ import (
 	"strings"
 	"sync"
 
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	"github.com/phongsathornpt/protonman/proton-sdk/domain"
 	xdraw "golang.org/x/image/draw"
 )
 
@@ -155,12 +155,12 @@ func (c *imagePrepareCache) put(key prepareCacheKey, value Prepared) {
 
 // PrepareMessages clones messages and prepares every image part for a model
 // request. Conversation history retains the canonical source-quality snapshot.
-func PrepareMessages(messages []sdk.Message, policy Policy) ([]sdk.Message, error) {
-	prepared := sdk.CloneMessages(messages)
+func PrepareMessages(messages []domain.Message, policy Policy) ([]domain.Message, error) {
+	prepared := domain.CloneMessages(messages)
 	for messageIndex := range prepared {
 		for partIndex := range prepared[messageIndex].Parts {
 			part := &prepared[messageIndex].Parts[partIndex]
-			if part.Type != sdk.ContentPartImage {
+			if part.Type != domain.ContentPartImage {
 				continue
 			}
 			image, err := Prepare(part.MIMEType, part.Data, policy)

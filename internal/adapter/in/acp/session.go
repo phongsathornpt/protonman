@@ -15,7 +15,6 @@ import (
 
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/app"
-	"github.com/phongsathornpt/protonman/internal/platform/appdirs"
 	"github.com/phongsathornpt/protonman/internal/base/contextutil"
 	"github.com/phongsathornpt/protonman/internal/core/conversation"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
@@ -23,7 +22,8 @@ import (
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/engine/toolcall"
 	"github.com/phongsathornpt/protonman/internal/feature/agent"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	"github.com/phongsathornpt/protonman/internal/platform/appdirs"
+	"github.com/phongsathornpt/protonman/proton-sdk/domain"
 )
 
 const sessionPersistenceTimeout = runtimepolicy.SessionPersistenceTimeout
@@ -40,7 +40,7 @@ type Session struct {
 	runner          app.Conversation
 	sessionService  *app.Sessions
 	agents          app.Agents
-	reasoningEffort sdk.ReasoningEffort
+	reasoningEffort domain.ReasoningEffort
 	retention       conversation.RetentionPolicy
 	mcpServers      []MCPServerConfig
 	resource        io.Closer
@@ -65,7 +65,7 @@ func NewSession(
 	sessionService *app.Sessions,
 	agents app.Agents,
 ) *Session {
-	reasoningEffort := sdk.ReasoningDefault
+	reasoningEffort := domain.ReasoningDefault
 	if effort, explicit := app.ReasoningPolicy(runner); explicit {
 		reasoningEffort = effort
 	}
@@ -105,20 +105,20 @@ func (s *Session) Close() error {
 }
 
 // ReasoningEffort returns the explicit session-local reasoning override.
-func (s *Session) ReasoningEffort() sdk.ReasoningEffort {
+func (s *Session) ReasoningEffort() domain.ReasoningEffort {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.reasoningEffort
 }
 
 // SetReasoningEffort replaces the session-local Protonman loop with an independently configured clone.
-func (s *Session) SetReasoningEffort(effort sdk.ReasoningEffort) error {
+func (s *Session) SetReasoningEffort(effort domain.ReasoningEffort) error {
 	if !effort.Valid() {
 		return fmt.Errorf("invalid reasoning effort %q", effort)
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	clone, err := app.CloneConversationWithReasoning(s.runner, effort, effort != sdk.ReasoningDefault)
+	clone, err := app.CloneConversationWithReasoning(s.runner, effort, effort != domain.ReasoningDefault)
 	if err != nil {
 		return err
 	}
@@ -565,13 +565,13 @@ func (s *Session) handleSlashCommand(
 	case "/reasoning", "/thinking":
 		if len(parts) == 1 {
 			label := "auto"
-			if effort := s.ReasoningEffort(); effort != sdk.ReasoningDefault {
+			if effort := s.ReasoningEffort(); effort != domain.ReasoningDefault {
 				label = string(effort)
 			}
 			_ = notifier(agentMessageNotification(s.id, "Reasoning override: **"+label+"**."))
 			return true, SessionPromptResult{StopReason: StopReasonEndTurn}, nil
 		}
-		effort, err := sdk.ParseReasoningEffort(parts[1])
+		effort, err := domain.ParseReasoningEffort(parts[1])
 		if err != nil {
 			return true, SessionPromptResult{}, fmt.Errorf("invalid reasoning effort: use auto, none, minimal, low, medium, high, xhigh, or max")
 		}
@@ -582,7 +582,7 @@ func (s *Session) handleSlashCommand(
 			return true, SessionPromptResult{}, fmt.Errorf("save session %q: %w", s.id, err)
 		}
 		label := "auto"
-		if effort != sdk.ReasoningDefault {
+		if effort != domain.ReasoningDefault {
 			label = string(effort)
 		}
 		_ = notifier(agentMessageNotification(s.id, "Reasoning override set to **"+label+"**."))
@@ -773,7 +773,7 @@ func (s *Session) saveState(ctx context.Context) error {
 	stateRevision := s.stateRevision
 	s.mu.Unlock()
 	reasoningSetting := "auto"
-	if reasoningEffort != sdk.ReasoningDefault {
+	if reasoningEffort != domain.ReasoningDefault {
 		reasoningSetting = string(reasoningEffort)
 	}
 	runtimeSettings := sessionRuntimeFor(s)

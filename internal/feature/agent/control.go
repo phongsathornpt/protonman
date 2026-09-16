@@ -6,7 +6,8 @@ import (
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/engine/toolcall"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	"github.com/phongsathornpt/protonman/proton-sdk/domain"
+	"github.com/phongsathornpt/protonman/proton-sdk/port"
 )
 
 // SetEnabled controls whether new subagents may be spawned. It never cancels existing agents.
@@ -78,7 +79,7 @@ func (c *Coordinator) SetParentRegistry(registry tool.Registry) {
 }
 
 // SetLanguageModel dynamically updates the proton-sdk model used by child subagents.
-func (c *Coordinator) SetLanguageModel(languageModel sdk.LanguageModel) {
+func (c *Coordinator) SetLanguageModel(languageModel port.LanguageModel) {
 	c.agentsMu.Lock()
 	defer c.agentsMu.Unlock()
 	c.languageModel = languageModel
@@ -96,7 +97,7 @@ func (c *Coordinator) SetModelResolver(resolver *ModelResolver) {
 }
 
 // LanguageModel returns the proton-sdk model used by child subagents.
-func (c *Coordinator) LanguageModel() sdk.LanguageModel {
+func (c *Coordinator) LanguageModel() port.LanguageModel {
 	c.agentsMu.RLock()
 	defer c.agentsMu.RUnlock()
 	return c.languageModel
@@ -151,7 +152,7 @@ func (c *Coordinator) SetReasoningResolver(resolver *ReasoningResolver) {
 }
 
 // SetReasoningEffort updates the explicit reasoning override inherited by new subagent turns.
-func (c *Coordinator) SetReasoningEffort(effort sdk.ReasoningEffort) {
+func (c *Coordinator) SetReasoningEffort(effort domain.ReasoningEffort) {
 	if !effort.Valid() {
 		return
 	}
@@ -161,7 +162,7 @@ func (c *Coordinator) SetReasoningEffort(effort sdk.ReasoningEffort) {
 }
 
 // ReasoningEffort returns the explicit reasoning override inherited by new subagents.
-func (c *Coordinator) ReasoningEffort() sdk.ReasoningEffort {
+func (c *Coordinator) ReasoningEffort() domain.ReasoningEffort {
 	c.agentsMu.RLock()
 	defer c.agentsMu.RUnlock()
 	return c.reasoningEffort

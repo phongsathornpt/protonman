@@ -5,14 +5,14 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	"github.com/phongsathornpt/protonman/proton-sdk/domain"
 )
 
 // Progress tracks execution rounds, tool calls, and retries in a turn.
 type Progress struct {
 	Round     int
 	ToolCalls int
-	Retry     sdk.RetryEvent
+	Retry     domain.RetryEvent
 }
 
 // State tracks the execution state of an active turn or tool call.

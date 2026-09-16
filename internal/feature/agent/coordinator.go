@@ -14,7 +14,8 @@ import (
 	"github.com/phongsathornpt/protonman/internal/core/workspace"
 	"github.com/phongsathornpt/protonman/internal/engine/toolcall"
 	"github.com/phongsathornpt/protonman/internal/engine/turn"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	"github.com/phongsathornpt/protonman/proton-sdk/domain"
+	"github.com/phongsathornpt/protonman/proton-sdk/port"
 )
 
 const (
@@ -38,12 +39,12 @@ type RunnerFactory func(profile Profile, tools *toolcall.Service) (turn.Runner, 
 // ModelResolver holds immutable per-profile language-model overrides.
 // Profiles without an override inherit the current Universal model at admission.
 type ModelResolver struct {
-	overrides map[Profile]sdk.LanguageModel
+	overrides map[Profile]port.LanguageModel
 }
 
 // NewModelResolver validates and snapshots explicit subagent model overrides.
-func NewModelResolver(overrides map[Profile]sdk.LanguageModel) (*ModelResolver, error) {
-	cloned := make(map[Profile]sdk.LanguageModel, len(overrides))
+func NewModelResolver(overrides map[Profile]port.LanguageModel) (*ModelResolver, error) {
+	cloned := make(map[Profile]port.LanguageModel, len(overrides))
 	for profile, languageModel := range overrides {
 		if !profile.IsSubagent() {
 			return nil, fmt.Errorf("model override profile %q is not delegable", profile)
@@ -57,7 +58,7 @@ func NewModelResolver(overrides map[Profile]sdk.LanguageModel) (*ModelResolver, 
 }
 
 // Resolve selects an explicit profile model or the caller-provided fallback.
-func (r *ModelResolver) Resolve(profile Profile, fallback sdk.LanguageModel) sdk.LanguageModel {
+func (r *ModelResolver) Resolve(profile Profile, fallback port.LanguageModel) port.LanguageModel {
 	if r != nil {
 		if languageModel, ok := r.overrides[profile]; ok {
 			return languageModel
@@ -69,12 +70,12 @@ func (r *ModelResolver) Resolve(profile Profile, fallback sdk.LanguageModel) sdk
 // ReasoningResolver holds immutable per-profile reasoning overrides.
 // ReasoningDefault entries intentionally inherit the current global/profile policy.
 type ReasoningResolver struct {
-	overrides map[Profile]sdk.ReasoningEffort
+	overrides map[Profile]domain.ReasoningEffort
 }
 
 // NewReasoningResolver validates and snapshots explicit subagent reasoning overrides.
-func NewReasoningResolver(overrides map[Profile]sdk.ReasoningEffort) (*ReasoningResolver, error) {
-	cloned := make(map[Profile]sdk.ReasoningEffort, len(overrides))
+func NewReasoningResolver(overrides map[Profile]domain.ReasoningEffort) (*ReasoningResolver, error) {
+	cloned := make(map[Profile]domain.ReasoningEffort, len(overrides))
 	for profile, effort := range overrides {
 		if !profile.IsSubagent() {
 			return nil, fmt.Errorf("reasoning override profile %q is not delegable", profile)
@@ -82,7 +83,7 @@ func NewReasoningResolver(overrides map[Profile]sdk.ReasoningEffort) (*Reasoning
 		if !effort.Valid() {
 			return nil, fmt.Errorf("reasoning override for %s is invalid: %q", profile, effort)
 		}
-		if effort != sdk.ReasoningDefault {
+		if effort != domain.ReasoningDefault {
 			cloned[profile] = effort
 		}
 	}
@@ -90,7 +91,7 @@ func NewReasoningResolver(overrides map[Profile]sdk.ReasoningEffort) (*Reasoning
 }
 
 // Resolve selects an explicit profile effort or the caller-provided fallback.
-func (r *ReasoningResolver) Resolve(profile Profile, fallback sdk.ReasoningEffort) sdk.ReasoningEffort {
+func (r *ReasoningResolver) Resolve(profile Profile, fallback domain.ReasoningEffort) domain.ReasoningEffort {
 	if r != nil {
 		if effort, ok := r.overrides[profile]; ok {
 			return effort
@@ -138,8 +139,8 @@ type childToolRuntime struct {
 type agentEntry struct {
 	status          AgentStatus
 	request         Request
-	languageModel   sdk.LanguageModel
-	reasoningEffort sdk.ReasoningEffort
+	languageModel   port.LanguageModel
+	reasoningEffort domain.ReasoningEffort
 	toolRuntime     childToolRuntime
 	dependencies    []*agentEntry
 	cancel          context.CancelFunc
@@ -152,7 +153,7 @@ type agentEntry struct {
 
 // Coordinator manages subagent execution in bounded, cancellable goroutines.
 type Coordinator struct {
-	languageModel     sdk.LanguageModel
+	languageModel     port.LanguageModel
 	modelResolver     *ModelResolver
 	reasoningResolver *ReasoningResolver
 	parentRegistry    tool.Registry
@@ -178,7 +179,7 @@ type Coordinator struct {
 	rootStop    context.CancelFunc
 
 	maxToolCalls         int
-	reasoningEffort      sdk.ReasoningEffort
+	reasoningEffort      domain.ReasoningEffort
 	maxLiveAgents        int
 	maxRetainedAgents    int
 	maxRuntime           time.Duration
@@ -238,7 +239,7 @@ func WithReasoningResolver(resolver *ReasoningResolver) Option {
 }
 
 // WithReasoningEffort overrides portable profile reasoning for subagents.
-func WithReasoningEffort(effort sdk.ReasoningEffort) Option {
+func WithReasoningEffort(effort domain.ReasoningEffort) Option {
 	return func(c *Coordinator) {
 		if effort.Valid() {
 			c.reasoningEffort = effort
@@ -393,7 +394,7 @@ func WithCallGuard(guard toolcall.CallGuard) Option {
 
 // NewCoordinator creates an agent coordinator for managing subagent goroutines.
 func NewCoordinator(
-	languageModel sdk.LanguageModel,
+	languageModel port.LanguageModel,
 	parentRegistry tool.Registry,
 	ws *workspace.Workspace,
 	policy *permission.Policy,

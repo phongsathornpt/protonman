@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/phongsathornpt/protonman/internal/core/tool"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	"github.com/phongsathornpt/protonman/proton-sdk/domain"
 )
 
 // Profile classifies Protonman's primary and specialized engineering attributes.
@@ -28,16 +28,16 @@ type Spec struct {
 	Profile           Profile
 	Description       string
 	Mutating          bool
-	Reasoning         sdk.ReasoningEffort
+	Reasoning         domain.ReasoningEffort
 	GroundingEvidence tool.EvidenceKind
 	AllowedKinds      []tool.Kind
 }
 
 var specs = []Spec{
-	{Profile: ProfileUniversal, Description: "adaptive primary software engineering orchestration", Mutating: true, Reasoning: sdk.ReasoningMedium, GroundingEvidence: tool.EvidenceNone},
-	{Profile: ProfileStrength, Description: "substantial implementation, fixes, and focused refactors", Mutating: true, Reasoning: sdk.ReasoningMedium, GroundingEvidence: tool.EvidenceWorkspace, AllowedKinds: []tool.Kind{tool.KindRead, tool.KindGrep, tool.KindGit, tool.KindWeb, tool.KindEdit, tool.KindBash}},
-	{Profile: ProfileAgility, Description: "fast read-only exploration, tracing, and focused investigation", Reasoning: sdk.ReasoningMedium, GroundingEvidence: tool.EvidenceWorkspace, AllowedKinds: []tool.Kind{tool.KindRead, tool.KindGrep, tool.KindGit, tool.KindWeb}},
-	{Profile: ProfileIntelligence, Description: "deep reasoning, difficult debugging, architecture, and high-risk engineering", Mutating: true, Reasoning: sdk.ReasoningHigh, GroundingEvidence: tool.EvidenceWorkspace, AllowedKinds: []tool.Kind{tool.KindRead, tool.KindGrep, tool.KindGit, tool.KindWeb, tool.KindEdit, tool.KindBash}},
+	{Profile: ProfileUniversal, Description: "adaptive primary software engineering orchestration", Mutating: true, Reasoning: domain.ReasoningMedium, GroundingEvidence: tool.EvidenceNone},
+	{Profile: ProfileStrength, Description: "substantial implementation, fixes, and focused refactors", Mutating: true, Reasoning: domain.ReasoningMedium, GroundingEvidence: tool.EvidenceWorkspace, AllowedKinds: []tool.Kind{tool.KindRead, tool.KindGrep, tool.KindGit, tool.KindWeb, tool.KindEdit, tool.KindBash}},
+	{Profile: ProfileAgility, Description: "fast read-only exploration, tracing, and focused investigation", Reasoning: domain.ReasoningMedium, GroundingEvidence: tool.EvidenceWorkspace, AllowedKinds: []tool.Kind{tool.KindRead, tool.KindGrep, tool.KindGit, tool.KindWeb}},
+	{Profile: ProfileIntelligence, Description: "deep reasoning, difficult debugging, architecture, and high-risk engineering", Mutating: true, Reasoning: domain.ReasoningHigh, GroundingEvidence: tool.EvidenceWorkspace, AllowedKinds: []tool.Kind{tool.KindRead, tool.KindGrep, tool.KindGit, tool.KindWeb, tool.KindEdit, tool.KindBash}},
 }
 
 // SpecForProfile returns the domain policy for one profile.
@@ -64,7 +64,6 @@ func SupportedProfiles() []Profile {
 func SubagentProfiles() []Profile {
 	return []Profile{ProfileStrength, ProfileAgility, ProfileIntelligence}
 }
-
 
 // SubagentProfileNames returns the delegatable profile names.
 func SubagentProfileNames() []string {

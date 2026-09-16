@@ -12,18 +12,20 @@ import (
 
 	"github.com/phongsathornpt/protonman/internal/core/conversation"
 	"github.com/phongsathornpt/protonman/internal/core/modelprofile"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	"github.com/phongsathornpt/protonman/proton-sdk/domain"
+	"github.com/phongsathornpt/protonman/proton-sdk/port"
+	"github.com/phongsathornpt/protonman/proton-sdk/usecase"
 	_ "golang.org/x/image/webp"
 )
 
 const estimatedBytesPerToken = 3
 
-func validateContextBudget(languageModel sdk.LanguageModel, request sdk.Request) error {
+func validateContextBudget(languageModel port.LanguageModel, request domain.Request) error {
 	return validateContextBudgetWithVisionPolicy(languageModel, request, modelprofile.DefaultVisionPolicy())
 }
 
-func validateContextBudgetWithVisionPolicy(languageModel sdk.LanguageModel, request sdk.Request, visionPolicy modelprofile.VisionPolicy) error {
-	limits := sdk.ModelTokenLimits(languageModel)
+func validateContextBudgetWithVisionPolicy(languageModel port.LanguageModel, request domain.Request, visionPolicy modelprofile.VisionPolicy) error {
+	limits := usecase.ModelTokenLimits(languageModel)
 	if limits.ContextWindow <= 0 && limits.MaxInputTokens <= 0 && limits.MaxOutputTokens <= 0 {
 		return nil
 	}
@@ -51,19 +53,19 @@ func validateContextBudgetWithVisionPolicy(languageModel sdk.LanguageModel, requ
 	return fmt.Errorf("%w: model %q estimated input %d tokens plus %d reserved output exceeds %d-token context window", ErrContextBudgetExceeded, languageModel.ModelID(), estimated, reserve, limits.ContextWindow)
 }
 
-func estimateRequestTokens(request sdk.Request) (int, error) {
+func estimateRequestTokens(request domain.Request) (int, error) {
 	return estimateRequestTokensWithVisionPolicy(request, modelprofile.DefaultVisionPolicy())
 }
 
-func estimateRequestTokensWithVisionPolicy(request sdk.Request, visionPolicy modelprofile.VisionPolicy) (int, error) {
+func estimateRequestTokensWithVisionPolicy(request domain.Request, visionPolicy modelprofile.VisionPolicy) (int, error) {
 	visionPolicy = modelprofile.EffectiveVisionPolicy(modelprofile.Resolved{VisionPolicy: visionPolicy})
 	transportNeutral := request
-	transportNeutral.Messages = sdk.CloneMessages(request.Messages)
+	transportNeutral.Messages = domain.CloneMessages(request.Messages)
 	imageTokens := 0
 	for messageIndex := range transportNeutral.Messages {
 		for partIndex := range transportNeutral.Messages[messageIndex].Parts {
 			part := &transportNeutral.Messages[messageIndex].Parts[partIndex]
-			if part.Type != sdk.ContentPartImage {
+			if part.Type != domain.ContentPartImage {
 				continue
 			}
 			imageTokens += estimateImageTokensWithPolicy(part.Data, visionPolicy)
@@ -159,7 +161,7 @@ func contextOutputReserve(window, requested int) int {
 	return reserve
 }
 
-func effectiveInputBudget(limits sdk.TokenLimits, requestedOutput int) int {
+func effectiveInputBudget(limits domain.TokenLimits, requestedOutput int) int {
 	budget := limits.MaxInputTokens
 	if limits.ContextWindow > 0 {
 		reserve := contextOutputReserve(limits.ContextWindow, requestedOutput)
@@ -177,11 +179,11 @@ func effectiveInputBudget(limits sdk.TokenLimits, requestedOutput int) int {
 	return budget
 }
 
-func compactRequestToModelBudget(request sdk.Request, limits sdk.TokenLimits, policy modelprofile.CompactionPolicy) (sdk.Request, conversation.CompactionDecision, error) {
+func compactRequestToModelBudget(request domain.Request, limits domain.TokenLimits, policy modelprofile.CompactionPolicy) (domain.Request, conversation.CompactionDecision, error) {
 	return compactRequestToModelBudgetWithVisionPolicy(request, limits, policy, modelprofile.DefaultVisionPolicy())
 }
 
-func compactRequestToModelBudgetWithVisionPolicy(request sdk.Request, limits sdk.TokenLimits, policy modelprofile.CompactionPolicy, visionPolicy modelprofile.VisionPolicy) (sdk.Request, conversation.CompactionDecision, error) {
+func compactRequestToModelBudgetWithVisionPolicy(request domain.Request, limits domain.TokenLimits, policy modelprofile.CompactionPolicy, visionPolicy modelprofile.VisionPolicy) (domain.Request, conversation.CompactionDecision, error) {
 	estimated, err := estimateRequestTokensWithVisionPolicy(request, visionPolicy)
 	if err != nil {
 		return request, conversation.CompactionDecision{}, err
@@ -207,7 +209,7 @@ func compactRequestToModelBudgetWithVisionPolicy(request sdk.Request, limits sdk
 		policy.MinRecentMessages,
 		2048,
 		messageTarget,
-		func(messages []sdk.Message) (int, error) {
+		func(messages []domain.Message) (int, error) {
 			candidate := request
 			candidate.Messages = messages
 			tokens, err := estimateRequestTokensWithVisionPolicy(candidate, visionPolicy)

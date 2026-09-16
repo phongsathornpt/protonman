@@ -38,7 +38,7 @@ func (c AgentRunCell) RenderWidth(width int) []string {
 	if durationText != "" {
 		reserved += len([]rune(durationText))
 	}
-	label := textview.TruncateEllipsis(c.title(), max(8, width-reserved))
+	label := textview.TruncateEllipsis(c.title(), max(1, width-reserved))
 	header := style.Render(indicator + label)
 	if durationText != "" {
 		header += tuistyle.ToolSummaryStyle.Render(durationText)

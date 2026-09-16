@@ -4,13 +4,13 @@ import (
 	"strings"
 
 	"github.com/phongsathornpt/protonman/internal/core/modelclient"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	"github.com/phongsathornpt/protonman/proton-sdk/port"
 )
 
 // Factory constructs concrete provider language models for the core model-client port.
 type Factory struct{}
 
-func (Factory) Build(request modelclient.Request) sdk.LanguageModel {
+func (Factory) Build(request modelclient.Request) port.LanguageModel {
 	providerName := strings.TrimSpace(request.ProviderName)
 	if providerName == "" {
 		providerName = DefaultProtonmanName

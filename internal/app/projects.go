@@ -6,7 +6,7 @@ import (
 
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 	project "github.com/phongsathornpt/protonman/internal/core/project"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	"github.com/phongsathornpt/protonman/proton-sdk/domain"
 )
 
 type ProjectDiscoveryOptions = project.Options
@@ -17,7 +17,7 @@ type ProjectInitResult = project.InitResult
 type ProjectSettingsRepository interface {
 	SaveAgentProfile(string, string) error
 	SaveSubagentsEnabled(string, bool) error
-	SaveReasoningEffort(string, sdk.ReasoningEffort) error
+	SaveReasoningEffort(string, domain.ReasoningEffort) error
 	SaveMaxToolCalls(string, int) error
 	SavePermissionMode(string, permission.Mode) error
 	SavePermissionRule(string, permission.Rule) error
@@ -74,7 +74,7 @@ func (p Projects) SaveSubagentsEnabled(workDir string, enabled bool) error {
 	return p.repository.SaveSubagentsEnabled(workDir, enabled)
 }
 
-func (p Projects) SaveReasoningEffort(workDir string, effort sdk.ReasoningEffort) error {
+func (p Projects) SaveReasoningEffort(workDir string, effort domain.ReasoningEffort) error {
 	if p.repository == nil {
 		return fmt.Errorf("project settings repository is unavailable")
 	}

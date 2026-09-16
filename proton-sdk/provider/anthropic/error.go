@@ -4,10 +4,10 @@ import (
 	"encoding/json"
 	"strings"
 
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	"github.com/phongsathornpt/protonman/proton-sdk/domain"
 )
 
-func anthropicHTTPError(status int, body []byte) *sdk.ProviderError {
+func anthropicHTTPError(status int, body []byte) *domain.ProviderError {
 	var payload struct {
 		Error struct {
 			Type    string `json:"type"`
@@ -22,5 +22,5 @@ func anthropicHTTPError(status int, body []byte) *sdk.ProviderError {
 			message = payload.Error.Message
 		}
 	}
-	return sdk.NewProviderError("anthropic", status, code, message)
+	return domain.NewProviderError("anthropic", status, code, message)
 }

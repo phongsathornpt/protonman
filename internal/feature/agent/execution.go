@@ -14,7 +14,8 @@ import (
 	"github.com/phongsathornpt/protonman/internal/engine/toolcall"
 	"github.com/phongsathornpt/protonman/internal/engine/turn"
 	"github.com/phongsathornpt/protonman/internal/feature/skill"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	"github.com/phongsathornpt/protonman/proton-sdk/domain"
+	"github.com/phongsathornpt/protonman/proton-sdk/port"
 )
 
 func (c *Coordinator) execute(ctx context.Context, req Request) (Result, error) {
@@ -29,7 +30,7 @@ func (c *Coordinator) execute(ctx context.Context, req Request) (Result, error) 
 	return c.executeWithRuntime(ctx, req, languageModel, reasoningEffort, runtimeSpec)
 }
 
-func (c *Coordinator) executeWithRuntime(ctx context.Context, req Request, languageModel sdk.LanguageModel, reasoningEffort sdk.ReasoningEffort, runtimeSpec childToolRuntime) (Result, error) {
+func (c *Coordinator) executeWithRuntime(ctx context.Context, req Request, languageModel port.LanguageModel, reasoningEffort domain.ReasoningEffort, runtimeSpec childToolRuntime) (Result, error) {
 	if err := ctx.Err(); err != nil {
 		return Result{SessionID: req.SessionID, AgentID: req.ID, Profile: req.Profile}, err
 	}
@@ -116,7 +117,7 @@ func (c *Coordinator) executeWithRuntime(ctx context.Context, req Request, langu
 		if spec, ok := SpecForProfile(req.Profile); ok {
 			loopOptions = append(loopOptions, turn.WithGroundingEvidence(spec.GroundingEvidence), turn.WithReasoningEffort(spec.Reasoning))
 		}
-		if reasoningEffort != sdk.ReasoningDefault {
+		if reasoningEffort != domain.ReasoningDefault {
 			loopOptions = append(loopOptions, turn.WithExplicitReasoningEffort(reasoningEffort))
 		}
 		if childSkills != nil {

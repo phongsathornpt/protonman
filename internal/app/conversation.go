@@ -19,7 +19,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/engine/turn"
 	"github.com/phongsathornpt/protonman/internal/feature/agent"
 	"github.com/phongsathornpt/protonman/internal/feature/skill"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	"github.com/phongsathornpt/protonman/proton-sdk/domain"
 )
 
 // Conversation executes one model/tool turn over an existing message history.
@@ -27,7 +27,7 @@ import (
 // must snapshot before retaining or mutating them. Inbound adapters depend on this
 // port instead of the concrete turn loop.
 type Conversation interface {
-	Run(context.Context, []sdk.Message, turn.Sink) (turn.Result, error)
+	Run(context.Context, []domain.Message, turn.Sink) (turn.Result, error)
 }
 
 // Event and Result are application-level aliases used by inbound adapters.
@@ -52,17 +52,17 @@ var (
 
 // ReasoningPolicy returns the explicit reasoning policy when the underlying
 // conversation supports session-local reasoning control.
-func ReasoningPolicy(conversation Conversation) (sdk.ReasoningEffort, bool) {
+func ReasoningPolicy(conversation Conversation) (domain.ReasoningEffort, bool) {
 	loop, ok := conversation.(*turn.Loop)
 	if !ok || loop == nil {
-		return sdk.ReasoningDefault, false
+		return domain.ReasoningDefault, false
 	}
 	return loop.ReasoningPolicy()
 }
 
 // CloneConversationWithReasoning returns an independent conversation with a
 // session-local reasoning policy.
-func CloneConversationWithReasoning(conversation Conversation, effort sdk.ReasoningEffort, explicit bool) (Conversation, error) {
+func CloneConversationWithReasoning(conversation Conversation, effort domain.ReasoningEffort, explicit bool) (Conversation, error) {
 	loop, ok := conversation.(*turn.Loop)
 	if !ok || loop == nil {
 		return nil, fmt.Errorf("conversation does not support reasoning overrides")
@@ -103,7 +103,7 @@ type ConversationSpec struct {
 	WorkspacePolicy *workspace.Workspace
 	ActiveGoal      string
 	AgentProfile    string
-	ReasoningEffort sdk.ReasoningEffort
+	ReasoningEffort domain.ReasoningEffort
 	MaxToolCalls    int
 	RequestTimeout  time.Duration
 	TurnTimeout     time.Duration
@@ -176,7 +176,7 @@ func primaryConversationPolicy(spec ConversationSpec) (prompt.Spec, []turn.Optio
 			)
 		}
 	}
-	if spec.ReasoningEffort != sdk.ReasoningDefault {
+	if spec.ReasoningEffort != domain.ReasoningDefault {
 		options = append(options, turn.WithExplicitReasoningEffort(spec.ReasoningEffort))
 	}
 	return promptSpec, options, nil
@@ -213,7 +213,7 @@ func (p *subagentRuntimeContextProvider) Pending(ctx context.Context) bool {
 	return ref.TurnID != "" && p.coordinator.HasBlockingLiveForTurn(ref)
 }
 
-func (p *subagentRuntimeContextProvider) Drain(ctx context.Context) ([]sdk.Message, error) {
+func (p *subagentRuntimeContextProvider) Drain(ctx context.Context) ([]domain.Message, error) {
 	if p == nil || p.synthesis == nil {
 		return nil, nil
 	}
@@ -228,7 +228,7 @@ func (p *subagentRuntimeContextProvider) Drain(ctx context.Context) ([]sdk.Messa
 	return p.consumeBatch(ctx, batch)
 }
 
-func (p *subagentRuntimeContextProvider) Await(ctx context.Context) ([]sdk.Message, error) {
+func (p *subagentRuntimeContextProvider) Await(ctx context.Context) ([]domain.Message, error) {
 	if p == nil || p.synthesis == nil || p.coordinator == nil {
 		return nil, nil
 	}
@@ -257,7 +257,7 @@ func (p *subagentRuntimeContextProvider) Await(ctx context.Context) ([]sdk.Messa
 	}
 }
 
-func (p *subagentRuntimeContextProvider) consumeBatch(ctx context.Context, batch agent.SynthesisBatch) ([]sdk.Message, error) {
+func (p *subagentRuntimeContextProvider) consumeBatch(ctx context.Context, batch agent.SynthesisBatch) ([]domain.Message, error) {
 	messages, err := synthesisBatchMessages(batch)
 	if err != nil {
 		return nil, err
@@ -345,7 +345,7 @@ func runtimeSubagentConclusion(result agent.Result) string {
 	return strings.TrimSpace(result.Summary)
 }
 
-func synthesisBatchMessages(batch agent.SynthesisBatch) ([]sdk.Message, error) {
+func synthesisBatchMessages(batch agent.SynthesisBatch) ([]domain.Message, error) {
 	if len(batch.Results) == 0 {
 		return nil, nil
 	}
@@ -368,5 +368,5 @@ func synthesisBatchMessages(batch agent.SynthesisBatch) ([]sdk.Message, error) {
 		string(payload),
 		"</proton-runtime-context>",
 	}, "\n")
-	return []sdk.Message{{ID: sdk.NewMessageID(), Role: sdk.RoleUser, Content: content}}, nil
+	return []domain.Message{{ID: domain.NewMessageID(), Role: domain.RoleUser, Content: content}}, nil
 }
