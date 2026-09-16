@@ -24,7 +24,7 @@ PROTONMAN_ICONS=ascii
 
 Renderers consume semantic fields such as `Icons.Read`, `Icons.Edit`, `Icons.Agent`, and `Icons.ToolSuccess`.
 
-The resolved icon set is injected into TUI presentation state. It is not a mutable package global and is not persisted in `.protonman/config.toml` because a repository must not decide which font a user's local terminal needs.
+The resolved icon set is injected into TUI presentation state. It is not a mutable package global and is not persisted in `.protonman/config.json` because a repository must not decide which font a user's local terminal needs.
 
 Raw and copyable transcript output remains text or portable Unicode and should not become part of persisted conversation data, tool results, or execution policy.
 

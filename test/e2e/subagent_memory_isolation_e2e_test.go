@@ -192,16 +192,19 @@ func writeHomeConfig(t *testing.T, home, baseURL string) {
 	if err := os.MkdirAll(protonDir, 0o755); err != nil {
 		t.Fatalf("create home config dir: %v", err)
 	}
-	configTOML := fmt.Sprintf(`
-[model]
-default = "mock-model"
-provider = "protonman"
-
-[providers.protonman]
-api_key = "mock-api-key"
-base_url = "%s"
-`, baseURL)
-	if err := os.WriteFile(filepath.Join(protonDir, "config.toml"), []byte(configTOML), 0o644); err != nil {
+	configJSON := fmt.Sprintf(`{
+  "model": {
+    "default": "mock-model",
+    "provider": "protonman"
+  },
+  "providers": {
+    "protonman": {
+      "api_key": "mock-api-key",
+      "base_url": "%s"
+    }
+  }
+}`, baseURL)
+	if err := os.WriteFile(filepath.Join(protonDir, "config.json"), []byte(configJSON), 0o644); err != nil {
 		t.Fatalf("write home config: %v", err)
 	}
 }

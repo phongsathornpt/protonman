@@ -13,8 +13,8 @@ import (
 )
 
 var (
-	// ErrNoFrontmatter indicates that SKILL.md does not start with YAML frontmatter.
-	ErrNoFrontmatter = errors.New("missing YAML frontmatter delimiters")
+	// ErrNoFrontmatter indicates that SKILL.md does not start with frontmatter.
+	ErrNoFrontmatter = errors.New("missing frontmatter delimiters")
 	// ErrMissingSKILLFile indicates the SKILL.md file is absent.
 	ErrMissingSKILLFile = errors.New("SKILL.md file not found")
 )
@@ -37,9 +37,9 @@ func ParseSkillFile(filePath string, scope Scope) (Skill, error) {
 		return Skill{}, fmt.Errorf("parse %q: %w", filePath, err)
 	}
 
-	raw, err := parseYAMLFrontmatter(fm)
+	raw, err := parseFrontmatter(fm)
 	if err != nil {
-		return Skill{}, fmt.Errorf("decode YAML frontmatter in %q: %w", filePath, err)
+		return Skill{}, fmt.Errorf("decode frontmatter in %q: %w", filePath, err)
 	}
 
 	name := stringVal(raw["name"])

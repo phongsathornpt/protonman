@@ -42,21 +42,21 @@ func ParseModelID(raw string) (ModelID, error) {
 
 // Provider describes one configured model provider connection.
 type Provider struct {
-	Name    string `toml:"name"`
-	Type    string `toml:"type"`
-	BaseURL string `toml:"base_url"`
-	APIKey  string `toml:"api_key"`
+	Name    string `json:"name"`
+	Type    string `json:"type"`
+	BaseURL string `json:"base_url"`
+	APIKey  string `json:"api_key"`
 }
 
 // Selection identifies the active provider and model.
 type Selection struct {
-	Default  string `toml:"default"`
-	Provider string `toml:"provider"`
+	Default  string `json:"default"`
+	Provider string `json:"provider"`
 }
 
 // SubagentRoute contains a per-profile model/reasoning override.
 type SubagentRoute struct {
-	Provider        ProviderName           `toml:"provider"`
-	Model           ModelID                `toml:"model"`
-	ReasoningEffort domain.ReasoningEffort `toml:"reasoning_effort"`
+	Provider        ProviderName           `json:"provider"`
+	Model           ModelID                `json:"model"`
+	ReasoningEffort domain.ReasoningEffort `json:"reasoning_effort"`
 }

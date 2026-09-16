@@ -59,16 +59,19 @@ func TestE2EGeminiStyleImageProbeRecoversToReadFile(t *testing.T) {
 
 func setupMockModelConfig(t *testing.T, server *mockLLMServer, home, model string) {
 	t.Helper()
-	config := fmt.Sprintf(`
-[model]
-default = %q
-provider = "protonman"
-
-[providers.protonman]
-api_key = "mock-api-key"
-base_url = %q
-`, model, server.URL())
-	path := filepath.Join(home, ".protonman", "config.toml")
+	config := fmt.Sprintf(`{
+  "model": {
+    "default": %q,
+    "provider": "protonman"
+  },
+  "providers": {
+    "protonman": {
+      "api_key": "mock-api-key",
+      "base_url": %q
+    }
+  }
+}`, model, server.URL())
+	path := filepath.Join(home, ".protonman", "config.json")
 	if err := os.WriteFile(path, []byte(config), 0o644); err != nil {
 		t.Fatalf("write mock model config: %v", err)
 	}

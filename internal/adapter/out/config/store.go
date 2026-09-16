@@ -5,23 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"strings"
 )
 
 func decodeDocument(data []byte, path, label string) (fileDocument, error) {
 	var doc fileDocument
-	trimmed := strings.TrimSpace(string(data))
-	if strings.HasSuffix(path, ".json") || strings.HasPrefix(trimmed, "{") {
-		if err := json.Unmarshal(data, &doc); err != nil {
-			return fileDocument{}, fmt.Errorf("decode existing %s %q: %w", label, path, err)
-		}
-		return doc, nil
-	}
-	if err := decodeTOML(data, &doc); err != nil {
-		if jsonErr := json.Unmarshal(data, &doc); jsonErr == nil {
-			return doc, nil
-		}
-		return fileDocument{}, fmt.Errorf("decode existing %s %q: %w", label, path, err)
+	if err := json.Unmarshal(data, &doc); err != nil {
+		return fileDocument{}, fmt.Errorf("decode %s %q: %w", label, path, err)
 	}
 	return doc, nil
 }

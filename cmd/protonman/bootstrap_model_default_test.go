@@ -70,15 +70,19 @@ func TestBuildRuntimeRepairsOpenCodeSelectionWithoutModel(t *testing.T) {
 	if err := os.MkdirAll(home+"/.protonman", 0o700); err != nil {
 		t.Fatal(err)
 	}
-	configText := `[providers.opencode]
-name = "opencode"
-type = "openai"
-base_url = "https://opencode.ai/zen/v1"
-
-[model]
-provider = "opencode"
-`
-	if err := os.WriteFile(home+"/.protonman/config.toml", []byte(configText), 0o600); err != nil {
+	configText := `{
+  "providers": {
+    "opencode": {
+      "name": "opencode",
+      "type": "openai",
+      "base_url": "https://opencode.ai/zen/v1"
+    }
+  },
+  "model": {
+    "provider": "opencode"
+  }
+}`
+	if err := os.WriteFile(home+"/.protonman/config.json", []byte(configText), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -120,28 +124,32 @@ func TestBuildRuntimeFallsBackToOpenCodeWhenSavedProviderIsMissing(t *testing.T)
 	if err := os.MkdirAll(home+"/.protonman", 0o700); err != nil {
 		t.Fatal(err)
 	}
-	configText := `[providers.9router]
-name = "9router"
-type = "openai"
-base_url = "https://router.example/v1"
-api_key = "test-key"
-
-[providers.opencode]
-name = "opencode"
-type = "openai"
-base_url = "https://opencode.ai/zen/v1"
-
-[providers.protonman]
-name = "protonman"
-type = "openai"
-base_url = "https://protonman.dev/api/v1"
-api_key = "test-key"
-
-[model]
-default = "manager"
-provider = "beta"
-`
-	if err := os.WriteFile(home+"/.protonman/config.toml", []byte(configText), 0o600); err != nil {
+	configText := `{
+  "providers": {
+    "9router": {
+      "name": "9router",
+      "type": "openai",
+      "base_url": "https://router.example/v1",
+      "api_key": "test-key"
+    },
+    "opencode": {
+      "name": "opencode",
+      "type": "openai",
+      "base_url": "https://opencode.ai/zen/v1"
+    },
+    "protonman": {
+      "name": "protonman",
+      "type": "openai",
+      "base_url": "https://protonman.dev/api/v1",
+      "api_key": "test-key"
+    }
+  },
+  "model": {
+    "default": "manager",
+    "provider": "beta"
+  }
+}`
+	if err := os.WriteFile(home+"/.protonman/config.json", []byte(configText), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	runtime, err := buildRuntime(context.Background(), cliOptions{})
@@ -185,17 +193,21 @@ func TestBuildRuntimePreservesConfiguredModelFromProtonmanHome(t *testing.T) {
 	if err := os.MkdirAll(home+"/.protonman", 0o700); err != nil {
 		t.Fatal(err)
 	}
-	configText := `[providers.custom]
-name = "custom"
-type = "openai"
-base_url = "https://custom.example/v1"
-api_key = "test-key"
-
-[model]
-default = "custom-model"
-provider = "custom"
-`
-	if err := os.WriteFile(home+"/.protonman/config.toml", []byte(configText), 0o600); err != nil {
+	configText := `{
+  "providers": {
+    "custom": {
+      "name": "custom",
+      "type": "openai",
+      "base_url": "https://custom.example/v1",
+      "api_key": "test-key"
+    }
+  },
+  "model": {
+    "default": "custom-model",
+    "provider": "custom"
+  }
+}`
+	if err := os.WriteFile(home+"/.protonman/config.json", []byte(configText), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	runtime, err := buildRuntime(context.Background(), cliOptions{})

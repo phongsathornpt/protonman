@@ -196,18 +196,21 @@ func (m *mockLLMServer) SetupWorkspaceConfig(t *testing.T, homeDir string) {
 		t.Fatalf("mkdir .protonman in home: %v", err)
 	}
 
-	configTOML := fmt.Sprintf(`
-[model]
-default = "mock-model"
-provider = "protonman"
+	configJSON := fmt.Sprintf(`{
+  "model": {
+    "default": "mock-model",
+    "provider": "protonman"
+  },
+  "providers": {
+    "protonman": {
+      "api_key": "mock-api-key",
+      "base_url": "%s"
+    }
+  }
+}`, m.URL())
 
-[providers.protonman]
-api_key = "mock-api-key"
-base_url = "%s"
-`, m.URL())
-
-	if err := os.WriteFile(filepath.Join(protonDir, "config.toml"), []byte(configTOML), 0o644); err != nil {
-		t.Fatalf("write config.toml in home: %v", err)
+	if err := os.WriteFile(filepath.Join(protonDir, "config.json"), []byte(configJSON), 0o644); err != nil {
+		t.Fatalf("write config.json in home: %v", err)
 	}
 }
 

@@ -12,10 +12,9 @@ import (
 )
 
 const (
-	RootDirName          = ".protonman"
-	ConfigFileName       = "config.json"
-	LegacyConfigFileName = "config.toml"
-	SessionsDir          = "sessions"
+	RootDirName        = ".protonman"
+	ConfigFileName     = "config.json"
+	SessionsDir        = "sessions"
 	CheckpointsDir       = "checkpoints"
 	SkillsDir            = "skills"
 	MemoryDir            = "memory"

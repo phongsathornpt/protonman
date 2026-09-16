@@ -161,12 +161,13 @@ func TestE2EProtectedPathsRejection(t *testing.T) {
 	if err := os.MkdirAll(projectProton, 0o755); err != nil {
 		t.Fatalf("mkdir .protonman: %v", err)
 	}
-	configContent := `
-[workspace]
-protected_paths = [".env", "secrets/*"]
-`
-	if err := os.WriteFile(filepath.Join(projectProton, "config.toml"), []byte(configContent), 0o644); err != nil {
-		t.Fatalf("write config.toml: %v", err)
+	configContent := `{
+  "workspace": {
+    "protected_paths": [".env", "secrets/*"]
+  }
+}`
+	if err := os.WriteFile(filepath.Join(projectProton, "config.json"), []byte(configContent), 0o644); err != nil {
+		t.Fatalf("write config.json: %v", err)
 	}
 
 	// Create .env in workspace

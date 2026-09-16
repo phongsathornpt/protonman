@@ -11,26 +11,28 @@ func TestE2EConfigPrecedenceAndWarnings(t *testing.T) {
 	ws := newTestWorkspace(t)
 	home := newTestHome(t)
 
-	// 1. Write global config.toml
+	// 1. Write global config.json
 	homeProton := filepath.Join(home, ".protonman")
 	_ = os.MkdirAll(homeProton, 0o755)
-	globalTOML := `
-[model]
-default = "global-model"
-provider = "protonman"
-`
-	if err := os.WriteFile(filepath.Join(homeProton, "config.toml"), []byte(globalTOML), 0o644); err != nil {
+	globalJSON := `{
+  "model": {
+    "default": "global-model",
+    "provider": "protonman"
+  }
+}`
+	if err := os.WriteFile(filepath.Join(homeProton, "config.json"), []byte(globalJSON), 0o644); err != nil {
 		t.Fatalf("write global config: %v", err)
 	}
 
-	// 2. Write project local .protonman/config.toml (untrusted)
+	// 2. Write project local .protonman/config.json (untrusted)
 	projectProton := filepath.Join(ws, ".protonman")
 	_ = os.MkdirAll(projectProton, 0o755)
-	projectTOML := `
-[model]
-default = "project-model"
-`
-	if err := os.WriteFile(filepath.Join(projectProton, "config.toml"), []byte(projectTOML), 0o644); err != nil {
+	projectJSON := `{
+  "model": {
+    "default": "project-model"
+  }
+}`
+	if err := os.WriteFile(filepath.Join(projectProton, "config.json"), []byte(projectJSON), 0o644); err != nil {
 		t.Fatalf("write project config: %v", err)
 	}
 
@@ -61,14 +63,14 @@ default = "project-model"
 	}
 }
 
-func TestE2EConfigMalformedTOMLHandling(t *testing.T) {
+func TestE2EConfigMalformedJSONHandling(t *testing.T) {
 	ws := newTestWorkspace(t)
 	home := newTestHome(t)
 
-	// Write invalid/corrupt TOML syntax
+	// Write invalid/corrupt JSON syntax
 	homeProton := filepath.Join(home, ".protonman")
 	_ = os.MkdirAll(homeProton, 0o755)
-	_ = os.WriteFile(filepath.Join(homeProton, "config.toml"), []byte("[model\nmalformed = syntax {{{"), 0o644)
+	_ = os.WriteFile(filepath.Join(homeProton, "config.json"), []byte(`{"model": malformed json {{{`), 0o644)
 
 	res := runProton(t, runOptions{
 		args: []string{"-y", "-p", "test"},
@@ -76,7 +78,7 @@ func TestE2EConfigMalformedTOMLHandling(t *testing.T) {
 		env:  []string{"PROTONMAN_HOME=" + home},
 	})
 	if res.exitCode == 0 {
-		t.Fatalf("expected exit code > 0 on malformed TOML, got 0")
+		t.Fatalf("expected exit code > 0 on malformed JSON, got 0")
 	}
 	combined := res.stdout + res.stderr
 	if !strings.Contains(combined, "load configuration") {

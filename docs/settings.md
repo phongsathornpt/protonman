@@ -1,6 +1,6 @@
 # Settings architecture
 
-Protonman treats runtime settings and persisted configuration as separate contracts. The configuration system uses JSON (`config.json`) as its canonical format while preserving backward compatibility with legacy `config.toml`.
+Protonman treats runtime settings and persisted configuration as separate contracts. The configuration system uses JSON (`config.json`) as its canonical format.
 
 ## Ownership
 
@@ -21,10 +21,10 @@ runtimepolicy defaults
 DefaultSnapshot()
         |
         v
-user ~/.protonman/config.json (or legacy config.toml)
+user ~/.protonman/config.json
         |
         v
-trusted project .protonman/config.json (or legacy config.toml)
+trusted project .protonman/config.json
         |
         v
 effective Snapshot + provenance + warnings
@@ -58,7 +58,7 @@ encode to temporary file as formatted JSON
 set scope-specific permissions
         |
         v
-atomic rename (and backup legacy .toml as .bak)
+atomic rename
 ```
 
 The shared primitive does not erase scope-specific security rules. User config remains `0600`; project config remains `0644` and must preserve project-scope and symlink rejection checks.

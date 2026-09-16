@@ -160,24 +160,29 @@ func writeReasoningConfig(t *testing.T, home, baseURL, providerType, modelID, pr
 	}
 	agentLines := ""
 	if profile != "" || effort != "" {
-		agentLines = "\n[agent]\n"
+		parts := []string{}
 		if profile != "" {
-			agentLines += fmt.Sprintf("profile = %q\n", profile)
+			parts = append(parts, fmt.Sprintf(`"profile": %q`, profile))
 		}
 		if effort != "" {
-			agentLines += fmt.Sprintf("reasoning_effort = %q\n", effort)
+			parts = append(parts, fmt.Sprintf(`"reasoning_effort": %q`, effort))
 		}
+		agentLines = fmt.Sprintf(`,"agent": {%s}`, strings.Join(parts, ","))
 	}
-	config := fmt.Sprintf(`[model]
-default = %q
-provider = "protonman"
-
-[providers.protonman]
-type = %q
-api_key = "mock-api-key"
-base_url = %q
-%s`, modelID, providerType, baseURL, agentLines)
-	if err := os.WriteFile(filepath.Join(protonDir, "config.toml"), []byte(config), 0o600); err != nil {
+	config := fmt.Sprintf(`{
+  "model": {
+    "default": %q,
+    "provider": "protonman"
+  },
+  "providers": {
+    "protonman": {
+      "type": %q,
+      "api_key": "mock-api-key",
+      "base_url": %q
+    }
+  }%s
+}`, modelID, providerType, baseURL, agentLines)
+	if err := os.WriteFile(filepath.Join(protonDir, "config.json"), []byte(config), 0o600); err != nil {
 		t.Fatal(err)
 	}
 }

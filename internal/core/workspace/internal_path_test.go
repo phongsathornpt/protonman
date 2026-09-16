@@ -19,11 +19,11 @@ func TestReservedInternalPathIsDeniedToWorkspaceAccess(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err = ws.Resolve(context.Background(), filepath.Join(".protonman", "config.toml"))
+	_, err = ws.Resolve(context.Background(), filepath.Join(".protonman", "config.json"))
 	if !errors.Is(err, ErrInternalPath) {
 		t.Fatalf("Resolve(internal) error = %v, want internal path", err)
 	}
-	_, err = ws.ResolveRead(context.Background(), filepath.Join(".protonman", "config.toml"))
+	_, err = ws.ResolveRead(context.Background(), filepath.Join(".protonman", "config.json"))
 	if !errors.Is(err, ErrInternalPath) {
 		t.Fatalf("ResolveRead(internal) error = %v, want internal path", err)
 	}
@@ -47,7 +47,7 @@ func TestReservedInternalPathRejectsWorkspaceSymlinkAlias(t *testing.T) {
 		t.Skipf("symlinks unavailable: %v", err)
 	}
 
-	_, err = ws.ResolveRead(context.Background(), filepath.Join("internal-link", "config.toml"))
+	_, err = ws.ResolveRead(context.Background(), filepath.Join("internal-link", "config.json"))
 	if !errors.Is(err, ErrInternalPath) {
 		t.Fatalf("ResolveRead(alias) error = %v, want internal path", err)
 	}

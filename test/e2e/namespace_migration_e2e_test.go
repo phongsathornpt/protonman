@@ -39,7 +39,7 @@ func TestE2EStartupFromUserHomeUsesUserScopeOnly(t *testing.T) {
 	if err := os.MkdirAll(protonmanDir, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(protonmanDir, "config.toml"), []byte("[agent]\nmax_tool_calls = 17\n"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(protonmanDir, "config.json"), []byte(`{"agent":{"max_tool_calls": 17}}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	sessionID := "home-workspace-session"

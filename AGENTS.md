@@ -174,23 +174,28 @@ Universal works normally when delegation is disabled.
 
 Configuration:
 
-```toml
-[agent]
-subagents_enabled = true
-reasoning_effort = "auto"
-
-[agent.subagents.strength]
-provider = "protonman"
-model = "coding-model-id"
-reasoning_effort = "medium"
-
-[agent.subagents.agility]
-reasoning_effort = "low" # model omitted: inherit Universal dynamically
-
-[agent.subagents.intelligence]
-provider = "anthropic"
-model = "reasoning-model-id"
-reasoning_effort = "high"
+```json
+{
+  "agent": {
+    "subagents_enabled": true,
+    "reasoning_effort": "auto",
+    "subagents": {
+      "strength": {
+        "provider": "protonman",
+        "model": "coding-model-id",
+        "reasoning_effort": "medium"
+      },
+      "agility": {
+        "reasoning_effort": "low"
+      },
+      "intelligence": {
+        "provider": "anthropic",
+        "model": "reasoning-model-id",
+        "reasoning_effort": "high"
+      }
+    }
+  }
+}
 ```
 
 Default delegation is enabled. Effective precedence is default -> user -> trusted project.

@@ -28,22 +28,34 @@ func TestLoadSubagentModelsDefaultsToInherit(t *testing.T) {
 func TestLoadSubagentModelsMergePerProfile(t *testing.T) {
 	homeDir := t.TempDir()
 	workDir := t.TempDir()
-	writeConfig(t, filepath.Join(homeDir, ".protonman", "config.toml"), `[agent.subagents.strength]
-provider = "protonman"
-model = "coding-model"
-
-[agent.subagents.agility]
-provider = "opencode"
-model = "fast-model"
-`)
-	writeConfig(t, filepath.Join(workDir, ".protonman", "config.toml"), `[agent.subagents.intelligence]
-provider = "anthropic"
-model = "reasoning-model"
-
-[agent.subagents.strength]
-provider = "custom"
-model = "project-coding-model"
-`)
+	writeConfig(t, filepath.Join(homeDir, ".protonman", "config.json"), `{
+  "agent": {
+    "subagents": {
+      "strength": {
+        "provider": "protonman",
+        "model": "coding-model"
+      },
+      "agility": {
+        "provider": "opencode",
+        "model": "fast-model"
+      }
+    }
+  }
+}`)
+	writeConfig(t, filepath.Join(workDir, ".protonman", "config.json"), `{
+  "agent": {
+    "subagents": {
+      "intelligence": {
+        "provider": "anthropic",
+        "model": "reasoning-model"
+      },
+      "strength": {
+        "provider": "custom",
+        "model": "project-coding-model"
+      }
+    }
+  }
+}`)
 
 	snapshot, err := Load(context.Background(), Options{HomeDir: homeDir, WorkDir: workDir, ProjectTrusted: true})
 	if err != nil {
@@ -67,9 +79,15 @@ model = "project-coding-model"
 func TestLoadSubagentModelsRejectsIncompleteOverride(t *testing.T) {
 	homeDir := t.TempDir()
 	workDir := t.TempDir()
-	writeConfig(t, filepath.Join(homeDir, ".protonman", "config.toml"), `[agent.subagents.strength]
-provider = "protonman"
-`)
+	writeConfig(t, filepath.Join(homeDir, ".protonman", "config.json"), `{
+  "agent": {
+    "subagents": {
+      "strength": {
+        "provider": "protonman"
+      }
+    }
+  }
+}`)
 
 	_, err := Load(context.Background(), Options{HomeDir: homeDir, WorkDir: workDir})
 	if err == nil || !strings.Contains(err.Error(), "provider and model must both be set") {
@@ -80,10 +98,16 @@ provider = "protonman"
 func TestLoadSubagentModelsRejectsUnsupportedProfile(t *testing.T) {
 	homeDir := t.TempDir()
 	workDir := t.TempDir()
-	writeConfig(t, filepath.Join(homeDir, ".protonman", "config.toml"), `[agent.subagents.universal]
-provider = "protonman"
-model = "main-model"
-`)
+	writeConfig(t, filepath.Join(homeDir, ".protonman", "config.json"), `{
+  "agent": {
+    "subagents": {
+      "universal": {
+        "provider": "protonman",
+        "model": "main-model"
+      }
+    }
+  }
+}`)
 
 	_, err := Load(context.Background(), Options{HomeDir: homeDir, WorkDir: workDir})
 	if err == nil || !strings.Contains(err.Error(), "unsupported profile") {
@@ -94,10 +118,16 @@ model = "main-model"
 func TestLoadSubagentModelsRejectsLegacyAlias(t *testing.T) {
 	homeDir := t.TempDir()
 	workDir := t.TempDir()
-	writeConfig(t, filepath.Join(homeDir, ".protonman", "config.toml"), `[agent.subagents.pow]
-provider = "protonman"
-model = "legacy-model"
-`)
+	writeConfig(t, filepath.Join(homeDir, ".protonman", "config.json"), `{
+  "agent": {
+    "subagents": {
+      "pow": {
+        "provider": "protonman",
+        "model": "legacy-model"
+      }
+    }
+  }
+}`)
 
 	_, err := Load(context.Background(), Options{HomeDir: homeDir, WorkDir: workDir})
 	if err == nil || !strings.Contains(err.Error(), "unsupported profile") {
@@ -108,21 +138,33 @@ model = "legacy-model"
 func TestLoadSubagentReasoningMergesFieldWise(t *testing.T) {
 	homeDir := t.TempDir()
 	workDir := t.TempDir()
-	writeConfig(t, filepath.Join(homeDir, ".protonman", "config.toml"), `[agent.subagents.strength]
-provider = "protonman"
-model = "coding-model"
-reasoning_effort = "low"
-
-[agent.subagents.agility]
-reasoning_effort = "low"
-`)
-	writeConfig(t, filepath.Join(workDir, ".protonman", "config.toml"), `[agent.subagents.strength]
-reasoning_effort = "high"
-
-[agent.subagents.agility]
-provider = "opencode"
-model = "fast-model"
-`)
+	writeConfig(t, filepath.Join(homeDir, ".protonman", "config.json"), `{
+  "agent": {
+    "subagents": {
+      "strength": {
+        "provider": "protonman",
+        "model": "coding-model",
+        "reasoning_effort": "low"
+      },
+      "agility": {
+        "reasoning_effort": "low"
+      }
+    }
+  }
+}`)
+	writeConfig(t, filepath.Join(workDir, ".protonman", "config.json"), `{
+  "agent": {
+    "subagents": {
+      "strength": {
+        "reasoning_effort": "high"
+      },
+      "agility": {
+        "provider": "opencode",
+        "model": "fast-model"
+      }
+    }
+  }
+}`)
 
 	snapshot, err := Load(context.Background(), Options{HomeDir: homeDir, WorkDir: workDir, ProjectTrusted: true})
 	if err != nil {
@@ -141,9 +183,15 @@ model = "fast-model"
 func TestLoadSubagentReasoningAllowsInheritedModel(t *testing.T) {
 	homeDir := t.TempDir()
 	workDir := t.TempDir()
-	writeConfig(t, filepath.Join(homeDir, ".protonman", "config.toml"), `[agent.subagents.intelligence]
-reasoning_effort = "high"
-`)
+	writeConfig(t, filepath.Join(homeDir, ".protonman", "config.json"), `{
+  "agent": {
+    "subagents": {
+      "intelligence": {
+        "reasoning_effort": "high"
+      }
+    }
+  }
+}`)
 
 	snapshot, err := Load(context.Background(), Options{HomeDir: homeDir, WorkDir: workDir})
 	if err != nil {
@@ -158,9 +206,15 @@ reasoning_effort = "high"
 func TestLoadSubagentReasoningRejectsInvalidValue(t *testing.T) {
 	homeDir := t.TempDir()
 	workDir := t.TempDir()
-	writeConfig(t, filepath.Join(homeDir, ".protonman", "config.toml"), `[agent.subagents.agility]
-reasoning_effort = "turbo"
-`)
+	writeConfig(t, filepath.Join(homeDir, ".protonman", "config.json"), `{
+  "agent": {
+    "subagents": {
+      "agility": {
+        "reasoning_effort": "turbo"
+      }
+    }
+  }
+}`)
 
 	_, err := Load(context.Background(), Options{HomeDir: homeDir, WorkDir: workDir})
 	if err == nil || !strings.Contains(err.Error(), "agent.subagents.agility.reasoning_effort") {

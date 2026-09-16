@@ -119,7 +119,7 @@ func TestSaveProjectSettingsRejectsSymlinkConfig(t *testing.T) {
 	if err := os.Mkdir(appdirs.ProjectRoot(workDir), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	target := filepath.Join(t.TempDir(), "outside.toml")
+	target := filepath.Join(t.TempDir(), "outside.json")
 	if err := os.WriteFile(target, []byte("[agent]\nmax_tool_calls = 1\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}

@@ -48,29 +48,29 @@ type SubagentModelConfig = modelconfig.SubagentRoute
 
 // AgentConfig specifies autonomous agent execution settings.
 type AgentConfig struct {
-	SubagentsEnabled     bool                           `toml:"subagents_enabled"`
-	Subagents            map[string]SubagentModelConfig `toml:"subagents,omitempty"`
-	MaxToolCalls         int                            `toml:"max_tool_calls"`
-	Profile              string                         `toml:"profile"`
-	ReasoningEffort      domain.ReasoningEffort         `toml:"reasoning_effort"`
-	MaxLiveSubagents     int                            `toml:"max_live_subagents"`
-	MaxRetainedSubagents int                            `toml:"max_retained_subagents"`
-	SubagentMaxRuntime   time.Duration                  `toml:"-"`
-	SubagentWaitTimeout  time.Duration                  `toml:"-"`
-	SubagentQueueTimeout time.Duration                  `toml:"-"`
-	CompletedResultTTL   time.Duration                  `toml:"-"`
+	SubagentsEnabled     bool                           `json:"subagents_enabled"`
+	Subagents            map[string]SubagentModelConfig `json:"subagents,omitempty"`
+	MaxToolCalls         int                            `json:"max_tool_calls"`
+	Profile              string                         `json:"profile"`
+	ReasoningEffort      domain.ReasoningEffort         `json:"reasoning_effort"`
+	MaxLiveSubagents     int                            `json:"max_live_subagents"`
+	MaxRetainedSubagents int                            `json:"max_retained_subagents"`
+	SubagentMaxRuntime   time.Duration                  `json:"-"`
+	SubagentWaitTimeout  time.Duration                  `json:"-"`
+	SubagentQueueTimeout time.Duration                  `json:"-"`
+	CompletedResultTTL   time.Duration                  `json:"-"`
 }
 
 // RuntimeConfig specifies execution and network time bounds.
 type RuntimeConfig struct {
-	TurnTimeout           time.Duration `toml:"-"`
-	RoundTimeout          time.Duration `toml:"-"`
-	ToolPermissionTimeout time.Duration `toml:"-"`
-	ToolExecutionTimeout  time.Duration `toml:"-"`
-	ModelRequestTimeout   time.Duration `toml:"-"`
-	ModelDiscoveryTimeout time.Duration `toml:"-"`
-	WebFetchTimeout       time.Duration `toml:"-"`
-	ModelCatalogTTL       time.Duration `toml:"-"`
+	TurnTimeout           time.Duration `json:"-"`
+	RoundTimeout          time.Duration `json:"-"`
+	ToolPermissionTimeout time.Duration `json:"-"`
+	ToolExecutionTimeout  time.Duration `json:"-"`
+	ModelRequestTimeout   time.Duration `json:"-"`
+	ModelDiscoveryTimeout time.Duration `json:"-"`
+	WebFetchTimeout       time.Duration `json:"-"`
+	ModelCatalogTTL       time.Duration `json:"-"`
 }
 
 // DefaultRuntimeConfig returns the default shared runtime policy.
@@ -108,7 +108,7 @@ const (
 
 // SkillsConfig specifies configured skill settings.
 type SkillsConfig struct {
-	Active []string `toml:"active,omitempty"`
+	Active []string `json:"active,omitempty"`
 }
 
 // Snapshot is the effective configuration after layered loading.

@@ -34,17 +34,20 @@ func TestE2EGlobalConfigDenyRuleOverridesAlwaysApprove(t *testing.T) {
 	ws := newTestWorkspace(t)
 	home := newTestHome(t)
 
-	// Write global config.toml with explicit deny rule for bash rm *
-	configPath := filepath.Join(home, ".protonman", "config.toml")
-	configContent := `
-[permission]
-default = "ask"
-
-[[permission.rules]]
-action = "deny"
-tool = "bash"
-pattern = "rm *"
-`
+	// Write global config.json with explicit deny rule for bash rm *
+	configPath := filepath.Join(home, ".protonman", "config.json")
+	configContent := `{
+  "permission": {
+    "default": "ask",
+    "rules": [
+      {
+        "action": "deny",
+        "tool": "bash",
+        "pattern": "rm *"
+      }
+    ]
+  }
+}`
 	if err := os.WriteFile(configPath, []byte(configContent), 0o644); err != nil {
 		t.Fatalf("write global config: %v", err)
 	}
@@ -68,18 +71,23 @@ func TestE2EProjectTrustGating(t *testing.T) {
 	ws := newTestWorkspace(t)
 	home := newTestHome(t)
 
-	// Create project-local .protonman/config.toml denying bash
+	// Create project-local .protonman/config.json denying bash
 	projectProton := filepath.Join(ws, ".protonman")
 	if err := os.MkdirAll(projectProton, 0o755); err != nil {
 		t.Fatalf("mkdir project .protonman: %v", err)
 	}
-	projectConfig := `
-[[permission.rules]]
-action = "deny"
-tool = "bash"
-pattern = "*"
-`
-	if err := os.WriteFile(filepath.Join(projectProton, "config.toml"), []byte(projectConfig), 0o644); err != nil {
+	projectConfig := `{
+  "permission": {
+    "rules": [
+      {
+        "action": "deny",
+        "tool": "bash",
+        "pattern": "*"
+      }
+    ]
+  }
+}`
+	if err := os.WriteFile(filepath.Join(projectProton, "config.json"), []byte(projectConfig), 0o644); err != nil {
 		t.Fatalf("write project config: %v", err)
 	}
 

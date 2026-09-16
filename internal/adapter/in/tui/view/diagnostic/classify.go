@@ -416,7 +416,7 @@ func Classify(err error, activeProvider string, activeModel string) Error {
 			Badge:   "CONFIG_ERROR",
 			Message: raw,
 			Suggestions: []string{
-				"Check your configuration file syntax (proton.toml or opencode.json)",
+				"Check your configuration file syntax (.protonman/config.json or opencode.json)",
 				"Ensure all provider keys and model configurations are properly structured",
 			},
 			RawDetails: raw,

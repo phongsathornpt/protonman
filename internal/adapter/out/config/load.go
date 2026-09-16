@@ -41,7 +41,7 @@ func Load(ctx context.Context, options Options) (Snapshot, error) {
 	if err != nil {
 		return Snapshot{}, err
 	}
-	userPath := resolveExistingConfigPath(dirs.Config)
+	userPath := dirs.Config
 	if err := loadFile(ctx, userPath, &snapshot, false); err != nil {
 		return Snapshot{}, err
 	}
@@ -58,7 +58,7 @@ func Load(ctx context.Context, options Options) (Snapshot, error) {
 	if !projectScope.Available {
 		return snapshot, nil
 	}
-	projectPath := resolveExistingConfigPath(projectScope.Config)
+	projectPath := projectScope.Config
 	if !options.ProjectTrusted {
 		exists, err := fileExists(projectPath)
 		if err != nil {
@@ -75,19 +75,6 @@ func Load(ctx context.Context, options Options) (Snapshot, error) {
 		return Snapshot{}, err
 	}
 	return snapshot, nil
-}
-
-func resolveExistingConfigPath(primaryPath string) string {
-	if _, err := os.Stat(primaryPath); err == nil {
-		return primaryPath
-	}
-	if strings.HasSuffix(primaryPath, ".json") {
-		legacyPath := strings.TrimSuffix(primaryPath, ".json") + ".toml"
-		if _, err := os.Stat(legacyPath); err == nil {
-			return legacyPath
-		}
-	}
-	return primaryPath
 }
 
 func loadFile(ctx context.Context, path string, snapshot *Snapshot, project bool) (loadErr error) {

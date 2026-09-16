@@ -202,7 +202,7 @@ func parsePositiveDuration(field, raw string) (time.Duration, error) {
 	return d, nil
 }
 
-// SaveUserProviderConfig persists or updates a provider configuration in ~/.protonman/config.toml.
+// SaveUserProviderConfig persists or updates a provider configuration in ~/.protonman/config.json.
 func decodeRule(raw fileRule) (permission.Rule, error) {
 	// Grok defaults omitted rule actions to deny. Keeping that default avoids
 	// turning a partially written rule into an accidental allow.

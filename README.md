@@ -257,7 +257,7 @@ Protonman routes agent model calls through `proton-sdk`, with native OpenAI-comp
 - `muse-spark-1.3-contributor` (1M context, tool-calling)
 - `MiniMax-M3` (1M context)
 
-Configure providers directly inside the TUI with `/provider` or via `~/.protonman/config.toml`.
+Configure providers directly inside the TUI with `/provider` or via `~/.protonman/config.json`.
 
 `proton-sdk` owns provider-neutral agent messages, tools, streaming events, usage/finish metadata, model registry, middleware, and provider wire adapters. The Protonman CLI keeps permission policy, tool execution, sessions, and turn orchestration outside the SDK. See [`docs/proton-sdk.md`](docs/proton-sdk.md) for the agent-first SDK contract and provider extension boundaries.
 
@@ -337,104 +337,101 @@ User-global state lives under `~/.protonman/` and project-local state under `<wo
 
 ## Configuration Reference
 
-Protonman loads `~/.protonman/config.toml`. When `PROTONMAN_TRUST_PROJECT=1` is set, a project-local `.protonman/config.toml` is merged, with project rules overriding user defaults.
+Protonman loads `~/.protonman/config.json`. When `PROTONMAN_TRUST_PROJECT=1` is set, a project-local `.protonman/config.json` is merged, with project rules overriding user defaults.
 
-```toml
-# Default permission mode: ask | plan | always-approve
-[ui]
-permission_mode = "ask"
-
-# Permission policy rules
-[permission]
-default = "ask"
-
-[[permission.rules]]
-action = "deny"
-tool = "bash"
-pattern = "rm -rf *"
-
-[[permission.rules]]
-action = "allow"
-tool = "read"
-pattern = "*.go"
-
-# Workspace boundary & protected file protection
-[workspace]
-protected_paths = [".env", "secrets/**", "**/*.pem", "**/*.key"]
-
-# OS-level process sandbox profile: off | workspace | read-only | strict
-[sandbox]
-profile = "off"
-
-# Agent execution boundaries
-[agent]
-subagents_enabled = true
-max_tool_calls = 0 # default: progress-aware safety budget; set >0 only for a stricter hard ceiling
-max_live_subagents = 16
-max_retained_subagents = 64
-subagent_queue_timeout = "2m"
-subagent_wait_timeout = "30s"
-subagent_max_runtime = "30m"
-completed_result_ttl = "24h"
-
-# Optional specialized subagent routes. Provider/model must be set together.
-# Omit both to inherit the current Universal model dynamically.
-[agent.subagents.strength]
-provider = "protonman"
-model = "coding-model-id"
-reasoning_effort = "medium"
-
-[agent.subagents.agility]
-provider = "opencode"
-model = "fast-model-id"
-reasoning_effort = "low"
-
-[agent.subagents.intelligence]
-provider = "anthropic"
-model = "reasoning-model-id"
-reasoning_effort = "high"
-
-# Shared runtime and network policies
-[runtime]
-# turn_timeout is disabled by default; set it only when you explicitly want a
-# wall-clock ceiling for the entire foreground turn.
-round_timeout = "5m"
-tool_permission_timeout = "2m"
-tool_execution_timeout = "2m"
-model_request_timeout = "5m"
-model_discovery_timeout = "10s"
-webFetchTimeout = "10s"
-model_catalog_ttl = "2m"
-
-# Active model preferences
-[model]
-default = "deepseek-v4-flash-vision-exp"
-provider = "protonman"
-
-# Model provider connections
-[providers.protonman]
-name = "protonman"
-type = "openai"
-base_url = "https://protonman.dev/api/v1"
-api_key = "plk_your_api_key_here"
-
-[providers.opencode]
-name = "opencode"
-type = "openai"
-base_url = "https://opencode.ai/zen/v1"
-api_key = ""
-
-[providers.ollama]
-name = "ollama"
-type = "openai"
-base_url = "http://localhost:11434/v1"
-api_key = ""
-
-[providers.anthropic]
-name = "anthropic"
-type = "anthropic"
-base_url = "https://api.anthropic.com"
-api_key = "your_anthropic_api_key"
+```json
+{
+  "ui": {
+    "permission_mode": "ask"
+  },
+  "permission": {
+    "default": "ask",
+    "rules": [
+      {
+        "action": "deny",
+        "tool": "bash",
+        "pattern": "rm -rf *"
+      },
+      {
+        "action": "allow",
+        "tool": "read",
+        "pattern": "*.go"
+      }
+    ]
+  },
+  "workspace": {
+    "protected_paths": [".env", "secrets/**", "**/*.pem", "**/*.key"]
+  },
+  "sandbox": {
+    "profile": "off"
+  },
+  "agent": {
+    "subagents_enabled": true,
+    "max_tool_calls": 0,
+    "max_live_subagents": 16,
+    "max_retained_subagents": 64,
+    "subagent_queue_timeout": "2m",
+    "subagent_wait_timeout": "30s",
+    "subagent_max_runtime": "30m",
+    "completed_result_ttl": "24h",
+    "subagents": {
+      "strength": {
+        "provider": "protonman",
+        "model": "coding-model-id",
+        "reasoning_effort": "medium"
+      },
+      "agility": {
+        "provider": "opencode",
+        "model": "fast-model-id",
+        "reasoning_effort": "low"
+      },
+      "intelligence": {
+        "provider": "anthropic",
+        "model": "reasoning-model-id",
+        "reasoning_effort": "high"
+      }
+    }
+  },
+  "runtime": {
+    "round_timeout": "5m",
+    "tool_permission_timeout": "2m",
+    "tool_execution_timeout": "2m",
+    "model_request_timeout": "5m",
+    "model_discovery_timeout": "10s",
+    "webFetchTimeout": "10s",
+    "model_catalog_ttl": "2m"
+  },
+  "model": {
+    "default": "deepseek-v4-flash-vision-exp",
+    "provider": "protonman"
+  },
+  "providers": {
+    "protonman": {
+      "name": "protonman",
+      "type": "openai",
+      "base_url": "https://protonman.dev/api/v1",
+      "api_key": "plk_your_api_key_here"
+    },
+    "opencode": {
+      "name": "opencode",
+      "type": "openai",
+      "base_url": "https://opencode.ai/zen/v1",
+      "api_key": ""
+    },
+    "ollama": {
+      "name": "ollama",
+      "type": "openai",
+      "base_url": "http://localhost:11434/v1",
+      "api_key": ""
+    },
+    "anthropic": {
+      "name": "anthropic",
+      "type": "anthropic",
+      "base_url": "https://api.anthropic.com",
+      "api_key": "your_anthropic_api_key"
+    }
+  }
+}
 ```
 
 

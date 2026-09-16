@@ -23,21 +23,25 @@ func TestE2ESubagentUsesConfiguredProjectModelRoute(t *testing.T) {
 	child.AddTextResponse(`Child inspected hello.txt.
 <proton-subagent-result>{"conclusion":"Child inspected hello.txt.","findings":[{"claim":"hello.txt was inspected","confidence":"high","evidence":[{"tool":"read","target":"hello.txt"},{"tool":"read","target":"missing.txt"}]}],"blockers":[]}</proton-subagent-result>`)
 
-	userConfig := fmt.Sprintf(`[model]
-default = "universal-model"
-provider = "primary"
-
-[providers.primary]
-type = "openai"
-base_url = %q
-api_key = "primary-key"
-
-[providers.fast]
-type = "openai"
-base_url = %q
-api_key = "fast-key"
-`, primary.URL(), child.URL())
-	if err := os.WriteFile(filepath.Join(home, ".protonman", "config.toml"), []byte(userConfig), 0o644); err != nil {
+	userConfig := fmt.Sprintf(`{
+  "model": {
+    "default": "universal-model",
+    "provider": "primary"
+  },
+  "providers": {
+    "primary": {
+      "type": "openai",
+      "base_url": %q,
+      "api_key": "primary-key"
+    },
+    "fast": {
+      "type": "openai",
+      "base_url": %q,
+      "api_key": "fast-key"
+    }
+  }
+}`, primary.URL(), child.URL())
+	if err := os.WriteFile(filepath.Join(home, ".protonman", "config.json"), []byte(userConfig), 0o644); err != nil {
 		t.Fatalf("write user config: %v", err)
 	}
 
@@ -45,12 +49,18 @@ api_key = "fast-key"
 	if err := os.MkdirAll(projectDir, 0o755); err != nil {
 		t.Fatalf("create project config dir: %v", err)
 	}
-	projectConfig := `[agent.subagents.agility]
-provider = "fast"
-model = "agility-model"
-reasoning_effort = "low"
-`
-	if err := os.WriteFile(filepath.Join(projectDir, "config.toml"), []byte(projectConfig), 0o644); err != nil {
+	projectConfig := `{
+  "agent": {
+    "subagents": {
+      "agility": {
+        "provider": "fast",
+        "model": "agility-model",
+        "reasoning_effort": "low"
+      }
+    }
+  }
+}`
+	if err := os.WriteFile(filepath.Join(projectDir, "config.json"), []byte(projectConfig), 0o644); err != nil {
 		t.Fatalf("write project config: %v", err)
 	}
 

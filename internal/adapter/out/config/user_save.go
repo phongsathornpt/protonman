@@ -45,12 +45,12 @@ func SaveUserProviderConfigWithOptions(homeDir string, provider ProviderConfig, 
 	})
 }
 
-// SaveUserDefaultProvider updates the active provider in ~/.protonman/config.toml.
+// SaveUserDefaultProvider updates the active provider in ~/.protonman/config.json.
 func SaveUserDefaultProvider(homeDir string, provider string) error {
 	return SaveUserDefaultModel(homeDir, provider, "")
 }
 
-// SaveUserDefaultModel updates the default active model and optionally provider in ~/.protonman/config.toml.
+// SaveUserDefaultModel updates the default active model and optionally provider in ~/.protonman/config.json.
 func SaveUserDefaultModel(homeDir string, provider string, modelID string) error {
 	return modifyUserConfigFile(homeDir, false, func(doc *fileDocument) {
 		if modelID != "" {
@@ -71,7 +71,7 @@ func SaveUserModelSelection(homeDir string, provider string, modelID string) err
 	})
 }
 
-// DeleteUserProviderConfig removes a provider configuration from ~/.protonman/config.toml.
+// DeleteUserProviderConfig removes a provider configuration from ~/.protonman/config.json.
 func DeleteUserProviderConfig(homeDir string, providerName string) error {
 	return modifyUserConfigFile(homeDir, true, func(doc *fileDocument) {
 		providerKey := strings.ToLower(strings.TrimSpace(providerName))
@@ -86,14 +86,14 @@ func DeleteUserProviderConfig(homeDir string, providerName string) error {
 	})
 }
 
-// SaveUserSubagentsEnabled updates the portable subagent capability switch in ~/.protonman/config.toml.
+// SaveUserSubagentsEnabled updates the portable subagent capability switch in ~/.protonman/config.json.
 func SaveUserSubagentsEnabled(homeDir string, enabled bool) error {
 	return modifyUserConfigFile(homeDir, false, func(doc *fileDocument) {
 		doc.Agent.SubagentsEnabled = &enabled
 	})
 }
 
-// SaveUserReasoningEffort updates the portable agent reasoning override in ~/.protonman/config.toml.
+// SaveUserReasoningEffort updates the portable agent reasoning override in ~/.protonman/config.json.
 func SaveUserReasoningEffort(homeDir string, effort domain.ReasoningEffort) error {
 	if !effort.Valid() {
 		return fmt.Errorf("invalid reasoning effort %q", effort)
@@ -107,7 +107,7 @@ func SaveUserReasoningEffort(homeDir string, effort domain.ReasoningEffort) erro
 	})
 }
 
-// SaveUserMaxToolCalls updates the optional hard tool-call ceiling override in ~/.protonman/config.toml. Zero keeps progress-aware defaults.
+// SaveUserMaxToolCalls updates the optional hard tool-call ceiling override in ~/.protonman/config.json. Zero keeps progress-aware defaults.
 func SaveUserMaxToolCalls(homeDir string, maxToolCalls int) error {
 	if maxToolCalls < 0 {
 		return fmt.Errorf("max tool calls cannot be negative")
@@ -117,7 +117,7 @@ func SaveUserMaxToolCalls(homeDir string, maxToolCalls int) error {
 	})
 }
 
-// SaveUserPermissionRule adds a static permission rule to ~/.protonman/config.toml.
+// SaveUserPermissionRule adds a static permission rule to ~/.protonman/config.json.
 func SaveUserPermissionRule(homeDir string, rule permission.Rule) error {
 	if !rule.Action.Valid() {
 		return fmt.Errorf("invalid permission action: %v", rule.Action)
@@ -130,7 +130,7 @@ func SaveUserPermissionRule(homeDir string, rule permission.Rule) error {
 	})
 }
 
-// SaveUserActiveSkills updates the active skills list in ~/.protonman/config.toml.
+// SaveUserActiveSkills updates the active skills list in ~/.protonman/config.json.
 func SaveUserActiveSkills(homeDir string, activeSkills []string) error {
 	return modifyUserConfigFile(homeDir, false, func(doc *fileDocument) {
 		doc.Skills = &fileSkills{Active: append([]string(nil), activeSkills...)}
@@ -156,9 +156,8 @@ func modifyUserConfigFile(homeDir string, returnIfNotExist bool, mutate func(*fi
 		return fmt.Errorf("create config directory: %w", err)
 	}
 	userPath := dirs.Config
-	readPath := resolveExistingConfigPath(userPath)
 
-	doc, exists, err := readDocument(readPath, "config file", false)
+	doc, exists, err := readDocument(userPath, "config file", false)
 	if err != nil {
 		return err
 	}
@@ -166,11 +165,5 @@ func modifyUserConfigFile(homeDir string, returnIfNotExist bool, mutate func(*fi
 		return nil
 	}
 	mutate(&doc)
-	if err := writeDocumentAtomic(userDir, userPath, "config", 0o600, doc); err != nil {
-		return err
-	}
-	if readPath != userPath && strings.HasSuffix(readPath, ".toml") {
-		_ = os.Rename(readPath, readPath+".bak")
-	}
-	return nil
+	return writeDocumentAtomic(userDir, userPath, "config", 0o600, doc)
 }
