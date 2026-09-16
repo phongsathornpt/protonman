@@ -252,10 +252,25 @@ jobs:
       - uses: actions/checkout@v6
       - name: Install published release asset
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           install_dir="$RUNNER_TEMP/protonman-bin"
-          curl -fsSL --retry 6 --retry-all-errors --retry-delay 2 \
+          for attempt in {1..12}; do
+            assets=$(gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \
+              --json assets --jq '.assets[].name' 2>/dev/null || true)
+            if grep -Fxq install.sh <<<"$assets"; then
+              break
+            fi
+            if [[ "$attempt" == 12 ]]; then
+              echo "published release asset install.sh not found on $GITHUB_REF_NAME" >&2
+              printf 'published assets:\n%s\n' "$assets" >&2
+              exit 1
+            fi
+            sleep 5
+          done
+          curl -fsSL --retry 3 --retry-all-errors --retry-delay 2 \
             "https://github.com/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME/install.sh" \
             | sh -s -- --version "$GITHUB_REF_NAME" --bin-dir "$install_dir"
           expected="Protonman ${GITHUB_REF_NAME#v}"
