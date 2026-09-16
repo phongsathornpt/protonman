@@ -1,12 +1,12 @@
 # Settings architecture
 
-Protonman treats runtime settings and persisted TOML as separate contracts. The settings refactor must preserve existing `~/.protonman/config.toml` behavior while reducing coupling between runtime types, file schema, defaults, and persistence.
+Protonman treats runtime settings and persisted configuration as separate contracts. The configuration system uses JSON (`config.json`) as its canonical format while preserving backward compatibility with legacy `config.toml`.
 
 ## Ownership
 
 `internal/base/runtimepolicy` owns canonical product runtime defaults. Do not mirror those defaults as aliases in config, TUI, application, or provider packages.
 
-`internal/adapter/out/config` owns layered TOML loading, merge/provenance, file-schema conversion, and user/project persistence. Application-facing mutations remain exposed through `internal/app`.
+`internal/adapter/out/config` owns layered JSON/TOML loading, merge/provenance, file-schema conversion, user/project persistence, and automatic migration from legacy TOML to JSON. Application-facing mutations remain exposed through `internal/app`.
 
 `DefaultSnapshot()` is the only constructor for a fresh effective config snapshot. Every call must return independent mutable maps and slices.
 
@@ -21,18 +21,18 @@ runtimepolicy defaults
 DefaultSnapshot()
         |
         v
-user ~/.protonman/config.toml
+user ~/.protonman/config.json (or legacy config.toml)
         |
         v
-trusted project .protonman/config.toml
+trusted project .protonman/config.json (or legacy config.toml)
         |
         v
 effective Snapshot + provenance + warnings
 ```
 
-## Persisted TOML boundary
+## Persisted file boundary
 
-The on-disk schema is a compatibility boundary. `fileDocument` and its nested `file*` structs represent TOML, not runtime state.
+The on-disk schema is a compatibility boundary. `fileDocument` and its nested `file*` structs represent persisted configuration (JSON and legacy TOML), not runtime state.
 
 Provider and model records therefore use dedicated file-schema types such as `fileProvider` and `fileModel`. Runtime `ProviderConfig` and `ModelConfig` must be populated through explicit conversion when loading and saving.
 
@@ -43,22 +43,22 @@ This keeps runtime refactors from silently changing users' config files.
 User and project settings share the atomic document persistence primitive in `internal/adapter/out/config/store.go`:
 
 ```text
-read existing document
+read existing document (JSON or legacy TOML)
         |
         v
-decode TOML
+decode document
         |
         v
 mutate document
         |
         v
-encode to temporary file
+encode to temporary file as formatted JSON
         |
         v
 set scope-specific permissions
         |
         v
-atomic rename
+atomic rename (and backup legacy .toml as .bak)
 ```
 
 The shared primitive does not erase scope-specific security rules. User config remains `0600`; project config remains `0644` and must preserve project-scope and symlink rejection checks.
@@ -67,14 +67,17 @@ The shared primitive does not erase scope-specific security rules. User config r
 
 Active skills can be configured in both user and project configuration:
 
-```toml
-[skills]
-active = ["my-skill", "another-skill"]
+```json
+{
+  "skills": {
+    "active": ["my-skill", "another-skill"]
+  }
+}
 ```
 
 When a user activates or deactivates a skill interactively (e.g. via `/skills` or `Ctrl+S`):
-- If a project-local `.protonman/` directory exists in the workspace, the active list is persisted to `.protonman/config.toml` (project scope).
-- Otherwise, it falls back to `~/.protonman/config.toml` (user scope).
+- If a project-local `.protonman/` directory exists in the workspace, the active list is persisted to `.protonman/config.json` (project scope).
+- Otherwise, it falls back to `~/.protonman/config.json` (user scope).
 
 Project configuration takes precedence over user configuration during layered load.
 

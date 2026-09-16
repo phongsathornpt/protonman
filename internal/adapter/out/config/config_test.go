@@ -345,7 +345,7 @@ func TestDeleteUserProviderConfig(t *testing.T) {
 	}
 
 	// Verify permissions
-	configFile := filepath.Join(homeDir, ".protonman", "config.toml")
+	configFile := filepath.Join(homeDir, ".protonman", "config.json")
 	info, err := os.Stat(configFile)
 	if err != nil {
 		t.Fatalf("stat config file: %v", err)
@@ -466,11 +466,11 @@ func TestSaveSubagentsEnabledPersistsBoolean(t *testing.T) {
 	if err := SaveUserSubagentsEnabled(homeDir, false); err != nil {
 		t.Fatal(err)
 	}
-	data, err := os.ReadFile(filepath.Join(homeDir, ".protonman", "config.toml"))
+	data, err := os.ReadFile(filepath.Join(homeDir, ".protonman", "config.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(data), "subagents_enabled = false") {
+	if !strings.Contains(string(data), `"subagents_enabled": false`) {
 		t.Fatalf("saved config missing boolean subagent setting:\n%s", data)
 	}
 }

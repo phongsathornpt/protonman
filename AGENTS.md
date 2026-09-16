@@ -408,7 +408,7 @@ User filesystem layout is centralized in `internal/app/appdirs`:
 
 ```text
 ~/.protonman/
-  config.toml
+  config.json
   sessions/
   checkpoints/
   skills/
@@ -446,8 +446,8 @@ Skills live in global `~/.protonman/skills/` or project `<workspace>/.protonman/
 
 Active skills are persisted in layered configuration under `[skills] active = [...]`:
 - Selection in the interactive picker (`Ctrl+S` or `/skills`) or slash command (`/skills <name>`, `/skills toggle`, `/skills deactivate`) persists the active skill list.
-- If a project-local `<workspace>/.protonman/` directory exists, the active skill list is saved to `.protonman/config.toml` (project scope).
-- Otherwise, it saves to `~/.protonman/config.toml` (user scope).
+- If a project-local `<workspace>/.protonman/` directory exists, the active skill list is saved to `.protonman/config.json` (project scope).
+- Otherwise, it saves to `~/.protonman/config.json` (user scope).
 
 Lockfiles pin project skill content hashes:
 - Canonical project lockfile location is `.protonman/skills-lock.json`. Legacy root `skills-lock.json` and `.agents/skills-lock.json` are discovered for backward compatibility.

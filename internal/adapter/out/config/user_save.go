@@ -156,8 +156,9 @@ func modifyUserConfigFile(homeDir string, returnIfNotExist bool, mutate func(*fi
 		return fmt.Errorf("create config directory: %w", err)
 	}
 	userPath := dirs.Config
+	readPath := resolveExistingConfigPath(userPath)
 
-	doc, exists, err := readDocument(userPath, "config file", false)
+	doc, exists, err := readDocument(readPath, "config file", false)
 	if err != nil {
 		return err
 	}
@@ -165,5 +166,11 @@ func modifyUserConfigFile(homeDir string, returnIfNotExist bool, mutate func(*fi
 		return nil
 	}
 	mutate(&doc)
-	return writeDocumentAtomic(userDir, userPath, "config", 0o600, doc)
+	if err := writeDocumentAtomic(userDir, userPath, "config", 0o600, doc); err != nil {
+		return err
+	}
+	if readPath != userPath && strings.HasSuffix(readPath, ".toml") {
+		_ = os.Rename(readPath, readPath+".bak")
+	}
+	return nil
 }

@@ -7,8 +7,6 @@ import (
 	"os"
 	"strings"
 
-	"github.com/pelletier/go-toml/v2"
-
 	"github.com/phongsathornpt/protonman/internal/platform/appdirs"
 )
 
@@ -43,7 +41,7 @@ func Load(ctx context.Context, options Options) (Snapshot, error) {
 	if err != nil {
 		return Snapshot{}, err
 	}
-	userPath := dirs.Config
+	userPath := resolveExistingConfigPath(dirs.Config)
 	if err := loadFile(ctx, userPath, &snapshot, false); err != nil {
 		return Snapshot{}, err
 	}
@@ -60,7 +58,7 @@ func Load(ctx context.Context, options Options) (Snapshot, error) {
 	if !projectScope.Available {
 		return snapshot, nil
 	}
-	projectPath := projectScope.Config
+	projectPath := resolveExistingConfigPath(projectScope.Config)
 	if !options.ProjectTrusted {
 		exists, err := fileExists(projectPath)
 		if err != nil {
@@ -79,25 +77,33 @@ func Load(ctx context.Context, options Options) (Snapshot, error) {
 	return snapshot, nil
 }
 
+func resolveExistingConfigPath(primaryPath string) string {
+	if _, err := os.Stat(primaryPath); err == nil {
+		return primaryPath
+	}
+	if strings.HasSuffix(primaryPath, ".json") {
+		legacyPath := strings.TrimSuffix(primaryPath, ".json") + ".toml"
+		if _, err := os.Stat(legacyPath); err == nil {
+			return legacyPath
+		}
+	}
+	return primaryPath
+}
+
 func loadFile(ctx context.Context, path string, snapshot *Snapshot, project bool) (loadErr error) {
 	if err := ctx.Err(); err != nil {
 		return fmt.Errorf("before loading %s: %w", path, err)
 	}
-	file, err := os.Open(path)
+	data, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil
 	}
 	if err != nil {
 		return fmt.Errorf("open config %s: %w", path, err)
 	}
-	defer func() {
-		if closeErr := file.Close(); closeErr != nil && loadErr == nil {
-			loadErr = fmt.Errorf("close config %s: %w", path, closeErr)
-		}
-	}()
 
-	var document fileDocument
-	if err := toml.NewDecoder(file).Decode(&document); err != nil {
+	document, err := decodeDocument(data, path, "config")
+	if err != nil {
 		return fmt.Errorf("decode config %s: %w", path, err)
 	}
 	source := SourceUser

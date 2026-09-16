@@ -43,11 +43,11 @@ func TestProtonmanDistributionIdentity(t *testing.T) {
 
 func TestProtonmanProjectNamespaceIsCanonical(t *testing.T) {
 	root := repositoryRoot(t)
-	if _, err := os.Stat(filepath.Join(root, ".protonman", "config.toml")); err != nil {
-		t.Fatalf("canonical .protonman/config.toml missing: %v", err)
+	if _, err := os.Stat(filepath.Join(root, ".protonman", "config.json")); err != nil {
+		t.Fatalf("canonical .protonman/config.json missing: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(root, ".proton", "config.toml")); !os.IsNotExist(err) {
-		t.Fatalf("legacy repo-local .proton/config.toml must not exist: %v", err)
+	if _, err := os.Stat(filepath.Join(root, ".proton", "config.json")); !os.IsNotExist(err) {
+		t.Fatalf("legacy repo-local .proton/config.json must not exist: %v", err)
 	}
 }
 

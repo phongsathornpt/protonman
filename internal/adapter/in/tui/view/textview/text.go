@@ -6,7 +6,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/charmbracelet/x/ansi"
-	"github.com/rivo/uniseg"
 )
 
 func WrapWords(text string, width int) string {
@@ -89,9 +88,9 @@ func SafeWrappedLines(text string, width int) []string {
 }
 
 func firstGrapheme(text string) string {
-	graphemes := uniseg.NewGraphemes(text)
-	if graphemes.Next() {
-		return graphemes.Str()
+	cluster, _ := ansi.FirstGraphemeCluster(text, ansi.WcWidth)
+	if cluster != "" {
+		return cluster
 	}
 	_, size := utf8.DecodeRuneInString(text)
 	if size <= 0 {

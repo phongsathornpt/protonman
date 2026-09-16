@@ -12,7 +12,8 @@ INSTALL_BINARY := $(INSTALL_DIR)/$(BIN_NAME)
 GO_SOURCES := $(shell find cmd internal proton-sdk -type f -name '*.go' ! -name '*_test.go')
 VERSION ?= $(shell git describe --tags --always --dirty --match 'v[0-9]*' 2>/dev/null || echo dev)
 VERSION_LDFLAGS := -X github.com/phongsathornpt/protonman/internal/base/buildinfo.version=$(VERSION)
-BUILD_LDFLAGS := $(strip $(LDFLAGS) $(VERSION_LDFLAGS))
+DEFAULT_LDFLAGS ?= -s -w
+BUILD_LDFLAGS := $(strip $(DEFAULT_LDFLAGS) $(LDFLAGS) $(VERSION_LDFLAGS))
 VERSION_KEY := $(subst /,_,$(VERSION))
 VERSION_STAMP := $(BIN_DIR)/.version-$(VERSION_KEY)
 GO_TMPDIR ?= $(HOME)/.cache/protonman/tmp

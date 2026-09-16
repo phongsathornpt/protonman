@@ -29,9 +29,9 @@ func Options(request permission.Request, projectTrusted, hasWorkDir bool) []Item
 	}
 	if permission.PersistentRuleEligible(request) {
 		if projectTrusted && hasWorkDir {
-			items = append(items, Item{Option: AllowProject, Label: "Allow and save to project (.protonman/config.toml)", Shortcut: "p"})
+			items = append(items, Item{Option: AllowProject, Label: "Allow and save to project (.protonman/config.json)", Shortcut: "p"})
 		}
-		items = append(items, Item{Option: AllowGlobal, Label: "Allow and save globally (~/.protonman/config.toml)", Shortcut: "g"})
+		items = append(items, Item{Option: AllowGlobal, Label: "Allow and save globally (~/.protonman/config.json)", Shortcut: "g"})
 	}
 	return append(items, Item{Option: Deny, Label: "Deny", Shortcut: "n"})
 }

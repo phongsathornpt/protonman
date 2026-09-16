@@ -10,8 +10,6 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-
-	"gopkg.in/yaml.v3"
 )
 
 var (
@@ -20,15 +18,6 @@ var (
 	// ErrMissingSKILLFile indicates the SKILL.md file is absent.
 	ErrMissingSKILLFile = errors.New("SKILL.md file not found")
 )
-
-type rawFrontmatter struct {
-	Name          string `yaml:"name"`
-	Description   string `yaml:"description"`
-	License       string `yaml:"license"`
-	Compatibility string `yaml:"compatibility"`
-	Metadata      any    `yaml:"metadata"`
-	AllowedTools  any    `yaml:"allowed-tools"`
-}
 
 // ParseSkillFile reads a SKILL.md file and constructs a domain Skill.
 func ParseSkillFile(filePath string, scope Scope) (Skill, error) {
@@ -48,16 +37,12 @@ func ParseSkillFile(filePath string, scope Scope) (Skill, error) {
 		return Skill{}, fmt.Errorf("parse %q: %w", filePath, err)
 	}
 
-	var raw rawFrontmatter
-	if err := yaml.Unmarshal(fm, &raw); err != nil {
-		// Attempt lenient fix for unquoted colons
-		fixedFm := fixLenientYAML(fm)
-		if retryErr := yaml.Unmarshal(fixedFm, &raw); retryErr != nil {
-			return Skill{}, fmt.Errorf("decode YAML frontmatter in %q: %w", filePath, err)
-		}
+	raw, err := parseYAMLFrontmatter(fm)
+	if err != nil {
+		return Skill{}, fmt.Errorf("decode YAML frontmatter in %q: %w", filePath, err)
 	}
 
-	name := strings.TrimSpace(raw.Name)
+	name := stringVal(raw["name"])
 	if name == "" {
 		// Fallback to directory name if name was omitted
 		name = filepath.Base(baseDir)
@@ -66,12 +51,12 @@ func ParseSkillFile(filePath string, scope Scope) (Skill, error) {
 		return Skill{}, fmt.Errorf("invalid skill name in %q: %w", filePath, err)
 	}
 
-	desc := strings.TrimSpace(raw.Description)
+	desc := stringVal(raw["description"])
 	if err := ValidateDescription(desc); err != nil {
 		return Skill{}, fmt.Errorf("invalid skill description in %q: %w", filePath, err)
 	}
 
-	allowedTools := parseAllowedTools(raw.AllowedTools)
+	allowedTools := parseAllowedTools(raw["allowed-tools"])
 	resources := scanResources(baseDir)
 
 	s := Skill{
@@ -80,9 +65,9 @@ func ParseSkillFile(filePath string, scope Scope) (Skill, error) {
 		Location:      absPath,
 		BaseDir:       baseDir,
 		Scope:         scope,
-		License:       strings.TrimSpace(raw.License),
-		Compatibility: strings.TrimSpace(raw.Compatibility),
-		Metadata:      parseMetadata(raw.Metadata),
+		License:       stringVal(raw["license"]),
+		Compatibility: stringVal(raw["compatibility"]),
+		Metadata:      parseMetadata(raw["metadata"]),
 		AllowedTools:  allowedTools,
 		Instructions:  strings.TrimSpace(body),
 		Resources:     resources,
@@ -93,6 +78,16 @@ func ParseSkillFile(filePath string, scope Scope) (Skill, error) {
 	}
 
 	return s, nil
+}
+
+func stringVal(v any) string {
+	if v == nil {
+		return ""
+	}
+	if s, ok := v.(string); ok {
+		return strings.TrimSpace(s)
+	}
+	return fmt.Sprint(v)
 }
 
 func extractFrontmatterAndBody(content []byte) ([]byte, string, error) {
@@ -127,27 +122,6 @@ func extractFrontmatterAndBody(content []byte) ([]byte, string, error) {
 	fm := []byte(strings.Join(fmLines, "\n"))
 	body := strings.Join(bodyLines, "\n")
 	return fm, body, nil
-}
-
-func fixLenientYAML(content []byte) []byte {
-	var out []string
-	scanner := bufio.NewScanner(bytes.NewReader(content))
-	for scanner.Scan() {
-		line := scanner.Text()
-		trimmed := strings.TrimSpace(line)
-		// If line starts with "description:" and has additional unquoted colons, quote the rest
-		if strings.HasPrefix(trimmed, "description:") {
-			parts := strings.SplitN(trimmed, ":", 2)
-			val := strings.TrimSpace(parts[1])
-			if !strings.HasPrefix(val, "\"") && !strings.HasPrefix(val, "'") {
-				indent := line[:strings.Index(line, "description:")]
-				escapedVal := strings.ReplaceAll(val, "\"", "\\\"")
-				line = fmt.Sprintf("%sdescription: \"%s\"", indent, escapedVal)
-			}
-		}
-		out = append(out, line)
-	}
-	return []byte(strings.Join(out, "\n"))
 }
 
 func parseAllowedTools(raw any) []string {

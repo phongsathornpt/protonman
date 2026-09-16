@@ -1,12 +1,30 @@
 package config
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
-
-	"github.com/pelletier/go-toml/v2"
+	"strings"
 )
+
+func decodeDocument(data []byte, path, label string) (fileDocument, error) {
+	var doc fileDocument
+	trimmed := strings.TrimSpace(string(data))
+	if strings.HasSuffix(path, ".json") || strings.HasPrefix(trimmed, "{") {
+		if err := json.Unmarshal(data, &doc); err != nil {
+			return fileDocument{}, fmt.Errorf("decode existing %s %q: %w", label, path, err)
+		}
+		return doc, nil
+	}
+	if err := decodeTOML(data, &doc); err != nil {
+		if jsonErr := json.Unmarshal(data, &doc); jsonErr == nil {
+			return doc, nil
+		}
+		return fileDocument{}, fmt.Errorf("decode existing %s %q: %w", label, path, err)
+	}
+	return doc, nil
+}
 
 func readDocument(path, label string, rejectSymlink bool) (fileDocument, bool, error) {
 	if rejectSymlink {
@@ -28,18 +46,19 @@ func readDocument(path, label string, rejectSymlink bool) (fileDocument, bool, e
 	if err != nil {
 		return fileDocument{}, false, fmt.Errorf("read %s %q: %w", label, path, err)
 	}
-	var doc fileDocument
-	if err := toml.Unmarshal(data, &doc); err != nil {
-		return fileDocument{}, false, fmt.Errorf("decode existing %s %q: %w", label, path, err)
+	doc, err := decodeDocument(data, path, label)
+	if err != nil {
+		return fileDocument{}, false, err
 	}
 	return doc, true, nil
 }
 
 func writeDocumentAtomic(dir, path, label string, mode os.FileMode, doc fileDocument) error {
-	encoded, err := toml.Marshal(doc)
+	encoded, err := json.MarshalIndent(doc, "", "  ")
 	if err != nil {
-		return fmt.Errorf("encode %s toml: %w", label, err)
+		return fmt.Errorf("encode %s json: %w", label, err)
 	}
+	encoded = append(encoded, '\n')
 	temp, err := os.CreateTemp(dir, ".config-*.tmp")
 	if err != nil {
 		return fmt.Errorf("create temporary %s: %w", label, err)

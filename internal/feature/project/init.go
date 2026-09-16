@@ -73,7 +73,7 @@ func Init(ctx context.Context, workDir string) (InitResult, error) {
 	if err != nil {
 		return result, fmt.Errorf("create project config: %w", err)
 	}
-	const initialConfig = "# Protonman project configuration\n"
+	const initialConfig = "{}\n"
 	if _, err := file.WriteString(initialConfig); err != nil {
 		_ = file.Close()
 		_ = os.Remove(configPath)

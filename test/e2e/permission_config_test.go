@@ -137,7 +137,7 @@ func TestE2EProviderConfigSaveAndReload(t *testing.T) {
 	}
 
 	// Step 2: Verify file existence and permissions on disk
-	configFile := filepath.Join(home, ".protonman", "config.toml")
+	configFile := filepath.Join(home, ".protonman", "config.json")
 	info, err := os.Stat(configFile)
 	if err != nil {
 		t.Fatalf("stat config file error = %v", err)
@@ -215,7 +215,7 @@ func TestE2EOpenCodeFreeProviderConfig(t *testing.T) {
 	}
 
 	// Step 2: Verify file existence and 0600 permissions
-	configFile := filepath.Join(home, ".protonman", "config.toml")
+	configFile := filepath.Join(home, ".protonman", "config.json")
 	info, err := os.Stat(configFile)
 	if err != nil {
 		t.Fatalf("stat config file error = %v", err)
@@ -299,8 +299,8 @@ func TestE2EProviderSwitchAndSelect(t *testing.T) {
 		t.Fatalf("SaveUserDefaultProvider(opencode) error: %v", err)
 	}
 
-	// Step 3: Check permissions on ~/.protonman/config.toml (must be 0600)
-	configFile := filepath.Join(home, ".protonman", "config.toml")
+	// Step 3: Check permissions on ~/.protonman/config.json (must be 0600)
+	configFile := filepath.Join(home, ".protonman", "config.json")
 	info, err := os.Stat(configFile)
 	if err != nil {
 		t.Fatalf("stat config file error: %v", err)

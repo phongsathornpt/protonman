@@ -11,18 +11,23 @@ import (
 func TestLoadHomeWorkspaceDoesNotAliasUserConfigAsProjectConfig(t *testing.T) {
 	home := t.TempDir()
 	configPath := filepath.Join(home, appdirs.RootDirName, appdirs.ConfigFileName)
-	writeConfig(t, configPath, `[permission]
-default = "ask"
-
-[[permission.rules]]
-tool = "edit"
-action = "ask"
-
-[workspace]
-protected_paths = [".env"]
-
-[agent]
-max_tool_calls = 17
+	writeConfig(t, configPath, `{
+  "permission": {
+    "default": "ask",
+    "rules": [
+      {
+        "tool": "edit",
+        "action": "ask"
+      }
+    ]
+  },
+  "workspace": {
+    "protected_paths": [".env"]
+  },
+  "agent": {
+    "max_tool_calls": 17
+  }
+}
 `)
 
 	for _, trusted := range []bool{false, true} {

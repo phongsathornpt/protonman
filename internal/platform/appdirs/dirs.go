@@ -12,14 +12,15 @@ import (
 )
 
 const (
-	RootDirName        = ".protonman"
-	ConfigFileName     = "config.toml"
-	SessionsDir        = "sessions"
-	CheckpointsDir     = "checkpoints"
-	SkillsDir          = "skills"
-	MemoryDir          = "memory"
-	LogsDir            = "logs"
-	SkillsLockFileName = "skills-lock.json"
+	RootDirName          = ".protonman"
+	ConfigFileName       = "config.json"
+	LegacyConfigFileName = "config.toml"
+	SessionsDir          = "sessions"
+	CheckpointsDir       = "checkpoints"
+	SkillsDir            = "skills"
+	MemoryDir            = "memory"
+	LogsDir              = "logs"
+	SkillsLockFileName   = "skills-lock.json"
 )
 
 // Dirs is the resolved Protonman filesystem layout for one user home.
@@ -103,7 +104,7 @@ func displayPath(path string) string {
 func UserConfigDisplay() string {
 	dirs, err := Resolve("")
 	if err != nil {
-		return "~/.protonman/config.toml"
+		return "~/.protonman/config.json"
 	}
 	return displayPath(dirs.Config)
 }

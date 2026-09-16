@@ -160,10 +160,17 @@ func modifyProjectConfigFile(workDir string, mutate func(*fileDocument)) error {
 	}
 
 	path := scope.Config
-	doc, _, err := readDocument(path, "project config", true)
+	readPath := resolveExistingConfigPath(path)
+	doc, _, err := readDocument(readPath, "project config", true)
 	if err != nil {
 		return err
 	}
 	mutate(&doc)
-	return writeDocumentAtomic(root, path, "project config", 0o644, doc)
+	if err := writeDocumentAtomic(root, path, "project config", 0o644, doc); err != nil {
+		return err
+	}
+	if readPath != path && strings.HasSuffix(readPath, ".toml") {
+		_ = os.Rename(readPath, readPath+".bak")
+	}
+	return nil
 }

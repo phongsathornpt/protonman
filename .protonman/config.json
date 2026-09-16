@@ -1,0 +1,28 @@
+{
+  "permission": {
+    "default": "",
+    "rules": []
+  },
+  "workspace": {
+    "protected_paths": []
+  },
+  "ui": {
+    "permission_mode": ""
+  },
+  "sandbox": {
+    "profile": ""
+  },
+  "agent": {
+    "subagents_enabled": true,
+    "profile": "universal",
+    "reasoning_effort": "auto"
+  },
+  "skills": {
+    "active": [
+      "golang-code-style",
+      "golang-design-patterns",
+      "golang-error-handling",
+      "golang-performance"
+    ]
+  }
+}
