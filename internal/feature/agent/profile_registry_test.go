@@ -1,8 +1,8 @@
 package agent
 
 import (
-	agentprofile "github.com/phongsathornpt/protonman/internal/core/agentprofile"
 	"context"
+	agentprofile "github.com/phongsathornpt/protonman/internal/core/agentprofile"
 	"strings"
 	"testing"
 

@@ -9,8 +9,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/phongsathornpt/protonman/internal/platform/appdirs"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
+	"github.com/phongsathornpt/protonman/internal/platform/appdirs"
 	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 )
 

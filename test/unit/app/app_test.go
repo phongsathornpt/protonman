@@ -1,10 +1,10 @@
 package app_test
 
 import (
-	"github.com/phongsathornpt/protonman/internal/feature/project"
-	"github.com/phongsathornpt/protonman/internal/feature/todo"
 	"context"
 	"errors"
+	"github.com/phongsathornpt/protonman/internal/feature/project"
+	"github.com/phongsathornpt/protonman/internal/feature/todo"
 	"strings"
 	"testing"
 	"time"
