@@ -6,7 +6,7 @@ import (
 
 	"github.com/phongsathornpt/protonman/internal/adapter/out/memoryfs"
 	"github.com/phongsathornpt/protonman/internal/app"
-	"github.com/phongsathornpt/protonman/internal/app/appdirs"
+	"github.com/phongsathornpt/protonman/internal/platform/appdirs"
 )
 
 // buildACPMemories composes the read-only durable-memory application facade for

@@ -11,7 +11,7 @@ import (
 	"golang.org/x/term"
 
 	"github.com/phongsathornpt/protonman/internal/base/envconfig"
-	"github.com/phongsathornpt/protonman/internal/feature/agent"
+	"github.com/phongsathornpt/protonman/internal/core/agentprofile"
 )
 
 type cliOptions struct {
@@ -38,7 +38,7 @@ func parseArgs(args []string) (cliOptions, error) {
 	flags.StringVar(&options.prompt, "prompt", "", "run one headless prompt and exit")
 	flags.StringVar(&options.output, "output", "text", "headless output format: text or json")
 	flags.StringVar(&options.mode, "permission-mode", "", "override permission mode")
-	profileHelp := "default agent profile: " + agent.ProfileList(", ")
+	profileHelp := "default agent profile: " + agentprofile.ProfileList(", ")
 	flags.StringVar(&options.agentProfile, "agent", "", profileHelp)
 	flags.StringVar(&options.agentProfile, "profile", "", profileHelp)
 	flags.StringVar(&options.agentProfile, "a", "", profileHelp)

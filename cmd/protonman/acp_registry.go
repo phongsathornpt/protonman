@@ -10,11 +10,11 @@ import (
 	skilltool "github.com/phongsathornpt/protonman/internal/adapter/out/tool/skill"
 	todotool "github.com/phongsathornpt/protonman/internal/adapter/out/tool/todo"
 	webtool "github.com/phongsathornpt/protonman/internal/adapter/out/tool/web"
-	"github.com/phongsathornpt/protonman/internal/app/appdirs"
 	"github.com/phongsathornpt/protonman/internal/core/session"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/core/workspace"
 	tododomain "github.com/phongsathornpt/protonman/internal/feature/todo"
+	"github.com/phongsathornpt/protonman/internal/platform/appdirs"
 	"github.com/phongsathornpt/protonman/internal/platform/checkpoint"
 	"github.com/phongsathornpt/protonman/internal/platform/sandbox"
 )

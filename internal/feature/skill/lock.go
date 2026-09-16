@@ -12,7 +12,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/phongsathornpt/protonman/internal/app/appdirs"
+	"github.com/phongsathornpt/protonman/internal/platform/appdirs"
 )
 
 const (

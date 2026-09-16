@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := tui
 
-.PHONY: all tui desktop desktop-run run dev build install run-bin clean test test-architecture test-race test-e2e test-install bench bench-cpu bench-mem fmt vet lint tag tag-push help
+.PHONY: all tui desktop desktop-run run dev build install run-bin clean test test-architecture test-architecture-desktop test-desktop test-race test-e2e test-install bench bench-cpu bench-mem fmt vet lint tag tag-push help
 
 # Binary configuration
 BIN_DIR := bin
@@ -71,6 +71,16 @@ test:
 test-architecture:
 	go test ./test/architecture/...
 	go test ./proton-sdk/... -run 'Ownership|Architecture|Contract'
+
+## test-architecture-desktop: Run architecture guards with desktop packages visible
+# The Fyne desktop frontend is build-tag gated, so it is absent from the default
+# package graph. GOFLAGS makes both the guard subprocess and this run see it.
+test-architecture-desktop:
+	GOFLAGS=-tags=desktop go test ./test/architecture/...
+
+## test-desktop: Run desktop frontend tests (build-tag gated)
+test-desktop:
+	go test -tags desktop ./internal/feature/desktop ./internal/adapter/in/desktop ./cmd/protonman-desktop
 
 ## test-race: Run all tests with race detector
 test-race:

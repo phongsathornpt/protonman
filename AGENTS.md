@@ -7,11 +7,12 @@ It summarizes the current codebase, architectural ownership, runtime invariants,
 and the expected engineering workflow. Treat repository code and tests as the
 source of truth when this document and implementation ever disagree.
 
-Protonman is a Go 1.27 autonomous coding agent with three inbound modes:
+Protonman is a Go 1.27 autonomous coding agent with four inbound modes:
 
 - Bubble Tea interactive TUI
 - headless CLI for scripts and CI
 - ACP stdio server for editor/IDE integrations
+- Fyne desktop GUI, which drives the CLI runtime over ACP (build with `-tags desktop`; see `docs/desktop.md`)
 
 The project prioritizes clean architecture, explicit capability boundaries,
 fail-closed security, bounded concurrency, structured tool contracts, and
@@ -34,12 +35,16 @@ When changing Protonman:
 
 ```text
 cmd/protonman/                     composition root and CLI mode selection
+cmd/protonman-desktop/             desktop composition root (`-tags desktop`)
 internal/adapter/in/            inbound adapters
   acp/                          ACP JSON-RPC/stdin-stdout adapter
   headless/                     non-interactive CLI adapter
   tui/                          Bubble Tea presentation layer
+  desktop/                      Fyne desktop frontend (`-tags desktop`; drives the CLI over ACP)
 internal/adapter/out/           driven infrastructure adapters
+  acpclient/                    ACP client used by the desktop frontend
   config/                       layered TOML loading and persistence
+  memoryfs/                     file-backed memory repository
   model/                        provider discovery and SDK adaptation
   sessionfs/                    file-backed session repository
   tool/
@@ -49,11 +54,11 @@ internal/adapter/out/           driven infrastructure adapters
     skill/                      skill activation tool
     todo/                       session-bound task tools
     web/                        web fetch adapter
-internal/app/                   application use-case boundaries
+internal/app/                   application use-case boundaries (including `Memories`)
 internal/base/                  leaf utilities with zero internal dependencies
-internal/core/                  pure domain contracts and policies
+internal/core/                  pure domain contracts and policies (including memory and model selection)
 internal/engine/                prompt, tool-call, and turn orchestration
-internal/feature/               agent, project, skill, and todo features
+internal/feature/               agent, desktop, imageprep, memory, project, skill, and todo features
 internal/platform/              checkpoint, sandbox, and telemetry infrastructure
 proton-sdk/                     provider-neutral model SDK
 proton-sdk/provider/            OpenAI-compatible and Anthropic protocol implementations
@@ -70,14 +75,20 @@ Do not weaken those tests to make an architectural violation pass.
 ### `internal/base/*`
 
 Leaf packages only. They must not import any other `internal/*` or `cmd/*` package.
-Current responsibilities include build metadata, context helpers, environment
-parsing, failure classification, glob matching, and global runtime defaults.
+Current responsibilities include build metadata, command-output analysis,
+context helpers, environment parsing, failure classification, glob matching,
+path utilities, string utilities, and global runtime defaults.
 
 ### `internal/core/*`
 
 Pure domain contracts and policies:
 
+- `agentidentity`: root versus delegated agent identity typing
 - `conversation`: provider-neutral conversation retention and historical tool-message policy
+- `memory`: memory entry contracts and repository port
+- `modelcatalog`: remote model catalog entries
+- `modelclient`: provider-neutral language-model request/response port
+- `modelconfig`: provider and model selection records
 - `modelprofile`: model metadata/capability policy
 - `permission`: permission modes, rules, grants, request evaluation
 - `session`: session aggregate, repository port, state/resource ownership
@@ -88,20 +99,23 @@ Core packages must not import adapters, features, engines, or the composition ro
 
 ### `internal/app/*`
 
-Application ports used by inbound adapters. TUI, ACP, and headless code should
-reach concrete subsystems through this layer instead of taking implementation
-escape hatches.
+Application ports used by inbound adapters. TUI, ACP, desktop, and headless code
+should reach concrete subsystems through this layer instead of taking
+implementation escape hatches.
 
 Important application boundaries:
 
 - `app.Conversation` hides `engine/turn` from inbound adapters.
-- `app.Agents` hides the concrete `agent.Coordinator` from TUI/ACP/headless.
+- `app.Agents` hides the concrete `agent.Coordinator` from TUI/ACP/desktop/headless.
 - `app.Projects`, `app.Providers`, and `app.UserSettings` own persistence use cases.
 - `app.Sessions` owns session discovery/load/delete operations.
 - `app.Models` owns provider model discovery.
+- `app.Memories` owns workspace and cross-workspace memory operations.
 
 Inbound adapters must not call config persistence, provider discovery, session
-filesystem stores, or coordinator methods directly.
+filesystem stores, or coordinator methods directly. This rule covers the
+build-tag gated desktop adapter as well (`test/architecture/desktop_contract_test.go`
+enforces it).
 
 ### Composition Root
 
@@ -125,7 +139,7 @@ config.Load
   -> toolcall.Service
   -> provider LanguageModel
   -> app.BuildConversation / turn.Loop
-  -> TUI | headless | ACP
+  -> TUI | headless | ACP | desktop (desktop drives the CLI over ACP)
 ```
 
 ## Agent Model: Dota-Style Attributes
@@ -683,6 +697,12 @@ go test ./...
 # E2E only
 make test-e2e
 
+# Desktop frontend tests (build-tag gated)
+make test-desktop
+
+# Architecture guards with desktop packages visible
+make test-architecture-desktop
+
 # Full race detector
 make test-race
 
@@ -701,6 +721,11 @@ go test -race \
   ./internal/adapter/out/tool/agent \
   ./internal/adapter/in/tui
 ```
+
+Desktop frontend code lives behind the `desktop` build tag and is invisible to
+the default package graph, `go test ./...`, and `go vet ./...`. Any change to
+the desktop subsystem requires the tagged verifiers (`make test-desktop`,
+`make test-architecture-desktop`) instead of their untagged equivalents.
 
 Run architecture tests whenever moving packages, adding cross-layer imports, or
 introducing a new application boundary:
@@ -735,11 +760,15 @@ When implementing a change, place it according to ownership:
 | permission execution pipeline | `internal/engine/toolcall` + `internal/core/permission` |
 | user/project TOML persistence | `internal/adapter/out/config`, exposed via `internal/app` |
 | terminal interaction/rendering | `internal/adapter/in/tui` |
+| desktop frontend/rendering | `internal/adapter/in/desktop` (`-tags desktop`) |
+| desktop presentation state | `internal/feature/desktop` |
+| ACP client for the desktop frontend | `internal/adapter/out/acpclient` |
 | provider model discovery/adaptation | `internal/adapter/out/model` |
 | provider wire protocol | `proton-sdk/provider/*` |
 | session persistence | `internal/adapter/out/sessionfs` |
+| memory persistence and use cases | `internal/adapter/out/memoryfs` + `internal/feature/memory`, exposed via `internal/app.Memories` |
 | reusable low-level defaults/helpers | `internal/base/*` only if truly dependency-free |
-| composition/wiring | `cmd/protonman` |
+| composition/wiring | `cmd/protonman` (desktop: `cmd/protonman-desktop`) |
 
 ### Configuration invariants
 
@@ -839,8 +868,8 @@ Before declaring a task complete, verify the relevant subset of:
 
 For common investigations, begin here:
 
-- startup/wiring: `cmd/protonman/bootstrap.go`
-- architecture guardrails: `test/architecture/dependency_test.go`
+- startup/wiring: `cmd/protonman/bootstrap.go` (desktop: `cmd/protonman-desktop/main.go`)
+- architecture guardrails: `test/architecture/dependency_test.go` (desktop: `test/architecture/desktop_contract_test.go`)
 - tool contracts: `internal/core/tool/`
 - default tools: `internal/adapter/out/tool/builtin/registry.go`
 - tool execution: `internal/engine/toolcall/service.go`
@@ -851,7 +880,9 @@ For common investigations, begin here:
 - subagent publication: `internal/adapter/out/tool/agent/capability_registry.go`
 - configuration: `internal/adapter/out/config/`
 - TUI commands/state: `internal/adapter/in/tui/`
+- desktop frontend: `internal/adapter/in/desktop/`, `internal/feature/desktop/` (`-tags desktop`)
 - sessions: `internal/core/session/`, `internal/adapter/out/sessionfs/`
+- memory: `internal/core/memory/`, `internal/feature/memory/`, `internal/adapter/out/memoryfs/`
 - tasks: `internal/feature/todo/`, `internal/adapter/out/tool/todo/`
 - MCP: `internal/adapter/out/tool/mcp/`
 - model adaptation: `internal/adapter/out/model/`

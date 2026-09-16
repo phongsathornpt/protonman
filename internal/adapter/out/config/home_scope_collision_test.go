@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/phongsathornpt/protonman/internal/app/appdirs"
+	"github.com/phongsathornpt/protonman/internal/platform/appdirs"
 )
 
 func TestLoadHomeWorkspaceDoesNotAliasUserConfigAsProjectConfig(t *testing.T) {

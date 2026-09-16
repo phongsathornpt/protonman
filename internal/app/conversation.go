@@ -10,6 +10,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/phongsathornpt/protonman/internal/core/agentprofile"
 	"github.com/phongsathornpt/protonman/internal/core/modelcatalog"
 	"github.com/phongsathornpt/protonman/internal/core/modelconfig"
 	"github.com/phongsathornpt/protonman/internal/core/workspace"
@@ -163,12 +164,12 @@ func primaryConversationPolicy(spec ConversationSpec) (prompt.Spec, []turn.Optio
 		turn.WithRoundTimeout(spec.RoundTimeout),
 	}
 	if profileName := strings.TrimSpace(spec.AgentProfile); profileName != "" {
-		profile, err := agent.ParseProfile(profileName)
+		profile, err := agentprofile.ParseProfile(profileName)
 		if err != nil {
 			return prompt.Spec{}, nil, fmt.Errorf("build conversation profile: %w", err)
 		}
 		promptSpec.Profile = string(profile)
-		if profileSpec, ok := agent.SpecForProfile(profile); ok {
+		if profileSpec, ok := agentprofile.SpecForProfile(profile); ok {
 			options = append(options,
 				turn.WithGroundingEvidence(profileSpec.GroundingEvidence),
 				turn.WithReasoningEffort(profileSpec.Reasoning),

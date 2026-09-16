@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/phongsathornpt/protonman/internal/app/appdirs"
+	"github.com/phongsathornpt/protonman/internal/platform/appdirs"
 )
 
 func TestComputeSkillFolderHash(t *testing.T) {

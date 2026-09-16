@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/phongsathornpt/protonman/internal/core/agentprofile"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/feature/agent"
 )
@@ -71,7 +72,7 @@ func subagentInputSchema() map[string]any {
 		"properties": map[string]any{
 			"action":         map[string]any{"type": "string", "enum": []string{"spawn", "wait", "get", "list", "cancel", "resume"}, "description": "Operation: spawn delegates work with automatic result delivery; wait/get/list are diagnostic inspection; cancel/resume explicitly control existing work"},
 			"task":           map[string]any{"type": "string", "description": "Task for action=spawn"},
-			"profile":        map[string]any{"type": "string", "enum": agent.SubagentProfileNames(), "description": agent.SubagentProfileSchemaDescription()},
+			"profile":        map[string]any{"type": "string", "enum": agentprofile.SubagentProfileNames(), "description": agentprofile.SubagentProfileSchemaDescription()},
 			"context":        map[string]any{"type": "string", "description": "Optional background context for action=spawn"},
 			"taskId":         map[string]any{"type": "string", "pattern": `^[A-Za-z0-9._:-]{1,128}$`, "description": "Optional ID from the current TODO plan. When present, runtime lifecycle events own that task's execution status."},
 			"dependsOn":      map[string]any{"type": "array", "maxItems": agent.MaxAgentDependencies, "items": map[string]any{"type": "string"}, "description": "For action=spawn only: already-spawned same-turn agent IDs that must complete successfully first"},

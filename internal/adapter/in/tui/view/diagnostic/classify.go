@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"github.com/phongsathornpt/protonman/internal/app"
-	"github.com/phongsathornpt/protonman/internal/app/appdirs"
+	"github.com/phongsathornpt/protonman/internal/platform/appdirs"
 	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 )
 

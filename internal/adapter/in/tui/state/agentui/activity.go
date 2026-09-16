@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/toolview"
+	agentprofile "github.com/phongsathornpt/protonman/internal/core/agentprofile"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/feature/agent"
 )
@@ -153,9 +154,9 @@ func activity(intent ActivityIntent, toolName string, kind tool.Kind, target str
 
 func defaultIntent(profile agent.Profile) ActivityIntent {
 	switch profile {
-	case agent.ProfileIntelligence:
+	case agentprofile.ProfileIntelligence:
 		return ActivitySkilling
-	case agent.ProfileStrength:
+	case agentprofile.ProfileStrength:
 		return ActivityPushing
 	default:
 		return ActivityRoaming

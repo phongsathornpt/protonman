@@ -4,17 +4,29 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	project "github.com/phongsathornpt/protonman/internal/core/project"
 	"os"
 	"path/filepath"
 
-	"github.com/phongsathornpt/protonman/internal/app/appdirs"
+	"github.com/phongsathornpt/protonman/internal/platform/appdirs"
 )
 
 // InitResult reports whether project-local Protonman configuration was created.
-type InitResult struct {
-	ProtonDir  string
-	ConfigPath string
-	Created    bool
+// InitResult is the core-owned initialization contract.
+type InitResult = project.InitResult
+
+// Lifecycle adapts the package-level Discover/Init implementations to the
+// application-owned project lifecycle port.
+type Lifecycle struct{}
+
+// Discover implements app.ProjectLifecycle.
+func (Lifecycle) Discover(ctx context.Context, opts Options) (State, error) {
+	return Discover(ctx, opts)
+}
+
+// Init implements app.ProjectLifecycle.
+func (Lifecycle) Init(ctx context.Context, workDir string) (InitResult, error) {
+	return Init(ctx, workDir)
 }
 
 // Init creates a minimal project-local Protonman configuration without overwriting

@@ -5,6 +5,7 @@ import (
 	"strings"
 	"unicode"
 
+	agentprofile "github.com/phongsathornpt/protonman/internal/core/agentprofile"
 	"github.com/phongsathornpt/protonman/internal/feature/skill"
 )
 
@@ -111,7 +112,7 @@ func skillProfileAffinity(candidate skill.Skill, profile Profile) (bool, int) {
 	profiles, declared := skillMetadataProfiles(candidate.Metadata)
 	if declared {
 		for _, name := range profiles {
-			declaredProfile, err := ParseProfile(name)
+			declaredProfile, err := agentprofile.ParseProfile(name)
 			if err == nil && declaredProfile == profile {
 				return true, 12
 			}

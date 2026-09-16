@@ -9,9 +9,9 @@ import (
 	"testing"
 
 	"github.com/phongsathornpt/protonman/internal/adapter/out/sessionfs"
-	"github.com/phongsathornpt/protonman/internal/app/appdirs"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 	"github.com/phongsathornpt/protonman/internal/core/session"
+	"github.com/phongsathornpt/protonman/internal/platform/appdirs"
 )
 
 func TestSessionResumeArgs(t *testing.T) {

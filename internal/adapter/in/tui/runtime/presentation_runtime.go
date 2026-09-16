@@ -17,6 +17,7 @@ import (
 	agentpane "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane/agent"
 	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/style"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
+	"github.com/phongsathornpt/protonman/internal/core/agentprofile"
 	"github.com/phongsathornpt/protonman/internal/core/modelprofile"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
@@ -355,9 +356,9 @@ func (m *bubbleModel) invalidateSessionHeaderBranch() {
 // no tool, retry, or explicit activity is available. It comes from the active
 // profile's activity vocabulary rather than a generic assistant word.
 func (m bubbleModel) rootActivityLabel() string {
-	profile, err := agent.ParseProfile(strings.TrimSpace(m.agentProfile))
+	profile, err := agentprofile.ParseProfile(strings.TrimSpace(m.agentProfile))
 	if err != nil || !profile.Valid() {
-		profile = agent.ProfileUniversal
+		profile = agentprofile.ProfileUniversal
 	}
 	return agentui.ActivityForState(profile, agent.StateRunning).String()
 }

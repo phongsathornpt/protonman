@@ -2,6 +2,7 @@
 package main
 
 import (
+	"github.com/phongsathornpt/protonman/internal/feature/todo"
 	"context"
 	"fmt"
 	"io"
@@ -19,8 +20,8 @@ import (
 	"github.com/phongsathornpt/protonman/internal/base/buildinfo"
 	"github.com/phongsathornpt/protonman/internal/base/envconfig"
 	"github.com/phongsathornpt/protonman/internal/core/session"
+	coretelemetry "github.com/phongsathornpt/protonman/internal/core/telemetry"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
-	"github.com/phongsathornpt/protonman/internal/engine/toolcall"
 	"github.com/phongsathornpt/protonman/internal/platform/telemetry"
 	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 )
@@ -101,7 +102,7 @@ func run(ctx context.Context, args []string) error {
 		}
 		server, serverErr := acp.New(
 			runtimeState.service, runtimeState.registry, runtimeState.runner,
-			acp.WithSessions(app.NewSessions(runtimeState.stateStore)),
+			acp.WithSessions(app.NewSessions(runtimeState.stateStore).WithTodoOpener(todo.OpenGoalBoundStore)),
 			acp.WithMemories(memories),
 			acp.WithAgents(app.NewAgents(runtimeState.coordinator)),
 			acpSessionRuntimeOption(runtimeState),
@@ -147,7 +148,7 @@ func run(ctx context.Context, args []string) error {
 		tui.WithApplicationServices(runtimeState.application),
 		tui.WithWorkDir(runtimeState.workDir),
 		tui.WithSessionID(runtimeState.sessionID),
-		tui.WithSessions(app.NewSessions(runtimeState.stateStore).WithSessionsRoot(runtimeState.sessionsRoot), workspaceKey(runtimeState.workDir)),
+		tui.WithSessions(app.NewSessions(runtimeState.stateStore).WithSessionsRoot(runtimeState.sessionsRoot).WithTodoOpener(todo.OpenGoalBoundStore), workspaceKey(runtimeState.workDir)),
 		tui.WithTodoHandlerFactory(todotool.NewTodoForSession),
 		tui.WithInitialMessages(session.ToModelMessages(runtimeState.state.Messages)),
 		tui.WithActiveGoal(runtimeState.state.ActiveGoal),
@@ -196,7 +197,7 @@ func run(ctx context.Context, args []string) error {
 
 func truthy(value string) bool { return envconfig.Truthy(value) }
 
-func configuredTelemetryObserver() (toolcall.Observer, error) {
+func configuredTelemetryObserver() (coretelemetry.Observer, error) {
 	switch strings.ToLower(envconfig.Value(envconfig.Telemetry)) {
 	case "", "off", "false", "0":
 		return nil, nil

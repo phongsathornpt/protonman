@@ -7,8 +7,8 @@ import (
 	"log/slog"
 	"sync"
 
+	coretelemetry "github.com/phongsathornpt/protonman/internal/core/telemetry"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
-	"github.com/phongsathornpt/protonman/internal/engine/toolcall"
 )
 
 // SlogObserver writes redacted tool-call events through a structured slog logger.
@@ -27,7 +27,7 @@ func NewSlogObserver(logger *slog.Logger) (*SlogObserver, error) {
 }
 
 // Observe writes one event without adding private request or result data.
-func (o *SlogObserver) Observe(ctx context.Context, event toolcall.Event) {
+func (o *SlogObserver) Observe(ctx context.Context, event coretelemetry.Event) {
 	attrs := []slog.Attr{
 		slog.String("event_kind", string(event.Kind)),
 		slog.Time("event_time", event.Time),
@@ -63,21 +63,21 @@ func (o *SlogObserver) Observe(ctx context.Context, event toolcall.Event) {
 		attrs = append(attrs, slog.String("recovery_action", string(event.RecoveryAction)))
 	}
 	switch event.Kind {
-	case toolcall.EventRecoveryAttempted:
+	case coretelemetry.EventRecoveryAttempted:
 		o.increment("tool_recovery_attempt_total")
-	case toolcall.EventRecoverySucceeded:
+	case coretelemetry.EventRecoverySucceeded:
 		o.increment("tool_recovery_success_total")
-	case toolcall.EventRecoveryFailed:
+	case coretelemetry.EventRecoveryFailed:
 		o.increment("tool_recovery_failure_total")
 	}
-	if event.Kind == toolcall.EventCallFailed && event.ErrorCode == tool.ErrorCodeStaleContinuation {
+	if event.Kind == coretelemetry.EventCallFailed && event.ErrorCode == tool.ErrorCodeStaleContinuation {
 		o.increment("tool_continuation_stale_total")
 	}
 	o.logger.LogAttrs(ctx, slog.LevelInfo, "protonman tool-call event", attrs...)
 }
 
 // ObserveProtection records redacted loop-safety telemetry and structured logs.
-func (o *SlogObserver) ObserveProtection(ctx context.Context, event toolcall.ProtectionEvent) {
+func (o *SlogObserver) ObserveProtection(ctx context.Context, event coretelemetry.ProtectionEvent) {
 	metric := protectionMetric(event.Kind)
 	if metric != "" {
 		o.increment(metric)
@@ -113,21 +113,21 @@ func (o *SlogObserver) ObserveProtection(ctx context.Context, event toolcall.Pro
 	o.logger.LogAttrs(ctx, slog.LevelInfo, "protonman tool protection event", attrs...)
 }
 
-func protectionMetric(kind toolcall.ProtectionEventKind) string {
+func protectionMetric(kind coretelemetry.ProtectionEventKind) string {
 	switch kind {
-	case toolcall.ProtectionLoopDetected:
+	case coretelemetry.ProtectionLoopDetected:
 		return "tool_loop_detected_total"
-	case toolcall.ProtectionCallSuppressed:
+	case coretelemetry.ProtectionCallSuppressed:
 		return "tool_call_suppressed_total"
-	case toolcall.ProtectionPermissionSuppressed:
+	case coretelemetry.ProtectionPermissionSuppressed:
 		return "tool_permission_retry_suppressed_total"
-	case toolcall.ProtectionRetryBudgetExhausted:
+	case coretelemetry.ProtectionRetryBudgetExhausted:
 		return "tool_retry_budget_exhausted_total"
-	case toolcall.ProtectionNoProgressSynthesis:
+	case coretelemetry.ProtectionNoProgressSynthesis:
 		return "tool_no_progress_synthesis_total"
-	case toolcall.ProtectionSafetyBudgetExhausted:
+	case coretelemetry.ProtectionSafetyBudgetExhausted:
 		return "tool_safety_budget_exhausted_total"
-	case toolcall.ProtectionTurnDeadlineExceeded:
+	case coretelemetry.ProtectionTurnDeadlineExceeded:
 		return "turn_deadline_exceeded_total"
 	default:
 		return ""
@@ -199,6 +199,6 @@ func (o *SlogObserver) Counters() map[string]uint64 {
 	return result
 }
 
-var _ toolcall.ProtectionObserver = (*SlogObserver)(nil)
+var _ coretelemetry.ProtectionObserver = (*SlogObserver)(nil)
 
-var _ toolcall.Observer = (*SlogObserver)(nil)
+var _ coretelemetry.Observer = (*SlogObserver)(nil)

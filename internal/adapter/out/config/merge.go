@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/phongsathornpt/protonman/internal/core/modelconfig"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 	"github.com/phongsathornpt/protonman/internal/platform/sandbox"
 	sdk "github.com/phongsathornpt/protonman/proton-sdk"
@@ -82,8 +83,8 @@ func mergeDocument(document fileDocument, snapshot *Snapshot, source ValueSource
 			}
 			current := snapshot.Agent.Subagents[profile]
 			if provider != "" {
-				current.Provider = provider
-				current.Model = modelID
+				current.Provider = modelconfig.ProviderName(provider)
+				current.Model = modelconfig.ModelID(modelID)
 			}
 			if raw.ReasoningEffort != nil {
 				effort, err := sdk.ParseReasoningEffort(*raw.ReasoningEffort)

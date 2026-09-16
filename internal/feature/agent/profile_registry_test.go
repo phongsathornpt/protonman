@@ -1,6 +1,7 @@
 package agent
 
 import (
+	agentprofile "github.com/phongsathornpt/protonman/internal/core/agentprofile"
 	"context"
 	"strings"
 	"testing"
@@ -99,7 +100,7 @@ func TestSystemPromptForProfileBehaviorContracts(t *testing.T) {
 
 func TestProfileSpecsAreCanonicalAndComplete(t *testing.T) {
 	want := []Profile{ProfileUniversal, ProfileStrength, ProfileAgility, ProfileIntelligence}
-	got := SupportedProfiles()
+	got := agentprofile.SupportedProfiles()
 	if len(got) != len(want) {
 		t.Fatalf("supported profiles = %v, want %v", got, want)
 	}
@@ -112,8 +113,8 @@ func TestProfileSpecsAreCanonicalAndComplete(t *testing.T) {
 
 func TestParseProfileRejectsOldNames(t *testing.T) {
 	for _, raw := range []string{"pow", "worker", "int", "explorer", "reviewer", "dex"} {
-		if _, err := ParseProfile(raw); err == nil {
-			t.Fatalf("ParseProfile(%q) error = nil, want error", raw)
+		if _, err := agentprofile.ParseProfile(raw); err == nil {
+			t.Fatalf("agentprofile.ParseProfile(%q) error = nil, want error", raw)
 		}
 	}
 }
@@ -137,7 +138,7 @@ func TestDefaultSystemPromptGroundsCodingToolUse(t *testing.T) {
 }
 
 func TestProfilePromptsIncludeSharedToolContract(t *testing.T) {
-	for _, profile := range SupportedProfiles() {
+	for _, profile := range agentprofile.SupportedProfiles() {
 		prompt := prompt.Render(prompt.Spec{Role: RolePromptForProfile(profile), Profile: string(profile)})
 		if !strings.Contains(prompt, "Tool and action identifiers are exact") {
 			t.Fatalf("profile %q missing shared tool contract", profile)
@@ -161,7 +162,7 @@ func TestProfileSpecsDeclarePortableReasoningEffort(t *testing.T) {
 }
 
 func TestProfileSpecsRequireWorkspaceGrounding(t *testing.T) {
-	for _, profile := range SubagentProfiles() {
+	for _, profile := range agentprofile.SubagentProfiles() {
 		spec, ok := SpecForProfile(profile)
 		if !ok {
 			t.Fatalf("missing spec for %q", profile)
@@ -173,7 +174,7 @@ func TestProfileSpecsRequireWorkspaceGrounding(t *testing.T) {
 }
 
 func TestSubagentProfilesExcludeUniversal(t *testing.T) {
-	got := SubagentProfiles()
+	got := agentprofile.SubagentProfiles()
 	want := []Profile{ProfileStrength, ProfileAgility, ProfileIntelligence}
 	if len(got) != len(want) {
 		t.Fatalf("subagent profiles = %v, want %v", got, want)

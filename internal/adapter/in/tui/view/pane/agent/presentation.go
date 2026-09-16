@@ -11,6 +11,7 @@ import (
 	panecommon "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane/common"
 	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/style"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/textview"
+	"github.com/phongsathornpt/protonman/internal/core/agentprofile"
 	"github.com/phongsathornpt/protonman/internal/feature/agent"
 )
 
@@ -115,7 +116,7 @@ func AgentDisplayProfile(st agent.AgentStatus) string {
 		if idx := strings.IndexByte(prefix, '-'); idx >= 0 {
 			prefix = prefix[:idx]
 		}
-		if parsed, err := agent.ParseProfile(prefix); err == nil {
+		if parsed, err := agentprofile.ParseProfile(prefix); err == nil {
 			profile = parsed
 		}
 	}

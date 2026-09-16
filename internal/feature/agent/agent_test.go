@@ -1,6 +1,7 @@
 package agent
 
 import (
+	agentprofile "github.com/phongsathornpt/protonman/internal/core/agentprofile"
 	"testing"
 )
 
@@ -30,13 +31,13 @@ func TestProfile(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.raw, func(t *testing.T) {
-			got, err := ParseProfile(tt.raw)
+			got, err := agentprofile.ParseProfile(tt.raw)
 			if (err != nil) != tt.wantErr {
-				t.Fatalf("ParseProfile(%q) error = %v, wantErr %v", tt.raw, err, tt.wantErr)
+				t.Fatalf("agentprofile.ParseProfile(%q) error = %v, wantErr %v", tt.raw, err, tt.wantErr)
 			}
 			if !tt.wantErr {
 				if got != tt.wantProf {
-					t.Errorf("ParseProfile(%q) = %q, want %q", tt.raw, got, tt.wantProf)
+					t.Errorf("agentprofile.ParseProfile(%q) = %q, want %q", tt.raw, got, tt.wantProf)
 				}
 				if !got.Valid() {
 					t.Errorf("profile %q should be valid", got)
@@ -58,12 +59,12 @@ func TestProfile(t *testing.T) {
 }
 
 func TestUniversalCannotBeDelegated(t *testing.T) {
-	if _, err := ParseSubagentProfile("universal"); err == nil {
+	if _, err := agentprofile.ParseSubagentProfile("universal"); err == nil {
 		t.Fatal("universal should not be a delegated subagent profile")
 	}
 	for _, name := range []string{"strength", "agility", "intelligence"} {
-		if _, err := ParseSubagentProfile(name); err != nil {
-			t.Fatalf("ParseSubagentProfile(%q) error = %v", name, err)
+		if _, err := agentprofile.ParseSubagentProfile(name); err != nil {
+			t.Fatalf("agentprofile.ParseSubagentProfile(%q) error = %v", name, err)
 		}
 	}
 }
