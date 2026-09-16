@@ -3,7 +3,7 @@ package agenttool
 import (
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/feature/agent"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	"github.com/phongsathornpt/protonman/proton-sdk/usecase"
 	"strings"
 )
 
@@ -69,12 +69,12 @@ func (r *CapabilityRegistry) Definitions() []tool.Definition {
 	return out
 }
 
-func (r *CapabilityRegistry) CompiledValidators(name string) (input, output *sdk.ToolSchemaValidator, ok bool) {
+func (r *CapabilityRegistry) CompiledValidators(name string) (input, output *usecase.ToolSchemaValidator, ok bool) {
 	if r == nil || r.base == nil || !r.visible(name) {
 		return nil, nil, false
 	}
 	type compiledRegistry interface {
-		CompiledValidators(string) (*sdk.ToolSchemaValidator, *sdk.ToolSchemaValidator, bool)
+		CompiledValidators(string) (*usecase.ToolSchemaValidator, *usecase.ToolSchemaValidator, bool)
 	}
 	compiled, ok := r.base.(compiledRegistry)
 	if !ok {

@@ -13,7 +13,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/base/contextutil"
 	"github.com/phongsathornpt/protonman/internal/base/failure"
 	"github.com/phongsathornpt/protonman/internal/engine/toolcall"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	"github.com/phongsathornpt/protonman/proton-sdk/port"
 )
 
 func (c *Coordinator) Spawn(ctx context.Context, req Request) (Handle, error) {
@@ -292,7 +292,7 @@ func (c *Coordinator) storeTerminal(ctx context.Context, entry *agentEntry, res 
 	return nil
 }
 
-func languageModelIdentity(languageModel sdk.LanguageModel) (provider, modelID string) {
+func languageModelIdentity(languageModel port.LanguageModel) (provider, modelID string) {
 	if languageModel == nil {
 		return "", ""
 	}

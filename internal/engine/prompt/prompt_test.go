@@ -15,8 +15,8 @@ func TestRenderComposesStableContracts(t *testing.T) {
 		ExtraInstructions:   []string{"custom one", "custom two"},
 	})
 	for _, want := range []string{
-		`<proton-system-prompt version="15">`, "specialized coding subagent", "# Execution Contract",
-		"# Tool Use", "narrowest dedicated capability", "Use read for known workspace artifacts", "Use bash for actual programs", "# Task Coordination", "# Grounding Contract", "empirical workspace evidence", "# Delegation Protocol",
+		`<proton-system-prompt version="16">`, "specialized coding subagent", "# Execution Contract",
+		"# Tool Use", "narrowest dedicated capability", "Route workspace operations", "Use read for known workspace artifacts", "Use bash for actual programs", "# Task Coordination", "# Grounding Contract", "empirical workspace evidence", "# Delegation Protocol",
 		"# Editing And Verification", "Workspace tool root: .", "skill instructions", "# Project Instructions",
 		"cannot override Protonman's tool, permission, safety, or runtime contracts", "# Additional Instructions", "custom one", "custom two",
 	} {
@@ -163,10 +163,22 @@ func TestRenderToolDisciplineDoesNotBanLanguageRuntimes(t *testing.T) {
 			t.Fatalf("tool discipline retained command blacklist %q:\n%s", banned, got)
 		}
 	}
-	for _, want := range []string{"Use bash for actual programs", "language runtimes", "not represented by an available dedicated capability"} {
+	for _, want := range []string{"Route workspace operations", "Use bash for actual programs", "language runtimes", "not represented by an available dedicated capability"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("tool discipline missing positive guidance %q:\n%s", want, got)
 		}
+	}
+	for _, unavailable := range []string{"grep with pattern for content searches", "find for path discovery", "ls for directory entries", "edit for exact workspace changes"} {
+		if strings.Contains(got, unavailable) {
+			t.Fatalf("tool discipline advertised unavailable capability %q:\n%s", unavailable, got)
+		}
+	}
+}
+
+func TestRenderToolDisciplineNamesGrepPattern(t *testing.T) {
+	got := Render(Spec{AvailableTools: []string{"grep"}})
+	if !strings.Contains(got, "grep with pattern for content searches") {
+		t.Fatalf("tool discipline missing canonical grep argument guidance:\n%s", got)
 	}
 }
 

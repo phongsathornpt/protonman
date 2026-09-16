@@ -11,17 +11,19 @@ import (
 
 	"github.com/phongsathornpt/protonman/internal/base/buildinfo"
 	"github.com/phongsathornpt/protonman/internal/base/runtimepolicy"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	"github.com/phongsathornpt/protonman/proton-sdk/domain"
+	"github.com/phongsathornpt/protonman/proton-sdk/port"
 	sdkanthropic "github.com/phongsathornpt/protonman/proton-sdk/provider/anthropic"
 	sdkopenai "github.com/phongsathornpt/protonman/proton-sdk/provider/openai"
+	"github.com/phongsathornpt/protonman/proton-sdk/usecase"
 )
 
 type sessionBoundModel struct {
-	base      sdk.LanguageModel
+	base      port.LanguageModel
 	sessionID string
 }
 
-func withSessionID(base sdk.LanguageModel, sessionID string) sdk.LanguageModel {
+func withSessionID(base port.LanguageModel, sessionID string) port.LanguageModel {
 	sessionID = strings.TrimSpace(sessionID)
 	if base == nil || sessionID == "" {
 		return base
@@ -29,43 +31,43 @@ func withSessionID(base sdk.LanguageModel, sessionID string) sdk.LanguageModel {
 	return &sessionBoundModel{base: base, sessionID: sessionID}
 }
 
-func (m *sessionBoundModel) Provider() string                    { return m.base.Provider() }
-func (m *sessionBoundModel) ModelID() string                     { return m.base.ModelID() }
-func (m *sessionBoundModel) Capabilities() sdk.ModelCapabilities { return m.base.Capabilities() }
-func (m *sessionBoundModel) ContextWindow() int                  { return sdk.ModelContextWindow(m.base) }
-func (m *sessionBoundModel) TokenLimits() sdk.TokenLimits        { return sdk.ModelTokenLimits(m.base) }
-func (m *sessionBoundModel) Stream(ctx context.Context, request sdk.Request) (sdk.Stream, error) {
+func (m *sessionBoundModel) Provider() string                       { return m.base.Provider() }
+func (m *sessionBoundModel) ModelID() string                        { return m.base.ModelID() }
+func (m *sessionBoundModel) Capabilities() domain.ModelCapabilities { return m.base.Capabilities() }
+func (m *sessionBoundModel) ContextWindow() int                     { return usecase.ModelContextWindow(m.base) }
+func (m *sessionBoundModel) TokenLimits() domain.TokenLimits        { return usecase.ModelTokenLimits(m.base) }
+func (m *sessionBoundModel) Stream(ctx context.Context, request domain.Request) (port.Stream, error) {
 	request.Metadata.SessionID = m.sessionID
 	return m.base.Stream(ctx, request)
 }
 
 type capabilityOverrideModel struct {
-	base          sdk.LanguageModel
+	base          port.LanguageModel
 	vision        *bool
 	tools         *bool
 	contextWindow *int
-	tokenLimits   *sdk.TokenLimits
+	tokenLimits   *domain.TokenLimits
 }
 
-func withVisionCapability(base sdk.LanguageModel, vision bool) sdk.LanguageModel {
+func withVisionCapability(base port.LanguageModel, vision bool) port.LanguageModel {
 	return &capabilityOverrideModel{base: base, vision: &vision}
 }
 
-func withToolsCapability(base sdk.LanguageModel, tools bool) sdk.LanguageModel {
+func withToolsCapability(base port.LanguageModel, tools bool) port.LanguageModel {
 	return &capabilityOverrideModel{base: base, tools: &tools}
 }
 
-func withContextWindow(base sdk.LanguageModel, tokens int) sdk.LanguageModel {
+func withContextWindow(base port.LanguageModel, tokens int) port.LanguageModel {
 	return &capabilityOverrideModel{base: base, contextWindow: &tokens}
 }
 
-func withTokenLimits(base sdk.LanguageModel, limits sdk.TokenLimits) sdk.LanguageModel {
+func withTokenLimits(base port.LanguageModel, limits domain.TokenLimits) port.LanguageModel {
 	return &capabilityOverrideModel{base: base, tokenLimits: &limits}
 }
 
 func (m *capabilityOverrideModel) Provider() string { return m.base.Provider() }
 func (m *capabilityOverrideModel) ModelID() string  { return m.base.ModelID() }
-func (m *capabilityOverrideModel) Capabilities() sdk.ModelCapabilities {
+func (m *capabilityOverrideModel) Capabilities() domain.ModelCapabilities {
 	caps := m.base.Capabilities()
 	if m.vision != nil {
 		caps.Vision = *m.vision
@@ -75,8 +77,8 @@ func (m *capabilityOverrideModel) Capabilities() sdk.ModelCapabilities {
 	}
 	return caps
 }
-func (m *capabilityOverrideModel) TokenLimits() sdk.TokenLimits {
-	limits := sdk.ModelTokenLimits(m.base)
+func (m *capabilityOverrideModel) TokenLimits() domain.TokenLimits {
+	limits := usecase.ModelTokenLimits(m.base)
 	if m.tokenLimits != nil {
 		if m.tokenLimits.ContextWindow > 0 {
 			limits.ContextWindow = m.tokenLimits.ContextWindow
@@ -96,11 +98,11 @@ func (m *capabilityOverrideModel) TokenLimits() sdk.TokenLimits {
 func (m *capabilityOverrideModel) ContextWindow() int {
 	return m.TokenLimits().ContextWindow
 }
-func (m *capabilityOverrideModel) Stream(ctx context.Context, request sdk.Request) (sdk.Stream, error) {
+func (m *capabilityOverrideModel) Stream(ctx context.Context, request domain.Request) (port.Stream, error) {
 	return m.base.Stream(ctx, request)
 }
 
-func newSDKOpenAILanguageModel(providerName, baseURL, apiKey, modelID string, opts ...ClientOption) sdk.LanguageModel {
+func newSDKOpenAILanguageModel(providerName, baseURL, apiKey, modelID string, opts ...ClientOption) port.LanguageModel {
 	cfg := newClientConfig(baseURL, apiKey, modelID)
 	for _, opt := range opts {
 		if opt != nil {
@@ -145,7 +147,7 @@ func newSDKOpenAILanguageModel(providerName, baseURL, apiKey, modelID string, op
 	if usesResponsesAPI(cfg.modelID, cfg.baseURL) {
 		modelOptions = append(modelOptions, sdkopenai.WithResponsesAPI())
 	}
-	var model sdk.LanguageModel = provider.Model(cfg.modelID, modelOptions...)
+	var model port.LanguageModel = provider.Model(cfg.modelID, modelOptions...)
 	if cfg.vision != nil {
 		model = withVisionCapability(model, *cfg.vision)
 	}
@@ -173,7 +175,7 @@ func newSDKOpenAILanguageModel(providerName, baseURL, apiKey, modelID string, op
 	return withModelProfile(model, cfg.profile)
 }
 
-func newSDKAnthropicLanguageModel(providerName, baseURL, apiKey, modelID string, opts ...ClientOption) sdk.LanguageModel {
+func newSDKAnthropicLanguageModel(providerName, baseURL, apiKey, modelID string, opts ...ClientOption) port.LanguageModel {
 	cfg := newClientConfig(baseURL, apiKey, modelID)
 	for _, opt := range opts {
 		if opt != nil {
@@ -189,7 +191,7 @@ func newSDKAnthropicLanguageModel(providerName, baseURL, apiKey, modelID string,
 		MaxRetryBackoff: retryPolicy.MaxBackoff, MaxRetryAfter: retryPolicy.MaxRetryAfter,
 		RetryDelays: retryPolicy.RetryDelays,
 	})
-	var model sdk.LanguageModel = provider.Model(cfg.modelID)
+	var model port.LanguageModel = provider.Model(cfg.modelID)
 	if cfg.vision != nil {
 		model = withVisionCapability(model, *cfg.vision)
 	}
@@ -235,8 +237,8 @@ var (
 	errOpenCodeFreeMaxDuration     = errors.New("opencode free model stream exceeded maximum duration")
 )
 
-func modelRetryPolicy() sdk.RetryPolicy {
-	return sdk.RetryPolicy{
+func modelRetryPolicy() domain.RetryPolicy {
+	return domain.RetryPolicy{
 		BaseBackoff:       runtimepolicy.ModelRetryBackoffStep,
 		PostFirstRetryGap: runtimepolicy.ModelRetryPostFirstGap,
 		MaxBackoff:        runtimepolicy.ModelRetryMaxBackoff,
@@ -258,9 +260,9 @@ func (p streamRetryProgress) replaySafe() bool {
 }
 
 type emptyStreamRetryModel struct {
-	base              sdk.LanguageModel
+	base              port.LanguageModel
 	maxRetries        int
-	retryPolicy       sdk.RetryPolicy
+	retryPolicy       domain.RetryPolicy
 	firstEventTimeout time.Duration
 	idleEventTimeout  time.Duration
 	maxStreamDuration time.Duration
@@ -272,7 +274,7 @@ type emptyStreamRetryModel struct {
 	retryOpenFailures bool
 }
 
-func withEmptyStreamRetry(base sdk.LanguageModel, maxRetries int, backoff time.Duration) sdk.LanguageModel {
+func withEmptyStreamRetry(base port.LanguageModel, maxRetries int, backoff time.Duration) port.LanguageModel {
 	policy := modelRetryPolicy()
 	policy.BaseBackoff = backoff
 	policy.RetryDelays = nil
@@ -283,19 +285,19 @@ func withEmptyStreamRetry(base sdk.LanguageModel, maxRetries int, backoff time.D
 	)
 }
 
-func withEmptyStreamRetryPolicy(base sdk.LanguageModel, maxRetries int, backoff, noOutputTimeout time.Duration) sdk.LanguageModel {
+func withEmptyStreamRetryPolicy(base port.LanguageModel, maxRetries int, backoff, noOutputTimeout time.Duration) port.LanguageModel {
 	return withStreamRetryPolicyConfig(base, maxRetries, streamRetryPolicy(backoff, 0), noOutputTimeout, 0, 0)
 }
 
-func withStreamRetryPolicy(base sdk.LanguageModel, maxRetries int, backoff, firstEventTimeout, idleEventTimeout, maxStreamDuration time.Duration) sdk.LanguageModel {
+func withStreamRetryPolicy(base port.LanguageModel, maxRetries int, backoff, firstEventTimeout, idleEventTimeout, maxStreamDuration time.Duration) port.LanguageModel {
 	return withStreamRetryPolicyConfig(base, maxRetries, streamRetryPolicy(backoff, 0), firstEventTimeout, idleEventTimeout, maxStreamDuration)
 }
 
-func withStreamRetryPolicyAndGap(base sdk.LanguageModel, maxRetries int, backoff, postFirstRetryGap, firstEventTimeout, idleEventTimeout, maxStreamDuration time.Duration) sdk.LanguageModel {
+func withStreamRetryPolicyAndGap(base port.LanguageModel, maxRetries int, backoff, postFirstRetryGap, firstEventTimeout, idleEventTimeout, maxStreamDuration time.Duration) port.LanguageModel {
 	return withStreamRetryPolicyConfig(base, maxRetries, streamRetryPolicy(backoff, postFirstRetryGap), firstEventTimeout, idleEventTimeout, maxStreamDuration)
 }
 
-func streamRetryPolicy(backoff, postFirstRetryGap time.Duration) sdk.RetryPolicy {
+func streamRetryPolicy(backoff, postFirstRetryGap time.Duration) domain.RetryPolicy {
 	policy := modelRetryPolicy()
 	policy.BaseBackoff = backoff
 	policy.PostFirstRetryGap = postFirstRetryGap
@@ -305,7 +307,7 @@ func streamRetryPolicy(backoff, postFirstRetryGap time.Duration) sdk.RetryPolicy
 	return policy
 }
 
-func withStreamRetryPolicyConfig(base sdk.LanguageModel, maxRetries int, policy sdk.RetryPolicy, firstEventTimeout, idleEventTimeout, maxStreamDuration time.Duration) sdk.LanguageModel {
+func withStreamRetryPolicyConfig(base port.LanguageModel, maxRetries int, policy domain.RetryPolicy, firstEventTimeout, idleEventTimeout, maxStreamDuration time.Duration) port.LanguageModel {
 	if base == nil || maxRetries <= 0 {
 		return base
 	}
@@ -321,7 +323,7 @@ func withStreamRetryPolicyConfig(base sdk.LanguageModel, maxRetries int, policy 
 // it does not retry stream opens: provider transport already owns the open
 // retry budget, so retrying opens here would double-count. Only replay-safe
 // mid-stream prefixes and empty finishes consume this budget.
-func withReplaySafeRetryConfig(base sdk.LanguageModel, maxRetries int, policy sdk.RetryPolicy) sdk.LanguageModel {
+func withReplaySafeRetryConfig(base port.LanguageModel, maxRetries int, policy domain.RetryPolicy) port.LanguageModel {
 	if base == nil || maxRetries <= 0 {
 		return base
 	}
@@ -331,13 +333,15 @@ func withReplaySafeRetryConfig(base sdk.LanguageModel, maxRetries int, policy sd
 	}
 }
 
-func (m *emptyStreamRetryModel) Provider() string                    { return m.base.Provider() }
-func (m *emptyStreamRetryModel) ModelID() string                     { return m.base.ModelID() }
-func (m *emptyStreamRetryModel) Capabilities() sdk.ModelCapabilities { return m.base.Capabilities() }
-func (m *emptyStreamRetryModel) ContextWindow() int                  { return sdk.ModelContextWindow(m.base) }
-func (m *emptyStreamRetryModel) TokenLimits() sdk.TokenLimits        { return sdk.ModelTokenLimits(m.base) }
+func (m *emptyStreamRetryModel) Provider() string                       { return m.base.Provider() }
+func (m *emptyStreamRetryModel) ModelID() string                        { return m.base.ModelID() }
+func (m *emptyStreamRetryModel) Capabilities() domain.ModelCapabilities { return m.base.Capabilities() }
+func (m *emptyStreamRetryModel) ContextWindow() int                     { return usecase.ModelContextWindow(m.base) }
+func (m *emptyStreamRetryModel) TokenLimits() domain.TokenLimits {
+	return usecase.ModelTokenLimits(m.base)
+}
 
-func (m *emptyStreamRetryModel) Stream(ctx context.Context, request sdk.Request) (sdk.Stream, error) {
+func (m *emptyStreamRetryModel) Stream(ctx context.Context, request domain.Request) (port.Stream, error) {
 	retry := &emptyStreamRetry{
 		base: m.base, request: request, parentCtx: ctx,
 		maxRetries: m.maxRetries, retryPolicy: m.retryPolicy,
@@ -357,31 +361,31 @@ func (m *emptyStreamRetryModel) Stream(ctx context.Context, request sdk.Request)
 }
 
 type emptyStreamRetry struct {
-	base              sdk.LanguageModel
-	request           sdk.Request
+	base              port.LanguageModel
+	request           domain.Request
 	parentCtx         context.Context
 	attemptCtx        context.Context
 	cancelAttempt     context.CancelCauseFunc
 	firstEventTimer   *time.Timer
 	idleEventTimer    *time.Timer
 	maxStreamTimer    *time.Timer
-	stream            sdk.Stream
+	stream            port.Stream
 	maxRetries        int
-	retryPolicy       sdk.RetryPolicy
+	retryPolicy       domain.RetryPolicy
 	firstEventTimeout time.Duration
 	idleEventTimeout  time.Duration
 	maxStreamDuration time.Duration
 	retries           int
 	progress          streamRetryProgress
-	pending           []sdk.Event
-	queue             []sdk.Event
+	pending           []domain.Event
+	queue             []domain.Event
 	retryOpenFailures bool
 }
 
-func (s *emptyStreamRetry) Next(ctx context.Context) (sdk.Event, error) {
+func (s *emptyStreamRetry) Next(ctx context.Context) (domain.Event, error) {
 	for {
 		if err := ctx.Err(); err != nil {
-			return sdk.Event{}, err
+			return domain.Event{}, err
 		}
 		if len(s.queue) > 0 {
 			event := s.queue[0]
@@ -394,27 +398,27 @@ func (s *emptyStreamRetry) Next(ctx context.Context) (sdk.Event, error) {
 			if timeoutCause := s.streamTimeoutCause(); timeoutCause != nil {
 				if s.progress.replaySafe() && s.retries < s.maxRetries && s.canRetry(timeoutCause, s.retries+1) {
 					if retryErr := s.retry(ctx, streamTimeoutReason(timeoutCause), timeoutCause); retryErr != nil {
-						return sdk.Event{}, retryErr
+						return domain.Event{}, retryErr
 					}
 					if retryErr := s.reopenAfterRetry(ctx); retryErr != nil {
-						return sdk.Event{}, fmt.Errorf("retry empty model stream: %w", retryErr)
+						return domain.Event{}, fmt.Errorf("retry empty model stream: %w", retryErr)
 					}
 					continue
 				}
 				s.stopAttemptTimers()
-				return sdk.Event{}, fmt.Errorf("%w: %w", sdk.ErrIncompleteStream, timeoutCause)
+				return domain.Event{}, fmt.Errorf("%w: %w", domain.ErrIncompleteStream, timeoutCause)
 			}
 			if reason, retryable := retryableStreamError(err); retryable && s.progress.replaySafe() && s.retries < s.maxRetries && s.canRetry(err, s.retries+1) {
 				if retryErr := s.retry(ctx, reason, err); retryErr != nil {
-					return sdk.Event{}, retryErr
+					return domain.Event{}, retryErr
 				}
 				if retryErr := s.reopenAfterRetry(ctx); retryErr != nil {
-					return sdk.Event{}, fmt.Errorf("retry empty model stream: %w", retryErr)
+					return domain.Event{}, fmt.Errorf("retry empty model stream: %w", retryErr)
 				}
 				continue
 			}
 			s.stopAttemptTimers()
-			return sdk.Event{}, err
+			return domain.Event{}, err
 		}
 		s.observeStreamActivity()
 
@@ -436,23 +440,23 @@ func (s *emptyStreamRetry) Next(ctx context.Context) (sdk.Event, error) {
 				continue
 			}
 		default:
-			if s.progress != streamProgressCommittedText && event.Kind != sdk.EventFinish {
+			if s.progress != streamProgressCommittedText && event.Kind != domain.EventFinish {
 				s.pending = append(s.pending, event)
 				continue
 			}
 		}
 
-		if event.Kind == sdk.EventFinish {
+		if event.Kind == domain.EventFinish {
 			s.stopAttemptTimers()
 			switch s.progress {
 			case streamProgressEmpty:
-				if event.FinishReason == sdk.FinishStop && s.retries < s.maxRetries && s.canRetry(nil, s.retries+1) {
+				if event.FinishReason == domain.FinishStop && s.retries < s.maxRetries && s.canRetry(nil, s.retries+1) {
 					s.pending = nil
 					if retryErr := s.retry(ctx, "empty_finish", nil); retryErr != nil {
-						return sdk.Event{}, retryErr
+						return domain.Event{}, retryErr
 					}
 					if retryErr := s.reopenAfterRetry(ctx); retryErr != nil {
-						return sdk.Event{}, fmt.Errorf("retry empty model stream: %w", retryErr)
+						return domain.Event{}, fmt.Errorf("retry empty model stream: %w", retryErr)
 					}
 					continue
 				}
@@ -522,10 +526,10 @@ func (s *emptyStreamRetry) canRetry(cause error, retryIndex int) bool {
 	return s.retryDecision(cause, retryIndex).Retry
 }
 
-func (s *emptyStreamRetry) retryDecision(cause error, retryIndex int) sdk.RetryDecision {
-	var providerErr *sdk.ProviderError
+func (s *emptyStreamRetry) retryDecision(cause error, retryIndex int) domain.RetryDecision {
+	var providerErr *domain.ProviderError
 	if errors.As(cause, &providerErr) && providerErr != nil {
-		decision := sdk.DecideRetry(cause, retryIndex, s.retryPolicy)
+		decision := domain.DecideRetry(cause, retryIndex, s.retryPolicy)
 		// A zero backoff is useful for tests and explicit callers. Preserve an
 		// explicit provider Retry-After, but do not replace disabled local
 		// backoff with the SDK fallback.
@@ -535,23 +539,23 @@ func (s *emptyStreamRetry) retryDecision(cause error, retryIndex int) sdk.RetryD
 		return decision
 	}
 	if s.retryPolicy.BaseBackoff <= 0 {
-		return sdk.RetryDecision{Retry: true}
+		return domain.RetryDecision{Retry: true}
 	}
-	return sdk.RetryDecision{Retry: true, Delay: sdk.RetryDelay(retryIndex, s.retryPolicy)}
+	return domain.RetryDecision{Retry: true, Delay: domain.RetryDelay(retryIndex, s.retryPolicy)}
 }
 
-func (s *emptyStreamRetry) scheduleRetry(ctx context.Context, reason string, decision sdk.RetryDecision) error {
+func (s *emptyStreamRetry) scheduleRetry(ctx context.Context, reason string, decision domain.RetryDecision) error {
 	delay := decision.Delay
 	slog.DebugContext(ctx, "model stream is replay-safe; retrying",
 		"provider", s.base.Provider(), "model", s.base.ModelID(),
 		"reason", reason, "retry", s.retries, "max_retries", s.maxRetries,
 		"delay_ms", delay.Milliseconds(),
 	)
-	sdk.ObserveRetry(ctx, sdk.RetryEvent{
+	domain.ObserveRetry(ctx, domain.RetryEvent{
 		Provider: s.base.Provider(), ModelID: s.base.ModelID(), Reason: reason,
 		Attempt: s.retries, MaxRetries: s.maxRetries, Delay: delay,
 	})
-	if err := sdk.WaitForRetry(ctx, delay); err != nil {
+	if err := domain.WaitForRetry(ctx, delay); err != nil {
 		return fmt.Errorf("wait to retry empty model stream: %w", err)
 	}
 	return nil
@@ -564,19 +568,19 @@ func retryableStreamError(err error) (string, bool) {
 	if isStreamTimeoutCause(err) {
 		return streamTimeoutReason(err), true
 	}
-	if errors.Is(err, sdk.ErrIncompleteStream) {
+	if errors.Is(err, domain.ErrIncompleteStream) {
 		return "incomplete_stream", true
 	}
-	var providerErr *sdk.ProviderError
+	var providerErr *domain.ProviderError
 	if !errors.As(err, &providerErr) || providerErr == nil || !providerErr.Retryable {
 		return "", false
 	}
 	switch providerErr.Kind {
-	case sdk.ErrorTransport:
+	case domain.ErrorTransport:
 		return "provider_transport", true
-	case sdk.ErrorOverloaded:
+	case domain.ErrorOverloaded:
 		return "provider_overloaded", true
-	case sdk.ErrorRateLimit:
+	case domain.ErrorRateLimit:
 		return "provider_rate_limit", true
 	default:
 		return "provider_stream_error", true
@@ -607,7 +611,7 @@ func (s *emptyStreamRetry) openAttempt() error {
 		cause := context.Cause(attemptCtx)
 		cancel(nil)
 		if isStreamTimeoutCause(cause) {
-			return fmt.Errorf("%w: %w", sdk.ErrIncompleteStream, cause)
+			return fmt.Errorf("%w: %w", domain.ErrIncompleteStream, cause)
 		}
 		return err
 	}
@@ -706,13 +710,13 @@ func (s *emptyStreamRetry) Close() error {
 	return s.closeAttempt()
 }
 
-func streamEventProgress(event sdk.Event) streamRetryProgress {
+func streamEventProgress(event domain.Event) streamRetryProgress {
 	switch event.Kind {
-	case sdk.EventTextDelta:
+	case domain.EventTextDelta:
 		if event.Text != "" {
 			return streamProgressCommittedText
 		}
-	case sdk.EventToolCallStart, sdk.EventToolCallDelta, sdk.EventToolCallEnd, sdk.EventToolCall:
+	case domain.EventToolCallStart, domain.EventToolCallDelta, domain.EventToolCallEnd, domain.EventToolCall:
 		return streamProgressBufferedTool
 	}
 	return streamProgressEmpty

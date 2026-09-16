@@ -1,9 +1,13 @@
 package memory
 
-import sdk "github.com/phongsathornpt/protonman/proton-sdk"
+import (
+	"github.com/phongsathornpt/protonman/proton-sdk/domain"
+	"github.com/phongsathornpt/protonman/proton-sdk/port"
+	"github.com/phongsathornpt/protonman/proton-sdk/usecase"
+)
 
-var _ sdk.MetadataModel = (*memoryLanguageModel)(nil)
+var _ port.MetadataModel = (*memoryLanguageModel)(nil)
 
-func (m *memoryLanguageModel) Metadata() sdk.ModelMetadata {
-	return sdk.ModelMetadataOf(m.base)
+func (m *memoryLanguageModel) Metadata() domain.ModelMetadata {
+	return usecase.ModelMetadataOf(m.base)
 }

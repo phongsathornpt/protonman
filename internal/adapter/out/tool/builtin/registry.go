@@ -14,7 +14,8 @@ import (
 	"github.com/phongsathornpt/protonman/internal/core/workspace"
 	"github.com/phongsathornpt/protonman/internal/platform/checkpoint"
 	"github.com/phongsathornpt/protonman/internal/platform/sandbox"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	"github.com/phongsathornpt/protonman/proton-sdk/domain"
+	"github.com/phongsathornpt/protonman/proton-sdk/usecase"
 )
 
 // ErrDuplicateTool indicates that a name is already registered.
@@ -22,8 +23,8 @@ var ErrDuplicateTool = errors.New("duplicate tool")
 
 // compiledToolValidators holds immutable schema validators produced at registration.
 type compiledToolValidators struct {
-	input  *sdk.ToolSchemaValidator
-	output *sdk.ToolSchemaValidator
+	input  *usecase.ToolSchemaValidator
+	output *usecase.ToolSchemaValidator
 }
 
 // Registry is a concurrency-safe in-process tool registry.
@@ -159,12 +160,12 @@ func prepareRegistration(handler tool.Handler) (preparedRegistration, error) {
 	if definition.Name != name {
 		return preparedRegistration{}, fmt.Errorf("register tool: name %q must not have leading or trailing whitespace", definition.Name)
 	}
-	sdkTool := sdk.Tool{Name: definition.Name, Description: definition.Description, InputSchema: definition.InputSchema, OutputSchema: definition.OutputSchema}
-	inputValidator, err := sdk.CompileToolInputValidator(sdkTool)
+	sdkTool := domain.Tool{Name: definition.Name, Description: definition.Description, InputSchema: definition.InputSchema, OutputSchema: definition.OutputSchema}
+	inputValidator, err := usecase.CompileToolInputValidator(sdkTool)
 	if err != nil {
 		return preparedRegistration{}, fmt.Errorf("register %q input schema: %w", definition.Name, err)
 	}
-	outputValidator, err := sdk.CompileToolOutputValidator(sdkTool)
+	outputValidator, err := usecase.CompileToolOutputValidator(sdkTool)
 	if err != nil {
 		return preparedRegistration{}, fmt.Errorf("register %q output schema: %w", definition.Name, err)
 	}
@@ -289,7 +290,7 @@ func (r *Registry) Lookup(name string) (tool.Handler, bool) {
 }
 
 // CompiledValidators returns the immutable validators compiled when the tool was registered.
-func (r *Registry) CompiledValidators(name string) (input, output *sdk.ToolSchemaValidator, ok bool) {
+func (r *Registry) CompiledValidators(name string) (input, output *usecase.ToolSchemaValidator, ok bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	validators, ok := r.validators[name]

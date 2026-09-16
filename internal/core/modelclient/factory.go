@@ -6,7 +6,7 @@ import (
 
 	"github.com/phongsathornpt/protonman/internal/core/modelcatalog"
 	"github.com/phongsathornpt/protonman/internal/core/modelconfig"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	"github.com/phongsathornpt/protonman/proton-sdk/port"
 )
 
 // Request contains provider-neutral inputs for one language model client.
@@ -25,5 +25,5 @@ type Request struct {
 
 // Factory constructs provider-specific language models behind a core port.
 type Factory interface {
-	Build(Request) sdk.LanguageModel
+	Build(Request) port.LanguageModel
 }

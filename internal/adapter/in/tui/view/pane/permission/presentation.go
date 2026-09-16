@@ -51,7 +51,7 @@ func PermissionView(snapshot PermissionSnapshot) PermissionRender {
 	}
 	mode := panecommon.ModeForSize(snapshot.Width, snapshot.Height)
 	if mode == panecommon.LayoutTiny {
-		contentWidth := max(8, snapshot.Width-8)
+		contentWidth := max(1, snapshot.Width-8)
 		selected := ""
 		if len(snapshot.Options) > 0 {
 			selected = snapshot.Options[index]

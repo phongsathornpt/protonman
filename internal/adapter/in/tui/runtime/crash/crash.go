@@ -64,8 +64,8 @@ func (m *CrashModel) Init() tea.Cmd {
 func (m *CrashModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		m.width = max(24, msg.Width)
-		m.height = max(10, msg.Height)
+		m.width = max(1, msg.Width)
+		m.height = max(1, msg.Height)
 		return m, nil
 	case tea.KeyPressMsg:
 		switch msg.String() {
@@ -106,8 +106,8 @@ func (m *CrashModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *CrashModel) View() tea.View {
-	contentWidth := min(84, max(24, m.width-4))
-	innerWidth := contentWidth - 4
+	contentWidth := min(84, max(1, m.width-4))
+	innerWidth := max(1, contentWidth-4)
 	var parts []string
 	headline := tuistyle.ErrorStyle.Bold(true).Render("Protonman crashed")
 	subtext := tuistyle.MutedStyle.Render("An unexpected error stopped the session.")
@@ -124,9 +124,10 @@ func (m *CrashModel) View() tea.View {
 		copyStyle = lipgloss.NewStyle().Foreground(tuistyle.AccentUser)
 	}
 	actions := lipgloss.JoinHorizontal(lipgloss.Center, copyStyle.Render(copyLabel), "   ", tuistyle.CommandStyle.Render("[r] Restart"), "   ", tuistyle.MutedStyle.Render("[q] Quit"))
+	actions = strings.Join(textview.SafeWrappedLines(actions, max(1, m.width-2)), "\n")
 	parts = append(parts, actions)
 	stackLines := strings.Split(m.stackTrace, "\n")
-	availableHeight := max(4, m.height-len(strings.Split(lipgloss.JoinVertical(lipgloss.Left, parts...), "\n"))-4)
+	availableHeight := max(1, m.height-len(strings.Split(lipgloss.JoinVertical(lipgloss.Left, parts...), "\n"))-4)
 	visibleLines := make([]string, 0, availableHeight)
 	start := min(len(stackLines), m.scrollOffset)
 	end := min(len(stackLines), start+availableHeight)
@@ -135,11 +136,22 @@ func (m *CrashModel) View() tea.View {
 	}
 	stackBoxStyle := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(tuistyle.ColorBorderSubtle).Padding(0, 1).Width(contentWidth)
 	stackHeader := tuistyle.MutedStyle.Render(fmt.Sprintf("Stack trace (lines %d-%d of %d, ↑/↓ scroll):", start+1, end, len(stackLines)))
+	stackHeader = strings.Join(textview.SafeWrappedLines(stackHeader, innerWidth), "\n")
 	stackBody := strings.Join(visibleLines, "\n")
+	stackBody = strings.Join(textview.SafeWrappedLines(stackBody, innerWidth), "\n")
 	parts = append(parts, stackBoxStyle.Render(lipgloss.JoinVertical(lipgloss.Left, stackHeader, tuistyle.MutedStyle.Render(stackBody))))
 	footer := tuistyle.MutedStyle.Render(fmt.Sprintf("Protonman %s · %s/%s", buildinfo.Version(), runtime.GOOS, runtime.GOARCH))
 	parts = append(parts, footer)
 	mainContent := lipgloss.JoinVertical(lipgloss.Center, parts...)
+	contentLines := strings.Split(mainContent, "\n")
+	clippedLines := make([]string, 0, min(len(contentLines), max(1, m.height)))
+	for _, line := range contentLines {
+		if len(clippedLines) == max(1, m.height) {
+			break
+		}
+		clippedLines = append(clippedLines, textview.TruncateEllipsis(line, max(1, m.width)))
+	}
+	mainContent = strings.Join(clippedLines, "\n")
 	view := tea.NewView(lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, mainContent))
 	view.AltScreen = true
 	return view

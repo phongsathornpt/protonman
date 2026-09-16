@@ -3,7 +3,7 @@ package agentui
 import (
 	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
 	"github.com/phongsathornpt/protonman/internal/base/runtimepolicy"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	"github.com/phongsathornpt/protonman/proton-sdk/domain"
 )
 
 // RuntimeState owns TUI-local agent controls across Bubble Tea program restarts.
@@ -11,7 +11,7 @@ type RuntimeState struct {
 	MaxToolCalls     int
 	Profile          string
 	SubagentsEnabled bool
-	ReasoningEffort  sdk.ReasoningEffort
+	ReasoningEffort  domain.ReasoningEffort
 }
 
 func NewRuntimeState(cfg config.AgentConfig, configured bool) RuntimeState {

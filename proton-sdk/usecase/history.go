@@ -13,10 +13,11 @@ func AppendAssistantResponse(messages []domain.Message, response domain.Response
 		return next
 	}
 	assistant := domain.Message{
-		ID:        domain.NewMessageID(),
-		Role:      domain.RoleAssistant,
-		Content:   response.Text,
-		ToolCalls: make([]domain.ToolCall, 0, len(response.ToolCalls)),
+		ID:               domain.NewMessageID(),
+		Role:             domain.RoleAssistant,
+		Content:          response.Text,
+		ReasoningContent: response.ReasoningContent,
+		ToolCalls:        make([]domain.ToolCall, 0, len(response.ToolCalls)),
 	}
 	for _, call := range response.ToolCalls {
 		assistant.ToolCalls = append(assistant.ToolCalls, call.Clone())

@@ -11,7 +11,7 @@ import (
 	"strings"
 	"sync"
 
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	"github.com/phongsathornpt/protonman/proton-sdk/domain"
 )
 
 type accumulatedToolCall struct {
@@ -26,11 +26,11 @@ type stream struct {
 	closer        io.Closer
 	chatCalls     map[int]*accumulatedToolCall
 	responseCalls map[string]*accumulatedToolCall
-	queue         []sdk.Event
+	queue         []domain.Event
 	done          bool
 	terminalErr   error
 	generatedSeq  uint64
-	metadata      sdk.ProviderMetadata
+	metadata      domain.ProviderMetadata
 	includeRaw    bool
 	provider      string
 	hasToolCalls  bool
@@ -38,7 +38,7 @@ type stream struct {
 	closeErr      error
 }
 
-func newStream(body io.ReadCloser, metadata sdk.ProviderMetadata, includeRaw bool, provider string) *stream {
+func newStream(body io.ReadCloser, metadata domain.ProviderMetadata, includeRaw bool, provider string) *stream {
 	return &stream{reader: bufio.NewReader(body), closer: body, chatCalls: map[int]*accumulatedToolCall{}, responseCalls: map[string]*accumulatedToolCall{}, metadata: metadata, includeRaw: includeRaw, provider: provider}
 }
 
@@ -49,8 +49,9 @@ type cachedTokenDetails struct {
 type chatChunk struct {
 	Choices []struct {
 		Delta struct {
-			Content   string `json:"content,omitempty"`
-			ToolCalls []struct {
+			Content          string `json:"content,omitempty"`
+			ReasoningContent string `json:"reasoning_content,omitempty"`
+			ToolCalls        []struct {
 				Index    int    `json:"index"`
 				ID       string `json:"id,omitempty"`
 				Function struct {
@@ -116,10 +117,10 @@ func cachedInputTokens(details *cachedTokenDetails) int64 {
 	return details.CachedTokens
 }
 
-func (s *stream) Next(ctx context.Context) (sdk.Event, error) {
+func (s *stream) Next(ctx context.Context) (domain.Event, error) {
 	for {
 		if err := ctx.Err(); err != nil {
-			return sdk.Event{}, err
+			return domain.Event{}, err
 		}
 		if len(s.queue) > 0 {
 			event := s.queue[0]
@@ -127,22 +128,22 @@ func (s *stream) Next(ctx context.Context) (sdk.Event, error) {
 			return event, nil
 		}
 		if s.terminalErr != nil {
-			return sdk.Event{}, s.terminalErr
+			return domain.Event{}, s.terminalErr
 		}
 		if s.done {
-			return sdk.Event{}, io.EOF
+			return domain.Event{}, io.EOF
 		}
 		line, err := s.reader.ReadString('\n')
 		if err != nil {
 			if errors.Is(err, io.EOF) {
 				if strings.TrimSpace(line) != "" {
 					if parseErr := s.processLine(line); parseErr != nil {
-						return sdk.Event{}, parseErr
+						return domain.Event{}, parseErr
 					}
 				}
 				if !s.done {
 					s.done = true
-					s.terminalErr = fmt.Errorf("%w: provider closed before terminal event", sdk.ErrIncompleteStream)
+					s.terminalErr = fmt.Errorf("%w: provider closed before terminal event", domain.ErrIncompleteStream)
 				}
 				if len(s.queue) > 0 {
 					event := s.queue[0]
@@ -150,11 +151,11 @@ func (s *stream) Next(ctx context.Context) (sdk.Event, error) {
 					return event, nil
 				}
 				if s.terminalErr != nil {
-					return sdk.Event{}, s.terminalErr
+					return domain.Event{}, s.terminalErr
 				}
-				return sdk.Event{}, io.EOF
+				return domain.Event{}, io.EOF
 			}
-			return sdk.Event{}, fmt.Errorf("read stream: %w", err)
+			return domain.Event{}, fmt.Errorf("read stream: %w", err)
 		}
 		if err := s.processLine(line); err != nil {
 			if len(s.queue) > 0 {
@@ -163,7 +164,7 @@ func (s *stream) Next(ctx context.Context) (sdk.Event, error) {
 				s.queue = s.queue[1:]
 				return event, nil
 			}
-			return sdk.Event{}, err
+			return domain.Event{}, err
 		}
 	}
 }
@@ -178,16 +179,16 @@ func (s *stream) processLine(line string) error {
 	}
 	payload := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
 	if s.includeRaw && payload != "" {
-		s.queue = append(s.queue, sdk.Event{Kind: sdk.EventRaw, RawData: append([]byte(nil), payload...)})
+		s.queue = append(s.queue, domain.Event{Kind: domain.EventRaw, RawData: append([]byte(nil), payload...)})
 	}
 	if payload == "[DONE]" {
-		s.finish(sdk.FinishStop)
+		s.finish(domain.FinishStop)
 		return nil
 	}
 
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal([]byte(payload), &fields); err != nil {
-		return fmt.Errorf("%w: decode SSE data: %w", sdk.ErrInvalidEvent, err)
+		return fmt.Errorf("%w: decode SSE data: %w", domain.ErrInvalidEvent, err)
 	}
 	if _, ok := fields["choices"]; ok {
 		return s.processChat(payload)
@@ -195,7 +196,7 @@ func (s *stream) processLine(line string) error {
 	if _, ok := fields["error"]; ok {
 		var chunk chatChunk
 		if err := json.Unmarshal([]byte(payload), &chunk); err != nil {
-			return fmt.Errorf("%w: decode provider error: %w", sdk.ErrInvalidEvent, err)
+			return fmt.Errorf("%w: decode provider error: %w", domain.ErrInvalidEvent, err)
 		}
 		if chunk.Error != nil {
 			return providerStreamError(s.provider, chunk.Error.Code, chunk.Error.Type, chunk.Error.Message, chunk.Error.Metadata)
@@ -204,19 +205,19 @@ func (s *stream) processLine(line string) error {
 	if _, ok := fields["type"]; ok {
 		return s.processResponses(payload)
 	}
-	return fmt.Errorf("%w: unsupported SSE data payload", sdk.ErrInvalidEvent)
+	return fmt.Errorf("%w: unsupported SSE data payload", domain.ErrInvalidEvent)
 }
 
 func (s *stream) processChat(payload string) error {
 	var chunk chatChunk
 	if err := json.Unmarshal([]byte(payload), &chunk); err != nil {
-		return fmt.Errorf("%w: decode chat completion event: %w", sdk.ErrInvalidEvent, err)
+		return fmt.Errorf("%w: decode chat completion event: %w", domain.ErrInvalidEvent, err)
 	}
 	if chunk.Error != nil {
 		return providerStreamError(s.provider, chunk.Error.Code, chunk.Error.Type, chunk.Error.Message, chunk.Error.Metadata)
 	}
 	if chunk.Usage != nil {
-		s.queue = append(s.queue, sdk.Event{Kind: sdk.EventUsage, Usage: sdk.Usage{
+		s.queue = append(s.queue, domain.Event{Kind: domain.EventUsage, Usage: domain.Usage{
 			InputTokens:       chunk.Usage.PromptTokens,
 			OutputTokens:      chunk.Usage.CompletionTokens,
 			TotalTokens:       chunk.Usage.TotalTokens,
@@ -224,8 +225,11 @@ func (s *stream) processChat(payload string) error {
 		}})
 	}
 	for _, choice := range chunk.Choices {
+		if choice.Delta.ReasoningContent != "" {
+			s.queue = append(s.queue, domain.Event{Kind: domain.EventReasoningDelta, ReasoningContent: choice.Delta.ReasoningContent})
+		}
 		if choice.Delta.Content != "" {
-			s.queue = append(s.queue, sdk.Event{Kind: sdk.EventTextDelta, Text: choice.Delta.Content})
+			s.queue = append(s.queue, domain.Event{Kind: domain.EventTextDelta, Text: choice.Delta.Content})
 		}
 		for _, toolDelta := range choice.Delta.ToolCalls {
 			call := s.chatCalls[toolDelta.Index]
@@ -241,12 +245,12 @@ func (s *stream) processChat(payload string) error {
 			}
 			if !call.started && call.id != "" && call.name != "" {
 				call.started = true
-				s.queue = append(s.queue, sdk.Event{Kind: sdk.EventToolCallStart, ToolCallID: call.id, ToolName: call.name})
+				s.queue = append(s.queue, domain.Event{Kind: domain.EventToolCallStart, ToolCallID: call.id, ToolName: call.name})
 			}
 			if toolDelta.Function.Arguments != "" {
 				call.arguments.WriteString(toolDelta.Function.Arguments)
 				if call.id != "" {
-					s.queue = append(s.queue, sdk.Event{Kind: sdk.EventToolCallDelta, ToolCallID: call.id, ArgumentsDelta: toolDelta.Function.Arguments})
+					s.queue = append(s.queue, domain.Event{Kind: domain.EventToolCallDelta, ToolCallID: call.id, ArgumentsDelta: toolDelta.Function.Arguments})
 				}
 			}
 		}
@@ -260,7 +264,7 @@ func (s *stream) processChat(payload string) error {
 func (s *stream) processResponses(payload string) error {
 	var chunk responsesChunk
 	if err := json.Unmarshal([]byte(payload), &chunk); err != nil {
-		return fmt.Errorf("%w: decode responses event: %w", sdk.ErrInvalidEvent, err)
+		return fmt.Errorf("%w: decode responses event: %w", domain.ErrInvalidEvent, err)
 	}
 	if chunk.Error != nil {
 		return providerStreamError(s.provider, chunk.Error.Code, chunk.Error.Type, chunk.Error.Message, chunk.Error.Metadata)
@@ -269,9 +273,13 @@ func (s *stream) processResponses(payload string) error {
 		return providerStreamError(s.provider, chunk.Response.Error.Code, chunk.Response.Error.Type, chunk.Response.Error.Message, chunk.Response.Error.Metadata)
 	}
 	switch chunk.Type {
+	case "response.reasoning_text.delta":
+		if chunk.Delta != "" {
+			s.queue = append(s.queue, domain.Event{Kind: domain.EventReasoningDelta, ReasoningContent: chunk.Delta})
+		}
 	case "response.output_text.delta":
 		if chunk.Delta != "" {
-			s.queue = append(s.queue, sdk.Event{Kind: sdk.EventTextDelta, Text: chunk.Delta})
+			s.queue = append(s.queue, domain.Event{Kind: domain.EventTextDelta, Text: chunk.Delta})
 		}
 	case "response.output_item.added":
 		if chunk.Item != nil && chunk.Item.Type == "function_call" {
@@ -282,14 +290,14 @@ func (s *stream) processResponses(payload string) error {
 			call := &accumulatedToolCall{id: callID, name: chunk.Item.Name, started: callID != "" && chunk.Item.Name != ""}
 			s.responseCalls[chunk.Item.ID] = call
 			if call.started {
-				s.queue = append(s.queue, sdk.Event{Kind: sdk.EventToolCallStart, ToolCallID: call.id, ToolName: call.name})
+				s.queue = append(s.queue, domain.Event{Kind: domain.EventToolCallStart, ToolCallID: call.id, ToolName: call.name})
 			}
 		}
 	case "response.function_call_arguments.delta":
 		if call := s.responseCalls[chunk.ItemID]; call != nil && chunk.Delta != "" {
 			call.arguments.WriteString(chunk.Delta)
 			if call.id != "" {
-				s.queue = append(s.queue, sdk.Event{Kind: sdk.EventToolCallDelta, ToolCallID: call.id, ArgumentsDelta: chunk.Delta})
+				s.queue = append(s.queue, domain.Event{Kind: domain.EventToolCallDelta, ToolCallID: call.id, ArgumentsDelta: chunk.Delta})
 			}
 		}
 	case "response.output_item.done":
@@ -299,16 +307,16 @@ func (s *stream) processResponses(payload string) error {
 	case "response.completed":
 		if chunk.Response != nil && chunk.Response.Usage != nil {
 			u := chunk.Response.Usage
-			s.queue = append(s.queue, sdk.Event{Kind: sdk.EventUsage, Usage: sdk.Usage{
+			s.queue = append(s.queue, domain.Event{Kind: domain.EventUsage, Usage: domain.Usage{
 				InputTokens:       u.InputTokens,
 				OutputTokens:      u.OutputTokens,
 				TotalTokens:       u.TotalTokens,
 				CachedInputTokens: cachedInputTokens(u.InputTokensDetails),
 			}})
 		}
-		reason := sdk.FinishStop
+		reason := domain.FinishStop
 		if s.hasToolCalls || len(s.responseCalls) > 0 {
-			reason = sdk.FinishToolCalls
+			reason = domain.FinishToolCalls
 		}
 		s.finish(reason)
 	}
@@ -341,15 +349,15 @@ func (s *stream) finishResponseCall(chunk responsesChunk) {
 		arguments = "{}"
 	}
 	s.hasToolCalls = true
-	s.queue = append(s.queue, sdk.Event{Kind: sdk.EventToolCallEnd, ToolCallID: callID}, sdk.Event{Kind: sdk.EventToolCall, ToolCall: sdk.ToolCall{ID: callID, Name: name, Arguments: json.RawMessage(arguments)}})
+	s.queue = append(s.queue, domain.Event{Kind: domain.EventToolCallEnd, ToolCallID: callID}, domain.Event{Kind: domain.EventToolCall, ToolCall: domain.ToolCall{ID: callID, Name: name, Arguments: json.RawMessage(arguments)}})
 }
 
-func (s *stream) finish(reason sdk.FinishReason) {
+func (s *stream) finish(reason domain.FinishReason) {
 	if s.done {
 		return
 	}
 	s.flushCalls()
-	s.queue = append(s.queue, sdk.Event{Kind: sdk.EventFinish, FinishReason: reason, ProviderMetadata: s.metadata})
+	s.queue = append(s.queue, domain.Event{Kind: domain.EventFinish, FinishReason: reason, ProviderMetadata: s.metadata})
 	s.done = true
 }
 
@@ -390,10 +398,10 @@ func (s *stream) emitCompleteCall(call *accumulatedToolCall) {
 		arguments = "{}"
 	}
 	if call.started {
-		s.queue = append(s.queue, sdk.Event{Kind: sdk.EventToolCallEnd, ToolCallID: call.id})
+		s.queue = append(s.queue, domain.Event{Kind: domain.EventToolCallEnd, ToolCallID: call.id})
 	}
 	s.hasToolCalls = true
-	s.queue = append(s.queue, sdk.Event{Kind: sdk.EventToolCall, ToolCall: sdk.ToolCall{ID: call.id, Name: call.name, Arguments: json.RawMessage(arguments)}})
+	s.queue = append(s.queue, domain.Event{Kind: domain.EventToolCall, ToolCall: domain.ToolCall{ID: call.id, Name: call.name, Arguments: json.RawMessage(arguments)}})
 }
 
 func (s *stream) nextCallID() string {
@@ -409,18 +417,18 @@ func (s *stream) Close() error {
 	return s.closeErr
 }
 
-func mapFinishReason(reason string) sdk.FinishReason {
+func mapFinishReason(reason string) domain.FinishReason {
 	switch strings.ToLower(strings.TrimSpace(reason)) {
 	case "stop":
-		return sdk.FinishStop
+		return domain.FinishStop
 	case "length":
-		return sdk.FinishLength
+		return domain.FinishLength
 	case "tool_calls", "function_call":
-		return sdk.FinishToolCalls
+		return domain.FinishToolCalls
 	case "content_filter":
-		return sdk.FinishOther
+		return domain.FinishOther
 	default:
-		return sdk.FinishOther
+		return domain.FinishOther
 	}
 }
 

@@ -13,7 +13,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/core/modelconfig"
 	"github.com/phongsathornpt/protonman/internal/core/session"
 	"github.com/phongsathornpt/protonman/internal/engine/toolcall"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	"github.com/phongsathornpt/protonman/proton-sdk/domain"
 )
 
 const (
@@ -108,7 +108,7 @@ func (s *Server) dispatchSessionRuntime(ctx context.Context, request RPCRequest)
 		if err != nil {
 			return nil, true, err
 		}
-		effort, err := sdk.ParseReasoningEffort(params.Reasoning)
+		effort, err := domain.ParseReasoningEffort(params.Reasoning)
 		if err != nil {
 			return nil, true, err
 		}
@@ -175,7 +175,7 @@ func (s *Server) runtimeSession(sessionID string) (*Session, error) {
 	return sess, nil
 }
 
-func (s *Server) setSessionReasoning(ctx context.Context, sess *Session, effort sdk.ReasoningEffort) error {
+func (s *Server) setSessionReasoning(ctx context.Context, sess *Session, effort domain.ReasoningEffort) error {
 	if !effort.Valid() {
 		return fmt.Errorf("invalid reasoning effort %q", effort)
 	}
@@ -184,7 +184,7 @@ func (s *Server) setSessionReasoning(ctx context.Context, sess *Session, effort 
 		sess.mu.Unlock()
 		return fmt.Errorf("session %q has an active prompt", sess.id)
 	}
-	clone, err := app.CloneConversationWithReasoning(sess.runner, effort, effort != sdk.ReasoningDefault)
+	clone, err := app.CloneConversationWithReasoning(sess.runner, effort, effort != domain.ReasoningDefault)
 	if err != nil {
 		sess.mu.Unlock()
 		return err
@@ -214,7 +214,7 @@ func (s *Server) updateSessionRuntime(ctx context.Context, sess *Session, mutate
 		mutate(&next)
 	}
 	next = normalizeSessionRuntime(next)
-	if _, err := sdk.ParseReasoningEffort(next.Reasoning); err != nil {
+	if _, err := domain.ParseReasoningEffort(next.Reasoning); err != nil {
 		sess.mu.Unlock()
 		return err
 	}
@@ -233,7 +233,7 @@ func (s *Server) updateSessionRuntime(ctx context.Context, sess *Session, mutate
 		return fmt.Errorf("runtime builder returned no conversation")
 	}
 
-	effort, _ := sdk.ParseReasoningEffort(next.Reasoning)
+	effort, _ := domain.ParseReasoningEffort(next.Reasoning)
 	sess.runner = runner
 	sess.reasoningEffort = effort
 	storeSessionRuntime(sess, next)
@@ -323,7 +323,7 @@ func runtimeResult(sess *Session) ProtonmanSessionRuntimeResult {
 func normalizeSessionRuntime(settings SessionRuntimeSettings) SessionRuntimeSettings {
 	settings.Provider = strings.TrimSpace(settings.Provider)
 	settings.Model = strings.TrimSpace(settings.Model)
-	if effort, err := sdk.ParseReasoningEffort(settings.Reasoning); err == nil {
+	if effort, err := domain.ParseReasoningEffort(settings.Reasoning); err == nil {
 		settings.Reasoning = reasoningSetting(effort)
 	} else {
 		settings.Reasoning = strings.TrimSpace(settings.Reasoning)
@@ -336,8 +336,8 @@ func normalizeSessionRuntime(settings SessionRuntimeSettings) SessionRuntimeSett
 	return settings
 }
 
-func reasoningSetting(effort sdk.ReasoningEffort) string {
-	if effort == sdk.ReasoningDefault {
+func reasoningSetting(effort domain.ReasoningEffort) string {
+	if effort == domain.ReasoningDefault {
 		return "auto"
 	}
 	return string(effort)

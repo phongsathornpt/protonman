@@ -26,7 +26,10 @@ func decodeCompatibleModels(body []byte) ([]RemoteModel, error) {
 				Reasoning          *bool `json:"reasoning"`
 				ToolChoiceRequired *bool `json:"tool_choice_required"`
 			} `json:"capabilities"`
-			Reasoning *modelprofile.CatalogReasoning `json:"reasoning"`
+			Reasoning         *modelprofile.CatalogReasoning `json:"reasoning"`
+			ToolSchemaDialect modelprofile.ToolSchemaDialect `json:"tool_schema"`
+			ThinkingMode      modelprofile.ThinkingMode      `json:"thinking_mode"`
+			VisionPolicy      *modelprofile.VisionPolicy     `json:"vision_policy"`
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(body, &openAIResp); err == nil && len(openAIResp.Data) > 0 {
@@ -60,6 +63,9 @@ func decodeCompatibleModels(body []byte) ([]RemoteModel, error) {
 				VisionSupport:      visionSupport,
 				ToolChoiceRequired: item.Capabilities.ToolChoiceRequired,
 				Reasoning:          modelprofile.NormalizeCatalogReasoning(reasoning),
+				ToolSchemaDialect:  item.ToolSchemaDialect,
+				ThinkingMode:       item.ThinkingMode,
+				VisionPolicy:       item.VisionPolicy,
 			})
 		}
 		return results, nil
@@ -84,8 +90,11 @@ func decodeCompatibleModels(body []byte) ([]RemoteModel, error) {
 				Reasoning          *bool `json:"reasoning"`
 				ToolChoiceRequired *bool `json:"tool_choice_required"`
 			} `json:"capabilities"`
-			Reasoning *modelprofile.CatalogReasoning `json:"reasoning"`
-			Provider  struct {
+			Reasoning         *modelprofile.CatalogReasoning `json:"reasoning"`
+			ToolSchemaDialect modelprofile.ToolSchemaDialect `json:"toolSchema"`
+			ThinkingMode      modelprofile.ThinkingMode      `json:"thinkingMode"`
+			VisionPolicy      *modelprofile.VisionPolicy     `json:"visionPolicy"`
+			Provider          struct {
 				Name string `json:"name"`
 			} `json:"provider"`
 		} `json:"models"`
@@ -122,6 +131,9 @@ func decodeCompatibleModels(body []byte) ([]RemoteModel, error) {
 				VisionSupport:      visionSupport,
 				ToolChoiceRequired: requiredToolChoice,
 				Reasoning:          modelprofile.NormalizeCatalogReasoning(reasoning),
+				ToolSchemaDialect:  item.ToolSchemaDialect,
+				ThinkingMode:       item.ThinkingMode,
+				VisionPolicy:       item.VisionPolicy,
 			})
 		}
 		return results, nil

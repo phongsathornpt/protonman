@@ -5,33 +5,35 @@ import (
 	"strings"
 
 	"github.com/phongsathornpt/protonman/internal/core/modelprofile"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	"github.com/phongsathornpt/protonman/proton-sdk/domain"
+	"github.com/phongsathornpt/protonman/proton-sdk/port"
+	"github.com/phongsathornpt/protonman/proton-sdk/usecase"
 )
 
-// Provider-neutral model types and aliases owned by proton-sdk.
-type Role = sdk.Role
+// Provider-neutral model types and aliases owned by proton-domain.
+type Role = domain.Role
 
 const (
-	RoleSystem    = sdk.RoleSystem
-	RoleUser      = sdk.RoleUser
-	RoleAssistant = sdk.RoleAssistant
-	RoleTool      = sdk.RoleTool
+	RoleSystem    = domain.RoleSystem
+	RoleUser      = domain.RoleUser
+	RoleAssistant = domain.RoleAssistant
+	RoleTool      = domain.RoleTool
 )
 
-type ContentPartType = sdk.ContentPartType
+type ContentPartType = domain.ContentPartType
 
 const (
-	ContentPartText  = sdk.ContentPartText
-	ContentPartImage = sdk.ContentPartImage
+	ContentPartText  = domain.ContentPartText
+	ContentPartImage = domain.ContentPartImage
 )
 
-type ContentPart = sdk.ContentPart
-type ToolCall = sdk.ToolCall
-type Message = sdk.Message
+type ContentPart = domain.ContentPart
+type ToolCall = domain.ToolCall
+type Message = domain.Message
 
-func CloneMessages(messages []Message) []Message    { return sdk.CloneMessages(messages) }
-func EnsureMessageIDs(messages []Message) []Message { return sdk.EnsureMessageIDs(messages) }
-func NewMessageID() string                          { return sdk.NewMessageID() }
+func CloneMessages(messages []Message) []Message    { return domain.CloneMessages(messages) }
+func EnsureMessageIDs(messages []Message) []Message { return domain.EnsureMessageIDs(messages) }
+func NewMessageID() string                          { return domain.NewMessageID() }
 
 // SnapshotMessages copies only the top-level message slice. Message payloads are
 // immutable after publication, so callers can isolate append/re-slice ownership
@@ -116,7 +118,7 @@ func withResolvedModelProfile(profile modelprofile.Resolved) ClientOption {
 		if value, known := cloned.Capabilities.Tools.Bool(); known {
 			c.tools = &value
 		}
-		limits := sdk.TokenLimits{
+		limits := domain.TokenLimits{
 			ContextWindow:   cloned.ContextWindow,
 			MaxInputTokens:  cloned.MaxInputTokens,
 			MaxOutputTokens: cloned.MaxOutputTokens,
@@ -128,18 +130,18 @@ func withResolvedModelProfile(profile modelprofile.Resolved) ClientOption {
 }
 
 type profiledLanguageModel struct {
-	base    sdk.LanguageModel
+	base    port.LanguageModel
 	profile modelprofile.Resolved
 }
 
-func withModelProfile(base sdk.LanguageModel, profile *modelprofile.Resolved) sdk.LanguageModel {
+func withModelProfile(base port.LanguageModel, profile *modelprofile.Resolved) port.LanguageModel {
 	if base == nil || profile == nil {
 		return base
 	}
 	return &profiledLanguageModel{base: base, profile: cloneResolvedModelProfile(*profile)}
 }
 
-func ResolvedModelProfile(model sdk.LanguageModel) (modelprofile.Resolved, bool) {
+func ResolvedModelProfile(model port.LanguageModel) (modelprofile.Resolved, bool) {
 	carrier, ok := model.(interface {
 		ResolvedModelProfile() modelprofile.Resolved
 	})
@@ -151,19 +153,19 @@ func ResolvedModelProfile(model sdk.LanguageModel) (modelprofile.Resolved, bool)
 
 func (m *profiledLanguageModel) Provider() string { return m.base.Provider() }
 func (m *profiledLanguageModel) ModelID() string  { return m.base.ModelID() }
-func (m *profiledLanguageModel) Capabilities() sdk.ModelCapabilities {
-	return m.base.Capabilities()
+func (m *profiledLanguageModel) Capabilities() domain.ModelCapabilities {
+	return m.profile.Capabilities.Apply(m.base.Capabilities())
 }
-func (m *profiledLanguageModel) Metadata() sdk.ModelMetadata {
-	return sdk.ModelMetadataOf(m.base)
+func (m *profiledLanguageModel) Metadata() domain.ModelMetadata {
+	return usecase.ModelMetadataOf(m.base)
 }
 func (m *profiledLanguageModel) ContextWindow() int {
 	return m.Metadata().TokenLimits.ContextWindow
 }
-func (m *profiledLanguageModel) TokenLimits() sdk.TokenLimits {
+func (m *profiledLanguageModel) TokenLimits() domain.TokenLimits {
 	return m.Metadata().TokenLimits
 }
-func (m *profiledLanguageModel) Stream(ctx context.Context, request sdk.Request) (sdk.Stream, error) {
+func (m *profiledLanguageModel) Stream(ctx context.Context, request domain.Request) (port.Stream, error) {
 	return m.base.Stream(ctx, request)
 }
 func (m *profiledLanguageModel) ResolvedModelProfile() modelprofile.Resolved {
@@ -171,32 +173,32 @@ func (m *profiledLanguageModel) ResolvedModelProfile() modelprofile.Resolved {
 }
 
 func cloneResolvedModelProfile(profile modelprofile.Resolved) modelprofile.Resolved {
-	profile.Reasoning.Levels = append([]sdk.ReasoningEffort(nil), profile.Reasoning.Levels...)
+	profile.Reasoning.Levels = append([]domain.ReasoningEffort(nil), profile.Reasoning.Levels...)
 	return profile
 }
 
 var (
-	_ sdk.MetadataModel = (*sessionBoundModel)(nil)
-	_ sdk.MetadataModel = (*profiledLanguageModel)(nil)
-	_ sdk.MetadataModel = (*lowConcurrencyModel)(nil)
-	_ sdk.MetadataModel = (*emptyStreamRetryModel)(nil)
-	_ sdk.MetadataModel = (*capabilityOverrideModel)(nil)
+	_ port.MetadataModel = (*sessionBoundModel)(nil)
+	_ port.MetadataModel = (*profiledLanguageModel)(nil)
+	_ port.MetadataModel = (*lowConcurrencyModel)(nil)
+	_ port.MetadataModel = (*emptyStreamRetryModel)(nil)
+	_ port.MetadataModel = (*capabilityOverrideModel)(nil)
 )
 
-func (m *sessionBoundModel) Metadata() sdk.ModelMetadata {
-	return sdk.ModelMetadataOf(m.base)
+func (m *sessionBoundModel) Metadata() domain.ModelMetadata {
+	return usecase.ModelMetadataOf(m.base)
 }
 
-func (m *lowConcurrencyModel) Metadata() sdk.ModelMetadata {
-	return sdk.ModelMetadataOf(m.base)
+func (m *lowConcurrencyModel) Metadata() domain.ModelMetadata {
+	return usecase.ModelMetadataOf(m.base)
 }
 
-func (m *emptyStreamRetryModel) Metadata() sdk.ModelMetadata {
-	return sdk.ModelMetadataOf(m.base)
+func (m *emptyStreamRetryModel) Metadata() domain.ModelMetadata {
+	return usecase.ModelMetadataOf(m.base)
 }
 
-func (m *capabilityOverrideModel) Metadata() sdk.ModelMetadata {
-	metadata := sdk.ModelMetadataOf(m.base)
+func (m *capabilityOverrideModel) Metadata() domain.ModelMetadata {
+	metadata := usecase.ModelMetadataOf(m.base)
 	limits := metadata.TokenLimits
 	if m.tokenLimits != nil {
 		if m.tokenLimits.ContextWindow > 0 {

@@ -16,21 +16,23 @@ const (
 )
 
 const (
-	EventTextStart     = domain.EventTextStart
-	EventTextDelta     = domain.EventTextDelta
-	EventTextEnd       = domain.EventTextEnd
-	EventToolCallStart = domain.EventToolCallStart
-	EventToolCallDelta = domain.EventToolCallDelta
-	EventToolCallEnd   = domain.EventToolCallEnd
-	EventToolCall      = domain.EventToolCall
-	EventUsage         = domain.EventUsage
-	EventRaw           = domain.EventRaw
-	EventFinish        = domain.EventFinish
+	EventTextStart      = domain.EventTextStart
+	EventTextDelta      = domain.EventTextDelta
+	EventTextEnd        = domain.EventTextEnd
+	EventReasoningDelta = domain.EventReasoningDelta
+	EventToolCallStart  = domain.EventToolCallStart
+	EventToolCallDelta  = domain.EventToolCallDelta
+	EventToolCallEnd    = domain.EventToolCallEnd
+	EventToolCall       = domain.EventToolCall
+	EventUsage          = domain.EventUsage
+	EventRaw            = domain.EventRaw
+	EventFinish         = domain.EventFinish
 )
 
 func NewTextStartEvent() Event                    { return domain.NewTextStartEvent() }
 func NewTextDeltaEvent(text string) Event         { return domain.NewTextDeltaEvent(text) }
 func NewTextEndEvent() Event                      { return domain.NewTextEndEvent() }
+func NewReasoningDeltaEvent(content string) Event { return domain.NewReasoningDeltaEvent(content) }
 func NewToolCallStartEvent(id, name string) Event { return domain.NewToolCallStartEvent(id, name) }
 func NewToolCallDeltaEvent(id, delta string) Event {
 	return domain.NewToolCallDeltaEvent(id, delta)

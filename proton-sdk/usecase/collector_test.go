@@ -36,6 +36,7 @@ func TestCollect(t *testing.T) {
 			domain.NewTextStartEvent(),
 			domain.NewTextDeltaEvent("Hello "),
 			domain.NewTextDeltaEvent("World"),
+			domain.NewReasoningDeltaEvent("inspect first"),
 			domain.NewToolCallEvent(domain.ToolCall{ID: "c1", Name: "echo", Arguments: json.RawMessage(`{}`)}),
 			domain.NewUsageEvent(domain.Usage{InputTokens: 10, OutputTokens: 5, TotalTokens: 15}),
 			domain.NewFinishEvent(domain.FinishStop, domain.ProviderMetadata{"prov": json.RawMessage(`{}`)}),
@@ -47,6 +48,9 @@ func TestCollect(t *testing.T) {
 	}
 	if resp.Text != "Hello World" {
 		t.Fatalf("unexpected text: %q", resp.Text)
+	}
+	if resp.ReasoningContent != "inspect first" {
+		t.Fatalf("unexpected reasoning content: %q", resp.ReasoningContent)
 	}
 	if len(resp.ToolCalls) != 1 || resp.ToolCalls[0].Name != "echo" {
 		t.Fatalf("unexpected tool calls: %+v", resp.ToolCalls)

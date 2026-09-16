@@ -6,11 +6,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/phongsathornpt/protonman/internal/core/agentprofile"
 	"github.com/phongsathornpt/protonman/internal/core/modelconfig"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 	"github.com/phongsathornpt/protonman/internal/engine/toolcall"
 	"github.com/phongsathornpt/protonman/internal/feature/agent"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	"github.com/phongsathornpt/protonman/proton-sdk/domain"
+	"github.com/phongsathornpt/protonman/proton-sdk/port"
 )
 
 // Agents owns inbound lifecycle/control access to the subagent coordinator.
@@ -36,16 +38,16 @@ func BuildSubagentModelResolver(spec SubagentModelResolverSpec) (*agent.ModelRes
 	if len(spec.Overrides) == 0 {
 		return nil, nil
 	}
-	overrides := make(map[agent.Profile]sdk.LanguageModel, len(spec.Overrides))
+	overrides := make(map[agentprofile.Profile]port.LanguageModel, len(spec.Overrides))
 	for rawProfile, configured := range spec.Overrides {
-		profile, err := agent.ParseSubagentProfile(rawProfile)
+		profile, err := agentprofile.ParseSubagentProfile(rawProfile)
 		if err != nil {
 			return nil, fmt.Errorf("subagent model %q: %w", rawProfile, err)
 		}
-		if strings.TrimSpace(configured.Provider) == "" && strings.TrimSpace(configured.Model) == "" {
+		if strings.TrimSpace(configured.Provider.String()) == "" && strings.TrimSpace(configured.Model.String()) == "" {
 			continue
 		}
-		providerKey, provider, ok := lookupProvider(spec.Providers, configured.Provider)
+		providerKey, provider, ok := lookupProvider(spec.Providers, configured.Provider.String())
 		if !ok {
 			return nil, fmt.Errorf("agent.subagents.%s: provider %q is not configured", profile, configured.Provider)
 		}
@@ -54,7 +56,7 @@ func BuildSubagentModelResolver(spec SubagentModelResolverSpec) (*agent.ModelRes
 		}
 		languageModel := spec.ModelFactory.Build(LanguageModelRequest{
 			ProviderName: providerKey, ProviderType: provider.Type, BaseURL: provider.BaseURL, APIKey: provider.APIKey,
-			ModelID: configured.Model, SessionID: spec.SessionID, AgentProfile: string(profile), RequestTimeout: spec.RequestTimeout,
+			ModelID: configured.Model.String(), SessionID: spec.SessionID, AgentProfile: string(profile), RequestTimeout: spec.RequestTimeout,
 		})
 		if languageModel == nil {
 			return nil, fmt.Errorf("agent.subagents.%s: provider %q requires credentials", profile, providerKey)
@@ -73,13 +75,13 @@ func BuildSubagentReasoningResolver(configured map[string]modelconfig.SubagentRo
 	if len(configured) == 0 {
 		return nil, nil
 	}
-	overrides := make(map[agent.Profile]sdk.ReasoningEffort, len(configured))
+	overrides := make(map[agentprofile.Profile]domain.ReasoningEffort, len(configured))
 	for rawProfile, subagentConfig := range configured {
-		profile, err := agent.ParseSubagentProfile(rawProfile)
+		profile, err := agentprofile.ParseSubagentProfile(rawProfile)
 		if err != nil {
 			return nil, fmt.Errorf("subagent reasoning %q: %w", rawProfile, err)
 		}
-		if subagentConfig.ReasoningEffort != sdk.ReasoningDefault {
+		if subagentConfig.ReasoningEffort != domain.ReasoningDefault {
 			overrides[profile] = subagentConfig.ReasoningEffort
 		}
 	}
@@ -156,7 +158,7 @@ func (a Agents) CancelByParent(parentID string) int {
 	}
 	return a.coordinator.CancelByParent(parentID)
 }
-func (a Agents) SetLanguageModel(languageModel sdk.LanguageModel) {
+func (a Agents) SetLanguageModel(languageModel port.LanguageModel) {
 	if a.coordinator != nil {
 		a.coordinator.SetLanguageModel(languageModel)
 	}
@@ -167,7 +169,7 @@ func (a Agents) SetPermissionMode(mode permission.Mode) {
 		a.coordinator.SetPermissionMode(mode)
 	}
 }
-func (a Agents) SetReasoningEffort(effort sdk.ReasoningEffort) {
+func (a Agents) SetReasoningEffort(effort domain.ReasoningEffort) {
 	if a.coordinator != nil {
 		a.coordinator.SetReasoningEffort(effort)
 	}

@@ -3,6 +3,8 @@ package app_test
 import (
 	"context"
 	"errors"
+	"github.com/phongsathornpt/protonman/internal/feature/project"
+	"github.com/phongsathornpt/protonman/internal/feature/todo"
 	"strings"
 	"testing"
 	"time"
@@ -175,7 +177,7 @@ func TestSessionsDetailUseCases(t *testing.T) {
 	}
 
 	// OpenTodoStore
-	sessionsWithRoot := sessions.WithSessionsRoot(t.TempDir())
+	sessionsWithRoot := sessions.WithSessionsRoot(t.TempDir()).WithTodoOpener(todo.OpenGoalBoundStore)
 	todoRepo, err := sessionsWithRoot.OpenTodoStore(ctx, "sess-todo", "goal-abc")
 	if err != nil {
 		t.Fatalf("OpenTodoStore error: %v", err)
@@ -212,7 +214,7 @@ func TestAgentsUseCaseNilSafe(t *testing.T) {
 
 func TestProjectsUseCase(t *testing.T) {
 	tmpDir := t.TempDir()
-	projects := app.NewProjects(config.ProjectSettingsStore{})
+	projects := app.NewProjects(config.ProjectSettingsStore{}, project.Lifecycle{})
 
 	// Init in tmpDir
 	res, err := projects.Init(context.Background(), tmpDir)

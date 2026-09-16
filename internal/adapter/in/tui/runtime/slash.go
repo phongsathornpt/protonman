@@ -75,7 +75,7 @@ func (v *slashPaneView) sync(ctx paneRenderContext) {
 		items = append(items, slashListItem{command: command})
 	}
 	if !v.ready {
-		v.picker = paneutil.NewMinimalList(items, slashCommandDelegate{}, maxInt(20, ctx.width-4), maxSlashRows)
+		v.picker = paneutil.NewMinimalList(items, slashCommandDelegate{}, maxInt(1, ctx.width-4), maxSlashRows)
 		v.picker.SetFilteringEnabled(false)
 		// Slash completion owns navigation through list.Update; help lives in the shared composer footer.
 		v.picker.InfiniteScrolling = true
@@ -83,6 +83,8 @@ func (v *slashPaneView) sync(ctx paneRenderContext) {
 	} else {
 		_ = v.picker.SetItems(items)
 	}
+	visibleRows := minInt(maxSlashRows, len(matches))
+	v.picker.SetSize(maxInt(1, ctx.width-4), maxInt(1, visibleRows))
 	if len(matches) == 0 {
 		return
 	}
@@ -96,8 +98,6 @@ func (v *slashPaneView) Render(ctx paneRenderContext) string {
 	if !v.ready || len(v.matches) == 0 {
 		return ""
 	}
-	visibleRows := minInt(maxSlashRows, len(v.matches))
-	v.picker.SetSize(maxInt(20, ctx.width-4), maxInt(1, visibleRows))
 	rows := v.commandRows(ctx)
 	if layoutModeForHeight(ctx.height) != layoutTiny {
 		width := maxInt(1, ctx.width-6)

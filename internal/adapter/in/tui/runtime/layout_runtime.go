@@ -203,6 +203,22 @@ func (m *bubbleModel) resize(width int, height int) {
 	if view, _ := m.panes.bottom.find(modelSetupViewID).(*modelSetupPaneView); view != nil {
 		view.resize(width, height)
 	}
+	if view, _ := m.panes.bottom.find(providerViewID).(*providerPaneView); view != nil {
+		view.resize(width, height)
+	}
+	if view, _ := m.panes.bottom.find(providerSelectViewID).(*providerSelectPaneView); view != nil {
+		view.resize(width, height)
+	}
+	ctx := newPaneRenderContext(m)
+	if view, _ := m.panes.bottom.find(skillsViewID).(*skillsPaneView); view != nil {
+		view.resize(ctx)
+	}
+	if view, _ := m.panes.bottom.find(todoInspectViewID).(*todoPaneView); view != nil {
+		view.resize(ctx)
+	}
+	if view, _ := m.panes.bottom.find(sessionResumeViewID).(*sessionResumePaneView); view != nil {
+		view.resize(ctx)
+	}
 	if m.historyState != nil {
 		m.historyState.SetWidth(width)
 	}
@@ -298,8 +314,30 @@ func (m *bubbleModel) reconcileLayout() {
 		return
 	}
 	m.layout.dirty = false
+	m.preparePaneViews()
 	scroll := m.captureViewportScroll()
 	m.applyFrameLayout(scroll, m.buildFrameLayout())
+}
+
+func (m *bubbleModel) preparePaneViews() {
+	if m == nil || m.panes.bottom == nil {
+		return
+	}
+	ctx := newPaneRenderContext(m)
+	switch view := m.panes.bottom.top().(type) {
+	case *skillsPaneView:
+		view.resize(ctx)
+	case *todoPaneView:
+		view.resize(ctx)
+	case *sessionResumePaneView:
+		view.resize(ctx)
+	case *modelSetupPaneView:
+		view.resize(m.layout.width, m.layout.height)
+	case *providerPaneView:
+		view.resize(m.layout.width, m.layout.height)
+	case *providerSelectPaneView:
+		view.resize(m.layout.width, m.layout.height)
+	}
 }
 
 func (m *bubbleModel) applyFrameLayout(scroll viewportScrollSnapshot, frame frameLayout) {
@@ -321,6 +359,7 @@ func (m *bubbleModel) refreshFrameLayout() {
 	if m == nil {
 		return
 	}
+	m.preparePaneViews()
 	frame := m.buildFrameLayout()
 	if frame.height != m.layout.frame.height {
 		m.requestRelayout()

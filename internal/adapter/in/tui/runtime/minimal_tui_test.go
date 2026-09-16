@@ -328,6 +328,19 @@ func TestViewIsPureAndIdempotent(t *testing.T) {
 	}
 }
 
+func TestProviderRenderDoesNotResizeInputs(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	view := newProviderPaneView()
+	before := [3]int{view.nameInput.Width(), view.endpointInput.Width(), view.apiKeyInput.Width()}
+
+	_ = view.Render(newPaneRenderContext(m))
+
+	after := [3]int{view.nameInput.Width(), view.endpointInput.Width(), view.apiKeyInput.Width()}
+	if before != after {
+		t.Fatalf("Render resized provider inputs: before=%v after=%v", before, after)
+	}
+}
+
 func TestMinimalVeryNarrowUnicodeFrameStaysWithinTerminal(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	m.resize(16, 8)

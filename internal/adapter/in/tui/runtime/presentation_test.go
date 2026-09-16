@@ -82,7 +82,9 @@ func TestPickersFitResponsiveTerminalHeights(t *testing.T) {
 		if got := lipgloss.Width(modelView); got > size[0] {
 			t.Fatalf("model setup width %d exceeds %d at %dx%d", got, size[0], size[0], size[1])
 		}
-		skillsView := (&skillsPaneView{}).Render(newPaneRenderContext(m))
+		skillsPane := &skillsPaneView{}
+		skillsPane.resize(newPaneRenderContext(m))
+		skillsView := skillsPane.Render(newPaneRenderContext(m))
 		if got := lipgloss.Height(skillsView); got > size[1] {
 			t.Fatalf("skills picker height %d exceeds %d at %dx%d", got, size[1], size[0], size[1])
 		}
@@ -224,6 +226,7 @@ func TestFocusedTodoPaneBoundsAndScrollsLargePlans(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, items)
 	m.resize(32, 14)
 	view := &todoPaneView{}
+	view.resize(newPaneRenderContext(m))
 	first := view.Render(newPaneRenderContext(m))
 	if lipgloss.Height(first) > 14 || lipgloss.Width(first) > 32 {
 		t.Fatalf("pane exceeds terminal: %dx%d", lipgloss.Width(first), lipgloss.Height(first))
@@ -246,6 +249,7 @@ func TestTodoPaneRendersSemanticColorsAndPreservesCheckmarkWhenSelected(t *testi
 	m := newTestBubbleModel(t, permission.ModeAsk, items)
 	m.resize(80, 24)
 	view := &todoPaneView{}
+	view.resize(newPaneRenderContext(m))
 	rendered := view.Render(newPaneRenderContext(m))
 
 	// Completed task checkmark must be rendered in green success style
@@ -285,6 +289,7 @@ func TestTodoPanePaginationAndIDLabel(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, items)
 	m.resize(80, 14)
 	view := &todoPaneView{}
+	view.resize(newPaneRenderContext(m))
 	rendered := view.Render(newPaneRenderContext(m))
 
 	plain := ansi.Strip(rendered)
@@ -313,6 +318,7 @@ func TestTodoPaneUtilizesAvailableWidthWithoutPrematureTruncation(t *testing.T) 
 	m := newTestBubbleModel(t, permission.ModeAsk, items)
 	m.resize(80, 14)
 	view := &todoPaneView{}
+	view.resize(newPaneRenderContext(m))
 	rendered := view.Render(newPaneRenderContext(m))
 
 	plain := ansi.Strip(rendered)
@@ -325,6 +331,7 @@ func TestSkillsPaneUnifiedSelectionStyle(t *testing.T) {
 	m := newTestSkillsModel(t, 2)
 	m.resize(80, 20)
 	view := &skillsPaneView{}
+	view.resize(newPaneRenderContext(m))
 	rendered := view.Render(newPaneRenderContext(m))
 	wantPrompt := brandStyle.Render(glyphPrompt)
 	if !strings.Contains(rendered, wantPrompt) {

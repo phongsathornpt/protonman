@@ -6,7 +6,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 )
 
-const Version = "15"
+const Version = "16"
 
 type ToolCapabilities struct {
 	Tasks  bool
@@ -140,6 +140,28 @@ func toolDisciplineSection(spec Spec) string {
 		"- Use only tools exposed in the current request. Tool and action identifiers are exact; never prefix, rename, qualify, or invent them.",
 		"- Treat tool errors as observations. Correct invalid calls when possible instead of repeating them blindly.",
 		"- Prefer the narrowest dedicated capability that directly represents the operation; use a tool only when it materially changes evidence, state, implementation, or verification.",
+	}
+	routes := make([]string, 0, 6)
+	if has(tool.NameRead) {
+		routes = append(routes, "read for known file contents")
+	}
+	if has(tool.NameGrep) {
+		routes = append(routes, "grep with pattern for content searches")
+	}
+	if has(tool.NameFind) {
+		routes = append(routes, "find for path discovery")
+	}
+	if has(tool.NameLS) {
+		routes = append(routes, "ls for directory entries")
+	}
+	if has(tool.NameEdit) {
+		routes = append(routes, "edit for exact workspace changes")
+	}
+	if has(tool.NameBash) {
+		routes = append(routes, "bash for programs, builds, tests, package managers, and workflows that need a process")
+	}
+	if len(routes) > 0 {
+		lines = append(lines, "- Route workspace operations to the narrowest available capability: "+strings.Join(routes, "; ")+".")
 	}
 	if has(tool.NameRead) || has(tool.NameGrep) || has(tool.NameFind) || has(tool.NameLS) || has(tool.NameEdit) {
 		lines = append(lines, "- Workspace filesystem paths are relative to the workspace root. Use . for the workspace root; never use / or another absolute filesystem path with workspace tools (external skill assets may use authorized absolute paths).")

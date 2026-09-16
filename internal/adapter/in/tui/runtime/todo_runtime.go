@@ -176,7 +176,7 @@ func (v *todoPaneView) ensurePicker(ctx paneRenderContext) {
 		return
 	}
 	v.icons = tuistyle.OrUnicodeIcons(v.icons)
-	v.picker = paneutil.NewMinimalList(todoListItems(ctx.todos, v.icons), todoSetupDelegate{}, maxInt(12, ctx.width-8), maxInt(5, minInt(14, ctx.height-4)))
+	v.picker = paneutil.NewMinimalList(todoListItems(ctx.todos, v.icons), todoSetupDelegate{}, maxInt(1, ctx.width-8), maxInt(1, minInt(14, ctx.height-4)))
 	v.picker.SetFilteringEnabled(false)
 	v.picker.SetStatusBarItemName("task", "tasks")
 	v.lastItems = tododomain.CloneItems(ctx.todos)
@@ -227,6 +227,18 @@ func (v *todoPaneView) syncTitle(ctx paneRenderContext) {
 	v.picker.Title = fmt.Sprintf("Tasks · %d/%d done", completed, len(ctx.todos))
 }
 
+func (v *todoPaneView) resize(ctx paneRenderContext) {
+	if v == nil {
+		return
+	}
+	v.ensurePicker(ctx)
+	if !v.initialized {
+		return
+	}
+	v.picker.SetSize(maxInt(1, ctx.width-8), maxInt(1, minInt(8, ctx.height-6)))
+	v.syncTitle(ctx)
+}
+
 func (v *todoPaneView) HandlePaneKey(ctx paneRenderContext, message tea.KeyPressMsg) paneKeyResult {
 	v.ensurePicker(ctx)
 	if key.Matches(message, paneutil.Keys.Close, paneutil.Keys.Confirm) {
@@ -238,14 +250,9 @@ func (v *todoPaneView) HandlePaneKey(ctx paneRenderContext, message tea.KeyPress
 }
 
 func (v *todoPaneView) Render(ctx paneRenderContext) string {
-	v.ensurePicker(ctx)
 	if !v.initialized {
 		return ""
 	}
-	if !slices.Equal(v.lastItems, ctx.todos) {
-		v.refreshItems(ctx)
-	}
-	v.picker.SetSize(maxInt(12, ctx.width-8), maxInt(4, minInt(8, ctx.height-6)))
 	completed, _, _ := todopane.TodoCounts(ctx.todos)
 	help := ""
 	if layoutModeForHeight(ctx.height) != layoutTiny {

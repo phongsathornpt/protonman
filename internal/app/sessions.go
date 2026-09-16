@@ -6,16 +6,22 @@ import (
 	"strings"
 	"time"
 
-	"github.com/phongsathornpt/protonman/internal/app/appdirs"
 	"github.com/phongsathornpt/protonman/internal/core/session"
-	tododomain "github.com/phongsathornpt/protonman/internal/feature/todo"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	tododomain "github.com/phongsathornpt/protonman/internal/core/todo"
+	"github.com/phongsathornpt/protonman/internal/platform/appdirs"
+	"github.com/phongsathornpt/protonman/proton-sdk/domain"
 )
+
+// TodoStoreOpener opens the durable session TODO store behind the core-owned
+// repository contract. The filesystem implementation lives in
+// internal/feature/todo and is wired at the composition root.
+type TodoStoreOpener func(ctx context.Context, path string) (tododomain.GoalBoundRepository, error)
 
 // Sessions exposes persisted-session use cases to inbound adapters.
 type Sessions struct {
 	repository   session.Repository
 	sessionsRoot string
+	todoOpener   TodoStoreOpener
 }
 
 func NewSessions(repository session.Repository) *Sessions {
@@ -31,6 +37,15 @@ func (s *Sessions) WithSessionsRoot(root string) *Sessions {
 		return nil
 	}
 	s.sessionsRoot = root
+	return s
+}
+
+// WithTodoOpener wires the durable TODO store implementation.
+func (s *Sessions) WithTodoOpener(opener TodoStoreOpener) *Sessions {
+	if s == nil {
+		return nil
+	}
+	s.todoOpener = opener
 	return s
 }
 
@@ -55,7 +70,7 @@ type SessionDetail struct {
 	AgentProfile       string
 	ReasoningEffort    string
 	LowConcurrencyMode string
-	Messages           []sdk.Message
+	Messages           []domain.Message
 	UpdatedAt          time.Time
 }
 
@@ -159,7 +174,10 @@ func (s *Sessions) OpenTodoStore(ctx context.Context, sessionID, activeGoal stri
 	if err != nil {
 		return nil, fmt.Errorf("resolve session resources: %w", err)
 	}
-	store, err := tododomain.OpenMarkdownStore(ctx, resources.Todo)
+	if s.todoOpener == nil {
+		return nil, fmt.Errorf("todo store opener is unavailable")
+	}
+	store, err := s.todoOpener(ctx, resources.Todo)
 	if err != nil {
 		return nil, fmt.Errorf("open session todo store: %w", err)
 	}

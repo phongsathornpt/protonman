@@ -19,6 +19,13 @@ type MarkdownStore struct {
 	mem  *Store
 }
 
+// OpenGoalBoundStore adapts the markdown store to the application-owned
+// TodoStoreOpener port. MarkdownStore implements the core GoalBoundRepository
+// contract, so the application layer never needs this package directly.
+func OpenGoalBoundStore(ctx context.Context, path string) (GoalBoundRepository, error) {
+	return OpenMarkdownStore(ctx, path)
+}
+
 func OpenMarkdownStore(ctx context.Context, path string) (*MarkdownStore, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err

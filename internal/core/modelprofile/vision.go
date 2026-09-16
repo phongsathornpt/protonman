@@ -17,12 +17,12 @@ const (
 // used as an area bound during preparation even for token schemes that do not
 // themselves charge one token per patch.
 type VisionPolicy struct {
-	MaxDimension   int
-	MaxPatches     int
-	PatchSize      int
-	MaxOutputBytes int
-	TokenScheme    VisionTokenScheme
-	FallbackTokens int
+	MaxDimension   int               `json:"max_dimension,omitempty"`
+	MaxPatches     int               `json:"max_patches,omitempty"`
+	PatchSize      int               `json:"patch_size,omitempty"`
+	MaxOutputBytes int               `json:"max_output_bytes,omitempty"`
+	TokenScheme    VisionTokenScheme `json:"token_scheme,omitempty"`
+	FallbackTokens int               `json:"fallback_tokens,omitempty"`
 }
 
 const (

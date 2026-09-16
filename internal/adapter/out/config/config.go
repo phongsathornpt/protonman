@@ -4,12 +4,12 @@ package config
 import (
 	"time"
 
-	"github.com/phongsathornpt/protonman/internal/app/appdirs"
 	"github.com/phongsathornpt/protonman/internal/base/runtimepolicy"
 	"github.com/phongsathornpt/protonman/internal/core/modelconfig"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
+	"github.com/phongsathornpt/protonman/internal/platform/appdirs"
 	"github.com/phongsathornpt/protonman/internal/platform/sandbox"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	"github.com/phongsathornpt/protonman/proton-sdk/domain"
 )
 
 // Options controls which configuration layers are considered.
@@ -52,7 +52,7 @@ type AgentConfig struct {
 	Subagents            map[string]SubagentModelConfig `toml:"subagents,omitempty"`
 	MaxToolCalls         int                            `toml:"max_tool_calls"`
 	Profile              string                         `toml:"profile"`
-	ReasoningEffort      sdk.ReasoningEffort            `toml:"reasoning_effort"`
+	ReasoningEffort      domain.ReasoningEffort         `toml:"reasoning_effort"`
 	MaxLiveSubagents     int                            `toml:"max_live_subagents"`
 	MaxRetainedSubagents int                            `toml:"max_retained_subagents"`
 	SubagentMaxRuntime   time.Duration                  `toml:"-"`

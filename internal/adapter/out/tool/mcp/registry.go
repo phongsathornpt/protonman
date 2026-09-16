@@ -12,7 +12,8 @@ import (
 	"unicode"
 
 	"github.com/phongsathornpt/protonman/internal/core/tool"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	"github.com/phongsathornpt/protonman/proton-sdk/domain"
+	"github.com/phongsathornpt/protonman/proton-sdk/usecase"
 )
 
 var (
@@ -189,11 +190,11 @@ func DiscoverWithOptions(ctx context.Context, registry tool.BatchRegistrar, opti
 		if err := definition.Validate(); err != nil {
 			return fmt.Errorf("validate MCP tool %q contract: %w", definition.Name, err)
 		}
-		sdkTool := sdk.Tool{Name: definition.Name, Description: definition.Description, InputSchema: definition.InputSchema, OutputSchema: definition.OutputSchema}
-		if _, err := sdk.CompileToolInputValidator(sdkTool); err != nil {
+		sdkTool := domain.Tool{Name: definition.Name, Description: definition.Description, InputSchema: definition.InputSchema, OutputSchema: definition.OutputSchema}
+		if _, err := usecase.CompileToolInputValidator(sdkTool); err != nil {
 			return fmt.Errorf("validate MCP tool %q input schema: %w", definition.Name, err)
 		}
-		if _, err := sdk.CompileToolOutputValidator(sdkTool); err != nil {
+		if _, err := usecase.CompileToolOutputValidator(sdkTool); err != nil {
 			return fmt.Errorf("validate MCP tool %q output schema: %w", definition.Name, err)
 		}
 	}

@@ -25,6 +25,12 @@ var (
 	packageGraphErr  error
 )
 
+var (
+	desktopGraphOnce sync.Once
+	desktopGraph     map[string]listedPackage
+	desktopGraphErr  error
+)
+
 func assertNoImports(t *testing.T, packages map[string]listedPackage, source string, forbidden []string) {
 	t.Helper()
 	pkg, ok := packages[source]
@@ -95,12 +101,40 @@ func listPackages(t *testing.T) map[string]listedPackage {
 	return packageGraph
 }
 
+// listDesktopPackages returns the repository package graph with the desktop
+// build tag enabled. The Fyne frontend in internal/adapter/in/desktop and
+// cmd/protonman-desktop is tag-gated, so it is absent from the default graph and
+// invisible to every guard that uses listPackages. Guards that must cover the
+// desktop subsystem use this loader.
+func listDesktopPackages(t *testing.T) map[string]listedPackage {
+	t.Helper()
+	root := repositoryRoot(t)
+	desktopGraphOnce.Do(func() {
+		desktopGraph, desktopGraphErr = loadPackageGraph(root, "desktop")
+	})
+	if desktopGraphErr != nil {
+		t.Fatalf("load desktop package graph: %v", desktopGraphErr)
+	}
+	return desktopGraph
+}
+
 func loadPackages(root string) (map[string]listedPackage, error) {
-	cmd := exec.Command("go", "list", "-json", "./...")
+	return loadPackageGraph(root, "")
+}
+
+// loadPackageGraph lists the package graph for the repository. A non-empty tags
+// value is passed through as -tags so build-tag gated packages stay visible.
+func loadPackageGraph(root string, tags string) (map[string]listedPackage, error) {
+	args := []string{"list", "-json"}
+	if tags != "" {
+		args = append(args, "-tags="+tags)
+	}
+	args = append(args, "./...")
+	cmd := exec.Command("go", args...)
 	cmd.Dir = root
 	output, err := cmd.Output()
 	if err != nil {
-		return nil, fmt.Errorf("go list ./...: %w", err)
+		return nil, fmt.Errorf("go list %s: %w", strings.Join(args, " "), err)
 	}
 	dec := json.NewDecoder(strings.NewReader(string(output)))
 	packages := map[string]listedPackage{}

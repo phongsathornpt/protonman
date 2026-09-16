@@ -10,7 +10,6 @@ import (
 	"strings"
 
 	"github.com/phongsathornpt/protonman/internal/app"
-	"github.com/phongsathornpt/protonman/internal/app/appdirs"
 	"github.com/phongsathornpt/protonman/internal/base/envconfig"
 	"github.com/phongsathornpt/protonman/internal/core/conversation"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
@@ -19,7 +18,8 @@ import (
 	"github.com/phongsathornpt/protonman/internal/engine/toolcall"
 	"github.com/phongsathornpt/protonman/internal/feature/agent"
 	"github.com/phongsathornpt/protonman/internal/feature/skill"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	"github.com/phongsathornpt/protonman/internal/platform/appdirs"
+	"github.com/phongsathornpt/protonman/proton-sdk/domain"
 )
 
 // Option configures the headless runner.
@@ -94,7 +94,7 @@ type Runner struct {
 	registry  tool.Registry
 	skills    *skill.Registry
 	runner    app.Conversation
-	messages  []sdk.Message
+	messages  []domain.Message
 	retention conversation.RetentionPolicy
 	nextID    uint64
 	turnSeq   uint64
@@ -115,7 +115,7 @@ func New(service *toolcall.Service, registry tool.Registry, runner app.Conversat
 		service:   service,
 		registry:  registry,
 		runner:    runner,
-		messages:  make([]sdk.Message, 0),
+		messages:  make([]domain.Message, 0),
 		retention: conversation.DefaultRetentionPolicy(),
 	}
 	for _, opt := range options {
@@ -127,18 +127,18 @@ func New(service *toolcall.Service, registry tool.Registry, runner app.Conversat
 }
 
 // Messages returns a copy of the in-memory transcript.
-func (r *Runner) Messages() []sdk.Message {
-	return sdk.CloneMessages(r.messages)
+func (r *Runner) Messages() []domain.Message {
+	return domain.CloneMessages(r.messages)
 }
 
 // SetMessages replaces the transcript used for later turns.
-func (r *Runner) SetMessages(messages []sdk.Message) error {
+func (r *Runner) SetMessages(messages []domain.Message) error {
 	for _, message := range messages {
 		if err := message.Validate(); err != nil {
 			return fmt.Errorf("load headless transcript: %w", err)
 		}
 	}
-	r.messages = conversation.Retain(sdk.CloneMessages(messages), r.retention)
+	r.messages = conversation.Retain(domain.CloneMessages(messages), r.retention)
 	return nil
 }
 
@@ -460,21 +460,21 @@ func (r *Runner) runCall(
 	if marshalErr != nil {
 		marshalErr = fmt.Errorf("encode headless tool result: %w", marshalErr)
 	}
-	r.messages = append(r.messages, sdk.Message{
-		ID:      sdk.NewMessageID(),
-		Role:    sdk.RoleUser,
+	r.messages = append(r.messages, domain.Message{
+		ID:      domain.NewMessageID(),
+		Role:    domain.RoleUser,
 		Content: fmt.Sprintf("/call %s", call.Name),
-	}, sdk.Message{
-		ID:   sdk.NewMessageID(),
-		Role: sdk.RoleAssistant,
-		ToolCalls: []sdk.ToolCall{{
+	}, domain.Message{
+		ID:   domain.NewMessageID(),
+		Role: domain.RoleAssistant,
+		ToolCalls: []domain.ToolCall{{
 			ID:        call.ID,
 			Name:      call.Name,
 			Arguments: append(json.RawMessage(nil), call.Arguments...),
 		}},
-	}, sdk.Message{
-		ID:         sdk.NewMessageID(),
-		Role:       sdk.RoleTool,
+	}, domain.Message{
+		ID:         domain.NewMessageID(),
+		Role:       domain.RoleTool,
 		Content:    string(resultContent),
 		ToolName:   call.Name,
 		ToolCallID: call.ID,
@@ -512,12 +512,12 @@ func (r *Runner) runTurn(
 	if r.runner == nil {
 		return fmt.Errorf("model client is not configured; use /help or /call")
 	}
-	r.messages = append(r.messages, sdk.Message{ID: sdk.NewMessageID(), Role: sdk.RoleUser, Content: prompt})
+	r.messages = append(r.messages, domain.Message{ID: domain.NewMessageID(), Role: domain.RoleUser, Content: prompt})
 	r.retainMessages()
 	r.turnSeq++
 	turnID := fmt.Sprintf("headless-turn-%d", r.turnSeq)
 	turnCtx := agent.WithTurnRef(ctx, agent.TurnRef{SessionID: r.sessionID, TurnID: turnID})
-	result, err := r.runner.Run(turnCtx, append([]sdk.Message(nil), r.messages...), func(_ context.Context, event app.Event) error {
+	result, err := r.runner.Run(turnCtx, append([]domain.Message(nil), r.messages...), func(_ context.Context, event app.Event) error {
 		switch event.Kind {
 		case app.EventTextDelta:
 			return writeEvent(output, format, Event{Kind: EventKindText, Text: event.Text})
@@ -542,9 +542,9 @@ func (r *Runner) runTurn(
 		r.messages = append(r.messages, result.Message)
 	}
 	if err != nil {
-		if (!result.ReplaySafe || len(result.Messages) == 0) && len(r.messages) > 0 && r.messages[len(r.messages)-1].Role == sdk.RoleUser && r.messages[len(r.messages)-1].Content == prompt {
+		if (!result.ReplaySafe || len(result.Messages) == 0) && len(r.messages) > 0 && r.messages[len(r.messages)-1].Role == domain.RoleUser && r.messages[len(r.messages)-1].Content == prompt {
 			last := len(r.messages) - 1
-			r.messages[last] = sdk.Message{}
+			r.messages[last] = domain.Message{}
 			r.messages = r.messages[:last]
 		}
 		r.retainMessages()

@@ -9,8 +9,8 @@ import (
 	"strings"
 
 	"github.com/phongsathornpt/protonman/internal/app"
-	"github.com/phongsathornpt/protonman/internal/app/appdirs"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	"github.com/phongsathornpt/protonman/internal/platform/appdirs"
+	"github.com/phongsathornpt/protonman/proton-sdk/domain"
 )
 
 // Classify maps an arbitrary runtime/provider error into a structured presentation error.
@@ -50,7 +50,7 @@ func Classify(err error, activeProvider string, activeModel string) Error {
 		}
 	}
 
-	if errors.Is(err, sdk.ErrIncompleteStream) {
+	if errors.Is(err, domain.ErrIncompleteStream) {
 		lower := strings.ToLower(raw)
 		if strings.Contains(lower, "produced no output before timeout") ||
 			strings.Contains(lower, "stream became idle before completion") ||

@@ -24,12 +24,16 @@ func TestResolveBuiltinKnownFamilies(t *testing.T) {
 		{model: "qwen3.6-plus", profile: "qwen3-hybrid-thinking", wantLevels: 1},
 		{model: "qwen3.6-flash", profile: "qwen3-hybrid-thinking", wantLevels: 1},
 		{model: "qwen3.7-max", profile: "qwen3-hybrid-thinking", wantLevels: 1},
-		{model: "deepseek-v4-flash-free", profile: "deepseek-v4-family", wantDefault: sdk.ReasoningHigh, wantLevels: 4},
+		{model: "deepseek-flash", profile: "deepseek-v4.1-flash-family", wantDefault: sdk.ReasoningHigh, wantLevels: 4},
+		{model: "deepseek-v4.1-flash", profile: "deepseek-v4.1-flash-family", wantDefault: sdk.ReasoningHigh, wantLevels: 4},
+		{model: "deepseek-v4-flash-free", profile: "deepseek-v4.1-flash-family", wantDefault: sdk.ReasoningHigh, wantLevels: 4},
+		{model: "router/deepseek-v4-flash-vision-exp", profile: "deepseek-v4.1-flash-family", wantDefault: sdk.ReasoningHigh, wantLevels: 4},
 		{model: "deepseek-v4-pro", profile: "deepseek-v4-family", wantDefault: sdk.ReasoningHigh, wantLevels: 4},
-		{model: "router/deepseek-v4-flash-vision-exp", profile: "deepseek-v4-family", wantDefault: sdk.ReasoningHigh, wantLevels: 4},
-		{model: "glm-5.3-flash", profile: "zai-glm-5.3-family", wantDefault: sdk.ReasoningMax, wantLevels: 3},
+		{model: "glm-5.3-flash", profile: "zai-glm-5.3-flash", wantDefault: sdk.ReasoningMax, wantLevels: 3, wantContext: 1_048_576},
 		{model: "glm-4.7", profile: "zai-glm-thinking", wantLevels: 1},
-		{model: "gpt-5.6-sol", profile: "gpt-5.6-family", wantDefault: sdk.ReasoningMedium, wantLevels: 6, wantContext: 1_050_000},
+		{model: "gpt-5.6-sol", profile: "gpt-5.6-sol", wantDefault: sdk.ReasoningMedium, wantLevels: 6, wantContext: 1_050_000},
+		{model: "gpt-5.6-terra", profile: "gpt-5.6-terra", wantDefault: sdk.ReasoningMedium, wantLevels: 6, wantContext: 1_050_000},
+		{model: "gpt-5.6-luna", profile: "gpt-5.6-luna", wantDefault: sdk.ReasoningMedium, wantLevels: 6, wantContext: 1_050_000},
 		{model: "grok-4.6-fast", profile: "grok-4.6", wantDefault: sdk.ReasoningHigh, wantLevels: 4},
 		{model: "claude-opus-5", profile: "claude-adaptive-thinking", wantLevels: 0},
 	}
@@ -46,6 +50,155 @@ func TestResolveBuiltinKnownFamilies(t *testing.T) {
 	}
 }
 
+func TestGeminiFlashProfileCapabilitiesAndReasoningLevels(t *testing.T) {
+	for _, modelID := range []string{
+		"gemini-3.8-flash",
+		"gemini-3.8-flash-latest",
+		"router/gemini-3.8-flash",
+	} {
+		resolved := ResolveBuiltin("google", modelID, CatalogMetadata{})
+		if resolved.ProfileName != "gemini-3.8-flash" {
+			t.Errorf("%s profile = %q, want gemini-3.8-flash", modelID, resolved.ProfileName)
+		}
+		if resolved.Capabilities.Tools != SupportYes || resolved.Capabilities.Vision != SupportYes {
+			t.Errorf("%s capabilities = %+v", modelID, resolved.Capabilities)
+		}
+		want := []sdk.ReasoningEffort{sdk.ReasoningLow, sdk.ReasoningMedium, sdk.ReasoningHigh}
+		if len(resolved.Reasoning.Levels) != len(want) {
+			t.Fatalf("%s reasoning levels = %v, want %v", modelID, resolved.Reasoning.Levels, want)
+		}
+		for index, effort := range want {
+			if resolved.Reasoning.Levels[index] != effort {
+				t.Errorf("%s reasoning level %d = %q, want %q", modelID, index, resolved.Reasoning.Levels[index], effort)
+			}
+		}
+	}
+}
+
+func TestGPT56ProfilesDeclareCurrentCapabilitiesAndLimits(t *testing.T) {
+	for _, modelID := range []string{
+		"gpt-5.6-sol",
+		"gpt-5.6",
+		"gpt-5.6-terra",
+		"gpt-5.6-luna",
+		"router/gpt-5.6-sol",
+	} {
+		resolved := ResolveBuiltin("openai", modelID, CatalogMetadata{})
+		if resolved.Capabilities.Tools != SupportYes || resolved.Capabilities.Vision != SupportYes {
+			t.Errorf("%s capabilities = %+v", modelID, resolved.Capabilities)
+		}
+		if resolved.ContextWindow != 1_050_000 || resolved.MaxOutputTokens != 131_072 {
+			t.Errorf("%s limits = context %d output %d", modelID, resolved.ContextWindow, resolved.MaxOutputTokens)
+		}
+	}
+}
+
+func TestGPT56ProfilesDoNotApplyToUnknownGPTModels(t *testing.T) {
+	resolved := ResolveBuiltin("openai", "gpt-5.7-preview", CatalogMetadata{})
+	if resolved.ProfileName != "" || resolved.ContextWindow != 0 || resolved.MaxOutputTokens != 0 {
+		t.Fatalf("unknown GPT profile = %+v", resolved)
+	}
+}
+
+func TestClaudeAdaptiveProfileCapabilities(t *testing.T) {
+	resolved := ResolveBuiltin("anthropic", "claude-sonnet-4-6", CatalogMetadata{})
+	if resolved.Capabilities.Tools != SupportYes || resolved.Capabilities.Vision != SupportYes {
+		t.Fatalf("Claude capabilities = %+v", resolved.Capabilities)
+	}
+	if resolved.Compatibility.ThinkingMode != ThinkingModeAdaptive {
+		t.Fatalf("Claude thinking mode = %q, want adaptive", resolved.Compatibility.ThinkingMode)
+	}
+	if resolved.Provenance.Tools != MetadataSourceBuiltin || resolved.Provenance.Vision != MetadataSourceBuiltin || resolved.Provenance.ThinkingMode != MetadataSourceBuiltin {
+		t.Fatalf("Claude provenance = %+v", resolved.Provenance)
+	}
+}
+
+func TestClaudeCatalogCapabilitiesOverrideBuiltin(t *testing.T) {
+	no := false
+	resolved := ResolveBuiltin("anthropic", "claude-sonnet-4-6", CatalogMetadata{Tools: &no, Vision: &no})
+	if resolved.Capabilities.Tools != SupportNo || resolved.Capabilities.Vision != SupportNo {
+		t.Fatalf("Claude catalog capability override = %+v", resolved.Capabilities)
+	}
+	if resolved.Compatibility.ThinkingMode != ThinkingModeAdaptive {
+		t.Fatalf("catalog omission erased thinking mode = %q", resolved.Compatibility.ThinkingMode)
+	}
+}
+
+func TestDeepSeekV41FlashCapabilities(t *testing.T) {
+	resolved := ResolveBuiltin("gateway", "deepseek-flash", CatalogMetadata{})
+	if resolved.Capabilities.Tools != SupportYes || resolved.Capabilities.Vision != SupportYes {
+		t.Fatalf("DeepSeek V4.1 Flash capabilities = %+v", resolved.Capabilities)
+	}
+	if resolved.Provenance.Tools != MetadataSourceBuiltin || resolved.Provenance.Vision != MetadataSourceBuiltin {
+		t.Fatalf("DeepSeek capability provenance = %+v", resolved.Provenance)
+	}
+}
+
+func TestQwenFamilyCapabilities(t *testing.T) {
+	for _, modelID := range []string{
+		"qwen3.8-flash",
+		"dashscope/qwen3.8-flash-latest",
+		"qwen3.8-max",
+		"router/qwen3.6-plus",
+	} {
+		resolved := ResolveBuiltin("gateway", modelID, CatalogMetadata{})
+		if resolved.Capabilities.Tools != SupportYes {
+			t.Errorf("%s tools = %v, want supported", modelID, resolved.Capabilities.Tools)
+		}
+	}
+	for _, modelID := range []string{"qwen3.8-flash", "qwen3.8-max"} {
+		resolved := ResolveBuiltin("gateway", modelID, CatalogMetadata{})
+		if resolved.Capabilities.Vision != SupportYes {
+			t.Errorf("%s vision = %v, want supported", modelID, resolved.Capabilities.Vision)
+		}
+	}
+}
+
+func TestGLM53FlashCapabilities(t *testing.T) {
+	for _, modelID := range []string{
+		"glm-5.3-flash",
+		"glm-5.3-flash-latest",
+		"router/glm-5.3-flash",
+	} {
+		resolved := ResolveBuiltin("gateway", modelID, CatalogMetadata{})
+		if resolved.ProfileName != "zai-glm-5.3-flash" {
+			t.Errorf("%s profile = %q, want zai-glm-5.3-flash", modelID, resolved.ProfileName)
+		}
+		if resolved.Capabilities.Tools != SupportYes || resolved.Capabilities.Vision != SupportYes {
+			t.Errorf("%s capabilities = %+v", modelID, resolved.Capabilities)
+		}
+		if resolved.ContextWindow != 1_048_576 || resolved.MaxOutputTokens != 131_072 {
+			t.Errorf("%s limits = context %d output %d", modelID, resolved.ContextWindow, resolved.MaxOutputTokens)
+		}
+	}
+}
+
+func TestGLM53BaseProfileDoesNotInheritFlashCapabilities(t *testing.T) {
+	resolved := ResolveBuiltin("gateway", "glm-5.3-pro", CatalogMetadata{})
+	if resolved.ProfileName != "zai-glm-5.3-family" {
+		t.Fatalf("profile = %q, want zai-glm-5.3-family", resolved.ProfileName)
+	}
+	if resolved.Capabilities.Tools != SupportUnknown || resolved.Capabilities.Vision != SupportUnknown {
+		t.Fatalf("base GLM capabilities = %+v, want unknown", resolved.Capabilities)
+	}
+}
+
+func TestCapabilitiesApplyPreservesUnknownAdapterValues(t *testing.T) {
+	base := sdk.ModelCapabilities{Streaming: true, Tools: true, Vision: true}
+	got := (Capabilities{Tools: SupportUnknown, Vision: SupportUnknown}).Apply(base)
+	if got != base {
+		t.Fatalf("unknown capability overlay = %+v, want %+v", got, base)
+	}
+}
+
+func TestCapabilitiesApplyHonorsExplicitModelValues(t *testing.T) {
+	base := sdk.ModelCapabilities{Streaming: true, Tools: true, Vision: true}
+	got := (Capabilities{Tools: SupportNo, Vision: SupportYes}).Apply(base)
+	if !got.Vision || got.Tools {
+		t.Fatalf("explicit capability overlay = %+v", got)
+	}
+}
+
 func TestResolveBuiltinMatchesNamespacedModelIDs(t *testing.T) {
 	tests := []struct {
 		model   string
@@ -56,7 +209,7 @@ func TestResolveBuiltinMatchesNamespacedModelIDs(t *testing.T) {
 		{model: "bai/gemini-3.8-flash", profile: "gemini-3.8-flash", kind: MatchExact},
 		{model: "dashscope/qwen3.8-max-latest", profile: "qwen3.8-max-family", kind: MatchFamily},
 		{model: "router/qwen3.6-plus", profile: "qwen3-hybrid-thinking", kind: MatchFamily},
-		{model: "router/gpt-5.6-sol", profile: "gpt-5.6-family", kind: MatchFamily},
+		{model: "router/gpt-5.6-sol", profile: "gpt-5.6-sol", kind: MatchExact},
 	}
 	for _, tt := range tests {
 		t.Run(tt.model, func(t *testing.T) {
@@ -118,6 +271,24 @@ func TestCatalogOmissionPreservesBuiltinKnowledge(t *testing.T) {
 	}
 	if got.Reasoning.Default != sdk.ReasoningMedium || len(got.Reasoning.Levels) != 3 {
 		t.Fatalf("omitted catalog erased reasoning metadata: %+v", got.Reasoning)
+	}
+}
+
+func TestCatalogCompatibilityOverridesBuiltinWithProvenance(t *testing.T) {
+	policy := VisionPolicy{MaxDimension: 6000, MaxPatches: 10000, PatchSize: 32}
+	got := ResolveBuiltin("gateway", "muse-spark-1.3-contributor-free", CatalogMetadata{
+		ToolSchemaDialect: ToolSchemaGeminiSubset,
+		ThinkingMode:      ThinkingModeManual,
+		VisionPolicy:      &policy,
+	})
+	if got.Compatibility.ToolSchemaDialect != ToolSchemaGeminiSubset || got.Compatibility.ThinkingMode != ThinkingModeManual {
+		t.Fatalf("compatibility = %+v", got.Compatibility)
+	}
+	if got.Provenance.ToolSchemaDialect != MetadataSourceCatalog || got.Provenance.ThinkingMode != MetadataSourceCatalog || got.Provenance.VisionPolicy != MetadataSourceCatalog {
+		t.Fatalf("compatibility provenance = %+v", got.Provenance)
+	}
+	if got.VisionPolicy.MaxDimension != 6000 || got.VisionPolicy.MaxPatches != 10000 {
+		t.Fatalf("vision policy = %+v", got.VisionPolicy)
 	}
 }
 
@@ -212,9 +383,9 @@ func TestResolvedProfileTracksMatchAndCatalogProvenance(t *testing.T) {
 	if exact.ProfileMatch != MatchExact || exact.CatalogOverride {
 		t.Fatalf("exact provenance = %+v", exact)
 	}
-	family := ResolveBuiltin("gateway", "gpt-5.6-sol", CatalogMetadata{})
-	if family.ProfileMatch != MatchFamily || family.CatalogOverride {
-		t.Fatalf("family provenance = %+v", family)
+	exactGPT := ResolveBuiltin("gateway", "gpt-5.6-sol", CatalogMetadata{})
+	if exactGPT.ProfileMatch != MatchExact || exactGPT.CatalogOverride {
+		t.Fatalf("GPT exact provenance = %+v", exactGPT)
 	}
 	yes := true
 	withCatalog := ResolveBuiltin("gateway", "gemini-3.8-flash", CatalogMetadata{Tools: &yes})

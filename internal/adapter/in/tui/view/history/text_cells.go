@@ -120,7 +120,7 @@ func (c *AssistantCell) RenderWidth(width int) []string {
 	if text == "" {
 		return nil
 	}
-	return c.renderAssistantIncremental(text, max(8, width-2))
+	return c.renderAssistantIncremental(text, max(1, width-2))
 }
 
 func assistantIncrementalText(text string) string {

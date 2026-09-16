@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"strings"
 
+	"github.com/phongsathornpt/protonman/internal/core/agentprofile"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/feature/agent"
 )
@@ -14,7 +15,7 @@ func RunFromCall(call tool.Call) PendingRun {
 		Task    string `json:"task"`
 	}
 	_ = json.Unmarshal(call.Arguments, &input)
-	profile, _ := agent.ParseSubagentProfile(input.Profile)
+	profile, _ := agentprofile.ParseSubagentProfile(input.Profile)
 	return PendingRun{Profile: profile, Task: strings.TrimSpace(input.Task)}
 }
 

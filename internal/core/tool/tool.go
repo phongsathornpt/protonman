@@ -417,6 +417,10 @@ type Definition struct {
 	// InputAliases maps canonical fields to legacy/model compatibility aliases.
 	// Aliases are accepted at ingress but are intentionally not published in InputSchema.
 	InputAliases map[string][]string
+	// ProviderOptions carries adapter-specific publication metadata. The
+	// canonical schema and host validation remain provider-neutral; adapters
+	// decide which options are meaningful for their wire protocol.
+	ProviderOptions map[string]json.RawMessage
 	// OutputSchema optionally validates structured output returned by the tool.
 	OutputSchema map[string]any
 	// Semantics optionally refines mutability, safety, evidence, and risk for a

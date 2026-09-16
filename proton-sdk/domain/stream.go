@@ -18,12 +18,13 @@ const (
 type EventKind string
 
 const (
-	EventTextStart     EventKind = "text_start"
-	EventTextDelta     EventKind = "text_delta"
-	EventTextEnd       EventKind = "text_end"
-	EventToolCallStart EventKind = "tool_call_start"
-	EventToolCallDelta EventKind = "tool_call_delta"
-	EventToolCallEnd   EventKind = "tool_call_end"
+	EventTextStart      EventKind = "text_start"
+	EventTextDelta      EventKind = "text_delta"
+	EventTextEnd        EventKind = "text_end"
+	EventReasoningDelta EventKind = "reasoning_delta"
+	EventToolCallStart  EventKind = "tool_call_start"
+	EventToolCallDelta  EventKind = "tool_call_delta"
+	EventToolCallEnd    EventKind = "tool_call_end"
 	// EventToolCall carries a complete tool call for agent runtimes that do not
 	// need incremental argument rendering. Providers may emit both lifecycle
 	// events and this normalized complete event.
@@ -34,8 +35,9 @@ const (
 )
 
 type Event struct {
-	Kind EventKind
-	Text string
+	Kind             EventKind
+	Text             string
+	ReasoningContent string
 
 	ToolCall         ToolCall
 	ToolCallID       string
@@ -52,6 +54,9 @@ func NewTextDeltaEvent(text string) Event {
 	return Event{Kind: EventTextDelta, Text: text}
 }
 func NewTextEndEvent() Event { return Event{Kind: EventTextEnd} }
+func NewReasoningDeltaEvent(content string) Event {
+	return Event{Kind: EventReasoningDelta, ReasoningContent: content}
+}
 func NewToolCallStartEvent(id, name string) Event {
 	return Event{Kind: EventToolCallStart, ToolCallID: id, ToolName: name}
 }
@@ -77,6 +82,11 @@ func NewFinishEvent(reason FinishReason, metadata ProviderMetadata) Event {
 func (e Event) Validate() error {
 	switch e.Kind {
 	case EventTextStart, EventTextDelta, EventTextEnd:
+		return nil
+	case EventReasoningDelta:
+		if e.ReasoningContent == "" {
+			return fmt.Errorf("%w: reasoning content is required", ErrInvalidEvent)
+		}
 		return nil
 	case EventToolCallStart:
 		if strings.TrimSpace(e.ToolCallID) == "" {
@@ -136,6 +146,7 @@ func (u Usage) Validate() error {
 // Response is the normalized output collected from one model stream.
 type Response struct {
 	Text             string
+	ReasoningContent string
 	ToolCalls        []ToolCall
 	Usage            Usage
 	FinishReason     FinishReason

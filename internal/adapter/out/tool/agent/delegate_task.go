@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/phongsathornpt/protonman/internal/core/agentprofile"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/feature/agent"
 )
@@ -58,8 +59,8 @@ func (delegateTaskHandler) Definition() tool.Definition {
 				},
 				"profile": map[string]any{
 					"type":        "string",
-					"enum":        agent.SubagentProfileNames(),
-					"description": agent.SubagentProfileSchemaDescription(),
+					"enum":        agentprofile.SubagentProfileNames(),
+					"description": agentprofile.SubagentProfileSchemaDescription(),
 				},
 				"context": map[string]any{
 					"type":        "string",
@@ -126,7 +127,7 @@ func (h delegateTaskHandler) Execute(ctx context.Context, call tool.Call) (tool.
 		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, "timeoutSeconds must be between 1 and 86400 when provided")
 	}
 
-	profile, err := agent.ParseSubagentProfile(input.Profile)
+	profile, err := agentprofile.ParseSubagentProfile(input.Profile)
 	if err != nil {
 		return tool.Result{}, tool.NewToolError(tool.ErrorCodeInvalidArguments, err.Error())
 	}

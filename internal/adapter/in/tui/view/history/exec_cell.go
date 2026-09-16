@@ -107,7 +107,7 @@ func (c ExecCell) RenderWidth(width int) []string {
 	}
 
 	if !c.Running {
-		contentWidth := max(20, width-4)
+		contentWidth := max(1, width-4)
 		for _, line := range c.renderOutputLines() {
 			style := tuistyle.BodyStyle
 			if strings.TrimSpace(line) == "stderr:" {

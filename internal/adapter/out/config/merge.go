@@ -5,9 +5,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/phongsathornpt/protonman/internal/core/modelconfig"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 	"github.com/phongsathornpt/protonman/internal/platform/sandbox"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	"github.com/phongsathornpt/protonman/proton-sdk/domain"
 )
 
 func mergeDocument(document fileDocument, snapshot *Snapshot, source ValueSource) error {
@@ -82,17 +83,17 @@ func mergeDocument(document fileDocument, snapshot *Snapshot, source ValueSource
 			}
 			current := snapshot.Agent.Subagents[profile]
 			if provider != "" {
-				current.Provider = provider
-				current.Model = modelID
+				current.Provider = modelconfig.ProviderName(provider)
+				current.Model = modelconfig.ModelID(modelID)
 			}
 			if raw.ReasoningEffort != nil {
-				effort, err := sdk.ParseReasoningEffort(*raw.ReasoningEffort)
+				effort, err := domain.ParseReasoningEffort(*raw.ReasoningEffort)
 				if err != nil {
 					return fmt.Errorf("agent.subagents.%s.reasoning_effort: %w", profile, err)
 				}
 				current.ReasoningEffort = effort
 			}
-			if current.Provider != "" || current.Model != "" || current.ReasoningEffort != sdk.ReasoningDefault {
+			if current.Provider != "" || current.Model != "" || current.ReasoningEffort != domain.ReasoningDefault {
 				snapshot.Agent.Subagents[profile] = current
 			}
 		}
@@ -109,7 +110,7 @@ func mergeDocument(document fileDocument, snapshot *Snapshot, source ValueSource
 		snapshot.Provenance[FieldAgentProfile] = source
 	}
 	if document.Agent.ReasoningEffort != nil {
-		effort, err := sdk.ParseReasoningEffort(*document.Agent.ReasoningEffort)
+		effort, err := domain.ParseReasoningEffort(*document.Agent.ReasoningEffort)
 		if err != nil {
 			return fmt.Errorf("agent.reasoning_effort: %w", err)
 		}

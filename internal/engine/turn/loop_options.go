@@ -8,7 +8,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/core/workspace"
 	"github.com/phongsathornpt/protonman/internal/engine/prompt"
 	"github.com/phongsathornpt/protonman/internal/feature/skill"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	"github.com/phongsathornpt/protonman/proton-sdk/domain"
 )
 
 // Option configures a Loop during construction.
@@ -40,7 +40,7 @@ func WithWorkspacePolicy(policy *workspace.Workspace) Option {
 
 // WithExplicitReasoningEffort sets a user-selected reasoning level. Known
 // unsupported levels fail locally rather than being silently clamped.
-func WithExplicitReasoningEffort(effort sdk.ReasoningEffort) Option {
+func WithExplicitReasoningEffort(effort domain.ReasoningEffort) Option {
 	return func(loop *Loop) error {
 		if !effort.Valid() {
 			return fmt.Errorf("%w: unsupported reasoning effort %q", ErrInvalidLoop, effort)
@@ -53,7 +53,7 @@ func WithExplicitReasoningEffort(effort sdk.ReasoningEffort) Option {
 
 // WithReasoningEffort sets a portable reasoning preference. The loop only
 // forwards it when the resolved model profile confirms reasoning support.
-func WithReasoningEffort(effort sdk.ReasoningEffort) Option {
+func WithReasoningEffort(effort domain.ReasoningEffort) Option {
 	return func(loop *Loop) error {
 		if !effort.Valid() {
 			return fmt.Errorf("%w: unsupported reasoning effort %q", ErrInvalidLoop, effort)

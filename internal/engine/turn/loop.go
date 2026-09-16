@@ -18,7 +18,8 @@ import (
 	"github.com/phongsathornpt/protonman/internal/engine/prompt"
 	"github.com/phongsathornpt/protonman/internal/engine/toolcall"
 	"github.com/phongsathornpt/protonman/internal/feature/skill"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	"github.com/phongsathornpt/protonman/proton-sdk/domain"
+	"github.com/phongsathornpt/protonman/proton-sdk/port"
 )
 
 const (
@@ -139,7 +140,7 @@ type Event struct {
 	Text    string
 	Call    tool.Call
 	Result  tool.Result
-	Retry   sdk.RetryEvent
+	Retry   domain.RetryEvent
 	Message model.Message
 	Err     error
 }
@@ -169,7 +170,7 @@ type Result struct {
 }
 
 type Loop struct {
-	languageModel                 sdk.LanguageModel
+	languageModel                 port.LanguageModel
 	tools                         *toolcall.Service
 	maxToolCalls                  int
 	maxStagnantToolCalls          int
@@ -182,7 +183,7 @@ type Loop struct {
 	maxToolResultBytesPerRound    int
 	maxToolResultBytesPerTurn     int
 	groundingEvidence             tool.EvidenceKind
-	reasoningEffort               sdk.ReasoningEffort
+	reasoningEffort               domain.ReasoningEffort
 	reasoningExplicit             bool
 	promptSpec                    *prompt.Spec
 	workspacePolicy               *workspace.Workspace
@@ -194,7 +195,7 @@ type Loop struct {
 var _ Runner = (*Loop)(nil)
 
 // NewLoop creates a model/tool loop that consumes proton-sdk directly.
-func NewLoop(languageModel sdk.LanguageModel, tools *toolcall.Service, options ...Option) (*Loop, error) {
+func NewLoop(languageModel port.LanguageModel, tools *toolcall.Service, options ...Option) (*Loop, error) {
 	if languageModel == nil {
 		return nil, fmt.Errorf("%w: language model is required", ErrInvalidLoop)
 	}
@@ -249,15 +250,15 @@ func (l *Loop) CloneWithActiveGoal(goal string) (*Loop, error) {
 	return clone, nil
 }
 
-func (l *Loop) ReasoningPolicy() (sdk.ReasoningEffort, bool) {
+func (l *Loop) ReasoningPolicy() (domain.ReasoningEffort, bool) {
 	if l == nil {
-		return sdk.ReasoningDefault, false
+		return domain.ReasoningDefault, false
 	}
 	return l.reasoningEffort, l.reasoningExplicit
 }
 
 // CloneWithReasoningEffort creates an independent loop with a session-local reasoning policy.
-func (l *Loop) CloneWithReasoningEffort(effort sdk.ReasoningEffort, explicit bool) (*Loop, error) {
+func (l *Loop) CloneWithReasoningEffort(effort domain.ReasoningEffort, explicit bool) (*Loop, error) {
 	if l == nil {
 		return nil, fmt.Errorf("%w: loop is required", ErrInvalidLoop)
 	}
@@ -269,7 +270,7 @@ func (l *Loop) CloneWithReasoningEffort(effort sdk.ReasoningEffort, explicit boo
 		return nil, err
 	}
 	clone.reasoningEffort = effort
-	clone.reasoningExplicit = explicit && effort != sdk.ReasoningDefault
+	clone.reasoningExplicit = explicit && effort != domain.ReasoningDefault
 	if _, err := clone.resolveReasoningPolicy(); err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrUnsupportedModelCapability, err)
 	}

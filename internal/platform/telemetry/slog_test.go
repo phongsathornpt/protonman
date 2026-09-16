@@ -8,8 +8,8 @@ import (
 	"testing"
 
 	"github.com/phongsathornpt/protonman/internal/core/permission"
+	coretelemetry "github.com/phongsathornpt/protonman/internal/core/telemetry"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
-	"github.com/phongsathornpt/protonman/internal/engine/toolcall"
 )
 
 func TestSlogObserverWritesStructuredRedactedEvent(t *testing.T) {
@@ -20,8 +20,8 @@ func TestSlogObserverWritesStructuredRedactedEvent(t *testing.T) {
 		t.Fatalf("NewSlogObserver() error = %v", err)
 	}
 
-	observer.Observe(context.Background(), toolcall.Event{
-		Kind:          toolcall.EventCallFailed,
+	observer.Observe(context.Background(), coretelemetry.Event{
+		Kind:          coretelemetry.EventCallFailed,
 		CallID:        "call-1",
 		ToolName:      "bash",
 		ToolKind:      permission.ToolBash,
@@ -62,13 +62,13 @@ func TestSlogObserverProtectionEventsAreRedactedAndCounted(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	observer.ObserveProtection(context.Background(), toolcall.ProtectionEvent{
-		Kind: toolcall.ProtectionCallSuppressed, ToolName: "bash", ToolKind: permission.ToolBash,
+	observer.ObserveProtection(context.Background(), coretelemetry.ProtectionEvent{
+		Kind: coretelemetry.ProtectionCallSuppressed, ToolName: "bash", ToolKind: permission.ToolBash,
 		Reason: "permission_retry", Fingerprint: "0123456789abcdef", RepeatCount: 1,
 		ErrorCode: tool.ErrorCodePermissionDenied,
 	})
-	observer.ObserveProtection(context.Background(), toolcall.ProtectionEvent{Kind: toolcall.ProtectionPermissionSuppressed})
-	observer.Observe(context.Background(), toolcall.Event{Kind: toolcall.EventCallFailed, ErrorCode: tool.ErrorCodeStaleContinuation})
+	observer.ObserveProtection(context.Background(), coretelemetry.ProtectionEvent{Kind: coretelemetry.ProtectionPermissionSuppressed})
+	observer.Observe(context.Background(), coretelemetry.Event{Kind: coretelemetry.EventCallFailed, ErrorCode: tool.ErrorCodeStaleContinuation})
 	counters := observer.Counters()
 	if counters["tool_call_suppressed_total"] != 1 {
 		t.Fatalf("suppressed counter = %d", counters["tool_call_suppressed_total"])
@@ -98,8 +98,8 @@ func TestSlogObserverCountsRecoveryLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, kind := range []toolcall.EventKind{toolcall.EventRecoveryAttempted, toolcall.EventRecoverySucceeded, toolcall.EventRecoveryFailed} {
-		observer.Observe(context.Background(), toolcall.Event{Kind: kind, ToolName: "read", RecoveryAction: tool.RecoveryRestartPagination})
+	for _, kind := range []coretelemetry.EventKind{coretelemetry.EventRecoveryAttempted, coretelemetry.EventRecoverySucceeded, coretelemetry.EventRecoveryFailed} {
+		observer.Observe(context.Background(), coretelemetry.Event{Kind: kind, ToolName: "read", RecoveryAction: tool.RecoveryRestartPagination})
 	}
 	counters := observer.Counters()
 	if counters["tool_recovery_attempt_total"] != 1 || counters["tool_recovery_success_total"] != 1 || counters["tool_recovery_failure_total"] != 1 {

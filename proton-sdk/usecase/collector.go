@@ -35,6 +35,8 @@ func (a *ResponseAccumulator) Absorb(event domain.Event) error {
 	switch event.Kind {
 	case domain.EventTextDelta:
 		a.text.WriteString(event.Text)
+	case domain.EventReasoningDelta:
+		a.response.ReasoningContent += event.ReasoningContent
 	case domain.EventToolCall:
 		a.response.ToolCalls = append(a.response.ToolCalls, event.ToolCall.Clone())
 	case domain.EventUsage:

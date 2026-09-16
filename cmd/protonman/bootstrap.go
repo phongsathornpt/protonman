@@ -17,10 +17,10 @@ import (
 	todotool "github.com/phongsathornpt/protonman/internal/adapter/out/tool/todo"
 	webtool "github.com/phongsathornpt/protonman/internal/adapter/out/tool/web"
 	"github.com/phongsathornpt/protonman/internal/app"
-	"github.com/phongsathornpt/protonman/internal/app/appdirs"
 	"github.com/phongsathornpt/protonman/internal/base/contextutil"
 	"github.com/phongsathornpt/protonman/internal/base/envconfig"
 	"github.com/phongsathornpt/protonman/internal/base/runtimepolicy"
+	"github.com/phongsathornpt/protonman/internal/core/agentprofile"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 	"github.com/phongsathornpt/protonman/internal/core/session"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
@@ -28,11 +28,13 @@ import (
 	"github.com/phongsathornpt/protonman/internal/engine/toolcall"
 	"github.com/phongsathornpt/protonman/internal/feature/agent"
 	memoryfeature "github.com/phongsathornpt/protonman/internal/feature/memory"
+	"github.com/phongsathornpt/protonman/internal/feature/project"
 	"github.com/phongsathornpt/protonman/internal/feature/skill"
 	tododomain "github.com/phongsathornpt/protonman/internal/feature/todo"
+	"github.com/phongsathornpt/protonman/internal/platform/appdirs"
 	"github.com/phongsathornpt/protonman/internal/platform/checkpoint"
 	"github.com/phongsathornpt/protonman/internal/platform/sandbox"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	"github.com/phongsathornpt/protonman/proton-sdk/domain"
 )
 
 type appRuntime struct {
@@ -67,6 +69,11 @@ func reconcileDelegatedTaskStatus(ctx context.Context, sessionsRoot, sessionID, 
 }
 
 func (r *appRuntime) Close() {
+	if r != nil && r.application.ModelFactory != nil {
+		if closer, ok := r.application.ModelFactory.(interface{ Close() }); ok {
+			closer.Close()
+		}
+	}
 	if r != nil && r.coordinator != nil {
 		_ = r.coordinator.Close()
 	}
@@ -250,7 +257,7 @@ func buildRuntime(ctx context.Context, options cliOptions) (*appRuntime, error) 
 	application := app.Services{
 		Models:       app.NewModels(model.Catalog{}),
 		Providers:    app.NewProviders(config.NewUserProviderRepository(homeDir)),
-		Projects:     app.NewProjects(config.ProjectSettingsStore{}),
+		Projects:     app.NewProjects(config.ProjectSettingsStore{}, project.Lifecycle{}),
 		UserSettings: app.NewUserSettings(config.NewUserSettingsStore(homeDir)),
 		ModelFactory: rootMemoryFactory,
 	}
@@ -348,7 +355,7 @@ func buildRuntime(ctx context.Context, options cliOptions) (*appRuntime, error) 
 		return nil, err
 	}
 	if found && strings.TrimSpace(state.ReasoningEffort) != "" {
-		effort, parseErr := sdk.ParseReasoningEffort(state.ReasoningEffort)
+		effort, parseErr := domain.ParseReasoningEffort(state.ReasoningEffort)
 		if parseErr != nil {
 			return nil, fmt.Errorf("restore session %q reasoning effort: %w", sessionID, parseErr)
 		}
@@ -391,7 +398,7 @@ func applyAgentProfile(loadedConfig *config.Snapshot, state *session.State, requ
 	if effectiveProfile == "" {
 		return nil
 	}
-	prof, err := agent.ParseProfile(effectiveProfile)
+	prof, err := agentprofile.ParseProfile(effectiveProfile)
 	if err != nil {
 		return err
 	}

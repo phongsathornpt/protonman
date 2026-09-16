@@ -56,6 +56,10 @@ Driving adapters translate external interaction into application operations:
 - `acp/`: ACP JSON-RPC/stdin-stdout protocol handling.
 - `headless/`: non-interactive CLI output for scripts and CI.
 - `tui/`: Bubble Tea terminal presentation and interaction.
+- `desktop/`: Fyne desktop frontend behind the `desktop` build tag. See [`desktop.md`](desktop.md).
+  It drives the CLI over ACP through `adapter/out/acpclient` rather than embedding a
+  second agent loop, so its presentation state lives in `feature/desktop` and its
+  driven boundary is `desktop_contract_test.go` rather than the untagged package graph.
 
 Inbound adapters consume application ports such as `app.Conversation`, `app.Agents`,
 `app.Models`, `app.Projects`, `app.Providers`, and `app.Sessions`. They must not bypass
@@ -109,7 +113,7 @@ Important boundaries include:
 
 The engine is orchestration, not an outbound adapter:
 
-- `prompt/` composes capability-driven system prompts using deterministic, cache-aware ordered sections. The managed prompt currently uses Prompt ABI v15; see [`system-prompt.md`](system-prompt.md) for ordering and prefix-cache invariants.
+- `prompt/` composes capability-driven system prompts using deterministic, cache-aware ordered sections. The managed prompt currently uses Prompt ABI v16; see [`system-prompt.md`](system-prompt.md) for ordering and prefix-cache invariants.
 - `toolcall/` validates and authorizes model-originated tool calls before execution.
 - `turn/` owns the bounded multi-round model/tool state machine, streaming, grounding,
   progress-aware tool safety budgets, tool-result budgets, repeated-call protection, reasoning policy, verification state, and ephemeral event-driven runtime context delivery. Runtime-context finalization is a terminal-turn invariant: it runs on success, failure, and cancellation so turn-owned asynchronous work and consumer state cannot outlive their parent.
@@ -122,6 +126,11 @@ Core packages define stable policies and contracts and do not import adapters, f
 engines, or the composition root.
 
 - `conversation/`: provider-neutral retention, compaction, and historical tool-message policy.
+- `memory/`: memory entry contracts and the repository port consumed by `feature/memory` and persisted by `adapter/out/memoryfs`.
+- `modelcatalog/`: remote model catalog entries.
+- `modelclient/`: provider-neutral language-model request/response port consumed by application factories.
+- `modelconfig/`: provider and model selection records shared by the config adapter and the SDK boundary.
+- `agentidentity/`: root versus delegated agent identity typing.
 - `modelprofile/`: model metadata, limits, modalities, reasoning and schema compatibility.
 - `permission/`: permission modes, rules, grants, and evaluation.
 - `session/`: session identity, aggregate resources, revisions, state, and repository port.
@@ -133,6 +142,9 @@ engines, or the composition root.
 Feature packages own cohesive product behavior built on core contracts:
 
 - `agent/`: canonical profiles, dependency-aware scheduling, lifecycle/events, delegation policy, required-vs-optional completion barriers, and versioned result delivery/consumption acknowledgement. Result availability drives the synthesis stream; the separate `agent_result_consumed` event is emitted only after successful parent-context encoding and never feeds back into that stream. Dependency edges reference already-admitted children in the same parent turn, so the runtime forms an acyclic execution graph by construction.
+- `desktop/`: desktop presentation state (multiple sessions, permission inbox, timeline) behind the `desktop` build tag. Stateless against the CLI runtime: every session behavior flows through the ACP protocol, so this package holds no sessions, models, or tools of its own.
+- `imageprep/`: image input preparation for multimodal turns.
+- `memory/`: memory use cases over `core/memory` contracts, persisted through `adapter/out/memoryfs`.
 - `project/`: project discovery/trust behavior.
 - `skill/`: skill discovery, activation domain behavior, lockfile verification, and schema migration (supporting both `.protonman/skills-lock.json` and legacy root locks with atomic backup). Dynamic read roots authorize active skill directories for tool access.
 - `todo/`: session task-plan state, durable active-goal binding/supersession, and optimistic concurrency.
@@ -145,6 +157,8 @@ network, provider, and terminal concerns remain in adapters/platform packages.
 Driven adapters implement infrastructure-facing ports:
 
 - `config/`: layered TOML loading, merge, provenance, and persistence. Effective settings are created through `DefaultSnapshot()`, whose product defaults come only from `internal/base/runtimepolicy`; user and project writers share one atomic document persistence primitive while retaining scope-specific security checks and file modes. Persisted TOML provider/model records use dedicated file-schema structs and explicit conversion into runtime config types, so runtime representation changes do not silently redefine the on-disk format. The current contract and refactor boundaries are documented in [`settings.md`](settings.md).
+- `acpclient/`: ACP client used by the build-tag gated desktop frontend to drive CLI sessions over stdio.
+- `memoryfs/`: file-backed memory repository implementing the `core/memory` port.
 - `model/`: provider presets, discovery, catalog normalization, SDK adaptation, and narrowly scoped provider-specific wrappers. Models can use a shared provider+endpoint+model low-concurrency scheduler here for bounded admission, low concurrency, adaptive pacing, and route-wide provider cooldowns. The default `auto` policy currently recommends it for OpenCode free models; `/low on` can force the same provider-neutral scheduler for any active provider/model and `/low off` bypasses it. Replay-safe stream recovery is a separate wrapper: OpenCode free models keep timeouts plus the full retry budget with open-retry ownership, while all other models use a bounded generic replay-safe retry for pre-commit incomplete streams and empty finishes.
 - `sessionfs/`: file-backed session repository and agent lifecycle persistence.
 - `tool/agent/`: subagent lifecycle tool and capability publication.
@@ -231,6 +245,9 @@ Key invariants include:
 6. Composition/wiring remains in `cmd/protonman` rather than leaking into domain packages.
 7. The TUI runtime root stays within its ratcheting production-file budget.
 8. Focused `tui/runtime/*` subpackages never import the root `tui/runtime` package.
+9. The desktop frontend is covered by `desktop_contract_test.go` with a desktop-tagged
+   package graph: its driven-adapter surface is `acpclient` only, and it keeps the same
+   application-port discipline as the other inbound adapters.
 
 Run `go test ./test/architecture` whenever moving packages or changing dependency direction.
 

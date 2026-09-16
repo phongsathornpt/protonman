@@ -8,16 +8,17 @@ import (
 	"strings"
 	"time"
 
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	"github.com/phongsathornpt/protonman/proton-sdk/domain"
 	"github.com/phongsathornpt/protonman/proton-sdk/internal/providerutil"
+	"github.com/phongsathornpt/protonman/proton-sdk/port"
 )
 
-func (m *LanguageModel) Stream(ctx context.Context, request sdk.Request) (sdk.Stream, error) {
+func (m *LanguageModel) Stream(ctx context.Context, request domain.Request) (port.Stream, error) {
 	if err := request.Validate(); err != nil {
 		return nil, err
 	}
 	if strings.TrimSpace(m.modelID) == "" {
-		return nil, fmt.Errorf("%w: model id is required", sdk.ErrInvalidRequest)
+		return nil, fmt.Errorf("%w: model id is required", domain.ErrInvalidRequest)
 	}
 	endpoint, encoded, err := m.encodeRequest(request)
 	if err != nil {
@@ -42,16 +43,16 @@ func (m *LanguageModel) Stream(ctx context.Context, request sdk.Request) (sdk.St
 				httpReq.Header.Set("User-Agent", base.UserAgent)
 			}
 		},
-		ParseError: func(status int, body []byte, headers http.Header) *sdk.ProviderError {
+		ParseError: func(status int, body []byte, headers http.Header) *domain.ProviderError {
 			return providerError(m.Provider(), status, body, headers)
 		},
-		OnSuccess: func(resp *http.Response) (sdk.Stream, error) {
+		OnSuccess: func(resp *http.Response) (port.Stream, error) {
 			return newStream(resp.Body, responseMetadata(m.Provider(), resp.Header), request.Options.IncludeRawChunks, m.Provider()), nil
 		},
 	})
 }
 
-func responseMetadata(provider string, headers http.Header) sdk.ProviderMetadata {
+func responseMetadata(provider string, headers http.Header) domain.ProviderMetadata {
 	values := map[string]any{}
 	for key, header := range map[string]string{
 		"request_id":    "x-request-id",
@@ -63,7 +64,7 @@ func responseMetadata(provider string, headers http.Header) sdk.ProviderMetadata
 			values[key] = value
 		}
 	}
-	if rateLimit := sdk.ParseRateLimitHeaders(headers, time.Now()); rateLimit != nil {
+	if rateLimit := providerutil.ParseRateLimitHeaders(headers, time.Now()); rateLimit != nil {
 		values["rate_limit"] = rateLimit
 	}
 	if len(values) == 0 {
@@ -73,5 +74,5 @@ func responseMetadata(provider string, headers http.Header) sdk.ProviderMetadata
 	if err != nil {
 		return nil
 	}
-	return sdk.ProviderMetadata{provider: raw}
+	return domain.ProviderMetadata{provider: raw}
 }

@@ -21,6 +21,9 @@ type RemoteModel struct {
 	VisionSupport      *bool                          `json:"vision_support,omitempty"`
 	ToolChoiceRequired *bool                          `json:"tool_choice_required,omitempty"`
 	Reasoning          *modelprofile.CatalogReasoning `json:"reasoning,omitempty"`
+	ToolSchemaDialect  modelprofile.ToolSchemaDialect `json:"tool_schema,omitempty"`
+	ThinkingMode       modelprofile.ThinkingMode      `json:"thinking_mode,omitempty"`
+	VisionPolicy       *modelprofile.VisionPolicy     `json:"vision_policy,omitempty"`
 }
 
 // DiscoveryRequest describes one provider catalog lookup.
@@ -47,5 +50,16 @@ func (m RemoteModel) ProfileMetadata() modelprofile.CatalogMetadata {
 		MaxInputTokens:     m.MaxInputTokens,
 		MaxOutputTokens:    m.MaxOutputTokens,
 		Reasoning:          modelprofile.NormalizeCatalogReasoning(m.Reasoning),
+		ToolSchemaDialect:  m.ToolSchemaDialect,
+		ThinkingMode:       m.ThinkingMode,
+		VisionPolicy:       cloneVisionPolicy(m.VisionPolicy),
 	}
+}
+
+func cloneVisionPolicy(policy *modelprofile.VisionPolicy) *modelprofile.VisionPolicy {
+	if policy == nil {
+		return nil
+	}
+	copy := *policy
+	return &copy
 }

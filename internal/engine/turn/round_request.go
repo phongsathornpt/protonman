@@ -11,7 +11,9 @@ import (
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/engine/prompt"
 	"github.com/phongsathornpt/protonman/internal/feature/imageprep"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	"github.com/phongsathornpt/protonman/proton-sdk/domain"
+	"github.com/phongsathornpt/protonman/proton-sdk/port"
+	"github.com/phongsathornpt/protonman/proton-sdk/usecase"
 )
 
 type resolvedModelState struct {
@@ -19,7 +21,7 @@ type resolvedModelState struct {
 	has     bool
 }
 
-func resolvedModelStateFor(languageModel sdk.LanguageModel) resolvedModelState {
+func resolvedModelStateFor(languageModel port.LanguageModel) resolvedModelState {
 	profile, ok := model.ResolvedModelProfile(languageModel)
 	return resolvedModelState{profile: profile, has: ok}
 }
@@ -79,13 +81,13 @@ func (l *Loop) prepareRoundRequest(
 	projectInstructions string,
 	reasoning modelprofile.ReasoningResolution,
 	grounding groundingState,
-	caps sdk.ModelCapabilities,
+	caps domain.ModelCapabilities,
 	safetyBudget *progressSafetyBudget,
 	forceNoProgressSynthesis bool,
 	forceSafetyBudgetSynthesis bool,
 	softToolBudgetWarned bool,
 	resolved resolvedModelState,
-) (sdk.Request, toolDispatchState, bool, error) {
+) (domain.Request, toolDispatchState, bool, error) {
 	var tools []tool.Definition
 	reqMessages := append([]model.Message(nil), history...)
 	hasCurrentTurnImage := latestUserMessageContainsImage(reqMessages)
@@ -164,7 +166,7 @@ func (l *Loop) prepareRoundRequest(
 		"remaining_safety_calls", dispatch.remainingSafetyCalls,
 	)
 
-	sdkTools := make([]sdk.Tool, 0, len(tools))
+	sdkTools := make([]domain.Tool, 0, len(tools))
 	if dispatch.enabled() {
 		dispatch.providerToCanonical = make(map[string]string, len(tools))
 		dispatch.canonicalNames = make(map[string]struct{}, len(tools))
@@ -180,19 +182,20 @@ func (l *Loop) prepareRoundRequest(
 		}
 		if dispatch.enabled() {
 			if existing, exists := dispatch.providerToCanonical[publishedName]; exists && existing != definition.Name {
-				return sdk.Request{}, dispatch, softToolBudgetWarned, fmt.Errorf("provider tool alias collision %q for %q and %q", publishedName, existing, definition.Name)
+				return domain.Request{}, dispatch, softToolBudgetWarned, fmt.Errorf("provider tool alias collision %q for %q and %q", publishedName, existing, definition.Name)
 			}
 			dispatch.providerToCanonical[publishedName] = definition.Name
 			dispatch.canonicalNames[definition.Name] = struct{}{}
 		}
-		sdkTools = append(sdkTools, sdk.Tool{
+		sdkTools = append(sdkTools, domain.Tool{
 			Name: publishedName, Description: definition.Description,
 			InputSchema: inputSchema, OutputSchema: definition.OutputSchema,
-			Dynamic: definition.Kind == tool.KindMCP,
+			ProviderOptions: domain.ProviderOptions(definition.ProviderOptions),
+			Dynamic:         definition.Kind == tool.KindMCP,
 		})
 	}
 
-	limits := sdk.ModelTokenLimits(l.languageModel)
+	limits := usecase.ModelTokenLimits(l.languageModel)
 	effectiveProfile := modelprofile.Resolved{
 		ContextWindow:   limits.ContextWindow,
 		MaxInputTokens:  limits.MaxInputTokens,
@@ -203,10 +206,17 @@ func (l *Loop) prepareRoundRequest(
 	}
 	visionPolicy := modelprofile.EffectiveVisionPolicy(effectiveProfile)
 
-	request := sdk.Request{Messages: reqMessages, Tools: sdkTools}
+	request := domain.Request{Messages: reqMessages, Tools: sdkTools}
+	if preparer, ok := l.languageModel.(port.RequestPreparer); ok {
+		prepared, prepareErr := preparer.PrepareRequest(ctx, request)
+		if prepareErr != nil {
+			return domain.Request{}, dispatch, softToolBudgetWarned, fmt.Errorf("prepare model request: %w", prepareErr)
+		}
+		request = prepared
+	}
 	if request.Requirements().Vision {
 		if !caps.Vision {
-			return sdk.Request{}, dispatch, softToolBudgetWarned, fmt.Errorf("model %q does not support image input", l.languageModel.ModelID())
+			return domain.Request{}, dispatch, softToolBudgetWarned, fmt.Errorf("model %q does not support image input", l.languageModel.ModelID())
 		}
 		prepared, err := imageprep.PrepareMessages(request.Messages, imageprep.Policy{
 			MaxDimension:   visionPolicy.MaxDimension,
@@ -215,7 +225,7 @@ func (l *Loop) prepareRoundRequest(
 			MaxOutputBytes: visionPolicy.MaxOutputBytes,
 		})
 		if err != nil {
-			return sdk.Request{}, dispatch, softToolBudgetWarned, fmt.Errorf("prepare model images: %w", err)
+			return domain.Request{}, dispatch, softToolBudgetWarned, fmt.Errorf("prepare model images: %w", err)
 		}
 		request.Messages = prepared
 		slog.DebugContext(ctx, "turn model images prepared",
@@ -226,13 +236,13 @@ func (l *Loop) prepareRoundRequest(
 	}
 	if grounding.pending() && dispatch.enabled() && len(sdkTools) > 0 && resolved.has &&
 		resolved.profile.Capabilities.ToolChoiceRequired == modelprofile.SupportYes {
-		request.Options.ToolChoice = sdk.ToolChoiceRequired
+		request.Options.ToolChoice = domain.ToolChoiceRequired
 	}
 	request.Options.ReasoningEffort = reasoning.Effective
 	compactionPolicy := modelprofile.EffectiveCompactionPolicy(effectiveProfile)
 	compactedRequest, compaction, err := compactRequestToModelBudgetWithVisionPolicy(request, limits, compactionPolicy, visionPolicy)
 	if err != nil {
-		return sdk.Request{}, dispatch, softToolBudgetWarned, fmt.Errorf("compact model context: %w", err)
+		return domain.Request{}, dispatch, softToolBudgetWarned, fmt.Errorf("compact model context: %w", err)
 	}
 	request = compactedRequest
 	if compaction.Required() {
@@ -245,24 +255,24 @@ func (l *Loop) prepareRoundRequest(
 		)
 	}
 	if err := request.Validate(); err != nil {
-		return sdk.Request{}, dispatch, softToolBudgetWarned, err
+		return domain.Request{}, dispatch, softToolBudgetWarned, err
 	}
 	if err := validateContextBudgetWithVisionPolicy(l.languageModel, request, visionPolicy); err != nil {
-		return sdk.Request{}, dispatch, softToolBudgetWarned, err
+		return domain.Request{}, dispatch, softToolBudgetWarned, err
 	}
 	return request, dispatch, softToolBudgetWarned, nil
 }
 
-func requestContainsImage(messages []sdk.Message) bool {
-	return (sdk.Request{Messages: messages}).Requirements().Vision
+func requestContainsImage(messages []domain.Message) bool {
+	return (domain.Request{Messages: messages}).Requirements().Vision
 }
 
-func latestUserMessageContainsImage(messages []sdk.Message) bool {
+func latestUserMessageContainsImage(messages []domain.Message) bool {
 	for index := len(messages) - 1; index >= 0; index-- {
-		if messages[index].Role != sdk.RoleUser {
+		if messages[index].Role != domain.RoleUser {
 			continue
 		}
-		return requestContainsImage([]sdk.Message{messages[index]})
+		return requestContainsImage([]domain.Message{messages[index]})
 	}
 	return false
 }

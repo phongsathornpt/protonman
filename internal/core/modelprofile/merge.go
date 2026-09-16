@@ -1,6 +1,6 @@
 package modelprofile
 
-import sdk "github.com/phongsathornpt/protonman/proton-sdk"
+import "github.com/phongsathornpt/protonman/proton-sdk/domain"
 
 func mergeProfile(dst *Resolved, src Profile) {
 	if src.Name != "" {
@@ -12,10 +12,10 @@ func mergeProfile(dst *Resolved, src Profile) {
 	mergeSupportWithSource(&dst.Capabilities.ToolChoiceRequired, src.Capabilities.ToolChoiceRequired, &dst.Provenance.ToolChoiceRequired, MetadataSourceBuiltin)
 	mergeSupportWithSource(&dst.Reasoning.Support, src.Reasoning.Support, &dst.Provenance.ReasoningSupport, MetadataSourceBuiltin)
 	if len(src.Reasoning.Levels) > 0 {
-		dst.Reasoning.Levels = append([]sdk.ReasoningEffort(nil), src.Reasoning.Levels...)
+		dst.Reasoning.Levels = append([]domain.ReasoningEffort(nil), src.Reasoning.Levels...)
 		dst.Provenance.ReasoningLevels = MetadataSourceBuiltin
 	}
-	if src.Reasoning.Default != sdk.ReasoningDefault {
+	if src.Reasoning.Default != domain.ReasoningDefault {
 		dst.Reasoning.Default = src.Reasoning.Default
 		dst.Provenance.ReasoningDefault = MetadataSourceBuiltin
 	}
@@ -44,6 +44,11 @@ func mergeProfile(dst *Resolved, src Profile) {
 		dst.Compatibility.ToolSchemaDialect = src.Compatibility.ToolSchemaDialect
 		dst.Provenance.ToolSchemaDialect = MetadataSourceBuiltin
 	}
+	if src.Compatibility.ThinkingMode != ThinkingModeDefault {
+		dst.Compatibility.ThinkingMode = src.Compatibility.ThinkingMode
+		dst.Provenance.ThinkingMode = MetadataSourceBuiltin
+	}
+	mergeSupportWithSource(&dst.Compatibility.ForcedToolChoice, src.Compatibility.ForcedToolChoice, &dst.Provenance.ForcedToolChoice, MetadataSourceBuiltin)
 }
 
 func mergeCatalog(dst *Resolved, src CatalogMetadata) {
@@ -71,6 +76,18 @@ func mergeCatalog(dst *Resolved, src CatalogMetadata) {
 		dst.MaxOutputTokens = src.MaxOutputTokens
 		dst.Provenance.MaxOutputTokens = MetadataSourceCatalog
 	}
+	if src.ToolSchemaDialect == ToolSchemaGeminiSubset {
+		dst.Compatibility.ToolSchemaDialect = src.ToolSchemaDialect
+		dst.Provenance.ToolSchemaDialect = MetadataSourceCatalog
+	}
+	if src.ThinkingMode == ThinkingModeAdaptive || src.ThinkingMode == ThinkingModeManual || src.ThinkingMode == ThinkingModeUnsupported {
+		dst.Compatibility.ThinkingMode = src.ThinkingMode
+		dst.Provenance.ThinkingMode = MetadataSourceCatalog
+	}
+	if src.VisionPolicy != nil && validateVisionPolicy(*src.VisionPolicy) == nil {
+		dst.VisionPolicy = *src.VisionPolicy
+		dst.Provenance.VisionPolicy = MetadataSourceCatalog
+	}
 	if src.Reasoning == nil {
 		return
 	}
@@ -81,15 +98,15 @@ func mergeCatalog(dst *Resolved, src CatalogMetadata) {
 		dst.Provenance.ReasoningSupport = MetadataSourceCatalog
 		if support == SupportNo {
 			dst.Reasoning.Levels = nil
-			dst.Reasoning.Default = sdk.ReasoningDefault
+			dst.Reasoning.Default = domain.ReasoningDefault
 			return
 		}
 	}
 	if len(src.Reasoning.Levels) > 0 {
-		dst.Reasoning.Levels = append([]sdk.ReasoningEffort(nil), src.Reasoning.Levels...)
+		dst.Reasoning.Levels = append([]domain.ReasoningEffort(nil), src.Reasoning.Levels...)
 		dst.Provenance.ReasoningLevels = MetadataSourceCatalog
 	}
-	if src.Reasoning.Default != sdk.ReasoningDefault {
+	if src.Reasoning.Default != domain.ReasoningDefault {
 		dst.Reasoning.Default = src.Reasoning.Default
 		dst.Provenance.ReasoningDefault = MetadataSourceCatalog
 	}

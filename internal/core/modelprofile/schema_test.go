@@ -44,8 +44,54 @@ func TestPublishInputSchemaLowersGeminiOneOfToBroadObject(t *testing.T) {
 	} else if _, ok := got["id"]; !ok {
 		t.Fatalf("required missing id: %#v", required)
 	}
+	if want := []any{"id", "op"}; !reflect.DeepEqual(required, want) {
+		t.Fatalf("required order = %#v, want deterministic order %#v", required, want)
+	}
 	if _, exists := canonical["additionalProperties"]; !exists {
 		t.Fatal("canonical schema was mutated")
+	}
+}
+
+func TestPublishInputSchemaGeminiOneOfRequiredOrderIsDeterministic(t *testing.T) {
+	canonical := map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"value": map[string]any{
+				"oneOf": []any{
+					map[string]any{
+						"type": "object",
+						"properties": map[string]any{
+							"zeta":  map[string]any{"type": "string"},
+							"alpha": map[string]any{"type": "string"},
+						},
+						"required": []any{"zeta", "alpha"},
+					},
+					map[string]any{
+						"type": "object",
+						"properties": map[string]any{
+							"beta": map[string]any{"type": "string"},
+						},
+						"required": []any{"beta", "alpha"},
+					},
+				},
+			},
+		},
+	}
+
+	first := PublishInputSchema(
+		Resolved{Compatibility: CompatibilityPolicy{ToolSchemaDialect: ToolSchemaGeminiSubset}},
+		canonical,
+	)
+	second := PublishInputSchema(
+		Resolved{Compatibility: CompatibilityPolicy{ToolSchemaDialect: ToolSchemaGeminiSubset}},
+		canonical,
+	)
+	if !reflect.DeepEqual(first, second) {
+		t.Fatalf("repeated lowering differs:\nfirst:  %#v\nsecond: %#v", first, second)
+	}
+	value := first["properties"].(map[string]any)["value"].(map[string]any)
+	if required, want := value["required"], []any{"alpha"}; !reflect.DeepEqual(required, want) {
+		t.Fatalf("merged required = %#v, want %#v", required, want)
 	}
 }
 

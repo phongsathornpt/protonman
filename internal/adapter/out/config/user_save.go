@@ -6,9 +6,9 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/phongsathornpt/protonman/internal/app/appdirs"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	"github.com/phongsathornpt/protonman/internal/platform/appdirs"
+	"github.com/phongsathornpt/protonman/proton-sdk/domain"
 )
 
 var userConfigMutationMu sync.Mutex
@@ -94,13 +94,13 @@ func SaveUserSubagentsEnabled(homeDir string, enabled bool) error {
 }
 
 // SaveUserReasoningEffort updates the portable agent reasoning override in ~/.protonman/config.toml.
-func SaveUserReasoningEffort(homeDir string, effort sdk.ReasoningEffort) error {
+func SaveUserReasoningEffort(homeDir string, effort domain.ReasoningEffort) error {
 	if !effort.Valid() {
 		return fmt.Errorf("invalid reasoning effort %q", effort)
 	}
 	return modifyUserConfigFile(homeDir, false, func(doc *fileDocument) {
 		value := string(effort)
-		if effort == sdk.ReasoningDefault {
+		if effort == domain.ReasoningDefault {
 			value = "auto"
 		}
 		doc.Agent.ReasoningEffort = &value

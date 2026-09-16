@@ -2,7 +2,7 @@ package modelsetup
 
 import (
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	"github.com/phongsathornpt/protonman/proton-sdk/domain"
 )
 
 func ActiveProviderName(names []string, index int) string {
@@ -12,7 +12,7 @@ func ActiveProviderName(names []string, index int) string {
 	return names[index]
 }
 
-func ReasoningIndex(choices []sdk.ReasoningEffort, desired sdk.ReasoningEffort) int {
+func ReasoningIndex(choices []domain.ReasoningEffort, desired domain.ReasoningEffort) int {
 	for i, effort := range choices {
 		if effort == desired {
 			return i
@@ -21,16 +21,16 @@ func ReasoningIndex(choices []sdk.ReasoningEffort, desired sdk.ReasoningEffort) 
 	return 0
 }
 
-func SelectedReasoning(choices []sdk.ReasoningEffort, index int) sdk.ReasoningEffort {
+func SelectedReasoning(choices []domain.ReasoningEffort, index int) domain.ReasoningEffort {
 	if index < 0 || index >= len(choices) {
-		return sdk.ReasoningDefault
+		return domain.ReasoningDefault
 	}
 	return choices[index]
 }
 
-func MoveReasoning(choices []sdk.ReasoningEffort, index, delta int) (int, sdk.ReasoningEffort) {
+func MoveReasoning(choices []domain.ReasoningEffort, index, delta int) (int, domain.ReasoningEffort) {
 	if len(choices) == 0 {
-		return 0, sdk.ReasoningDefault
+		return 0, domain.ReasoningDefault
 	}
 	index = (index + delta + len(choices)) % len(choices)
 	return index, choices[index]

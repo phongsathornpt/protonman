@@ -1,6 +1,9 @@
 package agenttool
 
-import "github.com/phongsathornpt/protonman/internal/feature/agent"
+import (
+	"github.com/phongsathornpt/protonman/internal/core/agentprofile"
+	"github.com/phongsathornpt/protonman/internal/feature/agent"
+)
 
 func agentStateSchema() map[string]any {
 	return map[string]any{"type": "string", "enum": []any{
@@ -62,7 +65,7 @@ func agentStatusSchema() map[string]any {
 			"session_id":   map[string]any{"type": "string"},
 			"id":           map[string]any{"type": "string"},
 			"parent_id":    map[string]any{"type": "string"},
-			"profile":      map[string]any{"type": "string", "enum": agent.SubagentProfileNames()},
+			"profile":      map[string]any{"type": "string", "enum": agentprofile.SubagentProfileNames()},
 			"provider":     map[string]any{"type": "string"},
 			"model":        map[string]any{"type": "string"},
 			"task":         map[string]any{"type": "string"},
@@ -89,7 +92,7 @@ func delegateTaskOutputSchema() map[string]any {
 		"properties": map[string]any{
 			"agentId":  map[string]any{"type": "string"},
 			"agent_id": map[string]any{"type": "string"},
-			"profile":  map[string]any{"type": "string", "enum": agent.SubagentProfileNames()},
+			"profile":  map[string]any{"type": "string", "enum": agentprofile.SubagentProfileNames()},
 			"status":   agentStateSchema(),
 			"optional": map[string]any{"type": "boolean"},
 			"taskId":   map[string]any{"type": "string"},
@@ -133,7 +136,7 @@ func resumeAgentOutputSchema() map[string]any {
 			"resumed_from": map[string]any{"type": "string"},
 			"agentId":      map[string]any{"type": "string"},
 			"agent_id":     map[string]any{"type": "string"},
-			"profile":      map[string]any{"type": "string", "enum": agent.SubagentProfileNames()},
+			"profile":      map[string]any{"type": "string", "enum": agentprofile.SubagentProfileNames()},
 			"status":       agentStateSchema(),
 		},
 		"required":             []any{"profile", "status"},

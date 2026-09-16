@@ -28,12 +28,32 @@ jobs:
           cache: true
       - name: Lint
         run: make lint
-      - name: Architecture
+      - name: Architecture (default graph)
         run: make test-architecture
       - name: Test
         run: make test
       - name: Build
         run: make build
+
+  quality-macos:
+    name: quality-macos
+    # macOS arm64 is a published release target, so the suite must stay green
+    # there. Host path handling differs (/var is a symlink to /private/var), which
+    # Linux-only CI cannot observe.
+    runs-on: macos-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Lint
+        run: make lint
+      - name: Test
+        run: make test
 
   desktop:
     name: desktop
@@ -55,8 +75,10 @@ jobs:
             libxkbcommon-dev \
             wayland-protocols \
             xorg-dev
+      - name: Architecture (desktop packages visible)
+        run: make test-architecture-desktop
       - name: Test Desktop
-        run: go test -tags desktop ./internal/adapter/in/desktop ./cmd/protonman-desktop
+        run: make test-desktop
       - name: Build Desktop with GUI assets
         run: make desktop
 

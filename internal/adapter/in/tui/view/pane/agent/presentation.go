@@ -11,6 +11,7 @@ import (
 	panecommon "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane/common"
 	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/style"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/textview"
+	"github.com/phongsathornpt/protonman/internal/core/agentprofile"
 	"github.com/phongsathornpt/protonman/internal/feature/agent"
 )
 
@@ -66,27 +67,27 @@ func AgentRows(snapshot AgentsSnapshot) []string {
 		header := AgentDisplayProfile(st) + "  " + textview.PadRight(activityLabel, 10) + " " + FormatElapsed(AgentDisplayDuration(st, now))
 		rows = append(rows, agentStateStyle(st.State).Render(strings.TrimSpace(header)))
 		if task := strings.TrimSpace(st.Task); task != "" {
-			rows = append(rows, "  "+textview.TruncateEllipsis(task, max(12, snapshot.Width-8)))
+			rows = append(rows, "  "+textview.TruncateEllipsis(task, max(1, snapshot.Width-8)))
 		}
 		if len(st.DependsOn) > 0 {
 			deps := "deps · " + strings.Join(st.DependsOn, ", ")
-			rows = append(rows, tuistyle.MutedStyle.Render("  "+textview.TruncateEllipsis(deps, max(12, snapshot.Width-8))))
+			rows = append(rows, tuistyle.MutedStyle.Render("  "+textview.TruncateEllipsis(deps, max(1, snapshot.Width-8))))
 		}
 		if label := AgentModelLabel(st); label != "" {
-			rows = append(rows, tuistyle.MutedStyle.Render("  "+textview.TruncateEllipsis(label, max(12, snapshot.Width-8))))
+			rows = append(rows, tuistyle.MutedStyle.Render("  "+textview.TruncateEllipsis(label, max(1, snapshot.Width-8))))
 		}
 		if activity := currentActivity; activity != "" && showCurrentActivity {
-			rows = append(rows, tuistyle.MutedStyle.Render("  "+textview.TruncateEllipsis(activity, max(12, snapshot.Width-8))))
+			rows = append(rows, tuistyle.MutedStyle.Render("  "+textview.TruncateEllipsis(activity, max(1, snapshot.Width-8))))
 		} else if reason := strings.TrimSpace(st.Reason); reason != "" {
-			rows = append(rows, tuistyle.ErrorStyle.Render("  "+textview.TruncateEllipsis(reason, max(12, snapshot.Width-8))))
+			rows = append(rows, tuistyle.ErrorStyle.Render("  "+textview.TruncateEllipsis(reason, max(1, snapshot.Width-8))))
 		}
-		rows = append(rows, tuistyle.MutedStyle.Render(textview.TruncateEllipsis("  id: "+st.ID, max(12, snapshot.Width-8))))
+		rows = append(rows, tuistyle.MutedStyle.Render(textview.TruncateEllipsis("  id: "+st.ID, max(1, snapshot.Width-8))))
 	}
 	if hidden := len(retained) - len(visible); hidden > 0 {
 		rows = append(rows, tuistyle.MutedStyle.Render(fmt.Sprintf("… %d more retained", hidden)))
 	}
 	if panecommon.ModeForHeight(snapshot.Height) != panecommon.LayoutTiny && snapshot.Width >= 40 {
-		rows = append(rows, "", tuistyle.MutedStyle.Render(textview.TruncateEllipsis("Status: "+agentuistate.LegendCompact(), max(12, snapshot.Width-4))))
+		rows = append(rows, "", tuistyle.MutedStyle.Render(textview.TruncateEllipsis("Status: "+agentuistate.LegendCompact(), max(1, snapshot.Width-4))))
 	}
 	return rows
 }
@@ -115,7 +116,7 @@ func AgentDisplayProfile(st agent.AgentStatus) string {
 		if idx := strings.IndexByte(prefix, '-'); idx >= 0 {
 			prefix = prefix[:idx]
 		}
-		if parsed, err := agent.ParseProfile(prefix); err == nil {
+		if parsed, err := agentprofile.ParseProfile(prefix); err == nil {
 			profile = parsed
 		}
 	}

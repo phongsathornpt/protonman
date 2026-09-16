@@ -16,6 +16,13 @@ type LanguageModel interface {
 	Stream(ctx context.Context, request domain.Request) (Stream, error)
 }
 
+// RequestPreparer optionally normalizes a request before the turn engine
+// estimates context cost and applies compaction. Implementations must be
+// idempotent for requests they have already prepared.
+type RequestPreparer interface {
+	PrepareRequest(context.Context, domain.Request) (domain.Request, error)
+}
+
 // MetadataModel is the canonical extension point for model metadata.
 type MetadataModel interface {
 	Metadata() domain.ModelMetadata

@@ -10,7 +10,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/base/runtimepolicy"
 	corememory "github.com/phongsathornpt/protonman/internal/core/memory"
 	"github.com/phongsathornpt/protonman/internal/core/session"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	"github.com/phongsathornpt/protonman/proton-sdk/port"
 )
 
 const minExtractionConfidence = 0.65
@@ -20,14 +20,14 @@ const minExtractionConfidence = 0.65
 type Extractor struct {
 	sessions         session.Repository
 	memories         corememory.Repository
-	model            sdk.LanguageModel
+	model            port.LanguageModel
 	currentSessionID string
 	workspaceKey     string
 	policy           runtimepolicy.MemoryPolicy
 	now              func() time.Time
 }
 
-func NewExtractor(sessions session.Repository, memories corememory.Repository, model sdk.LanguageModel, currentSessionID, workspaceKey string, policy runtimepolicy.MemoryPolicy) *Extractor {
+func NewExtractor(sessions session.Repository, memories corememory.Repository, model port.LanguageModel, currentSessionID, workspaceKey string, policy runtimepolicy.MemoryPolicy) *Extractor {
 	if policy.MaxExtractionSessions <= 0 || policy.MaxExtractionInputBytes <= 0 {
 		policy = runtimepolicy.DurableMemory()
 	}
@@ -116,16 +116,19 @@ func (e *Extractor) Run(ctx context.Context) error {
 	return nil
 }
 
-func (e *Extractor) StartBackground() {
+func (e *Extractor) StartBackground(parent context.Context) {
 	if e == nil {
 		return
+	}
+	if parent == nil {
+		parent = context.Background()
 	}
 	timeout := e.policy.ExtractionTimeout
 	if timeout <= 0 {
 		timeout = runtimepolicy.DurableMemory().ExtractionTimeout
 	}
 	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), timeout)
+		ctx, cancel := context.WithTimeout(parent, timeout)
 		defer cancel()
 		if err := e.Run(ctx); err != nil {
 			slog.Debug("background memory extraction stopped", "error", err)

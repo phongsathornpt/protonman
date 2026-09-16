@@ -6,10 +6,10 @@ Model identity and provider identity are not natural-language prompt inputs. Dif
 
 ## Prompt ABI
 
-The current managed prompt format is **Prompt ABI v15**:
+The current managed prompt format is **Prompt ABI v16**:
 
 ```text
-<proton-system-prompt version="15">
+<proton-system-prompt version="16">
 ...
 </proton-system-prompt>
 ```
@@ -18,7 +18,7 @@ The Prompt ABI version identifies Protonman's managed prompt format and ordering
 
 Bump the Prompt ABI when a change intentionally alters the managed prompt's model-facing contract, section topology, or serialization in a way that should invalidate assumptions about an older prompt shape.
 
-Prompt ABI v15 establishes a structural model-agnostic boundary. The prompt API no longer contains model-specific natural-language hint fields, and model profiles no longer expose an agent prompt-policy surface. A future change that reintroduces model/provider identity as prompt prose is therefore an architecture change, not a routine profile extension, and must be treated as an ABI review item.
+Prompt ABI v16 preserves the structural model-agnostic boundary from v15 and adds positive routing guidance for choosing the narrowest available workspace capability. The prompt API contains no model-specific natural-language hint fields, and model profiles expose no agent prompt-policy surface.
 
 ## Cache-aware section topology
 
@@ -74,7 +74,7 @@ Model profiles may describe:
 - compaction policy;
 - tool-schema and protocol compatibility.
 
-Model profiles must not contain natural-language instructions intended to change agent behavior. Prompt ABI v15 removes the former model-prompt compatibility surface completely: there is no `ModelPromptHints`, `AgentPolicy`, `PromptHints`, or prompt-hint provenance in the runtime model-profile/prompt types.
+Model profiles must not contain natural-language instructions intended to change agent behavior. Prompt ABI v16 preserves the v15 removal of the former model-prompt compatibility surface completely: there is no `ModelPromptHints`, `AgentPolicy`, `PromptHints`, or prompt-hint provenance in the runtime model-profile/prompt types.
 
 A resolved model profile may change how Protonman constructs or transports a request, but it must not mutate the canonical prompt text merely because the selected provider or model changed.
 
@@ -142,7 +142,7 @@ Prompt ABI v13 clarifies that the current explicit user request owns the immedia
 
 Prompt ABI v14 adds explicit parent-task/subagent linkage: when delegated work corresponds to a tracked TODO item, the parent passes `taskId` and runtime lifecycle events own `in_progress`/terminal task reconciliation.
 
-Prompt ABI v15 removes the legacy model-specific natural-language prompt-policy surface. Model/provider identity remains runtime metadata only, the old compatibility fields/types are gone, and the canonical managed prompt is model agnostic by construction.
+Prompt ABI v16 preserves the v15 removal of the legacy model-specific natural-language prompt-policy surface. Model/provider identity remains runtime metadata only, the old compatibility fields/types are gone, and the canonical managed prompt is model agnostic by construction.
 
 Runtime-delivered child content is untrusted evidence, not instruction material. It is appended after the stable managed system prompt and is not persisted as synthetic user conversation history, preserving the system-prefix cache boundary while keeping instruction hierarchy explicit.
 
@@ -163,6 +163,6 @@ Cache- and routing-sensitive behavior is covered primarily in `internal/engine/p
 - delegation routing distinguishes local work, AGILITY exploration, STRENGTH implementation, and INTELLIGENCE cross-cutting reasoning;
 - delegation preserves runtime-owned result delivery and completion semantics;
 - the turn engine publishes the managed prompt as the model-facing system message;
-- Prompt ABI assertions in unit, turn, and e2e tests agree on v15.
+- Prompt ABI assertions in unit, turn, and e2e tests agree on v16.
 
 When adding or moving a dynamic section, add a divergence-boundary regression test rather than relying only on substring assertions. When changing delegation policy, prefer semantic-anchor tests over exact full-section snapshots so wording can evolve without weakening the routing contract.

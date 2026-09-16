@@ -7,7 +7,7 @@ import (
 
 	"github.com/phongsathornpt/protonman/internal/base/contextutil"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	"github.com/phongsathornpt/protonman/proton-sdk/domain"
 )
 
 type executedCall struct {
@@ -25,7 +25,7 @@ type executedCall struct {
 func (l *Loop) runRound(
 	parent context.Context,
 	round int,
-	request sdk.Request,
+	request domain.Request,
 	dispatch toolDispatchState,
 	progress *progressGuard,
 	resultBudget *toolResultBudget,

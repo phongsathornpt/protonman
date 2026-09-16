@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	"github.com/phongsathornpt/protonman/proton-sdk/domain"
 )
 
 // Phase is the user-visible lifecycle state of the active TUI operation.
@@ -53,7 +53,7 @@ type Input struct {
 	PermissionPending bool
 	Canceling         bool
 	Streaming         bool
-	Retry             sdk.RetryEvent
+	Retry             domain.RetryEvent
 	RunningTool       string
 	ExplicitActivity  string
 	FallbackActivity  string
@@ -182,7 +182,7 @@ func agentCount(count int) string {
 }
 
 // RetryStatus normalizes retry countdown and reason copy for every TUI surface.
-func RetryStatus(retry sdk.RetryEvent, now time.Time) (string, []string, bool) {
+func RetryStatus(retry domain.RetryEvent, now time.Time) (string, []string, bool) {
 	if retry.Attempt <= 0 || retry.RetryAt.IsZero() {
 		return "", nil, false
 	}
@@ -197,7 +197,7 @@ func RetryStatus(retry sdk.RetryEvent, now time.Time) (string, []string, bool) {
 		}
 	}
 	activity := "retrying " + wait
-	if retry.Phase == sdk.RetryPhaseCooldown {
+	if retry.Phase == domain.RetryPhaseCooldown {
 		if wait == "now" {
 			activity = "cooldown complete"
 		} else {

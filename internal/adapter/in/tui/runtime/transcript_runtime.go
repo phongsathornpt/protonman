@@ -42,7 +42,7 @@ func (m *bubbleModel) refreshTranscriptViewport(forceTail bool) {
 	if m.panes.rawTranscript {
 		content = m.historyState.Raw()
 	} else {
-		content = strings.Join(m.historyState.RenderLinesAt(maxInt(8, m.panes.transcript.Width())), "\n")
+		content = strings.Join(m.historyState.RenderLinesAt(maxInt(1, m.panes.transcript.Width())), "\n")
 	}
 	if strings.TrimSpace(content) == "" {
 		content = mutedStyle.Render("No transcript yet.")

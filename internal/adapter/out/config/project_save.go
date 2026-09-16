@@ -8,9 +8,9 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/phongsathornpt/protonman/internal/app/appdirs"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	"github.com/phongsathornpt/protonman/internal/platform/appdirs"
+	"github.com/phongsathornpt/protonman/proton-sdk/domain"
 )
 
 var projectConfigMutationMu sync.Mutex
@@ -37,12 +37,12 @@ func SaveProjectSubagentsEnabled(workDir string, enabled bool) error {
 }
 
 // SaveProjectReasoningEffort updates the project-local reasoning preference.
-func SaveProjectReasoningEffort(workDir string, effort sdk.ReasoningEffort) error {
+func SaveProjectReasoningEffort(workDir string, effort domain.ReasoningEffort) error {
 	if !effort.Valid() {
 		return fmt.Errorf("invalid reasoning effort %q", effort)
 	}
 	value := string(effort)
-	if effort == sdk.ReasoningDefault {
+	if effort == domain.ReasoningDefault {
 		value = "auto"
 	}
 	return modifyProjectConfigFile(workDir, func(doc *fileDocument) {

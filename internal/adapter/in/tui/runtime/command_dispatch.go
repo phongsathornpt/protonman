@@ -12,12 +12,12 @@ import (
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/textview"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/app"
-	"github.com/phongsathornpt/protonman/internal/app/appdirs"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/feature/skill"
 	tododomain "github.com/phongsathornpt/protonman/internal/feature/todo"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	"github.com/phongsathornpt/protonman/internal/platform/appdirs"
+	"github.com/phongsathornpt/protonman/proton-sdk/domain"
 )
 
 func (m *bubbleModel) executeCommand(line string) tea.Cmd {
@@ -266,7 +266,7 @@ func (m *bubbleModel) resumeSession(targetID string) tea.Cmd {
 		m.agentProfile = detail.AgentProfile
 	}
 	if detail.ReasoningEffort != "" {
-		if effort, parseErr := sdk.ParseReasoningEffort(detail.ReasoningEffort); parseErr == nil {
+		if effort, parseErr := domain.ParseReasoningEffort(detail.ReasoningEffort); parseErr == nil {
 			m.reasoningEffort = effort
 		}
 	}

@@ -11,8 +11,8 @@ import (
 	"strings"
 
 	"github.com/phongsathornpt/protonman/internal/adapter/out/sessionfs"
-	"github.com/phongsathornpt/protonman/internal/app/appdirs"
 	"github.com/phongsathornpt/protonman/internal/core/session"
+	"github.com/phongsathornpt/protonman/internal/platform/appdirs"
 )
 
 func runSessionCommand(ctx context.Context, args []string) (bool, error) {

@@ -20,8 +20,8 @@ import (
 	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/app"
-	"github.com/phongsathornpt/protonman/internal/app/appdirs"
 	"github.com/phongsathornpt/protonman/internal/base/runtimepolicy"
+	"github.com/phongsathornpt/protonman/internal/platform/appdirs"
 )
 
 const providerViewID = "add_provider"
@@ -125,6 +125,7 @@ func newProviderPaneViewWithPreset(preset string) *providerPaneView {
 		filterFreeOnly: draft.FilterFreeOnly, activateOnSave: true,
 	}
 	pv.syncInputFocus()
+	pv.resize(defaultBubbleWidth, defaultBubbleHeight)
 	return pv
 }
 
@@ -202,6 +203,7 @@ func (v *providerPaneView) setFetchedModels(models []model.RemoteModel) {
 	v.models, _ = providerdomain.SortFetchedModels(models, v.isOpenCode())
 	v.filterFreeOnly = v.isOpenCode() && strings.TrimSpace(v.apiKeyInput.Value()) == ""
 	v.modelPickerSet = false
+	v.ensureModelPicker()
 }
 
 func (v *providerPaneView) currentModels() []model.RemoteModel {
@@ -281,7 +283,7 @@ func (v *providerPaneView) syncInputFocus() {
 }
 
 func (v *providerPaneView) handleModelSelectKey(ctx paneRenderContext, message tea.KeyPressMsg) paneKeyResult {
-	v.ensureModelPicker(ctx)
+	v.ensureModelPicker()
 	switch {
 	case key.Matches(message, paneutil.Keys.Escape):
 		v.state = providerStateInput
@@ -292,7 +294,7 @@ func (v *providerPaneView) handleModelSelectKey(ctx paneRenderContext, message t
 		if v.isOpenCode() && strings.TrimSpace(v.apiKeyInput.Value()) != "" {
 			v.filterFreeOnly = !v.filterFreeOnly
 			v.modelPickerSet = false
-			v.ensureModelPicker(ctx)
+			v.ensureModelPicker()
 		}
 		return paneKeyResult{handled: true}
 	case message.Text >= "1" && message.Text <= "9":
@@ -621,7 +623,7 @@ func providerEditorListItems(v *providerPaneView) []list.Item {
 	return items
 }
 
-func (v *providerPaneView) ensureModelPicker(ctx paneRenderContext) {
+func (v *providerPaneView) ensureModelPicker() {
 	if v == nil {
 		return
 	}
@@ -629,7 +631,7 @@ func (v *providerPaneView) ensureModelPicker(ctx paneRenderContext) {
 	if !v.modelPickerSet {
 		delegate := list.NewDefaultDelegate()
 		delegate.SetSpacing(0)
-		v.modelPicker = paneutil.NewMinimalList(items, delegate, maxInt(20, ctx.width-8), maxInt(6, minInt(20, ctx.height-4)))
+		v.modelPicker = paneutil.NewMinimalList(items, delegate, defaultBubbleWidth-8, maxProviderSelectRows)
 		v.modelPicker.SetFilteringEnabled(false)
 		v.modelPicker.SetStatusBarItemName("model", "models")
 		v.modelPicker.InfiniteScrolling = true
@@ -637,20 +639,10 @@ func (v *providerPaneView) ensureModelPicker(ctx paneRenderContext) {
 	} else {
 		_ = v.modelPicker.SetItems(items)
 	}
-	visibleRows := 7
-	switch layoutModeForHeight(ctx.height) {
-	case layoutTiny:
-		visibleRows = 2
-	case layoutCompact:
-		visibleRows = 4
-	}
-	v.modelPicker.SetSize(maxInt(20, ctx.width-8), visibleRows)
 }
 
 func (v *providerPaneView) Render(ctx paneRenderContext) string {
-	v.resizeInputs(ctx.width)
 	if v.state == providerStateSelectModel {
-		v.ensureModelPicker(ctx)
 		items := v.modelPicker.VisibleItems()
 		start, end := paneWindow(len(items), v.modelPicker.Index(), 7, layoutModeForHeight(ctx.height))
 		listRows := make([]string, 0, end-start)
@@ -725,10 +717,29 @@ func providerEditorKeyboardHelp(width int, state providerPaneState, editing, act
 }
 
 func (v *providerPaneView) resizeInputs(width int) {
-	inputWidth := maxInt(8, width-18)
+	inputWidth := maxInt(1, width-18)
 	v.nameInput.SetWidth(inputWidth)
 	v.endpointInput.SetWidth(inputWidth)
 	v.apiKeyInput.SetWidth(inputWidth)
+}
+
+func (v *providerPaneView) resize(width, height int) {
+	if v == nil {
+		return
+	}
+	v.resizeInputs(width)
+	if v.state != providerStateSelectModel {
+		return
+	}
+	v.ensureModelPicker()
+	visibleRows := 7
+	switch layoutModeForHeight(height) {
+	case layoutTiny:
+		visibleRows = 2
+	case layoutCompact:
+		visibleRows = 4
+	}
+	v.modelPicker.SetSize(maxInt(1, width-8), visibleRows)
 }
 
 func providerEditorSnapshot(ctx paneRenderContext, v *providerPaneView) providerpane.ProviderEditorSnapshot {

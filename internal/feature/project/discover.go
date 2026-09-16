@@ -4,38 +4,23 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	project "github.com/phongsathornpt/protonman/internal/core/project"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 
-	"github.com/phongsathornpt/protonman/internal/app/appdirs"
+	"github.com/phongsathornpt/protonman/internal/platform/appdirs"
 )
 
 // Options controls project-local Protonman discovery.
-type Options struct {
-	HomeDir       string
-	WorkDir       string
-	Trusted       bool
-	ConfigSources []string
-}
-
-// State describes project-local Protonman resources without loading configuration.
-type State struct {
-	WorkDir      string
-	Available    bool
-	ProtonDir    string
-	Exists       bool
-	Trusted      bool
-	ConfigPath   string
-	ConfigExists bool
-	ConfigLoaded bool
-	SkillsPath   string
-	SkillsExists bool
-	SkillCount   int
-	LockPath     string
-	LockExists   bool
-}
+// Options, State, and InitResult are core-owned contracts aliased for the
+// filesystem implementation. The canonical definitions live in
+// internal/core/project.
+type (
+	Options = project.Options
+	State   = project.State
+)
 
 // Discover inspects the project-local .protonman directory.
 func Discover(ctx context.Context, opts Options) (State, error) {

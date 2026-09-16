@@ -17,4 +17,4 @@ profile = 'universal'
 reasoning_effort = 'auto'
 
 [skills]
-active = ['golang-code-style', 'golang-design-patterns', 'golang-error-handling', 'golang-performance', 'golang-pro', 'golang-code-review']
+active = ['golang-code-style', 'golang-design-patterns', 'golang-error-handling', 'golang-performance']

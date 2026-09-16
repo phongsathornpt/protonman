@@ -49,7 +49,7 @@ func (*shortcutsPaneView) Render(ctx paneRenderContext) string {
 		shortcutRow(keys.Quit),
 	}
 	if layoutModeForHeight(ctx.height) == layoutNormal && ctx.subagentsEnabled {
-		legend := truncateWithEllipsis("Status: "+agentui.LegendCompact(), maxInt(12, ctx.width-8))
+		legend := truncateWithEllipsis("Status: "+agentui.LegendCompact(), maxInt(1, ctx.width-8))
 		rows = append(rows, "", mutedStyle.Render(legend))
 	}
 	help := paneKeyboardHelp(ctx.width-4, "esc/?", "Go Back")
@@ -343,7 +343,7 @@ func skillListItems(items []skillListItem) []list.Item {
 }
 
 func skillsListWidth(ctx paneRenderContext) int {
-	return maxInt(12, ctx.width-8)
+	return maxInt(1, ctx.width-8)
 }
 
 func skillsListHeight(ctx paneRenderContext) int {
@@ -364,13 +364,22 @@ func (v *skillsPaneView) syncTitle(ctx paneRenderContext) {
 	v.picker.Title = fmt.Sprintf("Skills · %d/%d active", active, count)
 }
 
-func (v *skillsPaneView) Render(ctx paneRenderContext) string {
+func (v *skillsPaneView) resize(ctx paneRenderContext) {
+	if v == nil {
+		return
+	}
 	v.ensurePicker(ctx)
 	if !v.initialized {
-		return ""
+		return
 	}
 	v.picker.SetSize(skillsListWidth(ctx), skillsListHeight(ctx))
 	v.syncTitle(ctx)
+}
+
+func (v *skillsPaneView) Render(ctx paneRenderContext) string {
+	if !v.initialized {
+		return ""
+	}
 	active := 0
 	for _, skill := range ctx.skillItems {
 		if skill.active {
@@ -506,11 +515,18 @@ func (v *sessionResumePaneView) selectedItem() (sessionListItem, bool) {
 const maxSessionResumeRows = 7
 
 func sessionResumeListWidth(ctx paneRenderContext) int {
-	return maxInt(12, ctx.width-8)
+	return maxInt(1, ctx.width-8)
 }
 
 func sessionResumeListHeight(ctx paneRenderContext) int {
 	return maxInt(4, min(maxSessionResumeRows, ctx.height-6))
+}
+
+func (v *sessionResumePaneView) resize(ctx paneRenderContext) {
+	if v == nil || !v.initialized || len(v.items) == 0 {
+		return
+	}
+	v.picker.SetSize(sessionResumeListWidth(ctx), sessionResumeListHeight(ctx))
 }
 
 func (v *sessionResumePaneView) Render(ctx paneRenderContext) string {
@@ -519,7 +535,6 @@ func (v *sessionResumePaneView) Render(ctx paneRenderContext) string {
 		help := paneKeyboardHelp(ctx.width-4, "esc/q", "Go Back")
 		return renderModalRows(ctx, panecommon.ToneColor(panecommon.ToneAssistant), paneSection("Sessions", rows, help, "0 sessions", ctx.width))
 	}
-	v.picker.SetSize(sessionResumeListWidth(ctx), sessionResumeListHeight(ctx))
 	help := paneKeyboardHelp(ctx.width-4, "↑/↓", "Navigate", "enter", "Resume", "/", "Filter", "esc/q", "Close")
 
 	items := v.picker.VisibleItems()
@@ -528,7 +543,7 @@ func (v *sessionResumePaneView) Render(ctx paneRenderContext) string {
 	if v.picker.SettingFilter() || v.picker.IsFiltered() {
 		listRows = append(listRows, mutedStyle.Render("Search: ")+userStyle.Render(v.picker.FilterValue()))
 	}
-	contentWidth := maxInt(20, ctx.width-8)
+	contentWidth := maxInt(1, ctx.width-8)
 	for index := start; index < end; index++ {
 		item, ok := items[index].(sessionListItem)
 		if !ok {

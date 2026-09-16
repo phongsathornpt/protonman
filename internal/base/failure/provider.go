@@ -4,7 +4,7 @@ import (
 	"errors"
 	"strings"
 
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	"github.com/phongsathornpt/protonman/proton-sdk/domain"
 )
 
 // Classified describes a normalized application failure without exposing provider-specific enums.
@@ -15,29 +15,29 @@ type Classified struct {
 
 // ClassifyProvider maps proton-sdk provider errors into the application failure catalog.
 func ClassifyProvider(err error) (Classified, bool) {
-	var providerErr *sdk.ProviderError
+	var providerErr *domain.ProviderError
 	if !errors.As(err, &providerErr) {
 		return Classified{}, false
 	}
 	code := CodeModelError
 	switch providerErr.Kind {
-	case sdk.ErrorAuthentication:
+	case domain.ErrorAuthentication:
 		code = CodeModelAuthentication
-	case sdk.ErrorPermission:
+	case domain.ErrorPermission:
 		code = CodeModelPermission
-	case sdk.ErrorRateLimit:
+	case domain.ErrorRateLimit:
 		code = CodeModelRateLimited
-	case sdk.ErrorModelNotFound:
+	case domain.ErrorModelNotFound:
 		code = CodeModelUnavailable
-	case sdk.ErrorContextLength:
+	case domain.ErrorContextLength:
 		code = CodeModelContextLimit
-	case sdk.ErrorOverloaded:
+	case domain.ErrorOverloaded:
 		code = CodeModelOverloaded
-	case sdk.ErrorTransport:
+	case domain.ErrorTransport:
 		code = CodeNetworkUnavailable
-	case sdk.ErrorProtocol:
+	case domain.ErrorProtocol:
 		code = CodeModelProtocol
-	case sdk.ErrorInvalidRequest:
+	case domain.ErrorInvalidRequest:
 		code = CodeModelInvalidRequest
 	}
 	return Classified{Code: code, Message: strings.TrimSpace(providerErr.Message)}, true

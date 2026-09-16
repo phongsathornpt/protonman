@@ -4,13 +4,13 @@ import (
 	"fmt"
 
 	"github.com/phongsathornpt/protonman/internal/core/permission"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	"github.com/phongsathornpt/protonman/proton-sdk/domain"
 )
 
 // UserSettingsRepository persists portable user-level preferences.
 type UserSettingsRepository interface {
 	SaveSubagentsEnabled(bool) error
-	SaveReasoningEffort(sdk.ReasoningEffort) error
+	SaveReasoningEffort(domain.ReasoningEffort) error
 	SaveMaxToolCalls(int) error
 	SavePermissionRule(permission.Rule) error
 	SaveActiveSkills([]string) error
@@ -30,7 +30,7 @@ func (u UserSettings) SaveSubagentsEnabled(enabled bool) error {
 	return u.repository.SaveSubagentsEnabled(enabled)
 }
 
-func (u UserSettings) SaveReasoningEffort(effort sdk.ReasoningEffort) error {
+func (u UserSettings) SaveReasoningEffort(effort domain.ReasoningEffort) error {
 	if u.repository == nil {
 		return fmt.Errorf("user settings repository is unavailable")
 	}

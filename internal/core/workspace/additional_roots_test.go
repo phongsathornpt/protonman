@@ -89,7 +89,15 @@ func TestWorkspaceRelativePathsStillUsePrimaryRoot(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := filepath.Join(primary, "same.txt")
+	// Workspace canonicalizes its root, and temporary directories are themselves
+	// behind symlinks on some hosts (/var -> /private/var on macOS), so compare
+	// against the canonical primary root. The assertion is about root selection,
+	// not about host path resolution.
+	canonicalPrimary, err := filepath.EvalSymlinks(primary)
+	if err != nil {
+		t.Fatalf("resolve primary root symlinks: %v", err)
+	}
+	want := filepath.Join(canonicalPrimary, "same.txt")
 	if got != want {
 		t.Fatalf("Resolve(relative) = %q, want %q", got, want)
 	}

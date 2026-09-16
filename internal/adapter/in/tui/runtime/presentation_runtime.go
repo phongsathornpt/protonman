@@ -17,11 +17,12 @@ import (
 	agentpane "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane/agent"
 	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/style"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
+	"github.com/phongsathornpt/protonman/internal/core/agentprofile"
 	"github.com/phongsathornpt/protonman/internal/core/modelprofile"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/feature/agent"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	"github.com/phongsathornpt/protonman/proton-sdk/domain"
 )
 
 func promptPlaceholder(hasRunner bool, mode permission.Mode, planMode bool) string {
@@ -355,9 +356,9 @@ func (m *bubbleModel) invalidateSessionHeaderBranch() {
 // no tool, retry, or explicit activity is available. It comes from the active
 // profile's activity vocabulary rather than a generic assistant word.
 func (m bubbleModel) rootActivityLabel() string {
-	profile, err := agent.ParseProfile(strings.TrimSpace(m.agentProfile))
+	profile, err := agentprofile.ParseProfile(strings.TrimSpace(m.agentProfile))
 	if err != nil || !profile.Valid() {
-		profile = agent.ProfileUniversal
+		profile = agentprofile.ProfileUniversal
 	}
 	return agentui.ActivityForState(profile, agent.StateRunning).String()
 }
@@ -470,7 +471,7 @@ func formatElapsed(duration time.Duration) string {
 
 // modelRetryStatus is retained as a compatibility seam for focused runtime
 // tests; retry wording itself is owned by state/runtimeui.
-func modelRetryStatus(retry sdk.RetryEvent, now time.Time) (string, string, bool) {
+func modelRetryStatus(retry domain.RetryEvent, now time.Time) (string, string, bool) {
 	activity, metaParts, ok := runtimeui.RetryStatus(retry, now)
 	if !ok {
 		return "", "", false

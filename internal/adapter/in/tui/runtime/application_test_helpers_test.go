@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"context"
+	"github.com/phongsathornpt/protonman/internal/feature/project"
 	"os"
 	"strings"
 	"testing"
@@ -80,7 +81,7 @@ func attachTestApplication(t testing.TB, m *bubbleModel) {
 	m.application = app.Services{
 		Models:       app.NewModels(model.Catalog{}),
 		Providers:    app.NewProviders(testProviderRepository{fallbackHome: home}),
-		Projects:     app.NewProjects(config.ProjectSettingsStore{}),
+		Projects:     app.NewProjects(config.ProjectSettingsStore{}, project.Lifecycle{}),
 		UserSettings: app.NewUserSettings(testUserSettingsStore{fallbackHome: home}),
 		ModelFactory: model.Factory{},
 	}

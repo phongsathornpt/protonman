@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	"github.com/phongsathornpt/protonman/proton-sdk/domain"
 )
 
 type Support uint8
@@ -34,6 +34,17 @@ const (
 	ToolSchemaGeminiSubset ToolSchemaDialect = "gemini_openapi_subset"
 )
 
+// ThinkingMode describes the provider contract used to request model
+// reasoning. It is transport metadata, not prompt policy.
+type ThinkingMode string
+
+const (
+	ThinkingModeDefault     ThinkingMode = ""
+	ThinkingModeAdaptive    ThinkingMode = "adaptive"
+	ThinkingModeManual      ThinkingMode = "manual"
+	ThinkingModeUnsupported ThinkingMode = "unsupported"
+)
+
 type MetadataSource string
 
 const (
@@ -49,6 +60,9 @@ type MetadataProvenance struct {
 	ReasoningLevels    MetadataSource
 	ReasoningDefault   MetadataSource
 	ToolChoiceRequired MetadataSource
+	ThinkingMode       MetadataSource
+	VisionPolicy       MetadataSource
+	ForcedToolChoice   MetadataSource
 	ContextWindow      MetadataSource
 	MaxInputTokens     MetadataSource
 	MaxOutputTokens    MetadataSource
@@ -63,6 +77,8 @@ func (p MetadataProvenance) Summary() string {
 		{"tools", p.Tools}, {"vision", p.Vision}, {"reasoning_support", p.ReasoningSupport},
 		{"reasoning_levels", p.ReasoningLevels}, {"reasoning_default", p.ReasoningDefault},
 		{"tool_choice_required", p.ToolChoiceRequired}, {"context_window", p.ContextWindow},
+		{"thinking_mode", p.ThinkingMode}, {"vision_policy", p.VisionPolicy},
+		{"forced_tool_choice", p.ForcedToolChoice},
 		{"max_input_tokens", p.MaxInputTokens}, {"max_output_tokens", p.MaxOutputTokens},
 		{"tool_schema_dialect", p.ToolSchemaDialect},
 	}
@@ -108,10 +124,23 @@ type Capabilities struct {
 	ToolChoiceRequired Support
 }
 
+// Apply overlays model-level capability knowledge onto the capabilities
+// published by the transport adapter. Unknown model fields deliberately keep
+// the adapter value; explicit model metadata always wins.
+func (c Capabilities) Apply(base domain.ModelCapabilities) domain.ModelCapabilities {
+	if value, known := c.Tools.Bool(); known {
+		base.Tools = value
+	}
+	if value, known := c.Vision.Bool(); known {
+		base.Vision = value
+	}
+	return base
+}
+
 type Reasoning struct {
 	Support Support
-	Levels  []sdk.ReasoningEffort
-	Default sdk.ReasoningEffort
+	Levels  []domain.ReasoningEffort
+	Default domain.ReasoningEffort
 }
 
 type Sampling struct {
@@ -122,6 +151,8 @@ type Sampling struct {
 
 type CompatibilityPolicy struct {
 	ToolSchemaDialect ToolSchemaDialect
+	ThinkingMode      ThinkingMode
+	ForcedToolChoice  Support
 }
 
 // CompactionPolicy controls when conversation history is compacted relative to
@@ -150,9 +181,9 @@ type Profile struct {
 }
 
 type CatalogReasoning struct {
-	Supported *bool                 `json:"supported,omitempty"`
-	Levels    []sdk.ReasoningEffort `json:"levels,omitempty"`
-	Default   sdk.ReasoningEffort   `json:"default,omitempty"`
+	Supported *bool                    `json:"supported,omitempty"`
+	Levels    []domain.ReasoningEffort `json:"levels,omitempty"`
+	Default   domain.ReasoningEffort   `json:"default,omitempty"`
 }
 
 func NormalizeCatalogReasoning(value *CatalogReasoning) *CatalogReasoning {
@@ -163,9 +194,9 @@ func NormalizeCatalogReasoning(value *CatalogReasoning) *CatalogReasoning {
 	if value.Supported != nil && !*value.Supported {
 		return normalized
 	}
-	seen := make(map[sdk.ReasoningEffort]struct{}, len(value.Levels))
+	seen := make(map[domain.ReasoningEffort]struct{}, len(value.Levels))
 	for _, effort := range value.Levels {
-		if !effort.Valid() || effort == sdk.ReasoningDefault {
+		if !effort.Valid() || effort == domain.ReasoningDefault {
 			continue
 		}
 		if _, ok := seen[effort]; ok {
@@ -174,7 +205,7 @@ func NormalizeCatalogReasoning(value *CatalogReasoning) *CatalogReasoning {
 		seen[effort] = struct{}{}
 		normalized.Levels = append(normalized.Levels, effort)
 	}
-	if value.Default.Valid() && value.Default != sdk.ReasoningDefault {
+	if value.Default.Valid() && value.Default != domain.ReasoningDefault {
 		normalized.Default = value.Default
 	}
 	return normalized
@@ -188,6 +219,9 @@ type CatalogMetadata struct {
 	MaxInputTokens     int
 	MaxOutputTokens    int
 	Reasoning          *CatalogReasoning
+	ToolSchemaDialect  ToolSchemaDialect
+	ThinkingMode       ThinkingMode
+	VisionPolicy       *VisionPolicy
 }
 
 type Resolved struct {
@@ -287,7 +321,10 @@ func modelIDLeaf(modelID string) string {
 }
 
 func catalogHasMetadata(c CatalogMetadata) bool {
-	return c.Tools != nil || c.Vision != nil || c.ToolChoiceRequired != nil || c.ContextWindow > 0 || c.MaxInputTokens > 0 || c.MaxOutputTokens > 0 || c.Reasoning != nil
+	validDialect := c.ToolSchemaDialect == ToolSchemaGeminiSubset
+	validThinking := c.ThinkingMode == ThinkingModeAdaptive || c.ThinkingMode == ThinkingModeManual || c.ThinkingMode == ThinkingModeUnsupported
+	validVisionPolicy := c.VisionPolicy != nil && validateVisionPolicy(*c.VisionPolicy) == nil
+	return c.Tools != nil || c.Vision != nil || c.ToolChoiceRequired != nil || c.ContextWindow > 0 || c.MaxInputTokens > 0 || c.MaxOutputTokens > 0 || c.Reasoning != nil || validDialect || validThinking || validVisionPolicy
 }
 
 func (m Matcher) score(provider, modelID string) (int, bool) {

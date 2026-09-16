@@ -11,7 +11,7 @@ import (
 	"strings"
 	"sync"
 
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	"github.com/phongsathornpt/protonman/proton-sdk/domain"
 )
 
 type toolAccumulator struct {
@@ -23,26 +23,26 @@ type toolAccumulator struct {
 type stream struct {
 	reader     *bufio.Reader
 	closer     io.Closer
-	queue      []sdk.Event
+	queue      []domain.Event
 	tools      map[int]*toolAccumulator
-	usage      sdk.Usage
-	finish     sdk.FinishReason
+	usage      domain.Usage
+	finish     domain.FinishReason
 	done       bool
 	terminal   error
-	metadata   sdk.ProviderMetadata
+	metadata   domain.ProviderMetadata
 	includeRaw bool
 	closeOnce  sync.Once
 	closeErr   error
 }
 
-func newStream(body io.ReadCloser, metadata sdk.ProviderMetadata, includeRaw bool) *stream {
+func newStream(body io.ReadCloser, metadata domain.ProviderMetadata, includeRaw bool) *stream {
 	return &stream{reader: bufio.NewReader(body), closer: body, tools: make(map[int]*toolAccumulator), metadata: metadata, includeRaw: includeRaw}
 }
 
-func (s *stream) Next(ctx context.Context) (sdk.Event, error) {
+func (s *stream) Next(ctx context.Context) (domain.Event, error) {
 	for {
 		if err := ctx.Err(); err != nil {
-			return sdk.Event{}, err
+			return domain.Event{}, err
 		}
 		if len(s.queue) > 0 {
 			event := s.queue[0]
@@ -50,26 +50,26 @@ func (s *stream) Next(ctx context.Context) (sdk.Event, error) {
 			return event, nil
 		}
 		if s.terminal != nil {
-			return sdk.Event{}, s.terminal
+			return domain.Event{}, s.terminal
 		}
 		if s.done {
-			return sdk.Event{}, io.EOF
+			return domain.Event{}, io.EOF
 		}
 		line, err := s.reader.ReadString('\n')
 		if err != nil {
 			if errors.Is(err, io.EOF) {
 				if strings.TrimSpace(line) != "" {
 					if parseErr := s.processLine(line); parseErr != nil {
-						return sdk.Event{}, parseErr
+						return domain.Event{}, parseErr
 					}
 				}
 				if !s.done {
 					s.done = true
-					s.terminal = fmt.Errorf("%w: anthropic stream closed before message_stop", sdk.ErrIncompleteStream)
+					s.terminal = fmt.Errorf("%w: anthropic stream closed before message_stop", domain.ErrIncompleteStream)
 				}
 				continue
 			}
-			return sdk.Event{}, fmt.Errorf("read anthropic stream: %w", err)
+			return domain.Event{}, fmt.Errorf("read anthropic stream: %w", err)
 		}
 		if err := s.processLine(line); err != nil {
 			if len(s.queue) > 0 {
@@ -78,7 +78,7 @@ func (s *stream) Next(ctx context.Context) (sdk.Event, error) {
 				s.queue = s.queue[1:]
 				return event, nil
 			}
-			return sdk.Event{}, err
+			return domain.Event{}, err
 		}
 	}
 }
@@ -118,11 +118,11 @@ func (s *stream) processLine(line string) error {
 	}
 	payload := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
 	if s.includeRaw && payload != "" {
-		s.queue = append(s.queue, sdk.Event{Kind: sdk.EventRaw, RawData: append([]byte(nil), payload...)})
+		s.queue = append(s.queue, domain.Event{Kind: domain.EventRaw, RawData: append([]byte(nil), payload...)})
 	}
 	var event wireEvent
 	if err := json.Unmarshal([]byte(payload), &event); err != nil {
-		return fmt.Errorf("%w: decode anthropic event: %w", sdk.ErrInvalidEvent, err)
+		return fmt.Errorf("%w: decode anthropic event: %w", domain.ErrInvalidEvent, err)
 	}
 	switch event.Type {
 	case "message_start":
@@ -131,7 +131,7 @@ func (s *stream) processLine(line string) error {
 			s.usage.OutputTokens = event.Message.Usage.OutputTokens
 			s.usage.CachedInputTokens = event.Message.Usage.CacheReadInputTokens
 			s.usage.TotalTokens = s.usage.InputTokens + s.usage.OutputTokens
-			s.queue = append(s.queue, sdk.Event{Kind: sdk.EventUsage, Usage: s.usage})
+			s.queue = append(s.queue, domain.Event{Kind: domain.EventUsage, Usage: s.usage})
 		}
 	case "content_block_start":
 		var block struct {
@@ -142,13 +142,13 @@ func (s *stream) processLine(line string) error {
 			Input json.RawMessage `json:"input"`
 		}
 		if err := json.Unmarshal(event.ContentBlock, &block); err != nil {
-			return fmt.Errorf("%w: decode anthropic content block: %w", sdk.ErrInvalidEvent, err)
+			return fmt.Errorf("%w: decode anthropic content block: %w", domain.ErrInvalidEvent, err)
 		}
 		switch block.Type {
 		case "text":
-			s.queue = append(s.queue, sdk.Event{Kind: sdk.EventTextStart})
+			s.queue = append(s.queue, domain.Event{Kind: domain.EventTextStart})
 			if block.Text != "" {
-				s.queue = append(s.queue, sdk.Event{Kind: sdk.EventTextDelta, Text: block.Text})
+				s.queue = append(s.queue, domain.Event{Kind: domain.EventTextDelta, Text: block.Text})
 			}
 		case "tool_use":
 			acc := &toolAccumulator{id: block.ID, name: block.Name}
@@ -156,7 +156,7 @@ func (s *stream) processLine(line string) error {
 				acc.args.Write(block.Input)
 			}
 			s.tools[event.Index] = acc
-			s.queue = append(s.queue, sdk.Event{Kind: sdk.EventToolCallStart, ToolCallID: block.ID, ToolName: block.Name})
+			s.queue = append(s.queue, domain.Event{Kind: domain.EventToolCallStart, ToolCallID: block.ID, ToolName: block.Name})
 		}
 	case "content_block_delta":
 		var delta struct {
@@ -165,17 +165,17 @@ func (s *stream) processLine(line string) error {
 			PartialJSON string `json:"partial_json"`
 		}
 		if err := json.Unmarshal(event.Delta, &delta); err != nil {
-			return fmt.Errorf("%w: decode anthropic content delta: %w", sdk.ErrInvalidEvent, err)
+			return fmt.Errorf("%w: decode anthropic content delta: %w", domain.ErrInvalidEvent, err)
 		}
 		switch delta.Type {
 		case "text_delta":
 			if delta.Text != "" {
-				s.queue = append(s.queue, sdk.Event{Kind: sdk.EventTextDelta, Text: delta.Text})
+				s.queue = append(s.queue, domain.Event{Kind: domain.EventTextDelta, Text: delta.Text})
 			}
 		case "input_json_delta":
 			if acc := s.tools[event.Index]; acc != nil && delta.PartialJSON != "" {
 				acc.args.WriteString(delta.PartialJSON)
-				s.queue = append(s.queue, sdk.Event{Kind: sdk.EventToolCallDelta, ToolCallID: acc.id, ToolName: acc.name, ArgumentsDelta: delta.PartialJSON})
+				s.queue = append(s.queue, domain.Event{Kind: domain.EventToolCallDelta, ToolCallID: acc.id, ToolName: acc.name, ArgumentsDelta: delta.PartialJSON})
 			}
 		}
 	case "content_block_stop":
@@ -185,16 +185,16 @@ func (s *stream) processLine(line string) error {
 				args = "{}"
 			}
 			if !json.Valid([]byte(args)) {
-				return fmt.Errorf("%w: anthropic tool arguments are invalid JSON", sdk.ErrInvalidEvent)
+				return fmt.Errorf("%w: anthropic tool arguments are invalid JSON", domain.ErrInvalidEvent)
 			}
-			call := sdk.ToolCall{ID: acc.id, Name: acc.name, Arguments: json.RawMessage(args)}
+			call := domain.ToolCall{ID: acc.id, Name: acc.name, Arguments: json.RawMessage(args)}
 			s.queue = append(s.queue,
-				sdk.Event{Kind: sdk.EventToolCallEnd, ToolCallID: acc.id, ToolName: acc.name},
-				sdk.Event{Kind: sdk.EventToolCall, ToolCall: call},
+				domain.Event{Kind: domain.EventToolCallEnd, ToolCallID: acc.id, ToolName: acc.name},
+				domain.Event{Kind: domain.EventToolCall, ToolCall: call},
 			)
 			delete(s.tools, event.Index)
 		} else {
-			s.queue = append(s.queue, sdk.Event{Kind: sdk.EventTextEnd})
+			s.queue = append(s.queue, domain.Event{Kind: domain.EventTextEnd})
 		}
 	case "message_delta":
 		var delta struct {
@@ -205,20 +205,20 @@ func (s *stream) processLine(line string) error {
 		if event.Usage.OutputTokens > 0 {
 			s.usage.OutputTokens = event.Usage.OutputTokens
 			s.usage.TotalTokens = s.usage.InputTokens + s.usage.OutputTokens
-			s.queue = append(s.queue, sdk.Event{Kind: sdk.EventUsage, Usage: s.usage})
+			s.queue = append(s.queue, domain.Event{Kind: domain.EventUsage, Usage: s.usage})
 		}
 	case "message_stop":
 		s.flushPendingTools()
 		if s.finish == "" {
-			s.finish = sdk.FinishStop
+			s.finish = domain.FinishStop
 		}
-		s.queue = append(s.queue, sdk.Event{Kind: sdk.EventFinish, FinishReason: s.finish, ProviderMetadata: s.metadata})
+		s.queue = append(s.queue, domain.Event{Kind: domain.EventFinish, FinishReason: s.finish, ProviderMetadata: s.metadata})
 		s.done = true
 	case "error":
 		if event.Error != nil {
-			return sdk.NewProviderError("anthropic", 0, event.Error.Type, event.Error.Message)
+			return domain.NewProviderError("anthropic", 0, event.Error.Type, event.Error.Message)
 		}
-		return sdk.NewProviderError("anthropic", 0, "stream_error", "anthropic stream error")
+		return domain.NewProviderError("anthropic", 0, "stream_error", "anthropic stream error")
 	case "ping":
 		return nil
 	default:
@@ -240,24 +240,24 @@ func (s *stream) flushPendingTools() {
 			args = "{}"
 		}
 		if json.Valid([]byte(args)) {
-			s.queue = append(s.queue, sdk.Event{Kind: sdk.EventToolCall, ToolCall: sdk.ToolCall{ID: acc.id, Name: acc.name, Arguments: json.RawMessage(args)}})
+			s.queue = append(s.queue, domain.Event{Kind: domain.EventToolCall, ToolCall: domain.ToolCall{ID: acc.id, Name: acc.name, Arguments: json.RawMessage(args)}})
 		}
 	}
 	s.tools = make(map[int]*toolAccumulator)
 }
 
-func mapStopReason(reason string) sdk.FinishReason {
+func mapStopReason(reason string) domain.FinishReason {
 	switch reason {
 	case "end_turn", "stop_sequence", "pause_turn":
-		return sdk.FinishStop
+		return domain.FinishStop
 	case "max_tokens", "model_context_window_exceeded":
-		return sdk.FinishLength
+		return domain.FinishLength
 	case "tool_use":
-		return sdk.FinishToolCalls
+		return domain.FinishToolCalls
 	case "refusal":
-		return sdk.FinishError
+		return domain.FinishError
 	default:
-		return sdk.FinishOther
+		return domain.FinishOther
 	}
 }
 

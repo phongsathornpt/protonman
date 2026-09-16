@@ -99,9 +99,12 @@ type Message struct {
 	// ID is a stable provider-neutral identity for this logical conversation message.
 	// Providers may ignore it on the wire; runtimes should preserve it across cloning,
 	// persistence, retention, and compaction. Legacy messages may omit it.
-	ID                string
-	Role              Role
-	Content           string
+	ID      string
+	Role    Role
+	Content string
+	// ReasoningContent preserves provider reasoning required by some models when
+	// a tool call is followed by another request in thinking mode.
+	ReasoningContent  string
 	Parts             []ContentPart
 	ToolCallID        string
 	ToolName          string

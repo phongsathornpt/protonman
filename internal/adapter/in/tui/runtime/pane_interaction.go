@@ -9,7 +9,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/feature/agent"
 	tododomain "github.com/phongsathornpt/protonman/internal/feature/todo"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	"github.com/phongsathornpt/protonman/proton-sdk/domain"
 )
 
 type paneActionKind uint8
@@ -42,7 +42,7 @@ type paneAction struct {
 	kind           paneActionKind
 	paneID         string
 	sessionID      string
-	reasoning      sdk.ReasoningEffort
+	reasoning      domain.ReasoningEffort
 	runSlash       bool
 	skillName      string
 	providerName   string

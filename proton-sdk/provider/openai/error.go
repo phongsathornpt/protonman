@@ -7,7 +7,8 @@ import (
 	"strings"
 	"time"
 
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	"github.com/phongsathornpt/protonman/proton-sdk/domain"
+	"github.com/phongsathornpt/protonman/proton-sdk/internal/providerutil"
 )
 
 type providerErrorPayload struct {
@@ -56,64 +57,64 @@ func mergeErrorMetadata(values ...map[string]any) map[string]any {
 	return merged
 }
 
-func providerError(provider string, status int, body []byte, headers http.Header) *sdk.ProviderError {
+func providerError(provider string, status int, body []byte, headers http.Header) *domain.ProviderError {
 	payload := parseProviderErrorPayload(body)
-	err := sdk.NewProviderError(provider, status, payload.Code, payload.Message)
+	err := domain.NewProviderError(provider, status, payload.Code, payload.Message)
 	if strings.EqualFold(provider, "opencode") {
 		classifyOpenCodeRateLimit(err, payload, headers)
-	} else if err.Kind == sdk.ErrorRateLimit || err.Kind == sdk.ErrorOverloaded {
-		err.RateLimit = sdk.ParseRateLimitHeaders(headers, time.Now())
+	} else if err.Kind == domain.ErrorRateLimit || err.Kind == domain.ErrorOverloaded {
+		err.RateLimit = providerutil.ParseRateLimitHeaders(headers, time.Now())
 	}
 	return err
 }
 
-func providerStreamError(provider, code, errorType, message string, metadata map[string]any) *sdk.ProviderError {
+func providerStreamError(provider, code, errorType, message string, metadata map[string]any) *domain.ProviderError {
 	payload := providerErrorPayload{Code: firstNonEmpty(code, errorType), Type: errorType, Message: message, Metadata: metadata}
-	err := sdk.NewProviderError(provider, 0, payload.Code, payload.Message)
+	err := domain.NewProviderError(provider, 0, payload.Code, payload.Message)
 	if strings.EqualFold(provider, "opencode") {
 		classifyOpenCodeRateLimit(err, payload, nil)
 	}
 	return err
 }
 
-func classifyOpenCodeRateLimit(err *sdk.ProviderError, payload providerErrorPayload, headers http.Header) {
+func classifyOpenCodeRateLimit(err *domain.ProviderError, payload providerErrorPayload, headers http.Header) {
 	if err == nil {
 		return
 	}
 	value := strings.ToLower(strings.Join([]string{payload.Type, payload.Code, payload.Message}, " "))
-	info := sdk.ParseRateLimitHeaders(headers, time.Now())
+	info := providerutil.ParseRateLimitHeaders(headers, time.Now())
 	if info == nil {
-		info = &sdk.RateLimitInfo{}
+		info = &domain.RateLimitInfo{}
 	}
 	limitName := strings.ToLower(strings.TrimSpace(metadataString(payload.Metadata, "limitName", "limit_name", "limit")))
 	info.LimitName = limitName
 
 	switch {
 	case strings.Contains(value, "freeusagelimiterror"), strings.Contains(value, "free usage limit"):
-		info.Kind = sdk.RateLimitFreeUsage
+		info.Kind = domain.RateLimitFreeUsage
 	case strings.Contains(value, "gousagelimiterror"), strings.Contains(value, "go usage limit"):
 		switch {
 		case strings.Contains(limitName, "5") && strings.Contains(limitName, "hour"):
-			info.Kind = sdk.RateLimitGoFiveHour
+			info.Kind = domain.RateLimitGoFiveHour
 		case strings.Contains(limitName, "week"):
-			info.Kind = sdk.RateLimitGoWeekly
+			info.Kind = domain.RateLimitGoWeekly
 		case strings.Contains(limitName, "month"):
-			info.Kind = sdk.RateLimitGoMonthly
+			info.Kind = domain.RateLimitGoMonthly
 		default:
-			info.Kind = sdk.RateLimitUnknownQuota
+			info.Kind = domain.RateLimitUnknownQuota
 		}
-		info.Scope = sdk.RateLimitScopeAccount
+		info.Scope = domain.RateLimitScopeAccount
 	case strings.Contains(value, "provider rate limit"), strings.Contains(value, "upstream rate limit"):
-		info.Kind = sdk.RateLimitProvider
-		info.Scope = sdk.RateLimitScopeProvider
-	case err.StatusCode == http.StatusTooManyRequests || err.Kind == sdk.ErrorRateLimit:
-		info.Kind = sdk.RateLimitTransient
-		info.Scope = sdk.RateLimitScopeRequest
+		info.Kind = domain.RateLimitProvider
+		info.Scope = domain.RateLimitScopeProvider
+	case err.StatusCode == http.StatusTooManyRequests || err.Kind == domain.ErrorRateLimit:
+		info.Kind = domain.RateLimitTransient
+		info.Scope = domain.RateLimitScopeRequest
 	default:
 		return
 	}
-	err.Kind = sdk.ErrorRateLimit
-	err.Retryable = info.Kind == sdk.RateLimitTransient || info.Kind == sdk.RateLimitProvider
+	err.Kind = domain.ErrorRateLimit
+	err.Retryable = info.Kind == domain.RateLimitTransient || info.Kind == domain.RateLimitProvider
 	err.RateLimit = info
 }
 

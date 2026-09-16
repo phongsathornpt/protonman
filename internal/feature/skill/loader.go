@@ -3,8 +3,8 @@ package skill
 import (
 	"context"
 	"fmt"
-	"github.com/phongsathornpt/protonman/internal/app/appdirs"
 	"github.com/phongsathornpt/protonman/internal/base/envconfig"
+	"github.com/phongsathornpt/protonman/internal/platform/appdirs"
 	"maps"
 	"os"
 	"path/filepath"

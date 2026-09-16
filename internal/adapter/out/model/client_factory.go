@@ -9,7 +9,8 @@ import (
 	"github.com/phongsathornpt/protonman/internal/base/runtimepolicy"
 	"github.com/phongsathornpt/protonman/internal/core/agentidentity"
 	"github.com/phongsathornpt/protonman/internal/core/modelprofile"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	"github.com/phongsathornpt/protonman/proton-sdk/domain"
+	"github.com/phongsathornpt/protonman/proton-sdk/port"
 )
 
 // clientConfig contains CLI-owned settings used to construct proton-sdk provider models.
@@ -26,7 +27,7 @@ type clientConfig struct {
 	vision         *bool
 	tools          *bool
 	contextWindow  *int
-	tokenLimits    *sdk.TokenLimits
+	tokenLimits    *domain.TokenLimits
 	profile        *modelprofile.Resolved
 	lowConcurrency LowConcurrencySetting
 }
@@ -106,7 +107,7 @@ func NewProviderLanguageModel(
 	apiKey string,
 	modelID string,
 	opts ...ClientOption,
-) sdk.LanguageModel {
+) port.LanguageModel {
 	protocol := ProviderProtocol(strings.ToLower(strings.TrimSpace(providerType)))
 	if protocol == "" {
 		if preset := MatchProviderPreset(providerName, baseURL); preset != nil {

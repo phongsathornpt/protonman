@@ -11,7 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/phongsathornpt/protonman/internal/base/runtimepolicy"
 	"github.com/phongsathornpt/protonman/internal/core/memory"
 )
 
@@ -97,8 +96,8 @@ func filterForgotten(entries []memory.Entry, set map[string]struct{}) []memory.E
 }
 
 // mergeForgotten appends newly forgotten IDs to the existing ordered tombstone
-// set and bounds the result. The oldest tombstones are evicted first, matching
-// the codebase's retention discipline of keeping the newest records.
+// set. Tombstones are retained indefinitely because Forget is a durable user
+// correction; eviction would allow extraction to resurrect the entry.
 func mergeForgotten(existing []string, added map[string]struct{}) []string {
 	unique := normalizeForgotten(existing)
 	if len(added) == 0 {
@@ -120,10 +119,6 @@ func mergeForgotten(existing []string, added map[string]struct{}) []string {
 		}
 		present[id] = struct{}{}
 		unique = append(unique, id)
-	}
-	limit := runtimepolicy.DurableMemory().MaxForgottenEntries
-	if limit > 0 && len(unique) > limit {
-		unique = unique[len(unique)-limit:]
 	}
 	return unique
 }

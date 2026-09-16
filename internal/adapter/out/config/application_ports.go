@@ -5,7 +5,7 @@ import (
 
 	"github.com/phongsathornpt/protonman/internal/core/modelconfig"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	"github.com/phongsathornpt/protonman/proton-sdk/domain"
 )
 
 // UserProviderRepository persists provider/model selection in user config.
@@ -50,7 +50,7 @@ func (s *UserSettingsStore) SaveSubagentsEnabled(enabled bool) error {
 	return SaveUserSubagentsEnabled(s.homeDir, enabled)
 }
 
-func (s *UserSettingsStore) SaveReasoningEffort(effort sdk.ReasoningEffort) error {
+func (s *UserSettingsStore) SaveReasoningEffort(effort domain.ReasoningEffort) error {
 	return SaveUserReasoningEffort(s.homeDir, effort)
 }
 
@@ -77,7 +77,7 @@ func (ProjectSettingsStore) SaveSubagentsEnabled(workDir string, enabled bool) e
 	return SaveProjectSubagentsEnabled(workDir, enabled)
 }
 
-func (ProjectSettingsStore) SaveReasoningEffort(workDir string, effort sdk.ReasoningEffort) error {
+func (ProjectSettingsStore) SaveReasoningEffort(workDir string, effort domain.ReasoningEffort) error {
 	return SaveProjectReasoningEffort(workDir, effort)
 }
 

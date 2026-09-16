@@ -8,7 +8,7 @@ import (
 	"sync"
 
 	"github.com/phongsathornpt/protonman/internal/core/modelconfig"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	"github.com/phongsathornpt/protonman/proton-sdk/domain"
 )
 
 const (
@@ -111,7 +111,7 @@ func (s *Server) dispatchSessionConfig(ctx context.Context, request RPCRequest) 
 		}
 
 	case configIDReasoning:
-		effort, parseErr := sdk.ParseReasoningEffort(value)
+		effort, parseErr := domain.ParseReasoningEffort(value)
 		if parseErr != nil {
 			return nil, true, parseErr
 		}
