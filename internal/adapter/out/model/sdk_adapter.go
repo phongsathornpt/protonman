@@ -111,7 +111,11 @@ func newSDKOpenAILanguageModel(providerName, baseURL, apiKey, modelID string, op
 	}
 	headers := agentHeaders(cfg)
 	isOpenCode := strings.EqualFold(strings.TrimSpace(providerName), DefaultOpenCodeName)
-	isOpenCodeFree := isOpenCode && IsFreeModel(cfg.modelID)
+	// Free-model recovery and automatic low concurrency are specific to the
+	// documented keyless Inference API. A provider named "opencode" may still
+	// point at Zen or a custom endpoint with a different access contract.
+	isOpenCodeFreeRoute := IsOpenCodeInferenceEndpoint(cfg.baseURL) || IsOpenCodeZenEndpoint(cfg.baseURL)
+	isOpenCodeFree := isOpenCode && isOpenCodeFreeRoute && IsFreeModel(cfg.modelID)
 	freeStreamRecovery := isOpenCodeFree
 	lowConcurrencyEnabled := cfg.lowConcurrency.Enabled(isOpenCodeFree)
 	retryPolicy := modelRetryPolicy()

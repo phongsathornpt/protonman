@@ -3,20 +3,19 @@ package tool
 import (
 	"path/filepath"
 	"strings"
-	"unicode"
 )
 
 func splitSimpleShell(command string) ([]string, []string, bool) {
 	var segments, operators []string
 	var b strings.Builder
-	var quote rune
+	var quote byte
 	for i := 0; i < len(command); i++ {
-		c := rune(command[i])
+		c := command[i]
 		if quote != 0 {
 			if quote == '"' && (c == '`' || (c == '$' && i+1 < len(command) && command[i+1] == '(')) {
 				return nil, nil, false
 			}
-			b.WriteByte(command[i])
+			b.WriteByte(c)
 			if c == quote {
 				quote = 0
 			}
@@ -24,7 +23,7 @@ func splitSimpleShell(command string) ([]string, []string, bool) {
 		}
 		if c == '\'' || c == '"' {
 			quote = c
-			b.WriteByte(command[i])
+			b.WriteByte(c)
 			continue
 		}
 		if c == '`' || c == '$' || c == '(' || c == ')' || c == '{' || c == '}' || c == '\n' {
@@ -35,11 +34,11 @@ func splitSimpleShell(command string) ([]string, []string, bool) {
 		}
 		if c == '&' {
 			if i > 0 && command[i-1] == '>' {
-				b.WriteByte(command[i])
+				b.WriteByte(c)
 				continue
 			}
 			if i+1 < len(command) && command[i+1] == '>' {
-				b.WriteByte(command[i])
+				b.WriteByte(c)
 				continue
 			}
 			if i+1 >= len(command) || command[i+1] != '&' {
@@ -53,7 +52,7 @@ func splitSimpleShell(command string) ([]string, []string, bool) {
 		}
 		if c == '|' {
 			if i > 0 && command[i-1] == '>' {
-				b.WriteByte(command[i])
+				b.WriteByte(c)
 				continue
 			}
 			if i+1 < len(command) && command[i+1] == '|' {
@@ -75,7 +74,7 @@ func splitSimpleShell(command string) ([]string, []string, bool) {
 			operators = append(operators, "|")
 			continue
 		}
-		b.WriteByte(command[i])
+		b.WriteByte(c)
 	}
 	if quote != 0 {
 		return nil, nil, false
@@ -92,7 +91,7 @@ func splitSimpleShell(command string) ([]string, []string, bool) {
 func shellWords(segment string) ([]string, []string, bool) {
 	var words, redirects []string
 	var b strings.Builder
-	var quote rune
+	var quote byte
 	flush := func() {
 		if b.Len() > 0 {
 			words = append(words, b.String())
@@ -100,12 +99,12 @@ func shellWords(segment string) ([]string, []string, bool) {
 		}
 	}
 	for i := 0; i < len(segment); i++ {
-		c := rune(segment[i])
+		c := segment[i]
 		if quote != 0 {
 			if c == quote {
 				quote = 0
 			} else {
-				b.WriteByte(segment[i])
+				b.WriteByte(c)
 			}
 			continue
 		}
@@ -113,7 +112,7 @@ func shellWords(segment string) ([]string, []string, bool) {
 			quote = c
 			continue
 		}
-		if unicode.IsSpace(c) {
+		if isSpaceByte(c) {
 			flush()
 			continue
 		}
@@ -129,11 +128,11 @@ func shellWords(segment string) ([]string, []string, bool) {
 			if i+1 < len(segment) && (segment[i+1] == '>' || segment[i+1] == '|') {
 				i++
 			}
-			for i+1 < len(segment) && unicode.IsSpace(rune(segment[i+1])) {
+			for i+1 < len(segment) && isSpaceByte(segment[i+1]) {
 				i++
 			}
 			j := i + 1
-			for j < len(segment) && !unicode.IsSpace(rune(segment[j])) {
+			for j < len(segment) && !isSpaceByte(segment[j]) {
 				j++
 			}
 			if j == i+1 {
@@ -151,13 +150,17 @@ func shellWords(segment string) ([]string, []string, bool) {
 			b.WriteByte(segment[i])
 			continue
 		}
-		b.WriteByte(segment[i])
+		b.WriteByte(c)
 	}
 	if quote != 0 {
 		return nil, nil, false
 	}
 	flush()
 	return words, redirects, true
+}
+
+func isSpaceByte(c byte) bool {
+	return c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\v' || c == '\f'
 }
 
 func literalMutationPaths(name string, args []string) []string {

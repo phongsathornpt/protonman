@@ -243,7 +243,8 @@ Protonman routes agent model calls through `proton-sdk`, with native OpenAI-comp
 
 | Provider | Base URL | Auth Required | Description |
 | :--- | :--- | :--- | :--- |
-| **OpenCode** | `https://opencode.ai/zen/v1` | No (Free) | Free-tier models with zero API key required; free-model streams use bounded recovery when the provider returns no visible output |
+| **OpenCode Inference** | `https://opencode.ai/inference/openai/v1` | No | Keyless free-tier chat models; free-model streams use bounded recovery when the provider returns no visible output |
+| **OpenCode Zen** | `https://opencode.ai/zen/v1` | Yes | Authenticated Zen catalog, including temporary free models such as Muse Spark 1.3 Contributor Free |
 | **Protonman** | `https://protonman.dev/api/v1` | Yes (`plk_...`) | High-speed AI model gateway |
 | **Ollama** | `http://localhost:11434/v1` | No | Local LLM inference |
 | **OpenAI** | `https://api.openai.com/v1` | Yes (`sk-...`) | OpenAI-compatible API through `proton-sdk` |
@@ -258,6 +259,8 @@ Protonman routes agent model calls through `proton-sdk`, with native OpenAI-comp
 - `MiniMax-M3` (1M context)
 
 Configure providers directly inside the TUI with `/provider` or via `~/.protonman/config.json`.
+
+OpenCode Zen uses the OpenAI Responses API and requires a Zen API key. Its model catalog is fetched from `/v1/models`, so `muse-spark-1.3-contributor-free` appears when the configured Zen account exposes it. The Contributor Free model is subject to OpenCode's temporary availability and data-use terms.
 
 `proton-sdk` owns provider-neutral agent messages, tools, streaming events, usage/finish metadata, model registry, middleware, and provider wire adapters. The Protonman CLI keeps permission policy, tool execution, sessions, and turn orchestration outside the SDK. See [`docs/proton-sdk.md`](docs/proton-sdk.md) for the agent-first SDK contract and provider extension boundaries.
 

@@ -14,6 +14,7 @@ import (
 
 const (
 	agentProfilesPreferencesKey = "acp.agents.v1"
+	activeAgentPreferencesKey   = "acp.active_agent.v1"
 	defaultAgentID              = "protonman"
 	antigravityAgentID          = "antigravity"
 	antigravityCommandEnv       = "ANTIGRAVITY_ACP_COMMAND"

@@ -34,6 +34,7 @@ func (a *application) renderSessionChrome() {
 	meta := "Select a session"
 	inspector := "_No session context loaded._"
 	contextLabel := "Context"
+	badgeText := ""
 	if found {
 		title = sessionDisplayTitle(active)
 		meta = sessionDisplayMeta(active)
@@ -42,6 +43,42 @@ func (a *application) renderSessionChrome() {
 		}
 		inspector = renderInspector(active)
 		contextLabel = contextSummaryLabel(active)
+
+		agentID := active.AgentID
+		if agentID == "" {
+			agentID = defaultAgentID
+		}
+		agentName := a.agentNameFor(agentID)
+		if agentName == "" {
+			agentName = agentID
+		}
+
+		a.mu.Lock()
+		health, hasHealth := a.state.AgentHealth[agentID]
+		client := a.clients[agentID]
+		a.mu.Unlock()
+
+		statusGlyph := string(iconSession)
+		statusNote := ""
+		if hasHealth {
+			switch health.Status {
+			case desktopstate.AgentStatusConnecting:
+				statusGlyph = string(iconReady)
+				statusNote = " · connecting"
+			case desktopstate.AgentStatusDisconnected:
+				statusGlyph = string(iconFailed)
+				statusNote = " · offline"
+			}
+		} else if client == nil {
+			statusGlyph = string(iconReady)
+			statusNote = " · connecting"
+		}
+
+		extTag := "ACP"
+		if agentID == defaultAgentID {
+			extTag = "Ext"
+		}
+		badgeText = fmt.Sprintf("%s %s · %s%s", statusGlyph, agentName, extTag, statusNote)
 	}
 
 	fyne.Do(func() {
@@ -50,6 +87,14 @@ func (a *application) renderSessionChrome() {
 		a.contextContent.ParseMarkdown(inspector)
 		a.contextContent.Refresh()
 		a.contextToggle.SetText(contextLabel)
+		if a.sessionAgentBadge != nil {
+			if found {
+				a.sessionAgentBadge.SetText(badgeText)
+				a.sessionAgentBadge.Show()
+			} else {
+				a.sessionAgentBadge.Hide()
+			}
+		}
 	})
 }
 

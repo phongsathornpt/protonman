@@ -108,6 +108,33 @@ func TestReduceDoesNotAliasPermissionOptions(t *testing.T) {
 	}
 }
 
+func TestReduceTracksAgentHealth(t *testing.T) {
+	state := State{}
+	state = Reduce(state, Event{
+		Kind: EventAgentHealthUpdated,
+		AgentHealth: AgentHealthState{
+			ID:     "antigravity",
+			Status: AgentStatusConnected,
+		},
+	})
+	if health, ok := state.AgentHealth["antigravity"]; !ok || health.Status != AgentStatusConnected {
+		t.Fatalf("unexpected agent health: %#v", state.AgentHealth)
+	}
+
+	state = MarkAgentDisconnected(state, "antigravity")
+	if health := state.AgentHealth["antigravity"]; health.Status != AgentStatusDisconnected {
+		t.Fatalf("expected disconnected status, got: %#v", health)
+	}
+}
+
+func TestReduceTracksActiveAgent(t *testing.T) {
+	state := State{ActiveAgentID: "protonman"}
+	state = Reduce(state, Event{Kind: EventActiveAgentChanged, AgentID: "antigravity"})
+	if state.ActiveAgentID != "antigravity" {
+		t.Fatalf("active agent = %q, want antigravity", state.ActiveAgentID)
+	}
+}
+
 func assertStatus(t *testing.T, state State, id string, want TaskStatus) {
 	t.Helper()
 	for _, session := range state.Sessions {

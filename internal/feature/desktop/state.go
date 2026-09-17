@@ -93,6 +93,22 @@ type MCPIntegrationState struct {
 	Env     []string
 }
 
+// AgentConnectionStatus tracks ACP agent daemon connection health.
+type AgentConnectionStatus string
+
+const (
+	AgentStatusConnected    AgentConnectionStatus = "connected"
+	AgentStatusConnecting   AgentConnectionStatus = "connecting"
+	AgentStatusDisconnected AgentConnectionStatus = "disconnected"
+)
+
+// AgentHealthState is the desktop projection of an ACP agent process health.
+type AgentHealthState struct {
+	ID        string
+	Status    AgentConnectionStatus
+	LastError string
+}
+
 // SessionContextState contains inspectable durable goal, TODO, and memory state.
 type SessionContextState struct {
 	Goal   string
@@ -134,7 +150,9 @@ type SessionState struct {
 // State owns desktop session state independently from Fyne widgets.
 type State struct {
 	ActiveSessionID string
+	ActiveAgentID   string
 	Sessions        []SessionState
+	AgentHealth     map[string]AgentHealthState
 	PermissionInbox []PermissionRequest
 	Integrations    []MCPIntegrationState
 }
@@ -158,6 +176,8 @@ const (
 	EventSessionMemoryUpdated
 	EventSessionRuntimeUpdated
 	EventIntegrationsReplaced
+	EventAgentHealthUpdated
+	EventActiveAgentChanged
 )
 
 // Event is a typed reducer input. Only fields relevant to Kind are consumed.
@@ -173,6 +193,8 @@ type Event struct {
 	Integrations []MCPIntegrationState
 	Permission   PermissionRequest
 	RequestID    string
+	AgentHealth  AgentHealthState
+	AgentID      string
 }
 
 // Reduce applies one event and returns a new state without aliasing caller-owned slices.
@@ -233,6 +255,15 @@ func Reduce(current State, event Event) State {
 		}
 	case EventIntegrationsReplaced:
 		next.Integrations = cloneIntegrations(event.Integrations)
+	case EventAgentHealthUpdated:
+		if next.AgentHealth == nil {
+			next.AgentHealth = make(map[string]AgentHealthState)
+		}
+		if event.AgentHealth.ID != "" {
+			next.AgentHealth[event.AgentHealth.ID] = event.AgentHealth
+		}
+	case EventActiveAgentChanged:
+		next.ActiveAgentID = event.AgentID
 	}
 
 	return next
@@ -242,6 +273,13 @@ func cloneState(state State) State {
 	state.Sessions = cloneSessions(state.Sessions)
 	state.PermissionInbox = clonePermissions(state.PermissionInbox)
 	state.Integrations = cloneIntegrations(state.Integrations)
+	if state.AgentHealth != nil {
+		cloned := make(map[string]AgentHealthState, len(state.AgentHealth))
+		for k, v := range state.AgentHealth {
+			cloned[k] = v
+		}
+		state.AgentHealth = cloned
+	}
 	return state
 }
 

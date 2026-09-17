@@ -111,6 +111,71 @@ func TestSearchReplaceTabSpaceIndentationTolerance(t *testing.T) {
 	}
 }
 
+func TestSearchReplaceWhitespaceToleranceAcceptsTrailingNewlineInOldString(t *testing.T) {
+	ws := newTestWorkspace(t, nil)
+	handler := NewSearchReplace(ws, &recordingCheckpointStore{id: "cp-tol-nl"})
+
+	// File uses tabs and has content after the target block.
+	fileContent := "package main\n\nfunc compute() {\n\tx := 1\n}\n\nfunc other() {}\n"
+	targetFile := "tolerant_nl.go"
+	if err := os.WriteFile(filepath.Join(ws.Root(), targetFile), []byte(fileContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// The model sends spaces and a trailing newline. The trailing newline ends the
+	// matched block; it must not require an extra empty line in the file.
+	oldString := "func compute() {\n    x := 1\n}\n"
+	newString := "func compute() {\n    x := 42\n}\n"
+
+	if _, err := handler.Execute(context.Background(), newJSONCall(t, "call-tol-nl", "edit", map[string]any{
+		"filePath":  targetFile,
+		"oldString": oldString,
+		"newString": newString,
+	})); err != nil {
+		t.Fatalf("expected indentation tolerance with trailing newline to succeed, got error: %v", err)
+	}
+
+	updated, err := os.ReadFile(filepath.Join(ws.Root(), targetFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "package main\n\nfunc compute() {\n\tx := 42\n}\n\nfunc other() {}\n"
+	if string(updated) != want {
+		t.Fatalf("updated content = %q, want %q", string(updated), want)
+	}
+}
+
+func TestSearchReplaceWhitespaceToleranceTrailingNewlineWithoutFileFinalNewline(t *testing.T) {
+	ws := newTestWorkspace(t, nil)
+	handler := NewSearchReplace(ws, &recordingCheckpointStore{id: "cp-tol-eof"})
+
+	// File has no final newline and uses indentation differing from oldString.
+	fileContent := "package main\n\nfunc compute() {\n\tx := 1\n}"
+	targetFile := "tolerant_eof.go"
+	if err := os.WriteFile(filepath.Join(ws.Root(), targetFile), []byte(fileContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	oldString := "func compute() {\n    x := 1\n}\n"
+	newString := "func compute() {\n    x := 42\n}\n"
+
+	if _, err := handler.Execute(context.Background(), newJSONCall(t, "call-tol-eof", "edit", map[string]any{
+		"filePath":  targetFile,
+		"oldString": oldString,
+		"newString": newString,
+	})); err != nil {
+		t.Fatalf("expected indentation tolerance at EOF without final newline to succeed, got error: %v", err)
+	}
+
+	updated, err := os.ReadFile(filepath.Join(ws.Root(), targetFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(updated), "x := 42") {
+		t.Fatalf("updated content missing new text: %q", string(updated))
+	}
+}
+
 func TestSearchReplaceAmbiguousWhitespaceMatchFailsSafely(t *testing.T) {
 	ws := newTestWorkspace(t, nil)
 	handler := NewSearchReplace(ws, &recordingCheckpointStore{id: "cp-ambig"})

@@ -2,6 +2,8 @@ package model
 
 import (
 	"context"
+	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -100,6 +102,9 @@ func TestFetchProviderModelsUnauthorized(t *testing.T) {
 	_, err := FetchProviderModels(context.Background(), ts.URL, "bad-key")
 	if err == nil || !strings.Contains(err.Error(), "401") {
 		t.Fatalf("expected 401 error, got: %v", err)
+	}
+	if !errors.Is(err, ErrUnauthorized) {
+		t.Fatalf("expected ErrUnauthorized, got: %v", err)
 	}
 }
 
@@ -238,6 +243,56 @@ func TestProviderHasUsableAuth(t *testing.T) {
 	if ProviderHasUsableAuth("custom", "https://example.test/v1", "") {
 		t.Fatal("unknown provider without API key should not be usable")
 	}
+	if ProviderHasUsableAuth(DefaultOpenCodeName, OpenCodeZenEndpoint, "") {
+		t.Fatal("OpenCode Zen should require an API key")
+	}
+	if !ProviderHasUsableAuth(DefaultOpenCodeName, OpenCodeZenEndpoint, "zen-key") {
+		t.Fatal("OpenCode Zen should accept a configured API key")
+	}
+}
+
+func TestIsProviderRecognizesOpenCodeZen(t *testing.T) {
+	if !IsProvider(DefaultOpenCodeName, DefaultOpenCodeName, OpenCodeZenEndpoint) {
+		t.Fatal("OpenCode Zen should be recognized as the OpenCode provider")
+	}
+	if IsProvider(DefaultOpenCodeName, DefaultOpenCodeName, "https://example.test/v1") {
+		t.Fatal("custom endpoint should not be recognized as OpenCode")
+	}
+}
+
+func TestFetchProviderModelsOpenCodeZenCatalog(t *testing.T) {
+	transport := roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		if request.URL.String() != OpenCodeZenEndpoint+"/models" {
+			t.Fatalf("request URL = %q", request.URL.String())
+		}
+		if request.Header.Get("Authorization") != "Bearer zen-key" {
+			t.Fatalf("authorization = %q", request.Header.Get("Authorization"))
+		}
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Header:     http.Header{"Content-Type": []string{"application/json"}},
+			Body:       io.NopCloser(strings.NewReader(`{"data":[{"id":"muse-spark-1.3-contributor-free","name":"Muse Spark 1.3 Contributor Free"},{"id":"gpt-5.5","name":"GPT 5.5"}]}`)),
+		}, nil
+	})
+	models, err := FetchProviderModelsForProtocol(
+		context.Background(),
+		ProviderProtocolOpenAI,
+		OpenCodeZenEndpoint,
+		"zen-key",
+		func(client *http.Client) { client.Transport = transport },
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(models) != 2 || models[0].ID != "muse-spark-1.3-contributor-free" {
+		t.Fatalf("Zen models = %+v, want Muse Spark catalog entry", models)
+	}
+}
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(request *http.Request) (*http.Response, error) {
+	return f(request)
 }
 
 func TestFetchAnthropicProviderModels(t *testing.T) {

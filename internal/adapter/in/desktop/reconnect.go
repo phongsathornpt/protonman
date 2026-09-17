@@ -35,9 +35,61 @@ func (a *application) superviseConnection() {
 	}
 	a.mu.Unlock()
 	for _, profile := range profiles {
-		go a.superviseAgentConnection(ctx, profile)
+		a.startAgentSupervisor(ctx, profile)
 	}
 	<-ctx.Done()
+}
+
+func (a *application) startAgentSupervisor(parentCtx context.Context, profile agentProfile) {
+	a.mu.Lock()
+	if a.agentCancels == nil {
+		a.agentCancels = make(map[string]context.CancelFunc)
+	}
+	if oldCancel, ok := a.agentCancels[profile.ID]; ok && oldCancel != nil {
+		oldCancel()
+	}
+	agentCtx, cancel := context.WithCancel(parentCtx)
+	a.agentCancels[profile.ID] = cancel
+	a.mu.Unlock()
+
+	go a.superviseAgentConnection(agentCtx, profile)
+}
+
+func (a *application) restartAgent(agentID string) {
+	a.mu.Lock()
+	profile, ok := a.profiles[agentID]
+	oldCancel := a.agentCancels[agentID]
+	client := a.clients[agentID]
+	delete(a.clients, agentID)
+	a.mu.Unlock()
+
+	if oldCancel != nil {
+		oldCancel()
+	}
+	if client != nil {
+		_ = client.Close()
+	}
+	if ok {
+		a.startAgentSupervisor(a.ctx, profile)
+	}
+}
+
+func (a *application) stopAgent(agentID string) {
+	a.mu.Lock()
+	cancel, _ := a.agentCancels[agentID]
+	delete(a.agentCancels, agentID)
+	client := a.clients[agentID]
+	delete(a.clients, agentID)
+	a.state = desktopstate.MarkAgentDisconnected(a.state, agentID)
+	a.mu.Unlock()
+
+	if cancel != nil {
+		cancel()
+	}
+	if client != nil {
+		_ = client.Close()
+	}
+	a.renderAgentStatus()
 }
 
 func (a *application) superviseAgentConnection(ctx context.Context, profile agentProfile) {
@@ -46,10 +98,32 @@ func (a *application) superviseAgentConnection(ctx context.Context, profile agen
 		if ctx.Err() != nil {
 			return
 		}
+		a.mu.Lock()
+		a.state = desktopstate.Reduce(a.state, desktopstate.Event{
+			Kind: desktopstate.EventAgentHealthUpdated,
+			AgentHealth: desktopstate.AgentHealthState{
+				ID:     profile.ID,
+				Status: desktopstate.AgentStatusConnecting,
+			},
+		})
+		a.mu.Unlock()
+		a.renderAgentStatus()
+
 		client, err := acpclient.StartCommand(ctx, profile.Command, func(event acpclient.Event) {
 			a.handleAgentEvent(profile.ID, event)
 		})
 		if err != nil {
+			a.mu.Lock()
+			a.state = desktopstate.Reduce(a.state, desktopstate.Event{
+				Kind: desktopstate.EventAgentHealthUpdated,
+				AgentHealth: desktopstate.AgentHealthState{
+					ID:        profile.ID,
+					Status:    desktopstate.AgentStatusDisconnected,
+					LastError: err.Error(),
+				},
+			})
+			a.mu.Unlock()
+			a.renderAgentStatus()
 			a.setStatus("Disconnected · retrying · " + err.Error())
 			if !waitReconnect(ctx, delay) {
 				return
@@ -65,6 +139,17 @@ func (a *application) superviseAgentConnection(ctx context.Context, profile agen
 			if ctx.Err() != nil {
 				return
 			}
+			a.mu.Lock()
+			a.state = desktopstate.Reduce(a.state, desktopstate.Event{
+				Kind: desktopstate.EventAgentHealthUpdated,
+				AgentHealth: desktopstate.AgentHealthState{
+					ID:        profile.ID,
+					Status:    desktopstate.AgentStatusDisconnected,
+					LastError: err.Error(),
+				},
+			})
+			a.mu.Unlock()
+			a.renderAgentStatus()
 			a.setStatus("ACP reconnect failed · " + err.Error())
 			if !waitReconnect(ctx, delay) {
 				return
@@ -205,6 +290,7 @@ func (a *application) markDisconnected(agentID string, client *acpclient.Client)
 	fyne.Do(func() { a.list.Refresh() })
 	a.refreshActiveView()
 	a.refreshPermissionView()
+	a.renderAgentStatus()
 }
 
 func (a *application) setClient(agentID string, client *acpclient.Client) {
@@ -217,7 +303,69 @@ func (a *application) setClient(agentID string, client *acpclient.Client) {
 		a.client = client
 		a.agent = a.profiles[agentID]
 	}
+	a.state = desktopstate.Reduce(a.state, desktopstate.Event{
+		Kind: desktopstate.EventAgentHealthUpdated,
+		AgentHealth: desktopstate.AgentHealthState{
+			ID:     agentID,
+			Status: desktopstate.AgentStatusConnected,
+		},
+	})
 	a.mu.Unlock()
+	a.renderAgentStatus()
+}
+
+func (a *application) renderAgentStatus() {
+	a.mu.Lock()
+	total := len(a.profiles)
+	connected := 0
+	for id := range a.profiles {
+		if a.clients[id] != nil {
+			connected++
+		}
+	}
+	a.mu.Unlock()
+
+	fyne.Do(func() {
+		if a.agentSettingsButton != nil {
+			if total > 1 {
+				a.agentSettingsButton.SetText(fmt.Sprintf("Agents %d/%d", connected, total))
+			} else if connected == 1 {
+				a.agentSettingsButton.SetText("Agents 1/1")
+			} else {
+				a.agentSettingsButton.SetText("Agents 0/1")
+			}
+		}
+	})
+	a.renderSessionChrome()
+	a.renderACPAgentSettings()
+}
+
+func (a *application) onSessionAgentBadgeClicked() {
+	a.mu.Lock()
+	activeID := a.state.ActiveSessionID
+	var agentID string
+	for _, s := range a.state.Sessions {
+		if s.ID == activeID {
+			agentID = s.AgentID
+			break
+		}
+	}
+	if agentID == "" {
+		agentID = a.activeAgentID
+	}
+	client := a.clients[agentID]
+	a.mu.Unlock()
+
+	if agentID != "" && client == nil {
+		a.setStatus("Reconnecting " + a.agentNameFor(agentID) + "…")
+		a.restartAgent(agentID)
+		return
+	}
+	if a.window != nil {
+		a.openACPAgentManagerDialog(agentID)
+		return
+	}
+	a.toggleACPAgentPanel()
 }
 
 func (a *application) currentClient() *acpclient.Client {

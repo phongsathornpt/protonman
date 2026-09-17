@@ -195,6 +195,8 @@ func (s *FileStore) withSessionLock(ctx context.Context, sessionID string, fn fu
 		return fmt.Errorf("protect session store: %w", err)
 	}
 	lockPath := filepath.Join(s.root, "."+sessionID+".lock")
+	timer := time.NewTimer(10 * time.Millisecond)
+	defer timer.Stop()
 	for {
 		if err := ctx.Err(); err != nil {
 			return err
@@ -211,10 +213,17 @@ func (s *FileStore) withSessionLock(ctx context.Context, sessionID string, fn fu
 			_ = os.Remove(lockPath)
 			continue
 		}
+		if !timer.Stop() {
+			select {
+			case <-timer.C:
+			default:
+			}
+		}
+		timer.Reset(10 * time.Millisecond)
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-time.After(10 * time.Millisecond):
+		case <-timer.C:
 		}
 	}
 }

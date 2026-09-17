@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"time"
@@ -371,7 +373,13 @@ func (s *Service) call(ctx context.Context, call tool.Call, recoveryDepth int) (
 
 func executeHandler(ctx context.Context, handler tool.Handler, call tool.Call) (result tool.Result, err error) {
 	defer func() {
-		if recover() != nil {
+		if r := recover(); r != nil {
+			slog.Error("tool handler panicked",
+				"tool", call.Name,
+				"call_id", call.ID,
+				"panic", r,
+				"stack", string(debug.Stack()),
+			)
 			result = tool.Result{}
 			err = errors.New("tool handler panicked")
 		}

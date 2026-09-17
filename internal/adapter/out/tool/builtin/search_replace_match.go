@@ -169,7 +169,7 @@ func findWhitespaceMatches(content, oldString, newString string, replaceAll bool
 	normOld := strings.ReplaceAll(oldString, "\r\n", "\n")
 
 	contentLines := splitLinesWithOffsets(normContent)
-	oldLines := strings.Split(normOld, "\n")
+	oldLines, oldTrailingNL := splitTolerantOldLines(normOld)
 
 	if len(oldLines) > len(contentLines) {
 		return nil, nil
@@ -183,7 +183,7 @@ func findWhitespaceMatches(content, oldString, newString string, replaceAll bool
 		if len(matchesA) > 1 && !replaceAll {
 			return nil, fmt.Errorf("oldString matched %d locations in %q (differing by trailing whitespace); use replaceAll for multiple matches", len(matchesA), filePath)
 		}
-		return buildTolerantReplacements(content, normContent, contentLines, oldLines, matchesA, newString, 3), nil
+		return buildTolerantReplacements(content, normContent, contentLines, oldLines, oldTrailingNL, matchesA, newString, 3), nil
 	}
 
 	// Sub-tier B: Leading/trailing whitespace and indentation tolerance (TrimSpace)
@@ -194,10 +194,24 @@ func findWhitespaceMatches(content, oldString, newString string, replaceAll bool
 		if len(matchesB) > 1 && !replaceAll {
 			return nil, fmt.Errorf("oldString matched %d locations in %q (differing by indentation/whitespace); please provide more surrounding context", len(matchesB), filePath)
 		}
-		return buildTolerantReplacements(content, normContent, contentLines, oldLines, matchesB, newString, 3), nil
+		return buildTolerantReplacements(content, normContent, contentLines, oldLines, oldTrailingNL, matchesB, newString, 3), nil
 	}
 
 	return nil, nil
+}
+
+// splitTolerantOldLines splits a CRLF-normalized oldString into logical lines for
+// whitespace-tolerant matching. A trailing newline marks the end of the matched
+// block, not an additional empty line the file must contain, so it is reported
+// separately. Splitting it into a trailing "" element required the file to end the
+// matched block on an empty line, which made tolerant matching fail whenever the
+// block was followed by more content or the file had no final newline.
+func splitTolerantOldLines(normOld string) ([]string, bool) {
+	lines := strings.Split(normOld, "\n")
+	if len(lines) > 1 && lines[len(lines)-1] == "" {
+		return lines[:len(lines)-1], true
+	}
+	return lines, false
 }
 
 type lineOffset struct {
@@ -272,7 +286,7 @@ func scanLineMatches(contentLines []lineOffset, oldLines []string, normalize fun
 	return matches
 }
 
-func buildTolerantReplacements(rawContent, normContent string, contentLines []lineOffset, oldLines []string, matchRanges [][2]int, newString string, tier int) []replaceMatch {
+func buildTolerantReplacements(rawContent, normContent string, contentLines []lineOffset, oldLines []string, oldHasTrailingNL bool, matchRanges [][2]int, newString string, tier int) []replaceMatch {
 	hasCRLF := strings.Contains(rawContent, "\r\n")
 	adjustedNew := newString
 	if hasCRLF && !strings.Contains(newString, "\r\n") {
@@ -288,7 +302,6 @@ func buildTolerantReplacements(rawContent, normContent string, contentLines []li
 		normEnd := lastLine.endOffset
 
 		// If oldString did not have a trailing newline, don't consume the file's trailing newline
-		oldHasTrailingNL := len(oldLines) > 0 && oldLines[len(oldLines)-1] == ""
 		if !oldHasTrailingNL && strings.HasSuffix(normContent[normStart:normEnd], "\n") && !strings.HasSuffix(newString, "\n") {
 			normEnd--
 		}

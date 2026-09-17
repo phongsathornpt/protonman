@@ -153,8 +153,20 @@ func IsOpenCodeInferenceEndpoint(baseURL string) bool {
 	return endpoint == strings.ToLower(DefaultOpenCodeEndpoint)
 }
 
+// IsOpenCodeZenEndpoint reports whether baseURL targets the authenticated
+// OpenCode Zen API.
+func IsOpenCodeZenEndpoint(baseURL string) bool {
+	endpoint := strings.ToLower(strings.TrimRight(strings.TrimSpace(baseURL), "/"))
+	return endpoint == strings.ToLower(OpenCodeZenEndpoint)
+}
+
 // IsProvider reports whether provider identity or endpoint maps to providerID.
 func IsProvider(providerID, providerName, baseURL string) bool {
+	if strings.TrimSpace(baseURL) != "" &&
+		strings.EqualFold(providerID, DefaultOpenCodeName) &&
+		(strings.EqualFold(strings.TrimSpace(providerName), DefaultOpenCodeName) || IsOpenCodeZenEndpoint(baseURL)) {
+		return IsOpenCodeInferenceEndpoint(baseURL) || IsOpenCodeZenEndpoint(baseURL)
+	}
 	preset := MatchProviderPreset(providerName, baseURL)
 	return preset != nil && strings.EqualFold(preset.ID, providerID)
 }

@@ -43,10 +43,10 @@ ACP chat, tool, permission, cancellation, MCP, and reconnect path. Protonman
 extensions such as Goal/TODO/Memory and runtime controls are unavailable for
 non-Protonman agents until capability-aware session support is added.
 
-To run multiple ACP agents at once, provide a JSON profile list. Desktop starts
+To run multiple ACP agents at once, provide a JSON profile list or configure them in Agent Settings. Desktop starts
 one supervised ACP process per profile; new sessions use the agent selected in
-the conversation header, while existing sessions continue using their owning
-agent process.
+the sidebar ("New with"), while existing sessions display their owning agent, connection
+health, and extension capabilities in the conversation header.
 
 ```sh
 PROTONMAN_ACP_AGENTS_JSON='[
@@ -54,6 +54,14 @@ PROTONMAN_ACP_AGENTS_JSON='[
   {"id":"antigravity","displayName":"Google Antigravity","command":"/path/to/agy_acp_server.par"}
 ]' protonman-desktop
 ```
+
+### Automatic ACP CLI Discovery & Agent Manager
+
+Desktop automatically scans the host machine's `PATH` for coding CLI tools that support the Agent Client Protocol:
+- **Safe Probing**: Candidates such as `protonman`, `goose`, `zero`, `agy`, `claude`, etc., are probed using bounded execution (`--help`) looking for ACP flags (`acp`, `--acp`).
+- **Dedicated Agent Manager Dialog**: Accessible from the sidebar bottom button (`Agents X/Y`), session agent badge, or `⚙ Manage ACP agents…` in the dropdown. Provides a master-detail manager with live process status dots, per-agent hot restart, custom profile creation with executable browser, and default agent selection.
+- **Sidebar Quick-Add**: Detected CLIs not yet configured appear directly in the sidebar target agent dropdown (`+ Add <Name> (detected)`). Selecting one immediately configures it and switches the target agent.
+
 
 ## Session behavior
 

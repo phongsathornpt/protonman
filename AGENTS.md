@@ -43,7 +43,7 @@ internal/adapter/in/            inbound adapters
   desktop/                      Fyne desktop frontend (`-tags desktop`; drives the CLI over ACP)
 internal/adapter/out/           driven infrastructure adapters
   acpclient/                    ACP client used by the desktop frontend
-  config/                       layered TOML loading and persistence
+  config/                       layered JSON configuration loading and persistence
   memoryfs/                     file-backed memory repository
   model/                        provider discovery and SDK adaptation
   sessionfs/                    file-backed session repository
@@ -763,7 +763,7 @@ When implementing a change, place it according to ownership:
 | prompt wording/composition | `internal/engine/prompt` |
 | model/tool turn behavior | `internal/engine/turn` |
 | permission execution pipeline | `internal/engine/toolcall` + `internal/core/permission` |
-| user/project TOML persistence | `internal/adapter/out/config`, exposed via `internal/app` |
+| user/project JSON persistence | `internal/adapter/out/config`, exposed via `internal/app` |
 | terminal interaction/rendering | `internal/adapter/in/tui` |
 | desktop frontend/rendering | `internal/adapter/in/desktop` (`-tags desktop`) |
 | desktop presentation state | `internal/feature/desktop` |
@@ -779,7 +779,7 @@ When implementing a change, place it according to ownership:
 
 `internal/base/runtimepolicy` is the single source of truth for product runtime defaults. `internal/adapter/out/config.DefaultSnapshot()` is the only constructor for a fresh effective config snapshot; do not add alias constants for runtime defaults inside config or TUI packages.
 
-User and project TOML mutation must reuse the shared atomic document persistence primitive in `internal/adapter/out/config/store.go`, while preserving scope-specific security checks and file modes. Persisted TOML structs are a compatibility boundary: never embed runtime `ProviderConfig` or `ModelConfig` directly in `fileDocument`; use explicit conversion at load/save boundaries. See `docs/settings.md` for the current settings architecture and migration rules.
+User and project configuration mutation must reuse the shared atomic document persistence primitive in `internal/adapter/out/config/store.go`, while preserving scope-specific security checks and file modes. Persisted configuration structs are a compatibility boundary: never embed runtime `ProviderConfig` or `ModelConfig` directly in `fileDocument`; use explicit conversion at load/save boundaries. See `docs/settings.md` for the current settings architecture and migration rules.
 
 ## Implementation Style
 

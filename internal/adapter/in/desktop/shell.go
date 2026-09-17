@@ -39,6 +39,9 @@ func (a *application) initDesktopControls() {
 	a.stop = widget.NewButtonWithIcon("Stop", theme.MediaStopIcon(), a.cancelPrompt)
 	a.send.Disable()
 	a.stop.Disable()
+	a.sessionAgentBadge = widget.NewButton("● Agent", a.onSessionAgentBadgeClicked)
+	a.sessionAgentBadge.Importance = widget.LowImportance
+	a.sessionAgentBadge.Hide()
 
 	a.initPermissionControls()
 	a.initACPAgentControls()
@@ -192,7 +195,11 @@ func (a *application) bindSessionRow(id widget.ListItemID, object fyne.CanvasObj
 	}
 
 	if session.Status != desktopstate.TaskIdle {
-		setIconText(subtitle, taskStatusIcon(session.Status), string(session.Status))
+		statusText := string(session.Status)
+		if agent := a.agentNameFor(session.AgentID); agent != "" {
+			statusText += " · " + agent
+		}
+		setIconText(subtitle, taskStatusIcon(session.Status), compactText(statusText, sidebarMetaMaxRunes))
 		setImportance(subtitle, statusImportance(session.Status))
 		return
 	}
@@ -264,14 +271,18 @@ func (a *application) buildSidebar() fyne.CanvasObject {
 	a.sessionSearch = widget.NewEntry()
 	a.sessionSearch.SetPlaceHolder("Search sessions or workspaces")
 	a.sessionSearch.OnChanged = a.applySidebarQuery
+	title := newIconText(iconRocket, "Protonman Desktop", fyne.TextStyle{Bold: true}, false)
 	newTask := widget.NewButtonWithIcon("New session", theme.ContentAddIcon(), func() {
 		if a.sessionSearch.Text != "" {
 			a.sessionSearch.SetText("")
 		}
 		a.newSession()
 	})
-	sidebarHeader := container.NewBorder(nil, nil, nil, newTask,
-		newIconText(iconRocket, "Protonman Desktop", fyne.TextStyle{Bold: true}, false),
+	newTask.Importance = widget.HighImportance
+	agentPicker := container.NewBorder(nil, nil,
+		widget.NewLabel("New with"),
+		nil,
+		a.agentSelect,
 	)
 
 	secondary := container.NewVBox(
@@ -286,7 +297,7 @@ func (a *application) buildSidebar() fyne.CanvasObject {
 	listContent := container.NewMax(a.list, a.sidebarEmpty)
 
 	return container.NewBorder(
-		container.NewVBox(sidebarHeader, a.sessionSearch),
+		container.NewVBox(title, newTask, agentPicker, a.sessionSearch),
 		secondary,
 		nil,
 		nil,
@@ -319,10 +330,8 @@ func (a *application) buildConversationSurface() fyne.CanvasObject {
 	a.sessionMeta = widget.NewLabel("Select a session")
 	a.sessionMeta.Wrapping = fyne.TextWrapWord
 
-	agentLabel := widget.NewLabelWithStyle("Agent", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
-	agentControl := container.New(fixedWidthLayout{width: 150}, a.agentSelect)
 	stopControl := container.New(fixedWidthLayout{width: 76}, a.stop)
-	headerActions := container.NewHBox(agentLabel, agentControl, stopControl, a.runtimeSummary, a.contextToggle)
+	headerActions := container.NewHBox(a.sessionAgentBadge, stopControl, a.runtimeSummary, a.contextToggle)
 	header := container.NewBorder(nil, nil, nil, headerActions,
 		container.NewVBox(a.sessionTitle, a.sessionMeta),
 	)

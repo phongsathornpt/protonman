@@ -603,7 +603,7 @@ func TestStreamIdleTimeoutDoesNotBlindReplayCommittedText(t *testing.T) {
 }
 
 func TestOpenCodeFreeModelFactoryEnablesEmptyStreamRetry(t *testing.T) {
-	model := newSDKOpenAILanguageModel(DefaultOpenCodeName, "https://example.test/v1", "", "nemotron-3.5-lightning-free", WithSessionID("session-1"))
+	model := newSDKOpenAILanguageModel(DefaultOpenCodeName, DefaultOpenCodeEndpoint, "", "nemotron-3.5-lightning-free", WithSessionID("session-1"))
 	retryModel, ok := model.(*emptyStreamRetryModel)
 	if !ok {
 		t.Fatalf("model type = %T, want *emptyStreamRetryModel", model)
@@ -620,7 +620,7 @@ func TestOpenCodeFreeModelFactoryEnablesEmptyStreamRetry(t *testing.T) {
 			t.Fatalf("free model retry delay %d = %v, want %v", index+1, got, want)
 		}
 	}
-	paid := newSDKOpenAILanguageModel(DefaultOpenCodeName, "https://example.test/v1", "", "paid-model", WithSessionID("session-1"))
+	paid := newSDKOpenAILanguageModel(DefaultOpenCodeName, DefaultOpenCodeEndpoint, "", "paid-model", WithSessionID("session-1"))
 	paidRetry, ok := paid.(*emptyStreamRetryModel)
 	if !ok {
 		t.Fatalf("paid model unexpectedly missing replay-safe retry wrapper: %T", paid)
@@ -633,8 +633,48 @@ func TestOpenCodeFreeModelFactoryEnablesEmptyStreamRetry(t *testing.T) {
 	}
 }
 
+func TestOpenCodeFreePolicyRequiresKnownEndpoint(t *testing.T) {
+	for _, endpoint := range []string{"https://example.test/v1"} {
+		model := newSDKOpenAILanguageModel(
+			DefaultOpenCodeName,
+			endpoint,
+			"",
+			"nemotron-3.5-lightning-free",
+		)
+		retryModel, ok := model.(*emptyStreamRetryModel)
+		if !ok {
+			t.Fatalf("endpoint %q: model type = %T, want replay wrapper", endpoint, model)
+		}
+		if retryModel.retryOpenFailures {
+			t.Fatalf("endpoint %q incorrectly enabled free-model open retries", endpoint)
+		}
+		if _, ok := retryModel.base.(*lowConcurrencyModel); ok {
+			t.Fatalf("endpoint %q incorrectly enabled free-model low concurrency", endpoint)
+		}
+	}
+}
+
+func TestOpenCodeZenFreeModelUsesFreePolicy(t *testing.T) {
+	model := newSDKOpenAILanguageModel(
+		DefaultOpenCodeName,
+		OpenCodeZenEndpoint,
+		"zen-key",
+		"muse-spark-1.3-contributor-free",
+	)
+	retryModel, ok := model.(*emptyStreamRetryModel)
+	if !ok {
+		t.Fatalf("model type = %T, want replay wrapper", model)
+	}
+	if !retryModel.retryOpenFailures || retryModel.maxRetries != runtimepolicy.ModelRetryMaxRetries {
+		t.Fatalf("Zen free wrapper = %+v, want free-model retry ownership", retryModel)
+	}
+	if _, ok := retryModel.base.(*lowConcurrencyModel); !ok {
+		t.Fatalf("Zen free inner type = %T, want low concurrency wrapper", retryModel.base)
+	}
+}
+
 func TestLowConcurrencySettingControlsOpenCodeWrapper(t *testing.T) {
-	freeAuto := newSDKOpenAILanguageModel(DefaultOpenCodeName, "https://example.test/v1", "", "nemotron-3.5-lightning-free")
+	freeAuto := newSDKOpenAILanguageModel(DefaultOpenCodeName, DefaultOpenCodeEndpoint, "", "nemotron-3.5-lightning-free")
 	retryAuto, ok := freeAuto.(*emptyStreamRetryModel)
 	if !ok {
 		t.Fatalf("free auto type = %T, want retry wrapper", freeAuto)
@@ -643,7 +683,7 @@ func TestLowConcurrencySettingControlsOpenCodeWrapper(t *testing.T) {
 		t.Fatalf("free auto inner type = %T, want low concurrency wrapper", retryAuto.base)
 	}
 
-	freeOff := newSDKOpenAILanguageModel(DefaultOpenCodeName, "https://example.test/v1", "", "nemotron-3.5-lightning-free", WithLowConcurrencyMode(LowConcurrencyOff))
+	freeOff := newSDKOpenAILanguageModel(DefaultOpenCodeName, DefaultOpenCodeEndpoint, "", "nemotron-3.5-lightning-free", WithLowConcurrencyMode(LowConcurrencyOff))
 	retryOff, ok := freeOff.(*emptyStreamRetryModel)
 	if !ok {
 		t.Fatalf("free off type = %T, want retry wrapper", freeOff)
@@ -652,7 +692,7 @@ func TestLowConcurrencySettingControlsOpenCodeWrapper(t *testing.T) {
 		t.Fatalf("free off unexpectedly retained low concurrency wrapper: %T", retryOff.base)
 	}
 
-	paidAuto := newSDKOpenAILanguageModel(DefaultOpenCodeName, "https://example.test/v1", "", "paid-model")
+	paidAuto := newSDKOpenAILanguageModel(DefaultOpenCodeName, DefaultOpenCodeEndpoint, "", "paid-model")
 	if inner := unwrapRetryModel(paidAuto); inner != nil {
 		if _, ok := inner.(*lowConcurrencyModel); ok {
 			t.Fatalf("paid auto unexpectedly enabled low concurrency: %T", inner)
@@ -661,7 +701,7 @@ func TestLowConcurrencySettingControlsOpenCodeWrapper(t *testing.T) {
 		t.Fatalf("paid auto unexpectedly enabled low concurrency: %T", paidAuto)
 	}
 
-	paidOn := newSDKOpenAILanguageModel(DefaultOpenCodeName, "https://example.test/v1", "", "paid-model", WithLowConcurrencyMode(LowConcurrencyOn))
+	paidOn := newSDKOpenAILanguageModel(DefaultOpenCodeName, DefaultOpenCodeEndpoint, "", "paid-model", WithLowConcurrencyMode(LowConcurrencyOn))
 	if inner := unwrapRetryModel(paidOn); inner == nil {
 		t.Fatalf("paid on type = %T, want replay wrapper around low concurrency wrapper", paidOn)
 	} else if _, ok := inner.(*lowConcurrencyModel); !ok {
@@ -809,7 +849,7 @@ func TestGenericFactoryEnablesReplaySafeRetry(t *testing.T) {
 		t.Fatalf("anthropic wrapper = %+v, want generic replay-safe budget without open retries", anthropicRetry)
 	}
 
-	free := newSDKOpenAILanguageModel(DefaultOpenCodeName, "https://example.test/v1", "", "nemotron-3.5-lightning-free")
+	free := newSDKOpenAILanguageModel(DefaultOpenCodeName, DefaultOpenCodeEndpoint, "", "nemotron-3.5-lightning-free")
 	freeRetry, ok := free.(*emptyStreamRetryModel)
 	if !ok {
 		t.Fatalf("free type = %T, want *emptyStreamRetryModel", free)

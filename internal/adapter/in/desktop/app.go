@@ -4,11 +4,13 @@ package desktop
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
@@ -31,10 +33,12 @@ type sessionItem struct {
 type application struct {
 	ctx context.Context
 
+	window        fyne.Window
 	client        *acpclient.Client // compatibility alias for the active agent
 	agent         agentProfile
 	profiles      map[string]agentProfile
 	clients       map[string]*acpclient.Client
+	agentCancels  map[string]context.CancelFunc
 	activeAgentID string
 	desktopApp    fyne.App
 
@@ -57,6 +61,7 @@ type application struct {
 	composer           *widget.Entry
 	send               *widget.Button
 	stop               *widget.Button
+	sessionAgentBadge  *widget.Button
 	sessionTitle       *widget.Label
 	sessionMeta        *widget.Label
 	contextToggle      *widget.Button
@@ -82,8 +87,14 @@ type application struct {
 	agentIDEntry         *widget.Entry
 	agentNameEntry       *widget.Entry
 	agentCommandEntry    *widget.Entry
-	agentArgsEntry       *widget.Entry
-	runtimeSync          bool
+	agentArgsEntry           *widget.Entry
+	discoveredAgents         []DiscoveredAgent
+	agentScanSelect          *widget.Select
+	agentScanButton          *widget.Button
+	agentAddDiscoveredButton *widget.Button
+	isScanningAgents         atomic.Bool
+	editingAgentID           string
+	runtimeSync              bool
 
 	integrationButton    *widget.Button
 	integrationPanel     *fyne.Container
@@ -115,34 +126,78 @@ func Run(ctx context.Context) error {
 		profileMap[profile.ID] = profile
 		profileIDs = append(profileIDs, profile.ID)
 	}
+	activeAgentID := profileIDs[0]
+	if prefs := desktopApp.Preferences(); prefs != nil {
+		if saved := strings.TrimSpace(prefs.String(activeAgentPreferencesKey)); saved != "" {
+			if _, ok := profileMap[saved]; ok {
+				activeAgentID = saved
+			}
+		}
+	}
 	ui := &application{
 		ctx:                 ctx,
+		window:              window,
 		desktopApp:          desktopApp,
 		profiles:            profileMap,
 		clients:             make(map[string]*acpclient.Client),
-		activeAgentID:       profileIDs[0],
+		agentCancels:        make(map[string]context.CancelFunc),
+		activeAgentID:       activeAgentID,
 		transcripts:         make(map[string]*strings.Builder),
 		collapsedWorkspaces: make(map[string]bool),
 		permissionWaiters:   make(map[string]chan string),
 		preferences:         desktopApp.Preferences(),
 	}
-	ui.agentSelect = widget.NewSelect(profileIDs, func(value string) {
+	ui.agentSelect = widget.NewSelect(ui.agentOptionList(), func(value string) {
+		if strings.Contains(value, "Manage ACP agents") {
+			ui.openACPAgentManagerDialog()
+			ui.agentSelect.SetSelected(ui.agentOptionForID(ui.activeAgentID))
+			return
+		}
+		agentID := ui.agentIDFromOption(value)
 		ui.mu.Lock()
-		if _, ok := ui.profiles[value]; ok {
-			ui.activeAgentID = value
+		_, ok := ui.profiles[agentID]
+		var discovered *DiscoveredAgent
+		if !ok {
+			for i := range ui.discoveredAgents {
+				if ui.discoveredAgents[i].ID == agentID {
+					discovered = &ui.discoveredAgents[i]
+					break
+				}
+			}
 		}
 		ui.mu.Unlock()
-		ui.populateACPAgentEditor(value)
-		ui.renderACPAgentSettings()
-		ui.setStatus("ACP agent selected · " + value)
+
+		if !ok && discovered != nil {
+			ui.agentIDEntry.SetText(discovered.ID)
+			ui.agentNameEntry.SetText(discovered.DisplayName)
+			ui.agentCommandEntry.SetText(discovered.Command)
+			args, _ := json.Marshal(discovered.Args)
+			ui.agentArgsEntry.SetText(string(args))
+			ui.saveACPAgent()
+			ui.setStatus("Configured and selected " + discovered.DisplayName)
+			return
+		}
+
+		if ok {
+			ui.mu.Lock()
+			ui.activeAgentID = agentID
+			if ui.preferences != nil {
+				ui.preferences.SetString(activeAgentPreferencesKey, agentID)
+			}
+			ui.mu.Unlock()
+			ui.populateACPAgentEditor(agentID)
+			ui.renderACPAgentSettings()
+			ui.setStatus("New sessions will use " + value)
+		}
 	})
 	ui.initDesktopControls()
 	// Select invokes its callback synchronously, so all callback targets must
 	// exist before selecting the initial value.
-	ui.agentSelect.SetSelected(profileIDs[0])
+	ui.agentSelect.SetSelected(ui.agentOptionForID(activeAgentID))
 	window.SetContent(ui.buildDesktopShell())
 
 	go ui.connect()
+	go ui.scanAndPopulateAgents()
 	window.ShowAndRun()
 	if client := ui.currentClient(); client != nil {
 		_ = client.Close()
@@ -496,7 +551,11 @@ func (a *application) sessionBusyLocked(sessionID string) bool {
 }
 
 func (a *application) setStatus(text string) {
-	fyne.Do(func() { a.status.SetText(text) })
+	fyne.Do(func() {
+		if a.status != nil {
+			a.status.SetText(text)
+		}
+	})
 }
 
 func shortID(id string) string {

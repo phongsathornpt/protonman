@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"testing"
 
+	fynetest "fyne.io/fyne/v2/test"
+
 	"github.com/phongsathornpt/protonman/internal/adapter/out/acpclient"
 )
 
@@ -95,3 +97,86 @@ func TestACPAgentProfilesPersistAndLoadFromPreferences(t *testing.T) {
 		t.Fatalf("loaded = %#v, stored = %#v", loaded, stored)
 	}
 }
+
+func TestAgentOptionMapping(t *testing.T) {
+	app := &application{
+		profiles: map[string]agentProfile{
+			"protonman":   {ID: "protonman", DisplayName: "Protonman"},
+			"antigravity": {ID: "antigravity", DisplayName: "Google Antigravity"},
+		},
+		activeAgentID: "protonman",
+	}
+
+	options := app.agentOptionList()
+	if len(options) != 3 || options[0] != "Google Antigravity" || options[1] != "Protonman" || options[2] != "⚙ Manage ACP agents…" {
+		t.Fatalf("unexpected options: %#v", options)
+	}
+
+	if id := app.agentIDFromOption("Google Antigravity"); id != "antigravity" {
+		t.Fatalf("expected antigravity, got %q", id)
+	}
+	if id := app.agentIDFromOption("Protonman"); id != "protonman" {
+		t.Fatalf("expected protonman, got %q", id)
+	}
+	if id := app.agentIDFromOption("⚙ Manage ACP agents…"); id != "" {
+		t.Fatalf("expected empty string for manage option, got %q", id)
+	}
+	if id := app.agentIDFromOption("unknown"); id != "unknown" {
+		t.Fatalf("expected unknown passthrough, got %q", id)
+	}
+
+	if label := app.agentOptionForID("antigravity"); label != "Google Antigravity" {
+		t.Fatalf("expected Google Antigravity, got %q", label)
+	}
+	if label := app.agentOptionForID("unknown"); label != "unknown" {
+		t.Fatalf("expected unknown, got %q", label)
+	}
+}
+
+func TestActiveAgentPersistenceKey(t *testing.T) {
+	prefs := &testPreferences{values: make(map[string]string)}
+	prefs.SetString(activeAgentPreferencesKey, "antigravity")
+	if got := prefs.String(activeAgentPreferencesKey); got != "antigravity" {
+		t.Fatalf("expected antigravity, got %q", got)
+	}
+}
+
+func TestSetDefaultAgent(t *testing.T) {
+	testApp := fynetest.NewApp()
+	prefs := testApp.Preferences()
+	app := &application{
+		profiles: map[string]agentProfile{
+			"protonman":   {ID: "protonman", DisplayName: "Protonman"},
+			"antigravity": {ID: "antigravity", DisplayName: "Google Antigravity"},
+		},
+		activeAgentID: "protonman",
+		preferences:   prefs,
+	}
+
+	app.setDefaultAgent("antigravity")
+	if app.activeAgentID != "antigravity" {
+		t.Fatalf("expected activeAgentID to be antigravity, got %q", app.activeAgentID)
+	}
+	if got := prefs.String(activeAgentPreferencesKey); got != "antigravity" {
+		t.Fatalf("expected preference %q, got %q", "antigravity", got)
+	}
+
+	// Unknown agent should not change default
+	app.setDefaultAgent("nonexistent")
+	if app.activeAgentID != "antigravity" {
+		t.Fatalf("expected activeAgentID to remain antigravity, got %q", app.activeAgentID)
+	}
+}
+
+func TestOpenACPAgentManagerDialogHeadlessSafety(t *testing.T) {
+	app := &application{
+		profiles: map[string]agentProfile{
+			"protonman": {ID: "protonman", DisplayName: "Protonman"},
+		},
+		activeAgentID: "protonman",
+	}
+	// Should not panic when window is nil
+	app.openACPAgentManagerDialog()
+	app.openACPAgentManagerDialog("protonman")
+}
+

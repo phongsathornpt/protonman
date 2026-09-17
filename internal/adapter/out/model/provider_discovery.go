@@ -17,6 +17,9 @@ import (
 // RemoteModel is provider-neutral discovered model metadata.
 type RemoteModel = modelcatalog.RemoteModel
 
+// ErrUnauthorized indicates that a remote provider rejected credentials (HTTP 401).
+var ErrUnauthorized = errors.New("authentication failed (401)")
+
 var openCodeInferenceFreeModels = []RemoteModel{
 	{ID: "big-pickle", Name: "Big Pickle", Provider: DefaultOpenCodeName},
 	{ID: "mimo-v2.5-free", Name: "MiMo V2.5 Free", Provider: DefaultOpenCodeName},
@@ -81,6 +84,20 @@ func FetchProviderModelsForProtocol(ctx context.Context, protocol ProviderProtoc
 		}
 	}
 
+	// Zen exposes the authenticated model catalog, including temporary free
+	// models such as Muse Spark 1.3 Contributor Free. Unlike the keyless
+	// Inference API, discovery must use the configured Zen credential.
+	if (protocol == "" || protocol == ProviderProtocolOpenAI) && IsOpenCodeZenEndpoint(baseURL) {
+		models, err := fetchModelsFromURL(ctx, client, baseURL+"/models", apiKey)
+		if err != nil {
+			return nil, err
+		}
+		if len(models) == 0 {
+			return nil, errors.New("no models returned by OpenCode Zen")
+		}
+		return models, nil
+	}
+
 	if protocol == ProviderProtocolAnthropic {
 		return fetchAnthropicModels(ctx, client, baseURL, apiKey)
 	}
@@ -93,7 +110,7 @@ func FetchProviderModelsForProtocol(ctx context.Context, protocol ProviderProtoc
 	}
 
 	// If 401 Unauthorized, return error directly to let user check their key
-	if err != nil && strings.Contains(err.Error(), "401") {
+	if err != nil && errors.Is(err, ErrUnauthorized) {
 		return nil, err
 	}
 
@@ -132,7 +149,7 @@ func fetchModelsFromURL(ctx context.Context, client *http.Client, urlStr string,
 	}
 
 	if resp.StatusCode == http.StatusUnauthorized {
-		return nil, fmt.Errorf("authentication failed (401): invalid or missing API key")
+		return nil, fmt.Errorf("%w: invalid or missing API key", ErrUnauthorized)
 	}
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("endpoint returned status %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
@@ -167,7 +184,7 @@ func fetchAnthropicModels(ctx context.Context, client *http.Client, baseURL stri
 		return nil, fmt.Errorf("read anthropic models response: %w", err)
 	}
 	if resp.StatusCode == http.StatusUnauthorized {
-		return nil, fmt.Errorf("authentication failed (401): invalid or missing API key")
+		return nil, fmt.Errorf("%w: invalid or missing API key", ErrUnauthorized)
 	}
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("endpoint returned status %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))

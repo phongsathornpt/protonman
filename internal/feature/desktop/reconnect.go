@@ -24,5 +24,11 @@ func MarkAgentDisconnected(current State, agentID string) State {
 	// Permission requests belong to the dead ACP process and cannot safely be
 	// answered after reconnect. A resumed session may request them again.
 	next.PermissionInbox = nil
+	if agentID != "" && next.AgentHealth != nil {
+		if health, ok := next.AgentHealth[agentID]; ok {
+			health.Status = AgentStatusDisconnected
+			next.AgentHealth[agentID] = health
+		}
+	}
 	return next
 }

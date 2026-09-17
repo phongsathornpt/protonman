@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"sort"
 	"strings"
 	"sync"
@@ -345,8 +346,10 @@ func (s *stream) finishResponseCall(chunk responsesChunk) {
 	if callID == "" {
 		callID = s.nextCallID()
 	}
-	if arguments == "" {
-		arguments = "{}"
+	var repaired bool
+	arguments, repaired = normalizeToolArguments(arguments)
+	if repaired {
+		slog.Debug("repaired control characters in model tool arguments", "provider", s.provider)
 	}
 	s.hasToolCalls = true
 	s.queue = append(s.queue, domain.Event{Kind: domain.EventToolCallEnd, ToolCallID: callID}, domain.Event{Kind: domain.EventToolCall, ToolCall: domain.ToolCall{ID: callID, Name: name, Arguments: json.RawMessage(arguments)}})
@@ -393,15 +396,78 @@ func (s *stream) emitCompleteCall(call *accumulatedToolCall) {
 	if call.id == "" {
 		call.id = s.nextCallID()
 	}
-	arguments := strings.TrimSpace(call.arguments.String())
-	if arguments == "" {
-		arguments = "{}"
+	arguments, repaired := normalizeToolArguments(call.arguments.String())
+	if repaired {
+		slog.Debug("repaired control characters in model tool arguments", "provider", s.provider)
 	}
 	if call.started {
 		s.queue = append(s.queue, domain.Event{Kind: domain.EventToolCallEnd, ToolCallID: call.id})
 	}
 	s.hasToolCalls = true
 	s.queue = append(s.queue, domain.Event{Kind: domain.EventToolCall, ToolCall: domain.ToolCall{ID: call.id, Name: call.name, Arguments: json.RawMessage(arguments)}})
+}
+
+// normalizeToolArguments repairs the one common malformed JSON shape produced
+// by OpenAI-compatible coding models: literal control characters inside a JSON
+// string. Multiline edit arguments are otherwise valid tool calls, but an
+// unescaped newline makes the whole model stream fail at Event.Validate.
+//
+// Deliberately do not repair structural JSON errors (truncated objects,
+// trailing commas, markdown fences, and similar output). Those remain invalid
+// so the caller can report the provider contract violation instead of silently
+// changing the requested tool call.
+func normalizeToolArguments(raw string) (string, bool) {
+	arguments := strings.TrimSpace(raw)
+	if arguments == "" {
+		return "{}", false
+	}
+	if json.Valid([]byte(arguments)) {
+		return arguments, false
+	}
+
+	var repaired strings.Builder
+	repaired.Grow(len(arguments))
+	inString := false
+	escaped := false
+	for _, char := range arguments {
+		if escaped {
+			repaired.WriteRune(char)
+			escaped = false
+			continue
+		}
+		if inString && char == '\\' {
+			repaired.WriteRune(char)
+			escaped = true
+			continue
+		}
+		if char == '"' {
+			inString = !inString
+			repaired.WriteRune(char)
+			continue
+		}
+		if inString {
+			switch char {
+			case '\n':
+				repaired.WriteString(`\n`)
+				continue
+			case '\r':
+				repaired.WriteString(`\r`)
+				continue
+			case '\t':
+				repaired.WriteString(`\t`)
+				continue
+			}
+			if char < 0x20 {
+				fmt.Fprintf(&repaired, `\u%04x`, char)
+				continue
+			}
+		}
+		repaired.WriteRune(char)
+	}
+	if candidate := repaired.String(); json.Valid([]byte(candidate)) {
+		return candidate, true
+	}
+	return arguments, false
 }
 
 func (s *stream) nextCallID() string {

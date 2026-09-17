@@ -87,6 +87,23 @@ func (l fixedWidthLayout) MinSize(_ []fyne.CanvasObject) fyne.Size {
 	return fyne.NewSize(l.width, 0)
 }
 
+// minSizeLayout enforces minimum width and height on its children.
+type minSizeLayout struct {
+	width  float32
+	height float32
+}
+
+func (l minSizeLayout) Layout(objects []fyne.CanvasObject, size fyne.Size) {
+	for _, object := range objects {
+		object.Move(fyne.NewPos(0, 0))
+		object.Resize(size)
+	}
+}
+
+func (l minSizeLayout) MinSize(_ []fyne.CanvasObject) fyne.Size {
+	return fyne.NewSize(l.width, l.height)
+}
+
 // responsiveDrawerLayout owns the conversation/drawer split. Unlike a Border
 // child with a cached MinSize, this layout receives the current available width
 // on every resize and recomputes the drawer allocation immediately.

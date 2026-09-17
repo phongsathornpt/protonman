@@ -104,7 +104,7 @@ func (a *application) setRuntimeModel() {
 	sessionID := a.state.ActiveSessionID
 	busy := a.sessionBusyLocked(sessionID)
 	a.mu.Unlock()
-	client := a.currentClient()
+	client := a.clientForSession(sessionID)
 	provider := strings.TrimSpace(a.modelProvider.Text)
 	modelID := strings.TrimSpace(a.modelID.Text)
 	if client == nil || sessionID == "" || busy || provider == "" || modelID == "" {
@@ -133,7 +133,7 @@ func (a *application) setRuntimeChoice(method, field, value string) {
 	sessionID := a.state.ActiveSessionID
 	busy := a.sessionBusyLocked(sessionID)
 	a.mu.Unlock()
-	client := a.currentClient()
+	client := a.clientForSession(sessionID)
 	value = strings.TrimSpace(value)
 	if client == nil || sessionID == "" || busy || value == "" {
 		return
