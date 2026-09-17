@@ -13,10 +13,10 @@ import (
 func TestOpenCodeRequestMetadataHeaders(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		want := map[string]string{
-			"x-opencode-session": "session-1",
-			"x-opencode-project": "project-1",
-			"x-opencode-request": "message-1",
-			"x-opencode-client":  "protonman",
+			"x-opencode-session":  "session-1",
+			"x-opencode-project":  "project-1",
+			"x-opencode-request":  "msg_message-1",
+			"x-opencode-client":   "protonman",
 			"x-parent-session-id": "parent-1",
 			"User-Agent":          "Protonman-Test",
 		}
@@ -37,7 +37,7 @@ func TestOpenCodeRequestMetadataHeaders(t *testing.T) {
 		Headers:      http.Header{"x-opencode-client": []string{"protonman"}},
 	})
 	stream, err := provider.Model("test-model").Stream(context.Background(), sdk.Request{
-		Messages: []sdk.Message{{ID: "message-1", Role: sdk.RoleUser, Content: "hi"}},
+		Messages: []sdk.Message{{ID: "msg_message-1", Role: sdk.RoleUser, Content: "hi"}},
 		Metadata: sdk.RequestMetadata{
 			SessionID:       "session-1",
 			ParentSessionID: "parent-1",
@@ -61,7 +61,7 @@ func TestOpenCodeRequestHeaderUsesExplicitRequestID(t *testing.T) {
 	defer server.Close()
 
 	stream, err := NewProvider(ProviderOptions{ProviderName: "opencode", BaseURL: server.URL}).Model("test-model").Stream(context.Background(), sdk.Request{
-		Messages: []sdk.Message{{ID: "message-1", Role: sdk.RoleUser, Content: "hi"}},
+		Messages: []sdk.Message{{ID: "msg_message-1", Role: sdk.RoleUser, Content: "hi"}},
 		Metadata: sdk.RequestMetadata{SessionID: "session-1", RequestID: "request-override"},
 	})
 	if err != nil {
@@ -86,7 +86,7 @@ func TestNonOpenCodeProviderDoesNotReceiveOpenCodeHeaders(t *testing.T) {
 	defer server.Close()
 
 	stream, err := NewProvider(ProviderOptions{ProviderName: "custom", BaseURL: server.URL}).Model("test-model").Stream(context.Background(), sdk.Request{
-		Messages: []sdk.Message{{ID: "message-1", Role: sdk.RoleUser, Content: "hi"}},
+		Messages: []sdk.Message{{ID: "msg_message-1", Role: sdk.RoleUser, Content: "hi"}},
 		Metadata: sdk.RequestMetadata{SessionID: "session-1", ProjectID: "project-1"},
 	})
 	if err != nil {

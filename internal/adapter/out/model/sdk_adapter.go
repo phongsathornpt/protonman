@@ -110,9 +110,10 @@ func newSDKOpenAILanguageModel(providerName, baseURL, apiKey, modelID string, op
 		}
 	}
 	headers := agentHeaders(cfg)
-	isOpenCode := IsProvider(DefaultOpenCodeName, providerName, cfg.baseURL)
-	freeStreamRecovery := isOpenCode && IsFreeModel(cfg.modelID)
-	lowConcurrencyEnabled := cfg.lowConcurrency.Enabled(isOpenCode && IsFreeModel(cfg.modelID))
+	isOpenCode := strings.EqualFold(strings.TrimSpace(providerName), DefaultOpenCodeName)
+	isOpenCodeFree := isOpenCode && IsFreeModel(cfg.modelID)
+	freeStreamRecovery := isOpenCodeFree
+	lowConcurrencyEnabled := cfg.lowConcurrency.Enabled(isOpenCodeFree)
 	retryPolicy := modelRetryPolicy()
 	providerMaxRetries := runtimepolicy.ModelRetryMaxRetries
 	if freeStreamRecovery {
