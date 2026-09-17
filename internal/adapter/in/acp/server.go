@@ -148,6 +148,13 @@ func (s *Server) Serve(ctx context.Context, input io.Reader, output io.Writer) e
 			defer prompts.Done()
 			notifier := func(notification RPCNotification) error { return WriteJSON(output, &s.writeMu, notification) }
 			result, promptErr := sess.ExecutePrompt(ctx, blocks, notifier)
+			if err := s.writeSessionInfoNotification(output, sess); err != nil {
+				select {
+				case asyncErrors <- err:
+				default:
+				}
+				return
+			}
 			if err := s.writeSessionUsageNotification(output, sess); err != nil {
 				select {
 				case asyncErrors <- err:
