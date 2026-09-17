@@ -25,8 +25,12 @@ func requestIDKey(raw json.RawMessage) (string, error) {
 	if err := decoder.Decode(&value); err != nil {
 		return "", fmt.Errorf("decode requestId: %w", err)
 	}
-	switch value.(type) {
-	case string, json.Number:
+	switch typed := value.(type) {
+	case string:
+	case json.Number:
+		if _, err := typed.Int64(); err != nil {
+			return "", fmt.Errorf("requestId must be an integer: %w", err)
+		}
 	default:
 		return "", fmt.Errorf("requestId must be a string or integer")
 	}
