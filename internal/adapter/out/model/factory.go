@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/phongsathornpt/protonman/internal/core/modelclient"
+	"github.com/phongsathornpt/protonman/internal/core/session"
 	"github.com/phongsathornpt/protonman/proton-sdk/port"
 )
 
@@ -30,7 +31,7 @@ func (Factory) Build(request modelclient.Request) port.LanguageModel {
 	if strings.TrimSpace(request.SessionID) != "" {
 		opts = append(opts, WithSessionID(request.SessionID))
 	}
-	return NewProviderLanguageModel(
+	languageModel := NewProviderLanguageModel(
 		providerName,
 		request.ProviderType,
 		baseURL,
@@ -38,4 +39,9 @@ func (Factory) Build(request modelclient.Request) port.LanguageModel {
 		request.ModelID,
 		opts...,
 	)
+	projectID := strings.TrimSpace(request.ProjectID)
+	if projectID == "" {
+		projectID = session.WorkspaceKeyFromID(request.SessionID)
+	}
+	return withRequestMetadata(languageModel, request.SessionID, projectID, request.ParentSessionID)
 }
