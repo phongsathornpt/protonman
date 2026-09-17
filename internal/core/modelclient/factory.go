@@ -11,16 +11,18 @@ import (
 
 // Request contains provider-neutral inputs for one language model client.
 type Request struct {
-	ProviderName   string
-	ProviderType   string
-	BaseURL        string
-	APIKey         string
-	ModelID        string
-	SessionID      string
-	AgentProfile   string
-	RequestTimeout time.Duration
-	RemoteModel    *modelcatalog.RemoteModel
-	LowConcurrency modelconfig.LowConcurrencySetting
+	ProviderName    string
+	ProviderType    string
+	BaseURL         string
+	APIKey          string
+	ModelID         string
+	SessionID       string
+	ProjectID       string
+	ParentSessionID string
+	AgentProfile    string
+	RequestTimeout  time.Duration
+	RemoteModel     *modelcatalog.RemoteModel
+	LowConcurrency  modelconfig.LowConcurrencySetting
 }
 
 // Factory constructs provider-specific language models behind a core port.
