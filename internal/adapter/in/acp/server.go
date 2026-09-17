@@ -55,6 +55,7 @@ type Server struct {
 	writeMu                sync.Mutex
 	sessions               map[string]*Session
 	sessionDirectories     map[string][]string
+	requestCancels         map[string]context.CancelFunc
 	nextID                 uint64
 }
 
@@ -70,6 +71,7 @@ func New(service *toolcall.Service, registry tool.Registry, runner app.Conversat
 		registry:           registry,
 		sessions:           make(map[string]*Session),
 		sessionDirectories: make(map[string][]string),
+		requestCancels:     make(map[string]context.CancelFunc),
 	}
 	for _, opt := range opts {
 		if opt != nil {
@@ -116,6 +118,10 @@ func (s *Server) Serve(ctx context.Context, input io.Reader, output io.Writer) e
 			}
 			continue
 		}
+		if request.Method == methodCancelRequest {
+			_ = s.handleCancelRequestNotification(request)
+			continue
+		}
 		if request.Method != "session/prompt" {
 			if err := s.handleRequest(ctx, request, output); err != nil {
 				return err
@@ -143,11 +149,15 @@ func (s *Server) Serve(ctx context.Context, input io.Reader, output io.Writer) e
 			}
 			continue
 		}
+		promptCtx, promptCancel := context.WithCancel(ctx)
+		unregister := s.registerRequestCancellation(request.ID, promptCancel)
 		prompts.Add(1)
-		go func(req RPCRequest, sess *Session, blocks []ContentBlock) {
+		go func(req RPCRequest, sess *Session, blocks []ContentBlock, promptCtx context.Context, promptCancel context.CancelFunc, unregister func()) {
 			defer prompts.Done()
+			defer unregister()
+			defer promptCancel()
 			notifier := func(notification RPCNotification) error { return WriteJSON(output, &s.writeMu, notification) }
-			result, promptErr := sess.ExecutePrompt(ctx, blocks, notifier)
+			result, promptErr := sess.ExecutePrompt(promptCtx, blocks, notifier)
 			if err := s.writeSessionInfoNotification(output, sess); err != nil {
 				select {
 				case asyncErrors <- err:
@@ -168,7 +178,7 @@ func (s *Server) Serve(ctx context.Context, input io.Reader, output io.Writer) e
 				default:
 				}
 			}
-		}(request, sess, params.Prompt)
+		}(request, sess, params.Prompt, promptCtx, promptCancel, unregister)
 	}
 	scanErr := scanner.Err()
 	prompts.Wait()
