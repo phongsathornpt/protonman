@@ -49,7 +49,9 @@ func (l *Loop) streamRound(
 			"close_error", closeErr != nil,
 		)
 	}()
-	assistant, calls, streamErr := consumeSDKStream(ctx, round, stream, sink)
+	assistant, calls, streamErr := consumeSDKStream(ctx, round, stream, sink, func(usage domain.Usage) {
+		recordModelUsage(l, usage)
+	})
 	if streamErr != nil {
 		return model.Message{}, nil, streamErr
 	}
@@ -68,7 +70,13 @@ func promptCacheHitPercent(usage domain.Usage) float64 {
 	return float64(usage.CachedInputTokens) * 100 / float64(usage.InputTokens)
 }
 
-func consumeSDKStream(ctx context.Context, round int, stream port.Stream, sink Sink) (model.Message, []model.ToolCall, error) {
+func consumeSDKStream(
+	ctx context.Context,
+	round int,
+	stream port.Stream,
+	sink Sink,
+	usageObserver func(domain.Usage),
+) (model.Message, []model.ToolCall, error) {
 	var text strings.Builder
 	var reasoning strings.Builder
 	calls := make([]model.ToolCall, 0)
@@ -96,6 +104,9 @@ func consumeSDKStream(ctx context.Context, round int, stream port.Stream, sink S
 			call.Arguments = append(json.RawMessage(nil), call.Arguments...)
 			calls = append(calls, call)
 		case domain.EventUsage:
+			if usageObserver != nil {
+				usageObserver(event.Usage)
+			}
 			slog.DebugContext(ctx, "model round token usage",
 				"round", round,
 				"input_tokens", event.Usage.InputTokens,

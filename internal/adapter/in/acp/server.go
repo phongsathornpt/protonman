@@ -55,6 +55,7 @@ type Server struct {
 	writeMu                sync.Mutex
 	sessions               map[string]*Session
 	sessionDirectories     map[string][]string
+	requestCancels         map[string]context.CancelFunc
 	nextID                 uint64
 }
 
@@ -70,6 +71,7 @@ func New(service *toolcall.Service, registry tool.Registry, runner app.Conversat
 		registry:           registry,
 		sessions:           make(map[string]*Session),
 		sessionDirectories: make(map[string][]string),
+		requestCancels:     make(map[string]context.CancelFunc),
 	}
 	for _, opt := range opts {
 		if opt != nil {
@@ -94,6 +96,8 @@ func (s *Server) Serve(ctx context.Context, input io.Reader, output io.Writer) e
 	if input == nil || output == nil {
 		return fmt.Errorf("%w: input and output are required", ErrInvalidServer)
 	}
+	unbindReverseRPC := s.bindReverseRPCOutput(output)
+	defer unbindReverseRPC()
 	stopInputWatch := watchInputCancellation(ctx, input)
 	defer stopInputWatch()
 	defer s.closeSessions()
@@ -109,11 +113,18 @@ func (s *Server) Serve(ctx context.Context, input io.Reader, output io.Writer) e
 		if len(line) == 0 {
 			continue
 		}
+		if s.handleClientResponseLine(line) {
+			continue
+		}
 		request, parseErr := decodeRequest(line)
 		if parseErr != nil {
 			if err := WriteJSON(output, &s.writeMu, parseErr); err != nil {
 				return err
 			}
+			continue
+		}
+		if request.Method == methodCancelRequest {
+			_ = s.handleCancelRequestNotification(request)
 			continue
 		}
 		if request.Method != "session/prompt" {
@@ -143,18 +154,36 @@ func (s *Server) Serve(ctx context.Context, input io.Reader, output io.Writer) e
 			}
 			continue
 		}
+		promptCtx, promptCancel := context.WithCancel(ctx)
+		unregister := s.registerRequestCancellation(request.ID, promptCancel)
 		prompts.Add(1)
-		go func(req RPCRequest, sess *Session, blocks []ContentBlock) {
+		go func(req RPCRequest, sess *Session, blocks []ContentBlock, promptCtx context.Context, promptCancel context.CancelFunc, unregister func()) {
 			defer prompts.Done()
+			defer unregister()
+			defer promptCancel()
 			notifier := func(notification RPCNotification) error { return WriteJSON(output, &s.writeMu, notification) }
-			result, promptErr := sess.ExecutePrompt(ctx, blocks, notifier)
+			result, promptErr := sess.ExecutePrompt(promptCtx, blocks, notifier)
+			if err := s.writeSessionInfoNotification(output, sess); err != nil {
+				select {
+				case asyncErrors <- err:
+				default:
+				}
+				return
+			}
+			if err := s.writeSessionUsageNotification(output, sess); err != nil {
+				select {
+				case asyncErrors <- err:
+				default:
+				}
+				return
+			}
 			if err := s.writeResponse(output, req.ID, result, nil, promptErr); err != nil {
 				select {
 				case asyncErrors <- err:
 				default:
 				}
 			}
-		}(request, sess, params.Prompt)
+		}(request, sess, params.Prompt, promptCtx, promptCancel, unregister)
 	}
 	scanErr := scanner.Err()
 	prompts.Wait()
