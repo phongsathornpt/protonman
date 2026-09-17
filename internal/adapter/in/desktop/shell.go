@@ -8,6 +8,7 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
@@ -144,7 +145,6 @@ func (a *application) bindSessionRow(id widget.ListItemID, object fyne.CanvasObj
 		return
 	}
 	row := a.sidebarRows[id]
-	collapsed := false
 	activeSessionID := a.state.ActiveSessionID
 	var session desktopstate.SessionState
 	if row.Kind == sidebarSessionRow {
@@ -154,21 +154,37 @@ func (a *application) bindSessionRow(id widget.ListItemID, object fyne.CanvasObj
 				break
 			}
 		}
-	} else {
-		collapsed = a.collapsedWorkspaces[row.WorkspaceKey]
+	}
+	var project desktopstate.ProjectState
+	var projectOK bool
+	if row.Kind == sidebarProjectRow {
+		project, projectOK = a.projectByIDLocked(row.ProjectID)
 	}
 	a.mu.Unlock()
 
 	box := object.(*fyne.Container)
 	title := box.Objects[0].(*fyne.Container)
 	subtitle := box.Objects[1].(*fyne.Container)
-	if row.Kind == sidebarWorkspaceRow {
-		workspaceIcon := iconFolder
-		if collapsed {
-			workspaceIcon = iconCollapsed
+	if row.Kind == sidebarProjectRow {
+		if !projectOK {
+			return
 		}
-		setIconText(title, workspaceIcon, compactText(row.WorkspaceName, sidebarTitleMaxRunes))
-		setIconText(subtitle, iconSession, fmt.Sprintf("%d sessions", row.SessionCount))
+		setIconText(title, iconFolder, compactText(project.Name, sidebarTitleMaxRunes))
+		sessions := 0
+		running := 0
+		for _, candidate := range a.state.Sessions {
+			if candidate.ProjectID == project.ID {
+				sessions++
+				if candidate.Status != desktopstate.TaskIdle && candidate.Status != desktopstate.TaskCompleted && candidate.Status != desktopstate.TaskFailed {
+					running++
+				}
+			}
+		}
+		meta := fmt.Sprintf("%d folders · %d agents · %d conversations", len(project.Folders), len(project.AgentIDs), sessions)
+		if running > 0 {
+			meta += fmt.Sprintf(" · %d active", running)
+		}
+		setIconText(subtitle, iconSession, compactText(meta, sidebarMetaMaxRunes+20))
 		setImportance(subtitle, widget.LowImportance)
 		if label := titleLabel(title); label != nil {
 			label.TextStyle = fyne.TextStyle{Bold: true}
@@ -214,22 +230,35 @@ func (a *application) selectSessionRow(id widget.ListItemID) {
 		return
 	}
 	row := a.sidebarRows[id]
-	if row.Kind != sidebarSessionRow {
-		a.collapsedWorkspaces[row.WorkspaceKey] = !a.collapsedWorkspaces[row.WorkspaceKey]
-		a.rebuildSidebarRowsLocked()
-		activeIndex := sidebarRowIndexForSession(a.sidebarRows, a.state.ActiveSessionID)
+	if row.Kind == sidebarProjectRow {
+		a.state.ActiveProjectID = row.ProjectID
+		a.state.ActiveSessionID = ""
+		project, _ := a.projectByIDLocked(row.ProjectID)
+		agentID := a.agentForProjectLocked(project)
 		a.mu.Unlock()
-		a.list.Refresh()
-		a.refreshSidebarEmptyState()
-		if activeIndex >= 0 {
-			a.list.Select(widget.ListItemID(activeIndex))
-		} else {
-			a.list.UnselectAll()
+		if agentID != "" {
+			a.agentSelect.SetSelected(agentID)
 		}
+		a.refreshActiveView()
+		a.refreshPermissionView()
 		return
 	}
 	a.state = desktopstate.Reduce(a.state, desktopstate.Event{Kind: desktopstate.EventSessionSelected, SessionID: row.SessionID})
+	selectedAgent := ""
+	for _, session := range a.state.Sessions {
+		if session.ID == row.SessionID {
+			a.state.ActiveProjectID = session.ProjectID
+			if session.AgentID != "" {
+				a.activeAgentID = session.AgentID
+				selectedAgent = session.AgentID
+			}
+			break
+		}
+	}
 	a.mu.Unlock()
+	if selectedAgent != "" && a.agentSelect != nil {
+		a.agentSelect.SetSelected(selectedAgent)
+	}
 	a.loadSessionHistory(row.SessionID)
 	a.refreshActiveView()
 	a.refreshPermissionView()
@@ -239,7 +268,7 @@ func (a *application) applySidebarQuery(query string) {
 	a.mu.Lock()
 	a.sidebarQuery = strings.TrimSpace(query)
 	a.rebuildSidebarRowsLocked()
-	activeIndex := sidebarRowIndexForSession(a.sidebarRows, a.state.ActiveSessionID)
+	activeIndex := sidebarRowIndexForProject(a.sidebarRows, a.state.ActiveProjectID)
 	a.mu.Unlock()
 
 	a.list.Refresh()
@@ -262,15 +291,29 @@ func (a *application) buildDesktopShell() fyne.CanvasObject {
 
 func (a *application) buildSidebar() fyne.CanvasObject {
 	a.sessionSearch = widget.NewEntry()
-	a.sessionSearch.SetPlaceHolder("Search sessions or workspaces")
+	a.sessionSearch.SetPlaceHolder("Search projects, folders, or conversations")
 	a.sessionSearch.OnChanged = a.applySidebarQuery
-	newTask := widget.NewButtonWithIcon("New session", theme.ContentAddIcon(), func() {
+	newProject := widget.NewButtonWithIcon("Project", theme.ContentAddIcon(), func() {
+		a.createProjectFromCurrentFolder()
+	})
+	addFolder := widget.NewButtonWithIcon("Folder", theme.FolderOpenIcon(), func() {
+		if a.window == nil {
+			return
+		}
+		dialog.ShowFolderOpen(func(uri fyne.ListableURI, err error) {
+			if err != nil || uri == nil {
+				return
+			}
+			a.addFolderToActiveProject(uri.Path())
+		}, a.window)
+	})
+	newTask := widget.NewButtonWithIcon("Chat", theme.MailSendIcon(), func() {
 		if a.sessionSearch.Text != "" {
 			a.sessionSearch.SetText("")
 		}
 		a.newSession()
 	})
-	sidebarHeader := container.NewBorder(nil, nil, nil, newTask,
+	sidebarHeader := container.NewBorder(nil, nil, nil, container.NewHBox(newProject, addFolder, newTask),
 		newIconText(iconRocket, "Protonman Desktop", fyne.TextStyle{Bold: true}, false),
 	)
 
@@ -307,9 +350,9 @@ func (a *application) refreshSidebarEmptyState() {
 		return
 	}
 	if query {
-		a.sidebarEmpty.SetText("No matching sessions")
+		a.sidebarEmpty.SetText("No matching projects")
 	} else {
-		a.sidebarEmpty.SetText("No sessions yet\nStart a new session to begin")
+		a.sidebarEmpty.SetText("No projects yet\nAdd a project folder to begin")
 	}
 	a.sidebarEmpty.Show()
 }
@@ -318,6 +361,23 @@ func (a *application) buildConversationSurface() fyne.CanvasObject {
 	a.sessionTitle = widget.NewLabelWithStyle("protonMAN", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
 	a.sessionMeta = widget.NewLabel("Select a session")
 	a.sessionMeta.Wrapping = fyne.TextWrapWord
+	a.projectTitle = widget.NewLabelWithStyle("Project", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
+	a.projectFolders = widget.NewLabel("")
+	a.projectFolders.Wrapping = fyne.TextWrapWord
+	a.projectAgents = widget.NewLabel("")
+	a.projectAgents.Wrapping = fyne.TextWrapWord
+	a.projectRecent = container.NewVBox()
+	a.projectOverview = container.NewVBox(
+		a.projectTitle,
+		widget.NewSeparator(),
+		widget.NewLabelWithStyle("Folders", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+		a.projectFolders,
+		widget.NewLabelWithStyle("ACP agents", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+		a.projectAgents,
+		widget.NewLabelWithStyle("Recent conversations", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+		a.projectRecent,
+	)
+	a.projectOverview.Hide()
 
 	agentLabel := widget.NewLabelWithStyle("Agent", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
 	agentControl := container.New(fixedWidthLayout{width: 150}, a.agentSelect)
@@ -330,7 +390,7 @@ func (a *application) buildConversationSurface() fyne.CanvasObject {
 	scroll := container.NewVScroll(a.chat)
 	a.conversationScroll = scroll
 	conversationWithDrawer := container.New(responsiveDrawerLayout{}, scroll, a.contextDrawer)
-	conversationBody := container.NewMax(conversationWithDrawer)
+	conversationBody := container.NewMax(conversationWithDrawer, a.projectOverview)
 	auxiliaryContent := container.NewVBox(a.permissionPanel, a.agentSettingsPanel, a.runtimePanel, a.integrationPanel, widget.NewSeparator())
 	auxiliaryScroll := container.NewVScroll(auxiliaryContent)
 
@@ -338,6 +398,102 @@ func (a *application) buildConversationSurface() fyne.CanvasObject {
 	footer := container.NewVBox(composer, a.status)
 
 	return container.New(desktopSurfaceLayout{}, header, auxiliaryScroll, footer, conversationBody)
+}
+
+func (a *application) renderProjectOverview() {
+	if a.projectOverview == nil {
+		return
+	}
+	a.mu.Lock()
+	project, ok := a.projectByIDLocked(a.state.ActiveProjectID)
+	if !ok || a.state.ActiveSessionID != "" {
+		a.mu.Unlock()
+		fyne.Do(func() { a.projectOverview.Hide() })
+		return
+	}
+	sessions := make([]desktopstate.SessionState, 0)
+	for _, session := range a.state.Sessions {
+		if session.ProjectID == project.ID {
+			sessions = append(sessions, session)
+		}
+	}
+	agents := make([]string, 0, len(project.AgentIDs))
+	for _, agentID := range project.AgentIDs {
+		name := agentID
+		if profile, exists := a.profiles[agentID]; exists {
+			name = profile.DisplayName
+		}
+		if name == "" {
+			name = agentID
+		}
+		agents = append(agents, name)
+	}
+	projectName := project.Name
+	folders := projectFolderNames(project)
+	agentText := strings.Join(agents, ", ")
+	if agentText == "" {
+		agentText = "No ACP agents attached"
+	}
+	type recentSession struct{ id, title, meta string }
+	recent := make([]recentSession, 0, len(sessions))
+	for i := len(sessions) - 1; i >= 0 && len(recent) < 8; i-- {
+		session := sessions[i]
+		title := strings.TrimSpace(session.Title)
+		if title == "" {
+			title = "Session " + shortID(session.ID)
+		}
+		agentName := session.AgentID
+		if profile, exists := a.profiles[session.AgentID]; exists {
+			agentName = profile.DisplayName
+		}
+		recent = append(recent, recentSession{id: session.ID, title: title, meta: agentName + " · " + session.WorkspaceName})
+	}
+	a.mu.Unlock()
+
+	fyne.Do(func() {
+		a.projectTitle.SetText(projectName)
+		a.projectFolders.SetText(folders)
+		a.projectAgents.SetText(agentText)
+		a.projectRecent.Objects = nil
+		if len(recent) == 0 {
+			a.projectRecent.Add(widget.NewLabel("No conversations yet. Start a chat from this project."))
+		} else {
+			for _, item := range recent {
+				item := item
+				a.projectRecent.Add(widget.NewButton(item.title+"\n"+item.meta, func() { a.selectProjectSession(item.id) }))
+			}
+		}
+		a.projectRecent.Refresh()
+		a.projectOverview.Show()
+	})
+}
+
+func (a *application) selectProjectSession(sessionID string) {
+	a.mu.Lock()
+	if !desktopSessionExists(a.state.Sessions, sessionID) {
+		a.mu.Unlock()
+		return
+	}
+	a.state = desktopstate.Reduce(a.state, desktopstate.Event{Kind: desktopstate.EventSessionSelected, SessionID: sessionID})
+	for _, session := range a.state.Sessions {
+		if session.ID == sessionID {
+			a.state.ActiveProjectID = session.ProjectID
+			break
+		}
+	}
+	a.mu.Unlock()
+	a.loadSessionHistory(sessionID)
+	a.refreshActiveView()
+	a.refreshPermissionView()
+}
+
+func desktopSessionExists(sessions []desktopstate.SessionState, id string) bool {
+	for _, session := range sessions {
+		if session.ID == id {
+			return true
+		}
+	}
+	return false
 }
 
 func (a *application) shouldFollowConversationTail() bool {

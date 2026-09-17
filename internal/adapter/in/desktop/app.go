@@ -20,12 +20,13 @@ import (
 )
 
 type sessionItem struct {
-	ID            string `json:"sessionId"`
-	AgentID       string `json:"agentId"`
-	Title         string `json:"title"`
-	Cwd           string `json:"cwd"`
-	WorkspaceKey  string `json:"workspaceKey"`
-	WorkspaceName string `json:"workspaceName"`
+	ID                    string   `json:"sessionId"`
+	AgentID               string   `json:"agentId"`
+	Title                 string   `json:"title"`
+	Cwd                   string   `json:"cwd"`
+	WorkspaceKey          string   `json:"workspaceKey"`
+	WorkspaceName         string   `json:"workspaceName"`
+	AdditionalDirectories []string `json:"additionalDirectories"`
 }
 
 type application struct {
@@ -37,6 +38,7 @@ type application struct {
 	clients       map[string]*acpclient.Client
 	activeAgentID string
 	desktopApp    fyne.App
+	window        fyne.Window
 
 	mu                    sync.Mutex
 	state                 desktopstate.State
@@ -62,6 +64,11 @@ type application struct {
 	contextToggle      *widget.Button
 	contextDrawer      *fyne.Container
 	contextContent     *widget.RichText
+	projectOverview    *fyne.Container
+	projectTitle       *widget.Label
+	projectFolders     *widget.Label
+	projectAgents      *widget.Label
+	projectRecent      *fyne.Container
 	runtimeSummary     *widget.Button
 	runtimePanel       *fyne.Container
 	permissionInbox    *widget.Button
@@ -126,10 +133,13 @@ func Run(ctx context.Context) error {
 		permissionWaiters:   make(map[string]chan string),
 		preferences:         desktopApp.Preferences(),
 	}
+	ui.window = window
+	ui.state.Projects = loadProjects(ui.preferences)
 	ui.agentSelect = widget.NewSelect(profileIDs, func(value string) {
 		ui.mu.Lock()
 		if _, ok := ui.profiles[value]; ok {
 			ui.activeAgentID = value
+			ui.setActiveProjectAgentLocked(value)
 		}
 		ui.mu.Unlock()
 		ui.populateACPAgentEditor(value)
@@ -200,19 +210,21 @@ func (a *application) refreshSessionsFor(agentID string, client *acpclient.Clien
 	sessions := make([]desktopstate.SessionState, 0, len(result.Sessions))
 	for _, session := range result.Sessions {
 		projected := desktopstate.SessionState{
-			ID:            session.ID,
-			AgentID:       strings.TrimSpace(session.AgentID),
-			Title:         session.Title,
-			Workspace:     session.Cwd,
-			WorkspaceKey:  strings.TrimSpace(session.WorkspaceKey),
-			WorkspaceName: strings.TrimSpace(session.WorkspaceName),
-			Status:        desktopstate.TaskIdle,
+			ID:                    session.ID,
+			AgentID:               strings.TrimSpace(session.AgentID),
+			Title:                 session.Title,
+			Workspace:             session.Cwd,
+			AdditionalDirectories: append([]string(nil), session.AdditionalDirectories...),
+			WorkspaceKey:          strings.TrimSpace(session.WorkspaceKey),
+			WorkspaceName:         strings.TrimSpace(session.WorkspaceName),
+			Status:                desktopstate.TaskIdle,
 		}
 		if projected.AgentID == "" {
 			projected.AgentID = agentID
 		}
 		if previous, ok := old[session.ID]; ok {
 			projected.Status = previous.Status
+			projected.ProjectID = previous.ProjectID
 			projected.Timeline = previous.Timeline
 			projected.Subagents = previous.Subagents
 			projected.Context = previous.Context
@@ -225,6 +237,9 @@ func (a *application) refreshSessionsFor(agentID string, client *acpclient.Clien
 			}
 			if projected.WorkspaceName == "" {
 				projected.WorkspaceName = previous.WorkspaceName
+			}
+			if len(projected.AdditionalDirectories) == 0 {
+				projected.AdditionalDirectories = append([]string(nil), previous.AdditionalDirectories...)
 			}
 		}
 		projected.Workspace = a.resolveWorkspacePath(projected.WorkspaceKey, projected.Workspace)
@@ -242,6 +257,8 @@ func (a *application) refreshSessionsFor(agentID string, client *acpclient.Clien
 		}
 	}
 	a.state = desktopstate.Reduce(a.state, desktopstate.Event{Kind: desktopstate.EventSessionsReplaced, Sessions: sessions})
+	a.migrateProjectsLocked()
+	_ = persistProjects(a.preferences, a.state.Projects)
 	a.rebuildSidebarRowsLocked()
 	a.mu.Unlock()
 	fyne.Do(func() {
@@ -253,14 +270,20 @@ func (a *application) refreshSessionsFor(agentID string, client *acpclient.Clien
 }
 
 func (a *application) newSession() {
-	client := a.currentClient()
+	a.mu.Lock()
+	project, _ := a.projectByIDLocked(a.state.ActiveProjectID)
+	agentID := a.agentForProjectLocked(project)
+	client := a.clients[agentID]
+	a.mu.Unlock()
 	if client == nil {
+		a.setStatus("Selected ACP agent is disconnected")
 		return
 	}
-	a.mu.Lock()
-	agentID := a.activeAgentID
-	a.mu.Unlock()
-	cwd := a.activeWorkspacePath()
+	cwd := primaryProjectFolder(project)
+	additionalDirectories := projectAdditionalFolders(project, cwd)
+	if cwd == "" {
+		cwd = a.activeWorkspacePath()
+	}
 	if cwd == "" {
 		workingDirectory, err := os.Getwd()
 		if err != nil {
@@ -278,6 +301,9 @@ func (a *application) newSession() {
 			SessionID string `json:"sessionId"`
 		}
 		params := map[string]any{"cwd": cwd}
+		if len(additionalDirectories) > 0 {
+			params["additionalDirectories"] = additionalDirectories
+		}
 		if servers := a.mcpServersPayload(); len(servers) > 0 {
 			params["mcpServers"] = servers
 		}
@@ -303,9 +329,11 @@ func (a *application) newSession() {
 		}
 		if !found {
 			a.state.Sessions = append(a.state.Sessions, desktopstate.SessionState{
-				ID: result.SessionID, AgentID: agentID, Title: "Session " + shortID(result.SessionID),
-				Workspace: cwd, Status: desktopstate.TaskIdle,
+				ID: result.SessionID, AgentID: agentID, ProjectID: project.ID, Title: "Session " + shortID(result.SessionID),
+				Workspace: cwd, AdditionalDirectories: additionalDirectories, Status: desktopstate.TaskIdle,
 			})
+			a.migrateProjectsLocked()
+			_ = persistProjects(a.preferences, a.state.Projects)
 			a.rebuildSidebarRowsLocked()
 		}
 		a.mu.Unlock()
@@ -363,6 +391,12 @@ func (a *application) sendPrompt() {
 
 	go func() {
 		resumeParams := map[string]any{"sessionId": sessionID, "cwd": workspace}
+		for _, session := range a.state.Sessions {
+			if session.ID == sessionID && len(session.AdditionalDirectories) > 0 {
+				resumeParams["additionalDirectories"] = session.AdditionalDirectories
+				break
+			}
+		}
 		if servers := a.mcpServersPayload(); len(servers) > 0 {
 			resumeParams["mcpServers"] = servers
 		}

@@ -118,22 +118,26 @@ type PermissionRequest struct {
 
 // SessionState is the desktop projection of one ACP session.
 type SessionState struct {
-	ID            string
-	AgentID       string
-	Title         string
-	Workspace     string
-	WorkspaceKey  string
-	WorkspaceName string
-	Status        TaskStatus
-	Timeline      []TimelineItem
-	Subagents     []SubagentState
-	Context       SessionContextState
-	Runtime       RuntimeSettingsState
+	ID                    string
+	AgentID               string
+	ProjectID             string
+	Title                 string
+	Workspace             string
+	AdditionalDirectories []string
+	WorkspaceKey          string
+	WorkspaceName         string
+	Status                TaskStatus
+	Timeline              []TimelineItem
+	Subagents             []SubagentState
+	Context               SessionContextState
+	Runtime               RuntimeSettingsState
 }
 
-// State owns desktop session state independently from Fyne widgets.
+// State owns desktop project and session state independently from Fyne widgets.
 type State struct {
 	ActiveSessionID string
+	ActiveProjectID string
+	Projects        []ProjectState
 	Sessions        []SessionState
 	PermissionInbox []PermissionRequest
 	Integrations    []MCPIntegrationState
@@ -239,10 +243,33 @@ func Reduce(current State, event Event) State {
 }
 
 func cloneState(state State) State {
+	state.Projects = cloneProjects(state.Projects)
 	state.Sessions = cloneSessions(state.Sessions)
 	state.PermissionInbox = clonePermissions(state.PermissionInbox)
 	state.Integrations = cloneIntegrations(state.Integrations)
 	return state
+}
+
+type ProjectFolder struct {
+	Path    string
+	Primary bool
+}
+
+type ProjectState struct {
+	ID             string
+	Name           string
+	Folders        []ProjectFolder
+	AgentIDs       []string
+	DefaultAgentID string
+}
+
+func cloneProjects(projects []ProjectState) []ProjectState {
+	out := slices.Clone(projects)
+	for i := range out {
+		out[i].Folders = slices.Clone(out[i].Folders)
+		out[i].AgentIDs = slices.Clone(out[i].AgentIDs)
+	}
+	return out
 }
 
 func cloneSessions(sessions []SessionState) []SessionState {
@@ -250,6 +277,7 @@ func cloneSessions(sessions []SessionState) []SessionState {
 	for i := range out {
 		out[i].Timeline = slices.Clone(out[i].Timeline)
 		out[i].Subagents = slices.Clone(out[i].Subagents)
+		out[i].AdditionalDirectories = slices.Clone(out[i].AdditionalDirectories)
 		out[i].Context = cloneSessionContext(out[i].Context)
 	}
 	return out

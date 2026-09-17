@@ -1260,28 +1260,7 @@ func TestKeyboardEnhancementsRecordLegacyFallback(t *testing.T) {
 	}
 }
 
-func TestNormalizeBlankComposerPolicy(t *testing.T) {
-	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
-	prompt := model.panes.bottom.prompt()
-	for _, value := range []string{"\n", "   \n", "\n\n\t"} {
-		prompt.SetValue(value)
-		if !model.normalizeBlankComposer() {
-			t.Fatalf("blank composer %q was not normalized", value)
-		}
-		if prompt.Value() != "" || prompt.Height() != 1 {
-			t.Fatalf("normalized composer value=%q height=%d", prompt.Value(), prompt.Height())
-		}
-	}
-	prompt.SetValue("hello\n")
-	if model.normalizeBlankComposer() {
-		t.Fatal("non-blank multiline composer was normalized")
-	}
-	if got := prompt.Value(); got != "hello\n" {
-		t.Fatalf("non-blank composer changed to %q", got)
-	}
-}
-
-func TestBlankComposerNewlinesDoNotCreateBorderGap(t *testing.T) {
+func TestBlankComposerNewlinesArePreserved(t *testing.T) {
 	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	model.resize(80, 24)
 
@@ -1290,15 +1269,17 @@ func TestBlankComposerNewlinesDoNotCreateBorderGap(t *testing.T) {
 		model = updated.(*bubbleModel)
 	}
 
+	if got := model.panes.bottom.prompt().Value(); got != "\n\n\n" {
+		t.Fatalf("blank multiline value = %q, want preserved newlines", got)
+	}
+	if got := model.panes.bottom.prompt().Height(); got != 4 {
+		t.Fatalf("blank multiline height = %d, want 4", got)
+	}
+	if command := model.submit(); command != nil {
+		t.Fatalf("blank multiline submit command = %v, want nil", command)
+	}
 	if got := model.panes.bottom.prompt().Value(); got != "" {
-		t.Fatalf("blank multiline value = %q, want empty", got)
-	}
-	if got := model.panes.bottom.prompt().Height(); got != 1 {
-		t.Fatalf("blank multiline height = %d, want 1", got)
-	}
-	plain := ansi.Strip(model.promptView())
-	if got := strings.Count(plain, "> "); got != 1 {
-		t.Fatalf("prompt count = %d, want 1: %q", got, plain)
+		t.Fatalf("blank multiline submit left value %q", got)
 	}
 }
 

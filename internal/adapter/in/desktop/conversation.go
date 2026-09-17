@@ -174,6 +174,9 @@ func (a *application) renderActiveView() {
 		}
 	}
 	a.mu.Unlock()
+	if activeID == "" {
+		a.renderProjectOverview()
+	}
 	historyLoading := sessionHistoryIsLoading(a, activeID)
 
 	fyne.Do(func() {
@@ -185,8 +188,14 @@ func (a *application) renderActiveView() {
 		}
 		if activeID == "" || promptBusy || historyLoading {
 			a.send.Disable()
+			if a.agentSelect != nil {
+				a.agentSelect.Enable()
+			}
 		} else {
 			a.send.Enable()
+			if a.agentSelect != nil {
+				a.agentSelect.Disable()
+			}
 		}
 		if promptBusy {
 			a.stop.Enable()

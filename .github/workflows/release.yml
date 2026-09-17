@@ -205,7 +205,7 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
+          GH_REPO: phongsathornpt/protonman
         run: |
           set -euo pipefail
           tag="$GITHUB_REF_NAME"
@@ -257,8 +257,9 @@ jobs:
         run: |
           set -euo pipefail
           install_dir="$RUNNER_TEMP/protonman-bin"
+          release_repository='phongsathornpt/protonman'
           for attempt in {1..12}; do
-            assets=$(gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \
+            assets=$(gh release view "$GITHUB_REF_NAME" --repo "$release_repository" \
               --json assets --jq '.assets[].name' 2>/dev/null || true)
             if grep -Fxq install.sh <<<"$assets"; then
               break
@@ -271,7 +272,7 @@ jobs:
             sleep 5
           done
           curl -fsSL --retry 3 --retry-all-errors --retry-delay 2 \
-            "https://github.com/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME/install.sh" \
+            "https://github.com/$release_repository/releases/download/$GITHUB_REF_NAME/install.sh" \
             | sh -s -- --version "$GITHUB_REF_NAME" --bin-dir "$install_dir"
           expected="Protonman ${GITHUB_REF_NAME#v}"
           test "$("$install_dir/protonman" --version)" = "$expected"
@@ -280,8 +281,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          release_repository='phongsathornpt/protonman'
           curl -fsSL --retry 6 --retry-all-errors --retry-delay 2 \
-            "https://github.com/$GITHUB_REPOSITORY/releases/latest/download/install.sh" \
+            "https://github.com/$release_repository/releases/latest/download/install.sh" \
             >/tmp/protonman-install.sh
           test -s /tmp/protonman-install.sh
           grep -q 'Install Protonman from GitHub Releases.' /tmp/protonman-install.sh

@@ -171,7 +171,6 @@ func (m *bubbleModel) handlePromptKey(message tea.KeyPressMsg) tea.Cmd {
 	case composerKeyActionNewline:
 		updated, command := prompt.Update(message)
 		*prompt = updated
-		m.normalizeBlankComposer()
 		m.syncSlashView()
 		m.requestRelayout()
 		return command
@@ -201,7 +200,6 @@ func (m *bubbleModel) handlePromptKey(message tea.KeyPressMsg) tea.Cmd {
 	}
 	updated, command := prompt.Update(message)
 	*prompt = updated
-	m.normalizeBlankComposer()
 	m.syncSlashView()
 	m.requestRelayout()
 	return command
