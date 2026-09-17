@@ -12,10 +12,18 @@ const (
 	DefaultProtonmanName     = "protonman"
 	DefaultProtonmanEndpoint = "https://protonman.dev/api/v1"
 
-	// DefaultOpenCodeName is the canonical provider label for OpenCode Zen.
+	// DefaultOpenCodeName is the canonical provider label for the public
+	// OpenCode Inference API. Free chat models on this endpoint do not require
+	// an API key and are intended for external callers.
 	DefaultOpenCodeName     = "opencode"
-	DefaultOpenCodeEndpoint = "https://opencode.ai/zen/v1"
-	DefaultOpenCodeModel    = "nemotron-3.5-lightning-free"
+	DefaultOpenCodeEndpoint = "https://opencode.ai/inference/openai/v1"
+	DefaultOpenCodeModel    = "nemotron-3-super-free"
+
+	// OpenCode's Zen endpoints are intentionally not treated as the anonymous
+	// free preset. They have a different access contract and must not silently
+	// inherit the keyless Inference API behavior.
+	OpenCodeZenEndpoint = "https://opencode.ai/zen/v1"
+	OpenCodeGoEndpoint  = "https://opencode.ai/zen/go/v1"
 
 	// DefaultOllamaName is the canonical provider label for local Ollama.
 	DefaultOllamaName     = "ollama"
@@ -49,10 +57,10 @@ var SupportedPresets = []SupportedProviderPreset{
 		Name:           "OpenCode (Free)",
 		Protocol:       ProviderProtocolOpenAI,
 		BaseURL:        DefaultOpenCodeEndpoint,
-		EndpointHosts:  []string{"opencode.ai"},
+		EndpointHosts:  []string{"opencode.ai/inference/openai"},
 		RequiresKey:    false,
 		KeyPlaceholder: "API key (optional)…",
-		Description:    "Free tier models, zero API key required",
+		Description:    "OpenCode Inference free chat models, zero API key required",
 	},
 	{
 		ID:             DefaultProtonmanName,
@@ -108,24 +116,41 @@ func LookupPreset(idOrName string) *SupportedProviderPreset {
 	return nil
 }
 
-// MatchProviderPreset resolves a known provider by configured name or endpoint.
+// MatchProviderPreset resolves a known provider by endpoint first, then by name.
+// Endpoint-first matching is important for OpenCode because the public Inference
+// API and Zen share a hostname but have different authentication contracts.
 func MatchProviderPreset(providerName, baseURL string) *SupportedProviderPreset {
-	if preset := LookupPreset(providerName); preset != nil {
-		return preset
-	}
 	endpoint := strings.ToLower(strings.TrimSpace(baseURL))
-	if endpoint == "" {
-		return nil
-	}
-	for i := range SupportedPresets {
-		preset := &SupportedPresets[i]
-		for _, host := range preset.EndpointHosts {
-			if strings.Contains(endpoint, strings.ToLower(host)) {
-				return preset
+	if endpoint != "" {
+		for i := range SupportedPresets {
+			preset := &SupportedPresets[i]
+			for _, host := range preset.EndpointHosts {
+				if strings.Contains(endpoint, strings.ToLower(host)) {
+					return preset
+				}
 			}
 		}
+
+		// Never classify an explicitly configured Zen/Go endpoint as the
+		// anonymous OpenCode free preset merely because its provider name is
+		// "opencode". Stale configs should fail auth validation instead of
+		// repeatedly hitting the upstream FreeTierError gate.
+		if strings.EqualFold(strings.TrimSpace(providerName), DefaultOpenCodeName) && isOpenCodeHost(endpoint) {
+			return nil
+		}
 	}
-	return nil
+	return LookupPreset(providerName)
+}
+
+func isOpenCodeHost(endpoint string) bool {
+	return strings.Contains(strings.ToLower(strings.TrimSpace(endpoint)), "opencode.ai/")
+}
+
+// IsOpenCodeInferenceEndpoint reports whether baseURL targets the documented
+// OpenAI-compatible OpenCode Inference API used by the keyless free preset.
+func IsOpenCodeInferenceEndpoint(baseURL string) bool {
+	endpoint := strings.ToLower(strings.TrimRight(strings.TrimSpace(baseURL), "/"))
+	return endpoint == strings.ToLower(DefaultOpenCodeEndpoint)
 }
 
 // IsProvider reports whether provider identity or endpoint maps to providerID.
