@@ -46,7 +46,7 @@ func TestOpenCodeSDKAdapterAlwaysSendsClientIdentity(t *testing.T) {
 
 func TestOpenCodeSDKAdapterSendsSessionIdentityWhenPresent(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if got := r.Header.Get("x-opencode-client"); got != "proton" {
+		if got := r.Header.Get("x-opencode-client"); got != "protonman" {
 			t.Fatalf("x-opencode-client = %q", got)
 		}
 		if got := r.Header.Get("x-opencode-session"); got != "session-1" {

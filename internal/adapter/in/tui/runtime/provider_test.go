@@ -742,14 +742,14 @@ func TestProviderViewOpenCodePresetLaunch(t *testing.T) {
 	if view.nameInput.Value() != "opencode" {
 		t.Fatalf("expected prefilled provider 'opencode', got: %s", view.nameInput.Value())
 	}
-	if view.endpointInput.Value() != "https://opencode.ai/zen/v1" {
-		t.Fatalf("expected prefilled endpoint 'https://opencode.ai/zen/v1', got: %s", view.endpointInput.Value())
+	if view.endpointInput.Value() != model.DefaultOpenCodeEndpoint {
+		t.Fatalf("expected prefilled endpoint %q, got: %s", model.DefaultOpenCodeEndpoint, view.endpointInput.Value())
 	}
 	if !strings.Contains(strings.ToLower(view.apiKeyInput.Placeholder), "optional") {
 		t.Fatalf("expected placeholder with 'Optional', got: %s", view.apiKeyInput.Placeholder)
 	}
 	rendered := bModel.View().Content
-	if !strings.Contains(rendered, "opencode") || !strings.Contains(rendered, "https://opencode.ai/zen/v1") {
+	if !strings.Contains(rendered, "opencode") || !strings.Contains(rendered, model.DefaultOpenCodeEndpoint) {
 		t.Fatalf("expected opencode in rendered view, got:\n%s", rendered)
 	}
 }

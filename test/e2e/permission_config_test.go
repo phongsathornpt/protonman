@@ -237,7 +237,7 @@ func TestE2EOpenCodeFreeProviderConfig(t *testing.T) {
 		t.Fatalf("read config file: %v", err)
 	}
 	fileStr := string(content)
-	if !strings.Contains(fileStr, "https://opencode.ai/zen/v1") {
+	if !strings.Contains(fileStr, model.DefaultOpenCodeEndpoint) {
 		t.Fatalf("config missing OpenCode endpoint, got:\n%s", fileStr)
 	}
 	if !strings.Contains(fileStr, defaultModel) {

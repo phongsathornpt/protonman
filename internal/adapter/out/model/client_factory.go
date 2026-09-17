@@ -92,7 +92,7 @@ func newClientConfig(baseURL, apiKey, modelID string) clientConfig {
 		baseURL:    baseURL,
 		apiKey:     apiKey,
 		modelID:    strings.TrimSpace(modelID),
-		clientName: "proton",
+		clientName: "protonman",
 		userAgent:  buildinfo.UserAgent(),
 		agentType:  agentidentity.TypeProtonman,
 		httpClient: &http.Client{Timeout: runtimepolicy.ModelRequestTimeout},

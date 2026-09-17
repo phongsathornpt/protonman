@@ -42,6 +42,9 @@ func (m *LanguageModel) Stream(ctx context.Context, request domain.Request) (por
 			if base.UserAgent != "" {
 				httpReq.Header.Set("User-Agent", base.UserAgent)
 			}
+			if strings.EqualFold(strings.TrimSpace(m.Provider()), "opencode") {
+				applyOpenCodeRequestHeaders(httpReq.Header, request)
+			}
 		},
 		ParseError: func(status int, body []byte, headers http.Header) *domain.ProviderError {
 			return providerError(m.Provider(), status, body, headers)
@@ -50,6 +53,25 @@ func (m *LanguageModel) Stream(ctx context.Context, request domain.Request) (por
 			return newStream(resp.Body, responseMetadata(m.Provider(), resp.Header), request.Options.IncludeRawChunks, m.Provider()), nil
 		},
 	})
+}
+
+func applyOpenCodeRequestHeaders(headers http.Header, request domain.Request) {
+	if headers == nil {
+		return
+	}
+	metadata := request.Metadata
+	if value := strings.TrimSpace(metadata.SessionID); value != "" {
+		headers.Set("x-opencode-session", value)
+	}
+	if value := strings.TrimSpace(metadata.ProjectID); value != "" {
+		headers.Set("x-opencode-project", value)
+	}
+	if value := strings.TrimSpace(request.EffectiveRequestID()); value != "" {
+		headers.Set("x-opencode-request", value)
+	}
+	if value := strings.TrimSpace(metadata.ParentSessionID); value != "" {
+		headers.Set("x-parent-session-id", value)
+	}
 }
 
 func responseMetadata(provider string, headers http.Header) domain.ProviderMetadata {
