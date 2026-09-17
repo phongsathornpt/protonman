@@ -60,7 +60,7 @@ var StableV1Coverage = []StableFeature{
 	{Name: "elicitation", Supported: false, Advertised: false},
 	{Name: "authentication", Supported: false, Advertised: false},
 	{Name: "terminal_authentication", Supported: false, Advertised: false},
-	{Name: "request_cancellation", Supported: false, Advertised: false},
+	{Name: "request_cancellation", Supported: true, Advertised: false},
 }
 
 func stableFeature(name string) (StableFeature, bool) {
