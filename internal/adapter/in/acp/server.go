@@ -96,6 +96,8 @@ func (s *Server) Serve(ctx context.Context, input io.Reader, output io.Writer) e
 	if input == nil || output == nil {
 		return fmt.Errorf("%w: input and output are required", ErrInvalidServer)
 	}
+	unbindReverseRPC := s.bindReverseRPCOutput(output)
+	defer unbindReverseRPC()
 	stopInputWatch := watchInputCancellation(ctx, input)
 	defer stopInputWatch()
 	defer s.closeSessions()
@@ -109,6 +111,9 @@ func (s *Server) Serve(ctx context.Context, input io.Reader, output io.Writer) e
 		}
 		line := bytes.TrimSpace(scanner.Bytes())
 		if len(line) == 0 {
+			continue
+		}
+		if s.handleClientResponseLine(line) {
 			continue
 		}
 		request, parseErr := decodeRequest(line)
