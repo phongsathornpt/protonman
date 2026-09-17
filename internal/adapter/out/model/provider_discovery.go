@@ -17,6 +17,21 @@ import (
 // RemoteModel is provider-neutral discovered model metadata.
 type RemoteModel = modelcatalog.RemoteModel
 
+var openCodeInferenceFreeModels = []RemoteModel{
+	{ID: "big-pickle", Name: "Big Pickle", Provider: DefaultOpenCodeName},
+	{ID: "mimo-v2.5-free", Name: "MiMo V2.5 Free", Provider: DefaultOpenCodeName},
+	{ID: "nemotron-3-super-free", Name: "Nemotron 3 Super Free", Provider: DefaultOpenCodeName},
+}
+
+// OpenCodeInferenceFreeModels returns the documented keyless chat models exposed
+// by the OpenCode Inference API. The endpoint does not document a public model
+// catalog, so discovery for the built-in free preset is intentionally explicit.
+func OpenCodeInferenceFreeModels() []RemoteModel {
+	models := make([]RemoteModel, len(openCodeInferenceFreeModels))
+	copy(models, openCodeInferenceFreeModels)
+	return models
+}
+
 // IsFreeModel reports whether a given model ID represents an OpenCode free-tier model.
 func IsFreeModel(id string) bool {
 	idLower := strings.ToLower(strings.TrimSpace(id))
@@ -49,6 +64,14 @@ func FetchProviderModelsForProtocol(ctx context.Context, protocol ProviderProtoc
 		} else {
 			baseURL = DefaultProtonmanEndpoint
 		}
+	}
+
+	// The documented OpenCode Inference API exposes chat-completions and
+	// responses endpoints but no public /models contract. Avoid probing a
+	// non-contract endpoint and keep the built-in keyless preset limited to the
+	// models OpenCode explicitly documents as free chat models.
+	if protocol == ProviderProtocolOpenAI && IsOpenCodeInferenceEndpoint(baseURL) {
+		return OpenCodeInferenceFreeModels(), nil
 	}
 
 	client := &http.Client{Timeout: runtimepolicy.ModelDiscoveryTimeout}
