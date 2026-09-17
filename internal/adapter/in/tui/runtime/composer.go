@@ -10,6 +10,7 @@ import (
 	"charm.land/bubbles/v2/textarea"
 	"charm.land/bubbles/v2/viewport"
 	"charm.land/lipgloss/v2"
+
 	tuiconv "github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/conversation"
 	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/style"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
@@ -332,18 +333,6 @@ func (m *bubbleModel) resetPrompt() {
 	m.panes.bottom.composer.historyDrafts = nil
 	m.panes.bottom.syncPromptChrome()
 	m.requestRelayout()
-}
-
-func (m *bubbleModel) normalizeBlankComposer() bool {
-	if m == nil || m.panes.bottom == nil || m.panes.bottom.prompt() == nil {
-		return false
-	}
-	prompt := m.panes.bottom.prompt()
-	if prompt.Value() == "" || strings.TrimSpace(prompt.Value()) != "" {
-		return false
-	}
-	m.resetPrompt()
-	return true
 }
 
 func (m *bubbleModel) historyPrevious() {

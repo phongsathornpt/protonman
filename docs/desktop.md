@@ -61,6 +61,25 @@ Desktop can keep multiple ACP sessions visible while work continues in the backg
 
 If the ACP subprocess exits, Desktop reconnects with bounded retry behavior and resumes known sessions. An interrupted in-flight prompt is never replayed automatically because a tool may already have produced side effects before the disconnect.
 
+## Projects and folders
+
+Desktop navigation is project-first. A project is a Desktop-owned collection of
+folders and configured ACP agents; conversations remain owned by the ACP agent
+that created them and are shown as recent conversations inside the selected
+project. Existing sessions are migrated into a project derived from their
+workspace path.
+
+A project can contain multiple folders. The primary folder is sent as ACP
+`cwd`; the remaining available folders are sent as
+`additionalDirectories` when a new session is created or an existing session
+is resumed. Folder paths are retained in Desktop preferences when a checkout is
+temporarily unavailable, but Desktop refuses to execute a session until its
+primary folder exists again.
+
+Project identity is separate from Protonman's workspace key. Workspace-keyed
+runtime state such as memories and checkpoints remains unchanged by the
+project navigation layer.
+
 ## Permissions
 
 ACP reverse requests are rendered inline and added to a cross-session permission inbox. Permission decisions are returned using the original JSON-RPC request ID and ACP permission option ID.

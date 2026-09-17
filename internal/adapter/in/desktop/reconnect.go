@@ -172,6 +172,9 @@ func (a *application) resumeKnownSessions(ctx context.Context, agentID string, c
 			continue
 		}
 		params := map[string]any{"sessionId": session.ID, "cwd": workspace}
+		if len(session.AdditionalDirectories) > 0 {
+			params["additionalDirectories"] = session.AdditionalDirectories
+		}
 		if len(mcpServers) > 0 {
 			params["mcpServers"] = mcpServers
 		}

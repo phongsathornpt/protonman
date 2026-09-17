@@ -20,6 +20,7 @@ func (a *application) renderSessionChrome() {
 	a.mu.Lock()
 	activeID := a.state.ActiveSessionID
 	var active desktopstate.SessionState
+	var activeProject desktopstate.ProjectState
 	found := false
 	for _, session := range a.state.Sessions {
 		if session.ID == activeID {
@@ -28,12 +29,19 @@ func (a *application) renderSessionChrome() {
 			break
 		}
 	}
+	activeProject, _ = a.projectByIDLocked(a.state.ActiveProjectID)
 	a.mu.Unlock()
 
 	title := "Welcome to Protonman Desktop"
 	meta := "Select a session"
 	inspector := "_No session context loaded._"
 	contextLabel := "Context"
+	if !found {
+		if activeProject.ID != "" {
+			title = activeProject.Name
+			meta = "Project overview · " + projectFolderNames(activeProject)
+		}
+	}
 	if found {
 		title = sessionDisplayTitle(active)
 		meta = sessionDisplayMeta(active)

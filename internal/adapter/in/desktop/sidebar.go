@@ -12,12 +12,15 @@ import (
 type sidebarRowKind uint8
 
 const (
-	sidebarWorkspaceRow sidebarRowKind = iota
+	sidebarProjectRow sidebarRowKind = iota
 	sidebarSessionRow
+	sidebarWorkspaceRow = sidebarProjectRow
 )
 
 type sidebarRow struct {
 	Kind          sidebarRowKind
+	ProjectID     string
+	ProjectName   string
 	WorkspaceKey  string
 	WorkspaceName string
 	SessionID     string
@@ -25,7 +28,36 @@ type sidebarRow struct {
 }
 
 func (a *application) rebuildSidebarRowsLocked() {
-	a.sidebarRows = buildSidebarRowsWithCollapsed(filterSessions(a.state.Sessions, a.sidebarQuery), a.collapsedWorkspaces)
+	projects := filterProjects(a.state.Projects, a.state.Sessions, a.sidebarQuery)
+	rows := make([]sidebarRow, 0, len(projects))
+	for _, project := range projects {
+		rows = append(rows, sidebarRow{Kind: sidebarProjectRow, ProjectID: project.ID, ProjectName: project.Name})
+	}
+	a.sidebarRows = rows
+}
+
+func filterProjects(projects []desktopstate.ProjectState, sessions []desktopstate.SessionState, query string) []desktopstate.ProjectState {
+	query = strings.ToLower(strings.TrimSpace(query))
+	if query == "" {
+		return append([]desktopstate.ProjectState(nil), projects...)
+	}
+	matched := make(map[string]bool)
+	for _, session := range sessions {
+		if strings.Contains(strings.ToLower(strings.Join([]string{session.Title, session.WorkspaceName, session.Workspace, session.ID}, "\n")), query) {
+			matched[session.ProjectID] = true
+		}
+	}
+	filtered := make([]desktopstate.ProjectState, 0, len(projects))
+	for _, project := range projects {
+		haystack := strings.ToLower(project.Name)
+		for _, folder := range project.Folders {
+			haystack += "\n" + strings.ToLower(folder.Path)
+		}
+		if strings.Contains(haystack, query) || matched[project.ID] {
+			filtered = append(filtered, project)
+		}
+	}
+	return filtered
 }
 
 func filterSessions(sessions []desktopstate.SessionState, query string) []desktopstate.SessionState {
@@ -92,6 +124,15 @@ func buildSidebarRowsWithCollapsed(sessions []desktopstate.SessionState, collaps
 func sidebarRowIndexForSession(rows []sidebarRow, sessionID string) int {
 	for i := range rows {
 		if rows[i].Kind == sidebarSessionRow && rows[i].SessionID == sessionID {
+			return i
+		}
+	}
+	return -1
+}
+
+func sidebarRowIndexForProject(rows []sidebarRow, projectID string) int {
+	for i := range rows {
+		if rows[i].Kind == sidebarProjectRow && rows[i].ProjectID == projectID {
 			return i
 		}
 	}
