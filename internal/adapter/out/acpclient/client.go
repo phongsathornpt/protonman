@@ -20,6 +20,8 @@ var ErrClosed = errors.New("ACP client is closed")
 
 var ErrMethodNotHandled = errors.New("ACP reverse request method is not handled")
 
+const cancelRequestMethod = "$/cancel_request"
+
 type RPCError struct {
 	Code    int             `json:"code"`
 	Message string          `json:"message"`
@@ -175,6 +177,7 @@ func (c *Client) Call(ctx context.Context, method string, params any, result any
 	select {
 	case <-ctx.Done():
 		c.removePending(id)
+		c.notifyRequestCancellation(id)
 		return ctx.Err()
 	case <-c.closed:
 		return ErrClosed
@@ -190,6 +193,14 @@ func (c *Client) Call(ctx context.Context, method string, params any, result any
 		}
 		return nil
 	}
+}
+
+func (c *Client) notifyRequestCancellation(id uint64) {
+	params, err := json.Marshal(map[string]any{"requestId": id})
+	if err != nil {
+		return
+	}
+	_ = c.write(envelope{JSONRPC: "2.0", Method: cancelRequestMethod, Params: params})
 }
 
 func (c *Client) Close() error {
