@@ -24,7 +24,10 @@ type ModelOptions struct {
 // RequestMetadata carries provider-neutral, request-scoped transport metadata.
 // Providers may map these values to protocol headers, but callers own the identity.
 type RequestMetadata struct {
-	SessionID string
+	SessionID       string
+	ParentSessionID string
+	RequestID       string
+	ProjectID       string
 }
 
 type Request struct {
@@ -32,6 +35,26 @@ type Request struct {
 	Tools    []Tool
 	Options  ModelOptions
 	Metadata RequestMetadata
+}
+
+// EffectiveRequestID returns the explicit transport request identity when one
+// was supplied, otherwise it falls back to the most recent user message ID.
+// The fallback keeps all model rounds and retries for one user turn correlated
+// without forcing provider-specific request IDs into the turn engine.
+func (r Request) EffectiveRequestID() string {
+	if id := strings.TrimSpace(r.Metadata.RequestID); id != "" {
+		return id
+	}
+	for i := len(r.Messages) - 1; i >= 0; i-- {
+		message := r.Messages[i]
+		if message.Role != RoleUser {
+			continue
+		}
+		if id := strings.TrimSpace(message.ID); id != "" {
+			return id
+		}
+	}
+	return ""
 }
 
 func (r Request) Validate() error {
