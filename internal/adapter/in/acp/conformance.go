@@ -54,7 +54,7 @@ var StableV1Coverage = []StableFeature{
 	{Name: "session/delete", Supported: true, Advertised: true},
 	{Name: "session/close", Supported: true, Advertised: true},
 	{Name: "session/additional_directories", Supported: true, Advertised: true},
-	{Name: "session/configuration", Supported: false, Advertised: false},
+	{Name: "session/configuration", Supported: true, Advertised: true},
 	{Name: "session/usage", Supported: false, Advertised: false},
 	{Name: "session/info_update", Supported: false, Advertised: false},
 	{Name: "elicitation", Supported: false, Advertised: false},
