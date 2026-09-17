@@ -6,14 +6,38 @@ import (
 	"context"
 	"encoding/json"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
 
+type synchronizedBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *synchronizedBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *synchronizedBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
+}
+
+func (b *synchronizedBuffer) Len() int {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Len()
+}
+
 func TestReverseRPCRequestCorrelatesClientResponse(t *testing.T) {
 	server := &Server{}
-	var output bytes.Buffer
-	unbind := server.bindReverseRPCOutput(&output)
+	output := &synchronizedBuffer{}
+	unbind := server.bindReverseRPCOutput(output)
 	defer unbind()
 
 	type result struct {
@@ -58,8 +82,8 @@ func TestReverseRPCRequestCorrelatesClientResponse(t *testing.T) {
 
 func TestReverseRPCCancellationNotifiesClient(t *testing.T) {
 	server := &Server{}
-	var output bytes.Buffer
-	unbind := server.bindReverseRPCOutput(&output)
+	output := &synchronizedBuffer{}
+	unbind := server.bindReverseRPCOutput(output)
 	defer unbind()
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -80,13 +104,14 @@ func TestReverseRPCCancellationNotifiesClient(t *testing.T) {
 		t.Fatalf("requestClient() error = %v, want context.Canceled", err)
 	}
 
-	scanner := bufio.NewScanner(strings.NewReader(output.String()))
+	text := output.String()
+	scanner := bufio.NewScanner(strings.NewReader(text))
 	var lines []string
 	for scanner.Scan() {
 		lines = append(lines, scanner.Text())
 	}
 	if len(lines) != 2 {
-		t.Fatalf("writes = %d, want request plus cancellation: %s", len(lines), output.String())
+		t.Fatalf("writes = %d, want request plus cancellation: %s", len(lines), text)
 	}
 	var notification RPCNotification
 	if err := json.Unmarshal([]byte(lines[1]), &notification); err != nil {
