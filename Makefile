@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := tui
 
-.PHONY: all tui desktop desktop-run run dev build size install run-bin clean test test-architecture test-architecture-desktop test-desktop test-race test-e2e test-install bench bench-cpu bench-mem fmt vet lint tag tag-push help
+.PHONY: all tui desktop desktop-run desktop-frontend run dev build size install run-bin clean test test-architecture test-architecture-desktop test-desktop test-race test-e2e test-install bench bench-cpu bench-mem fmt vet lint tag tag-push help
 
 # Binary configuration
 BIN_DIR := bin
@@ -14,6 +14,7 @@ VERSION ?= $(shell git describe --tags --always --dirty --match 'v[0-9]*' 2>/dev
 VERSION_LDFLAGS := -X github.com/phongsathornpt/protonman/internal/base/buildinfo.version=$(VERSION)
 DEFAULT_LDFLAGS ?= -s -w
 BUILD_LDFLAGS := $(strip $(DEFAULT_LDFLAGS) $(LDFLAGS) $(VERSION_LDFLAGS))
+DESKTOP_GO_TAGS ?= desktop,webkit2_41
 VERSION_KEY := $(subst /,_,$(VERSION))
 VERSION_STAMP := $(BIN_DIR)/.version-$(VERSION_KEY)
 GO_TMPDIR ?= $(HOME)/.cache/protonman/tmp
@@ -22,13 +23,16 @@ GO_ENV := GOTMPDIR="$(GO_TMPDIR)"
 ## tui: Run Protonman TUI from the cached binary (default)
 tui: run
 
-## desktop: Build the Fyne desktop client and prepare bundled GUI assets
-# Linux requires the normal Fyne desktop development packages (OpenGL/X11).
-desktop: $(DESKTOP_BINARY)
+## desktop: Build the Wails desktop client and bundled React assets
+desktop: desktop-frontend $(DESKTOP_BINARY)
 
-## desktop-run: Build and run the Fyne desktop client against the local CLI
+## desktop-run: Build and run the Wails desktop client against the local CLI
 desktop-run: $(BINARY) $(DESKTOP_BINARY)
 	PROTONMAN_BINARY="$(abspath $(BINARY))" ./$(DESKTOP_BINARY)
+
+## desktop-frontend: Build the Wails frontend assets
+desktop-frontend:
+	npm --prefix cmd/protonman-desktop/frontend run build
 
 ## run: Build Protonman only when sources changed, then run it
 run: $(BINARY)
@@ -55,9 +59,9 @@ $(BINARY): $(GO_SOURCES) go.mod go.sum Makefile $(VERSION_STAMP)
 	@mkdir -p $(BIN_DIR) "$(GO_TMPDIR)"
 	$(GO_ENV) go build -trimpath -ldflags "$(BUILD_LDFLAGS)" -o $(BINARY) ./cmd/protonman
 
-$(DESKTOP_BINARY): $(GO_SOURCES) go.mod go.sum Makefile $(VERSION_STAMP)
+$(DESKTOP_BINARY): $(GO_SOURCES) go.mod go.sum Makefile $(VERSION_STAMP) desktop-frontend
 	@mkdir -p $(BIN_DIR) "$(GO_TMPDIR)"
-	$(GO_ENV) go build -tags desktop -trimpath -ldflags "$(BUILD_LDFLAGS)" -o $(DESKTOP_BINARY) ./cmd/protonman-desktop
+	$(GO_ENV) go build -tags "$(DESKTOP_GO_TAGS)" -trimpath -ldflags "$(BUILD_LDFLAGS)" -o $(DESKTOP_BINARY) ./cmd/protonman-desktop
 
 ## install: Build from the current source tree and install into ~/.local/bin by default
 install: build
@@ -78,14 +82,14 @@ test-architecture:
 	go test ./proton-sdk/... -run 'Ownership|Architecture|Contract'
 
 ## test-architecture-desktop: Run architecture guards with desktop packages visible
-# The Fyne desktop frontend is build-tag gated, so it is absent from the default
+# The desktop frontend is build-tag gated, so it is absent from the default
 # package graph. GOFLAGS makes both the guard subprocess and this run see it.
 test-architecture-desktop:
-	GOFLAGS=-tags=desktop go test ./test/architecture/...
+	GOFLAGS=-tags=$(DESKTOP_GO_TAGS) go test ./test/architecture/...
 
-## test-desktop: Run desktop frontend tests (build-tag gated)
+## test-desktop: Run desktop controller tests (build-tag gated)
 test-desktop:
-	go test -tags desktop ./internal/feature/desktop ./internal/adapter/in/desktop ./cmd/protonman-desktop
+	go test -tags "$(DESKTOP_GO_TAGS)" ./internal/feature/desktop ./internal/adapter/in/desktop ./cmd/protonman-desktop
 
 ## test-race: Run all tests with race detector
 test-race:

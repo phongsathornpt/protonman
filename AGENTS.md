@@ -12,7 +12,7 @@ Protonman is a Go 1.27 autonomous coding agent with four inbound modes:
 - Bubble Tea interactive TUI
 - headless CLI for scripts and CI
 - ACP stdio server for editor/IDE integrations
-- Fyne desktop GUI, which drives the CLI runtime over ACP (build with `-tags desktop`; see `docs/desktop.md`)
+- Wails + React desktop GUI, which drives the CLI runtime over ACP (build with `-tags desktop`; see `docs/desktop.md`)
 
 The project prioritizes clean architecture, explicit capability boundaries,
 fail-closed security, bounded concurrency, structured tool contracts, and
@@ -40,7 +40,7 @@ internal/adapter/in/            inbound adapters
   acp/                          ACP JSON-RPC/stdin-stdout adapter
   headless/                     non-interactive CLI adapter
   tui/                          Bubble Tea presentation layer
-  desktop/                      Fyne desktop frontend (`-tags desktop`; drives the CLI over ACP)
+  desktop/                      Wails desktop adapter (`-tags desktop`; drives the CLI over ACP)
 internal/adapter/out/           driven infrastructure adapters
   acpclient/                    ACP client used by the desktop frontend
   config/                       layered JSON configuration loading and persistence

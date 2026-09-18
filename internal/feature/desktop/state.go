@@ -147,7 +147,7 @@ type SessionState struct {
 	Runtime       RuntimeSettingsState
 }
 
-// State owns desktop session state independently from Fyne widgets.
+// State owns desktop session state independently from UI widgets.
 type State struct {
 	ActiveSessionID string
 	ActiveAgentID   string

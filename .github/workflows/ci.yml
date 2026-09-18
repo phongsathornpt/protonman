@@ -65,16 +65,18 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-      - name: Install Fyne dependencies
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - name: Install desktop dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y \
             gcc \
-            libgl1-mesa-dev \
-            libwayland-dev \
-            libxkbcommon-dev \
-            wayland-protocols \
-            xorg-dev
+            libgtk-3-dev \
+            libwebkit2gtk-4.1-dev
+      - name: Install frontend dependencies
+        run: npm --prefix cmd/protonman-desktop/frontend install --no-audit --no-fund
       - name: Architecture (desktop packages visible)
         run: make test-architecture-desktop
       - name: Test Desktop

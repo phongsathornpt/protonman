@@ -1,0 +1,24 @@
+:root {
+  color: #e7e8ec;
+  background: #111216;
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  font-synthesis: none;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; min-width: 720px; }
+button { border: 1px solid #363943; border-radius: 8px; background: #1a1c22; color: inherit; cursor: pointer; padding: 10px 14px; }
+button:hover { border-color: #737b91; }
+.shell { display: grid; grid-template-columns: 280px 1fr; min-height: 100vh; }
+.sidebar { border-right: 1px solid #292b33; padding: 32px 24px; background: #15161b; }
+.content { max-width: 820px; padding: 56px 64px; }
+.eyebrow { color: #8e98b2; font-size: 11px; font-weight: 700; letter-spacing: .16em; }
+h1, h2 { margin: 10px 0 14px; letter-spacing: -.03em; }
+h1 { font-size: 25px; }
+h2 { font-size: 32px; }
+.muted { color: #9297a6; line-height: 1.55; }
+.status-card { align-items: flex-start; border: 1px solid #30333d; border-radius: 12px; display: flex; gap: 14px; margin-top: 42px; padding: 20px; }
+.status-card p { margin-bottom: 0; }
+.status-dot { background: #7ed6a1; border-radius: 50%; flex: 0 0 9px; height: 9px; margin-top: 5px; width: 9px; }
+.actions { display: flex; gap: 10px; margin-top: 18px; }
+.primary { background: #d8e2ff; border-color: #d8e2ff; color: #171921; }

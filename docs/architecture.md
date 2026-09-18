@@ -56,7 +56,7 @@ Driving adapters translate external interaction into application operations:
 - `acp/`: ACP JSON-RPC/stdin-stdout protocol handling.
 - `headless/`: non-interactive CLI output for scripts and CI.
 - `tui/`: Bubble Tea terminal presentation and interaction.
-- `desktop/`: Fyne desktop frontend behind the `desktop` build tag. See [`desktop.md`](desktop.md).
+- `desktop/`: Wails desktop adapter with React/TypeScript assets behind the `desktop` build tag. See [`desktop.md`](desktop.md).
   It drives the CLI over ACP through `adapter/out/acpclient` rather than embedding a
   second agent loop, so its presentation state lives in `feature/desktop` and its
   driven boundary is `desktop_contract_test.go` rather than the untagged package graph.

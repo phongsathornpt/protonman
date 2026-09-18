@@ -42,7 +42,7 @@ print_size cli "$report_dir/protonman"
 
 if [ "$include_desktop" = 1 ]; then
 	CGO_ENABLED=1 GOOS="$goos" GOARCH="$goarch" go build \
-		-tags desktop -trimpath -ldflags "$ldflags" \
+		-tags 'desktop,webkit2_41' -trimpath -ldflags "$ldflags" \
 		-o "$report_dir/protonman-desktop" ./cmd/protonman-desktop
 	print_size desktop "$report_dir/protonman-desktop"
 	mkdir "$report_dir/package"

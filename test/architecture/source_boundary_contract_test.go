@@ -5,7 +5,7 @@ import "testing"
 func TestInboundAdaptersDoNotPerformConfigPersistence(t *testing.T) {
 	configImport := modulePath + "/internal/adapter/out/config"
 	// Every inbound adapter is listed explicitly, including the build-tag gated
-	// Fyne desktop frontend: the AST walk below reads source from disk, so tag
+	// Wails desktop frontend: the AST walk below reads source from disk, so tag
 	// gating does not exclude it from this check.
 	for _, adapter := range []string{
 		"internal/adapter/in/tui",
