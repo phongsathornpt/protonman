@@ -26,6 +26,13 @@ go.work
 go.work.sum
 vendor/
 
+# Frontend dependencies
+cmd/protonman-desktop/frontend/node_modules/
+
+# Frontend build artifacts
+cmd/protonman-desktop/frontend/dist/
+*.tsbuildinfo
+
 # Protonman runtime & atomic write temporary files
 .proton-write-*
 

@@ -5,9 +5,9 @@ import (
 	"testing"
 )
 
-// desktopPackages are the tag-gated packages that make up the Wails desktop
-// frontend. They are absent from the default package graph, so the guards in
-// this file load a desktop-tagged graph instead of listPackages.
+// desktopPackages are the packages that make up the Wails desktop frontend.
+// The Wails implementation is tag-gated, so these guards load a desktop-tagged
+// graph instead of relying only on the default package graph.
 var desktopPackages = []string{
 	modulePath + "/cmd/protonman-desktop",
 	modulePath + "/internal/adapter/in/desktop",
@@ -26,7 +26,7 @@ func TestDesktopPackagesStayVisibleToGuards(t *testing.T) {
 	}
 }
 
-	// The desktop frontend is a fourth inbound adapter and must keep the same
+// The desktop frontend is a fourth inbound adapter and must keep the same
 // boundary discipline as the TUI, ACP, and headless adapters: no direct turn
 // engine, session persistence, or project manipulation.
 func TestDesktopInboundAdapterUsesApplicationBoundary(t *testing.T) {
@@ -44,7 +44,7 @@ func TestDesktopInboundAdapterUsesApplicationBoundary(t *testing.T) {
 	)
 }
 
-	// The desktop frontend drives the CLI runtime over ACP instead of embedding a
+// The desktop frontend drives the CLI runtime over ACP instead of embedding a
 // second agent loop, so the outbound ACP client is its only permitted driven
 // adapter. A new outbound adapter dependency is an architecture decision that
 // must be recorded deliberately rather than added silently.

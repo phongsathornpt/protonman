@@ -56,10 +56,11 @@ Driving adapters translate external interaction into application operations:
 - `acp/`: ACP JSON-RPC/stdin-stdout protocol handling.
 - `headless/`: non-interactive CLI output for scripts and CI.
 - `tui/`: Bubble Tea terminal presentation and interaction.
-- `desktop/`: Wails desktop adapter with React/TypeScript assets behind the `desktop` build tag. See [`desktop.md`](desktop.md).
+- `desktop/`: framework-free Wails desktop adapter/controller with React/TypeScript assets. The Wails composition in `cmd/protonman-desktop` is behind the `desktop` build tag. See [`desktop.md`](desktop.md).
   It drives the CLI over ACP through `adapter/out/acpclient` rather than embedding a
   second agent loop, so its presentation state lives in `feature/desktop` and its
-  driven boundary is `desktop_contract_test.go` rather than the untagged package graph.
+  driven boundary is `desktop_contract_test.go`, which loads the complete tagged
+  composition graph.
 
 Inbound adapters consume application ports such as `app.Conversation`, `app.Agents`,
 `app.Models`, `app.Projects`, `app.Providers`, and `app.Sessions`. They must not bypass
@@ -142,7 +143,7 @@ engines, or the composition root.
 Feature packages own cohesive product behavior built on core contracts:
 
 - `agent/`: canonical profiles, dependency-aware scheduling, lifecycle/events, delegation policy, required-vs-optional completion barriers, and versioned result delivery/consumption acknowledgement. Result availability drives the synthesis stream; the separate `agent_result_consumed` event is emitted only after successful parent-context encoding and never feeds back into that stream. Dependency edges reference already-admitted children in the same parent turn, so the runtime forms an acyclic execution graph by construction.
-- `desktop/`: desktop presentation state (multiple sessions, permission inbox, timeline) behind the `desktop` build tag. Stateless against the CLI runtime: every session behavior flows through the ACP protocol, so this package holds no sessions, models, or tools of its own.
+- `desktop/`: desktop presentation state (multiple sessions, permission inbox, timeline). Stateless against the CLI runtime: every session behavior flows through the ACP protocol, so this package holds no sessions, models, or tools of its own.
 - `imageprep/`: image input preparation for multimodal turns.
 - `memory/`: memory use cases over `core/memory` contracts, persisted through `adapter/out/memoryfs`.
 - `project/`: project discovery/trust behavior.
@@ -157,7 +158,7 @@ network, provider, and terminal concerns remain in adapters/platform packages.
 Driven adapters implement infrastructure-facing ports:
 
 - `config/`: layered JSON configuration loading, merge, provenance, and persistence (with automatic migration from legacy TOML). Effective settings are created through `DefaultSnapshot()`, whose product defaults come only from `internal/base/runtimepolicy`; user and project writers share one atomic document persistence primitive while retaining scope-specific security checks and file modes. Persisted configuration provider/model records use dedicated file-schema structs and explicit conversion into runtime config types, so runtime representation changes do not silently redefine the on-disk format. The current contract and refactor boundaries are documented in [`settings.md`](settings.md).
-- `acpclient/`: ACP client used by the build-tag gated desktop frontend to drive CLI sessions over stdio.
+- `acpclient/`: ACP client used by the desktop frontend to drive CLI sessions over stdio; the Wails composition that consumes it is build-tag gated.
 - `memoryfs/`: file-backed memory repository implementing the `core/memory` port.
 - `model/`: provider presets, discovery, catalog normalization, SDK adaptation, and narrowly scoped provider-specific wrappers. Models can use a shared provider+endpoint+model low-concurrency scheduler here for bounded admission, low concurrency, adaptive pacing, and route-wide provider cooldowns. The default `auto` policy currently recommends it for OpenCode free models; `/low on` can force the same provider-neutral scheduler for any active provider/model and `/low off` bypasses it. Replay-safe stream recovery is a separate wrapper: OpenCode free models keep timeouts plus the full retry budget with open-retry ownership, while all other models use a bounded generic replay-safe retry for pre-commit incomplete streams and empty finishes.
 - `sessionfs/`: file-backed session repository and agent lifecycle persistence.

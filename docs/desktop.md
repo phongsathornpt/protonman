@@ -24,12 +24,16 @@ only client lifecycle, presentation projection, and desktop preferences.
 
 ## Development
 
-Install frontend dependencies and build the embedded React assets:
+The frontend uses React 19, TypeScript 7, Vite 8, and the Wails v3 runtime.
+Install dependencies and build the embedded React assets:
 
 ```sh
-npm --prefix cmd/protonman-desktop/frontend install
+bun --cwd cmd/protonman-desktop/frontend install
 make desktop-frontend
 ```
+
+`npm --prefix cmd/protonman-desktop/frontend install` remains supported when Bun
+is unavailable. The repository lockfile is `frontend/bun.lock`.
 
 Wails v3 bindings are generated from the registered Go services:
 
@@ -45,8 +49,18 @@ make test-desktop
 make desktop
 ```
 
-The desktop application is guarded by the `desktop` build tag. Normal CLI
-builds do not include Wails or the frontend assets.
+The desktop package shell in `cmd/protonman-desktop/main.go` is intentionally
+visible to Go tooling and editors. The Wails implementation is in
+`main_desktop.go` and is guarded by the `desktop` build tag; `main_stub.go`
+provides a clear non-desktop error. Normal CLI builds do not include Wails or
+the frontend assets.
+
+Build or run the desktop application with the tag enabled:
+
+```sh
+go build -tags desktop ./cmd/protonman-desktop
+go run -tags desktop ./cmd/protonman-desktop
+```
 
 Wails v3 uses the GTK4/WebKitGTK 6.0 stack by default on supported Linux
 distributions. Older distributions must use the documented legacy `gtk3`

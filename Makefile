@@ -15,6 +15,8 @@ VERSION_LDFLAGS := -X github.com/phongsathornpt/protonman/internal/base/buildinf
 DEFAULT_LDFLAGS ?= -s -w
 BUILD_LDFLAGS := $(strip $(DEFAULT_LDFLAGS) $(LDFLAGS) $(VERSION_LDFLAGS))
 DESKTOP_GO_TAGS ?= desktop
+FRONTEND_DIR := cmd/protonman-desktop/frontend
+FRONTEND_COMMAND ?= npm --prefix $(FRONTEND_DIR)
 VERSION_KEY := $(subst /,_,$(VERSION))
 VERSION_STAMP := $(BIN_DIR)/.version-$(VERSION_KEY)
 GO_TMPDIR ?= $(HOME)/.cache/protonman/tmp
@@ -32,7 +34,7 @@ desktop-run: $(BINARY) $(DESKTOP_BINARY)
 
 ## desktop-frontend: Build the Wails frontend assets
 desktop-frontend:
-	npm --prefix cmd/protonman-desktop/frontend run build
+	$(FRONTEND_COMMAND) run build
 
 ## run: Build Protonman only when sources changed, then run it
 run: $(BINARY)
@@ -82,12 +84,12 @@ test-architecture:
 	go test ./proton-sdk/... -run 'Ownership|Architecture|Contract'
 
 ## test-architecture-desktop: Run architecture guards with desktop packages visible
-# The desktop frontend is build-tag gated, so it is absent from the default
-# package graph. GOFLAGS makes both the guard subprocess and this run see it.
+# GOFLAGS makes both the architecture guard subprocess and this run exercise
+# the Wails implementation behind the desktop build tag.
 test-architecture-desktop:
 	GOFLAGS=-tags=$(DESKTOP_GO_TAGS) go test ./test/architecture/...
 
-## test-desktop: Run desktop controller tests (build-tag gated)
+## test-desktop: Run desktop controller and Wails composition tests
 test-desktop:
 	go test -tags "$(DESKTOP_GO_TAGS)" ./internal/feature/desktop ./internal/adapter/in/desktop ./cmd/protonman-desktop
 

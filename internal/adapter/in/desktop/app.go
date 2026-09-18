@@ -1,5 +1,3 @@
-//go:build desktop
-
 // Package desktop contains the framework adapter for the Wails desktop
 // migration. Runtime and ACP behavior belongs in the controller; this package
 // only exposes the bounded API consumed by the React frontend.

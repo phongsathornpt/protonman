@@ -10,16 +10,16 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@vitejs/plugin-react": "^5.0.4",
+    "@vitejs/plugin-react": "^6.1.1",
     "@wailsio/runtime": "^3.0.0-alpha.79",
     "react": "^19.1.1",
     "react-dom": "^19.1.1"
   },
   "devDependencies": {
-    "typescript": "^5.8.3",
-    "vite": "^6.3.5",
-    "vitest": "^3.2.4",
-    "@types/react": "^19.1.2",
-    "@types/react-dom": "^19.1.2"
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.0",
+    "vitest": "^5.0.1"
   }
 }

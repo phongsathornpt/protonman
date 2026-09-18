@@ -102,10 +102,8 @@ func listPackages(t *testing.T) map[string]listedPackage {
 }
 
 // listDesktopPackages returns the repository package graph with the desktop
-// build tag enabled. The Wails frontend in internal/adapter/in/desktop and
-// cmd/protonman-desktop is tag-gated, so it is absent from the default graph and
-// invisible to every guard that uses listPackages. Guards that must cover the
-// desktop subsystem use this loader.
+// build tag enabled. The Wails implementation is tag-gated, so guards that
+// must cover the complete desktop subsystem use this loader.
 func listDesktopPackages(t *testing.T) map[string]listedPackage {
 	t.Helper()
 	root := repositoryRoot(t)
