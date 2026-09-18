@@ -1,6 +1,6 @@
 # Protonman Desktop
 
-Protonman Desktop is a Wails frontend for the existing Protonman runtime. The
+Protonman Desktop is a Wails v3 frontend for the existing Protonman runtime. The
 desktop application does not embed a second agent loop. It drives the CLI
 runtime through the Agent Client Protocol (ACP) JSON-RPC boundary.
 
@@ -31,6 +31,13 @@ npm --prefix cmd/protonman-desktop/frontend install
 make desktop-frontend
 ```
 
+Wails v3 bindings are generated from the registered Go services:
+
+```sh
+wails3 generate bindings -ts -f '-tags desktop' \
+  -d cmd/protonman-desktop/frontend/bindings ./cmd/protonman-desktop
+```
+
 Run the controller tests and build the desktop binary:
 
 ```sh
@@ -40,6 +47,10 @@ make desktop
 
 The desktop application is guarded by the `desktop` build tag. Normal CLI
 builds do not include Wails or the frontend assets.
+
+Wails v3 uses the GTK4/WebKitGTK 6.0 stack by default on supported Linux
+distributions. Older distributions must use the documented legacy `gtk3`
+build path and matching dependencies.
 
 ## Runtime migration status
 

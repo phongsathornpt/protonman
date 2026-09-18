@@ -94,7 +94,7 @@ func TestDesktopBinarySizeBudget(t *testing.T) {
 	tempDir := t.TempDir()
 	binPath := filepath.Join(tempDir, "protonman_desktop_budget_test")
 
-	cmd := exec.Command("go", "build", "-tags", "desktop,webkit2_41", "-trimpath", "-ldflags=-s -w", "-o", binPath, "./cmd/protonman-desktop")
+	cmd := exec.Command("go", "build", "-tags", "desktop", "-trimpath", "-ldflags=-s -w", "-o", binPath, "./cmd/protonman-desktop")
 	cmd.Dir = repoRoot
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr

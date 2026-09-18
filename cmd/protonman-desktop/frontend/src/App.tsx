@@ -1,21 +1,6 @@
 import { useState } from "react";
-
-type Snapshot = {
-  status: string;
-};
-
-declare global {
-  interface Window {
-    go?: {
-      main?: {
-			DesktopApp?: {
-          Snapshot: () => Promise<Snapshot>;
-          SetStatus: (status: string) => Promise<void>;
-        };
-      };
-    };
-  }
-}
+import { DesktopService } from "../bindings/github.com/phongsathornpt/protonman/cmd/protonman-desktop/index";
+import type { Snapshot } from "../bindings/github.com/phongsathornpt/protonman/internal/adapter/in/desktop/models";
 
 const initialSnapshot: Snapshot = { status: "Connecting to Wails shell…" };
 
@@ -23,22 +8,11 @@ export function App() {
   const [snapshot, setSnapshot] = useState(initialSnapshot);
 
   async function loadSnapshot() {
-	const api = window.go?.main?.DesktopApp;
-    if (!api) {
-      setSnapshot({ status: "Wails bindings unavailable in browser mode" });
-      return;
-    }
-
-    setSnapshot(await api.Snapshot());
+    setSnapshot(await DesktopService.Snapshot());
   }
 
   async function markReady() {
-	const api = window.go?.main?.DesktopApp;
-    if (!api) {
-      return;
-    }
-
-    await api.SetStatus("ready");
+    await DesktopService.SetStatus("ready");
     await loadSnapshot();
   }
 

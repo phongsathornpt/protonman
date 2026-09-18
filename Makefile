@@ -14,7 +14,7 @@ VERSION ?= $(shell git describe --tags --always --dirty --match 'v[0-9]*' 2>/dev
 VERSION_LDFLAGS := -X github.com/phongsathornpt/protonman/internal/base/buildinfo.version=$(VERSION)
 DEFAULT_LDFLAGS ?= -s -w
 BUILD_LDFLAGS := $(strip $(DEFAULT_LDFLAGS) $(LDFLAGS) $(VERSION_LDFLAGS))
-DESKTOP_GO_TAGS ?= desktop,webkit2_41
+DESKTOP_GO_TAGS ?= desktop
 VERSION_KEY := $(subst /,_,$(VERSION))
 VERSION_STAMP := $(BIN_DIR)/.version-$(VERSION_KEY)
 GO_TMPDIR ?= $(HOME)/.cache/protonman/tmp

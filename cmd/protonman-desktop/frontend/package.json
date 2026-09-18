@@ -10,7 +10,8 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@vitejs/plugin-react": "^4.3.4",
+    "@vitejs/plugin-react": "^5.0.4",
+    "@wailsio/runtime": "^3.0.0-alpha.79",
     "react": "^19.1.1",
     "react-dom": "^19.1.1"
   },
