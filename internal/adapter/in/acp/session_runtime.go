@@ -185,17 +185,25 @@ func (s *Server) setSessionReasoning(ctx context.Context, sess *Session, effort 
 		return fmt.Errorf("session %q has an active prompt", sess.id)
 	}
 	clone, err := app.CloneConversationWithReasoning(sess.runner, effort, effort != domain.ReasoningDefault)
-	if err != nil {
+	if err == nil {
+		sess.runner = clone
+		sess.reasoningEffort = effort
+		settings := sessionRuntimeForLocked(sess)
+		settings.Reasoning = reasoningSetting(effort)
+		storeSessionRuntime(sess, settings)
 		sess.mu.Unlock()
-		return err
+		return sess.saveStateDetached(ctx)
 	}
-	sess.runner = clone
-	sess.reasoningEffort = effort
-	settings := sessionRuntimeForLocked(sess)
-	settings.Reasoning = reasoningSetting(effort)
-	storeSessionRuntime(sess, settings)
 	sess.mu.Unlock()
-	return sess.saveStateDetached(ctx)
+
+	// If the runner cannot be cloned directly (e.g. mock or custom runner in tests),
+	// fall back to rebuilding the conversation through session runtime controls.
+	if control, ok := sessionRuntimeControlFor(s); ok && control.build != nil {
+		return s.updateSessionRuntime(ctx, sess, func(next *SessionRuntimeSettings) {
+			next.Reasoning = reasoningSetting(effort)
+		})
+	}
+	return err
 }
 
 func (s *Server) updateSessionRuntime(ctx context.Context, sess *Session, mutate func(*SessionRuntimeSettings)) error {

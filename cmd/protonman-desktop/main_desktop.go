@@ -94,6 +94,10 @@ func (a *DesktopService) SetProvider(sessionID, provider string) (desktop.Snapsh
 	return a.controller.SetProvider(context.Background(), sessionID, provider)
 }
 
+func (a *DesktopService) SetConfigOption(sessionID, configID, value string) (desktop.Snapshot, error) {
+	return a.controller.SetConfigOption(context.Background(), sessionID, configID, value)
+}
+
 func (a *DesktopService) SetLowConcurrency(sessionID, setting string) (desktop.Snapshot, error) {
 	return a.controller.SetLowConcurrency(context.Background(), sessionID, setting)
 }

@@ -232,6 +232,9 @@ func (s *Server) dispatch(ctx context.Context, request RPCRequest, output io.Wri
 			return nil, nil, err
 		}
 		return nil, nil, nil
+	case methodSessionSetConfigOption:
+		result, _, err := s.dispatchSessionConfig(ctx, request)
+		return result, nil, err
 	default:
 		return nil, nil, fmt.Errorf("method %q is not supported", request.Method)
 	}

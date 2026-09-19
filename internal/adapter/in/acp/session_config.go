@@ -144,7 +144,7 @@ func (s *Server) dispatchSessionConfig(ctx context.Context, request RPCRequest) 
 	case configIDModel:
 		options := s.sessionConfigOptions(ctx, sess)
 		modelOption, ok := findSessionConfigOption(options, configIDModel)
-		if !ok || !selectOptionContains(modelOption, value) {
+		if ok && modelOption.Error == "" && len(modelOption.Options) > 0 && !selectOptionContains(modelOption, value) {
 			return nil, true, fmt.Errorf("model %q is not an advertised session config value", value)
 		}
 		if err := s.updateSessionRuntime(ctx, sess, func(next *SessionRuntimeSettings) {
@@ -153,7 +153,7 @@ func (s *Server) dispatchSessionConfig(ctx context.Context, request RPCRequest) 
 			return nil, true, err
 		}
 
-	case configIDReasoning:
+	case configIDReasoning, "thought_level", "thoughtLevel":
 		effort, parseErr := domain.ParseReasoningEffort(value)
 		if parseErr != nil {
 			return nil, true, parseErr
@@ -162,7 +162,7 @@ func (s *Server) dispatchSessionConfig(ctx context.Context, request RPCRequest) 
 			return nil, true, err
 		}
 
-	case configIDLowConcurrency:
+	case configIDLowConcurrency, "low_concurrency":
 		setting, parseErr := modelconfig.ParseLowConcurrencySetting(value)
 		if parseErr != nil {
 			return nil, true, parseErr
@@ -187,7 +187,19 @@ func decodeSessionConfigStringValue(params SetSessionConfigOptionParams) (string
 	}
 	var value string
 	if err := json.Unmarshal(params.Value, &value); err != nil {
-		return "", fmt.Errorf("session config option %q requires a string value: %w", params.ConfigID, err)
+		var objectValue struct {
+			ID    string `json:"id"`
+			Value string `json:"value"`
+		}
+		if objErr := json.Unmarshal(params.Value, &objectValue); objErr == nil {
+			value = strings.TrimSpace(objectValue.Value)
+			if value == "" {
+				value = strings.TrimSpace(objectValue.ID)
+			}
+		}
+		if value == "" {
+			return "", fmt.Errorf("session config option %q requires a string value: %w", params.ConfigID, err)
+		}
 	}
 	value = strings.TrimSpace(value)
 	if value == "" {

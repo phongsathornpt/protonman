@@ -488,7 +488,8 @@ func (c *Controller) SetModel(ctx context.Context, sessionID, modelID string) (S
 	})
 }
 
-func (c *Controller) SetProvider(ctx context.Context, sessionID, provider string) (Snapshot, error) {
+// SetConfigOption updates a session configuration option using standard ACP session/set_config_option.
+func (c *Controller) SetConfigOption(ctx context.Context, sessionID, configID, value string) (Snapshot, error) {
 	client, err := c.connectedClient()
 	if err != nil {
 		return c.Snapshot(ctx), err
@@ -496,15 +497,19 @@ func (c *Controller) SetProvider(ctx context.Context, sessionID, provider string
 	var result sessionConfigResult
 	params := map[string]any{
 		"sessionId": sessionID,
-		"configId":  "provider",
+		"configId":  configID,
 		"type":      "select",
-		"value":     provider,
+		"value":     value,
 	}
 	if err := client.Call(ctx, "session/set_config_option", params, &result); err != nil {
 		return c.Snapshot(ctx), err
 	}
 	c.storeConfigOptions(sessionID, result.ConfigOptions)
 	return c.refreshSessionRuntime(ctx, sessionID)
+}
+
+func (c *Controller) SetProvider(ctx context.Context, sessionID, provider string) (Snapshot, error) {
+	return c.SetConfigOption(ctx, sessionID, "provider", provider)
 }
 
 func (c *Controller) SetLowConcurrency(ctx context.Context, sessionID, setting string) (Snapshot, error) {
