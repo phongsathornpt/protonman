@@ -5,10 +5,13 @@ import (
 	"fmt"
 	"strings"
 
+	coretodo "github.com/phongsathornpt/protonman/internal/core/todo"
 	tododomain "github.com/phongsathornpt/protonman/internal/feature/todo"
 )
 
 const methodSessionContext = "protonman/session/context"
+const methodSessionTodoUpdate = "protonman/session/todo/update"
+const methodSessionTodoPatch = "protonman/session/todo/patch"
 
 // ProtonmanSessionContextParams identifies the session whose durable working
 // context should be inspected by a native Protonman client.
@@ -38,6 +41,26 @@ type ProtonmanSessionContextResult struct {
 	Todo      ProtonmanTodoSnapshot `json:"todo"`
 }
 
+type ProtonmanSessionTodoUpdateParams struct {
+	SessionID string          `json:"sessionId"`
+	Revision  uint64          `json:"revision"`
+	ItemID    string          `json:"itemId"`
+	Status    coretodo.Status `json:"status"`
+}
+
+type ProtonmanSessionTodoUpdateResult struct {
+	SessionID string                `json:"sessionId"`
+	Todo      ProtonmanTodoSnapshot `json:"todo"`
+}
+
+type ProtonmanSessionTodoPatchParams struct {
+	SessionID  string               `json:"sessionId"`
+	Revision   uint64               `json:"revision"`
+	Operations []coretodo.Operation `json:"operations"`
+}
+
+type ProtonmanSessionTodoPatchResult = ProtonmanSessionTodoUpdateResult
+
 func (s *Server) sessionContext(ctx context.Context, sessionID string) (ProtonmanSessionContextResult, error) {
 	sessionID = strings.TrimSpace(sessionID)
 	if sessionID == "" {
@@ -66,6 +89,67 @@ func (s *Server) sessionContext(ctx context.Context, sessionID string) (Protonma
 		Goal:      goal,
 		Todo:      projectTodoSnapshot(store.Snapshot()),
 	}, nil
+}
+
+func (s *Server) sessionTodoUpdate(ctx context.Context, params ProtonmanSessionTodoUpdateParams) (ProtonmanSessionTodoUpdateResult, error) {
+	sessionID := strings.TrimSpace(params.SessionID)
+	if sessionID == "" {
+		return ProtonmanSessionTodoUpdateResult{}, fmt.Errorf("sessionId is required")
+	}
+	itemID := strings.TrimSpace(params.ItemID)
+	if itemID == "" {
+		return ProtonmanSessionTodoUpdateResult{}, fmt.Errorf("itemId is required")
+	}
+	if !params.Status.Valid() {
+		return ProtonmanSessionTodoUpdateResult{}, fmt.Errorf("invalid todo status %q", params.Status)
+	}
+	if s.sessionService == nil {
+		return ProtonmanSessionTodoUpdateResult{}, fmt.Errorf("session persistence is unavailable")
+	}
+	return s.sessionTodoPatch(ctx, ProtonmanSessionTodoPatchParams{
+		SessionID: sessionID,
+		Revision:  params.Revision,
+		Operations: []coretodo.Operation{{
+			Op:     coretodo.PatchSetStatus,
+			ID:     itemID,
+			Status: params.Status,
+		}},
+	})
+}
+
+func (s *Server) sessionTodoPatch(ctx context.Context, params ProtonmanSessionTodoPatchParams) (ProtonmanSessionTodoPatchResult, error) {
+	sessionID := strings.TrimSpace(params.SessionID)
+	if sessionID == "" {
+		return ProtonmanSessionTodoPatchResult{}, fmt.Errorf("sessionId is required")
+	}
+	if len(params.Operations) == 0 {
+		return ProtonmanSessionTodoPatchResult{}, fmt.Errorf("todo patch requires at least one operation")
+	}
+	if s.sessionService == nil {
+		return ProtonmanSessionTodoPatchResult{}, fmt.Errorf("session persistence is unavailable")
+	}
+	goal := ""
+	detail, err := s.sessionService.LoadDetail(ctx, sessionID, "")
+	if err != nil {
+		if _, active := s.lookupSession(sessionID); !active {
+			return ProtonmanSessionTodoPatchResult{}, err
+		}
+	} else {
+		goal = strings.TrimSpace(detail.ActiveGoal)
+	}
+	store, err := s.sessionService.OpenTodoStore(ctx, sessionID, goal)
+	if err != nil {
+		return ProtonmanSessionTodoPatchResult{}, fmt.Errorf("open todo state for session %q: %w", sessionID, err)
+	}
+	patchStore, ok := store.(coretodo.PatchRepository)
+	if !ok {
+		return ProtonmanSessionTodoPatchResult{}, fmt.Errorf("todo updates are unavailable")
+	}
+	_, after, err := patchStore.CompareAndPatch(ctx, params.Revision, params.Operations)
+	if err != nil {
+		return ProtonmanSessionTodoPatchResult{}, err
+	}
+	return ProtonmanSessionTodoPatchResult{SessionID: sessionID, Todo: projectTodoSnapshot(after)}, nil
 }
 
 func projectTodoSnapshot(snapshot tododomain.Snapshot) ProtonmanTodoSnapshot {

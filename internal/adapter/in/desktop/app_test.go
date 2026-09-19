@@ -10,12 +10,12 @@ func TestControllerSnapshotAndSubscription(t *testing.T) {
 	controller := NewController()
 	defer controller.Close()
 
-	if got := controller.Snapshot(context.Background()).Status; got != "Wails migration shell" {
+	if got := controller.Snapshot(context.Background()).Status; got != "Ready to connect" {
 		t.Fatalf("initial status = %q", got)
 	}
 
 	updates, unsubscribe := controller.Subscribe(context.Background())
-	controller.SetStatus("ready")
+	controller.updateStatus("ready", "disconnected")
 
 	select {
 	case got := <-updates:
@@ -27,7 +27,7 @@ func TestControllerSnapshotAndSubscription(t *testing.T) {
 	}
 
 	unsubscribe()
-	controller.SetStatus("closed")
+	controller.updateStatus("closed", "disconnected")
 	if _, ok := <-updates; ok {
 		t.Fatal("updates channel remains open after unsubscribe")
 	}

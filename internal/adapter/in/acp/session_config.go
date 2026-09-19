@@ -15,6 +15,7 @@ const (
 	methodSessionSetConfigOption = "session/set_config_option"
 
 	configIDModel          = "model"
+	configIDProvider       = "provider"
 	configIDReasoning      = "reasoning"
 	configIDLowConcurrency = "lowConcurrency"
 )
@@ -35,6 +36,7 @@ type SessionConfigOption struct {
 	ID           string                      `json:"id"`
 	Name         string                      `json:"name"`
 	Description  string                      `json:"description,omitempty"`
+	Error        string                      `json:"error,omitempty"`
 	Category     string                      `json:"category,omitempty"`
 	Type         string                      `json:"type"`
 	CurrentValue string                      `json:"currentValue"`
@@ -61,7 +63,10 @@ type SetSessionConfigOptionResult struct {
 // discovery and caching policy.
 type SessionModelOptionsProvider func(context.Context, SessionRuntimeSettings) ([]SessionConfigSelectOption, error)
 
-var sessionModelOptionsProviders sync.Map // map[*Server]SessionModelOptionsProvider
+type SessionProviderOptionsProvider func(context.Context, SessionRuntimeSettings) ([]SessionConfigSelectOption, error)
+
+var sessionModelOptionsProviders sync.Map    // map[*Server]SessionModelOptionsProvider
+var sessionProviderOptionsProviders sync.Map // map[*Server]SessionProviderOptionsProvider
 
 func WithSessionConfigModelOptions(provider SessionModelOptionsProvider) Option {
 	return func(server *Server) {
@@ -77,6 +82,23 @@ func sessionModelOptionsProviderFor(server *Server) (SessionModelOptionsProvider
 		return nil, false
 	}
 	provider, ok := value.(SessionModelOptionsProvider)
+	return provider, ok && provider != nil
+}
+
+func WithSessionConfigProviderOptions(provider SessionProviderOptionsProvider) Option {
+	return func(server *Server) {
+		if provider != nil {
+			sessionProviderOptionsProviders.Store(server, provider)
+		}
+	}
+}
+
+func sessionProviderOptionsProviderFor(server *Server) (SessionProviderOptionsProvider, bool) {
+	value, ok := sessionProviderOptionsProviders.Load(server)
+	if !ok {
+		return nil, false
+	}
+	provider, ok := value.(SessionProviderOptionsProvider)
 	return provider, ok && provider != nil
 }
 
@@ -98,6 +120,27 @@ func (s *Server) dispatchSessionConfig(ctx context.Context, request RPCRequest) 
 	}
 
 	switch strings.TrimSpace(params.ConfigID) {
+	case configIDProvider:
+		options := s.sessionConfigOptions(ctx, sess)
+		providerOption, ok := findSessionConfigOption(options, configIDProvider)
+		if !ok || !selectOptionContains(providerOption, value) {
+			return nil, true, fmt.Errorf("provider %q is not an advertised session config value", value)
+		}
+		modelID := sessionRuntimeFor(sess).Model
+		if modelProvider, ok := sessionModelOptionsProviderFor(s); ok {
+			next := sessionRuntimeFor(sess)
+			next.Provider = value
+			if discovered, err := modelProvider(ctx, next); err == nil && len(discovered) > 0 {
+				modelID = strings.TrimSpace(discovered[0].Value)
+			}
+		}
+		if err := s.updateSessionRuntime(ctx, sess, func(next *SessionRuntimeSettings) {
+			next.Provider = value
+			next.Model = modelID
+		}); err != nil {
+			return nil, true, err
+		}
+
 	case configIDModel:
 		options := s.sessionConfigOptions(ctx, sess)
 		modelOption, ok := findSessionConfigOption(options, configIDModel)
@@ -161,12 +204,33 @@ func (s *Server) sessionConfigOptions(ctx context.Context, sess *Session) []Sess
 		return nil
 	}
 	settings := sessionRuntimeFor(sess)
-	options := make([]SessionConfigOption, 0, 3)
+	options := make([]SessionConfigOption, 0, 4)
+
+	providerValues := []SessionConfigSelectOption{}
+	if provider, ok := sessionProviderOptionsProviderFor(s); ok {
+		if discovered, err := provider(ctx, settings); err == nil && len(discovered) > 0 {
+			providerValues = ensureCurrentConfigValue(discovered, settings.Provider)
+		}
+	}
+	if len(providerValues) > 0 {
+		options = append(options, SessionConfigOption{
+			ID:           configIDProvider,
+			Name:         "Provider",
+			Description:  "Provider used for future turns",
+			Category:     "model",
+			Type:         "select",
+			CurrentValue: settings.Provider,
+			Options:      providerValues,
+		})
+	}
 
 	modelValues := []SessionConfigSelectOption{{Value: settings.Model, Name: settings.Model}}
+	var modelError string
 	if provider, ok := sessionModelOptionsProviderFor(s); ok {
 		if discovered, err := provider(ctx, settings); err == nil && len(discovered) > 0 {
 			modelValues = ensureCurrentConfigValue(discovered, settings.Model)
+		} else if err != nil {
+			modelError = err.Error()
 		}
 	}
 	if strings.TrimSpace(settings.Model) != "" {
@@ -174,6 +238,7 @@ func (s *Server) sessionConfigOptions(ctx context.Context, sess *Session) []Sess
 			ID:           configIDModel,
 			Name:         "Model",
 			Description:  "Model used for future turns in the active provider",
+			Error:        modelError,
 			Category:     "model",
 			Type:         "select",
 			CurrentValue: settings.Model,

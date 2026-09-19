@@ -371,6 +371,53 @@ func (s *Session) ReplayHistory(notifier func(RPCNotification) error) error {
 	s.mu.Unlock()
 
 	for _, msg := range messages {
+		text := msg.TextContent()
+		if msg.Role == model.RoleAssistant {
+			if toolName, output, ok := replayHistoricalTool(text); ok {
+				toolCallID := "history-" + msg.ID
+				if err := notifier(RPCNotification{
+					JSONRPC: "2.0",
+					Method:  "session/update",
+					Params: map[string]any{
+						"sessionId": s.id,
+						"update": map[string]any{
+							"sessionUpdate": "tool_call",
+							"toolCallId":    toolCallID,
+							"title":         "Historical tool " + toolName,
+							"kind":          string(ToolKindForName(toolName)),
+							"status":        string(ToolCallStatusCompleted),
+						},
+					},
+				}); err != nil {
+					return err
+				}
+				if output != "" {
+					if err := notifier(RPCNotification{
+						JSONRPC: "2.0",
+						Method:  "session/update",
+						Params: map[string]any{
+							"sessionId": s.id,
+							"update": map[string]any{
+								"sessionUpdate": "tool_call_update",
+								"toolCallId":    toolCallID,
+								"status":        string(ToolCallStatusCompleted),
+								"content": []map[string]any{{
+									"type": "content",
+									"content": map[string]any{
+										"type": "text",
+										"text": output,
+									},
+								}},
+							},
+						},
+					}); err != nil {
+						return err
+					}
+				}
+				continue
+			}
+		}
+
 		var updateType string
 		switch msg.Role {
 		case model.RoleUser:
@@ -381,7 +428,6 @@ func (s *Session) ReplayHistory(notifier func(RPCNotification) error) error {
 			continue
 		}
 
-		text := msg.TextContent()
 		if text == "" {
 			continue
 		}
@@ -405,6 +451,28 @@ func (s *Session) ReplayHistory(notifier func(RPCNotification) error) error {
 		}
 	}
 	return s.replaySubagents(notifier)
+}
+
+func replayHistoricalTool(text string) (name, output string, ok bool) {
+	const prefix = "Historical tool "
+	if !strings.HasPrefix(text, prefix) {
+		return "", "", false
+	}
+	rest := strings.TrimPrefix(text, prefix)
+	separator := strings.Index(rest, " result")
+	if separator <= 0 {
+		return "", "", false
+	}
+	name = strings.TrimSpace(rest[:separator])
+	if name == "" {
+		return "", "", false
+	}
+	colon := strings.Index(rest[separator:], ":")
+	if colon < 0 {
+		return name, "", true
+	}
+	output = strings.TrimSpace(rest[separator+colon+1:])
+	return name, output, true
 }
 
 func (s *Session) handleSlashCommand(

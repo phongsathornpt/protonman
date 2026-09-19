@@ -140,6 +140,7 @@ type SessionState struct {
 	Workspace     string
 	WorkspaceKey  string
 	WorkspaceName string
+	Mode          string
 	Status        TaskStatus
 	Timeline      []TimelineItem
 	Subagents     []SubagentState
@@ -163,6 +164,7 @@ type EventKind uint8
 const (
 	EventSessionsReplaced EventKind = iota
 	EventSessionSelected
+	EventSessionDeselected
 	EventPromptQueued
 	EventPromptStarted
 	EventPromptCompleted
@@ -178,6 +180,9 @@ const (
 	EventIntegrationsReplaced
 	EventAgentHealthUpdated
 	EventActiveAgentChanged
+	EventSessionModeUpdated
+	EventSessionTimelineReset
+	EventPermissionsCleared
 )
 
 // Event is a typed reducer input. Only fields relevant to Kind are consumed.
@@ -195,6 +200,7 @@ type Event struct {
 	RequestID    string
 	AgentHealth  AgentHealthState
 	AgentID      string
+	Mode         string
 }
 
 // Reduce applies one event and returns a new state without aliasing caller-owned slices.
@@ -211,6 +217,8 @@ func Reduce(current State, event Event) State {
 		if hasSession(next.Sessions, event.SessionID) {
 			next.ActiveSessionID = event.SessionID
 		}
+	case EventSessionDeselected:
+		next.ActiveSessionID = ""
 	case EventPromptQueued:
 		setStatus(&next, event.SessionID, TaskQueued)
 	case EventPromptStarted:
@@ -264,6 +272,17 @@ func Reduce(current State, event Event) State {
 		}
 	case EventActiveAgentChanged:
 		next.ActiveAgentID = event.AgentID
+	case EventSessionModeUpdated:
+		if session := sessionByID(&next, event.SessionID); session != nil {
+			session.Mode = event.Mode
+		}
+	case EventSessionTimelineReset:
+		if session := sessionByID(&next, event.SessionID); session != nil {
+			session.Timeline = nil
+			session.Subagents = nil
+		}
+	case EventPermissionsCleared:
+		next.PermissionInbox = nil
 	}
 
 	return next

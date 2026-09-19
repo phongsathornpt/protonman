@@ -9,12 +9,104 @@ import { Call as $Call, CancellablePromise as $CancellablePromise, Create as $Cr
 // @ts-ignore: Unused imports
 import * as desktop$0 from "../../internal/adapter/in/desktop/models.js";
 
-export function SetStatus(status: string): $CancellablePromise<void> {
-    return $Call.ByID(4081117397, status);
+export function Bootstrap(): $CancellablePromise<desktop$0.Snapshot> {
+    return $Call.ByID(4234800217).then(($result: any) => {
+        return $$createType0($result);
+    });
+}
+
+export function CancelPrompt(sessionID: string): $CancellablePromise<desktop$0.Snapshot> {
+    return $Call.ByID(1428106745, sessionID).then(($result: any) => {
+        return $$createType0($result);
+    });
+}
+
+export function CloseSession(sessionID: string): $CancellablePromise<desktop$0.Snapshot> {
+    return $Call.ByID(2454491117, sessionID).then(($result: any) => {
+        return $$createType0($result);
+    });
+}
+
+export function DeleteSession(sessionID: string): $CancellablePromise<desktop$0.Snapshot> {
+    return $Call.ByID(2796280046, sessionID).then(($result: any) => {
+        return $$createType0($result);
+    });
+}
+
+export function ForgetMemory(sessionID: string, scope: string, memoryID: string): $CancellablePromise<desktop$0.Snapshot> {
+    return $Call.ByID(2645048367, sessionID, scope, memoryID).then(($result: any) => {
+        return $$createType0($result);
+    });
+}
+
+export function NewSession(workspace: string, additionalDirectories: string[], mcpServers: desktop$0.MCPServerView[]): $CancellablePromise<desktop$0.Snapshot> {
+    return $Call.ByID(2520185075, workspace, additionalDirectories, mcpServers).then(($result: any) => {
+        return $$createType0($result);
+    });
+}
+
+export function PatchTodo(sessionID: string, revision: number, operation: desktop$0.TodoOperationView): $CancellablePromise<desktop$0.Snapshot> {
+    return $Call.ByID(1997961121, sessionID, revision, operation).then(($result: any) => {
+        return $$createType0($result);
+    });
+}
+
+export function ResolvePermission(requestID: string, optionID: string): $CancellablePromise<desktop$0.Snapshot> {
+    return $Call.ByID(1546399332, requestID, optionID).then(($result: any) => {
+        return $$createType0($result);
+    });
+}
+
+export function SelectSession(sessionID: string): $CancellablePromise<desktop$0.Snapshot> {
+    return $Call.ByID(587928607, sessionID).then(($result: any) => {
+        return $$createType0($result);
+    });
+}
+
+export function SendPrompt(sessionID: string, text: string): $CancellablePromise<desktop$0.Snapshot> {
+    return $Call.ByID(2073190693, sessionID, text).then(($result: any) => {
+        return $$createType0($result);
+    });
+}
+
+export function SetLowConcurrency(sessionID: string, setting: string): $CancellablePromise<desktop$0.Snapshot> {
+    return $Call.ByID(1681113234, sessionID, setting).then(($result: any) => {
+        return $$createType0($result);
+    });
+}
+
+export function SetMode(sessionID: string, modeID: string): $CancellablePromise<desktop$0.Snapshot> {
+    return $Call.ByID(3677927852, sessionID, modeID).then(($result: any) => {
+        return $$createType0($result);
+    });
+}
+
+export function SetModel(sessionID: string, modelID: string): $CancellablePromise<desktop$0.Snapshot> {
+    return $Call.ByID(3662440768, sessionID, modelID).then(($result: any) => {
+        return $$createType0($result);
+    });
+}
+
+export function SetProvider(sessionID: string, provider: string): $CancellablePromise<desktop$0.Snapshot> {
+    return $Call.ByID(3201037490, sessionID, provider).then(($result: any) => {
+        return $$createType0($result);
+    });
+}
+
+export function SetReasoning(sessionID: string, reasoning: string): $CancellablePromise<desktop$0.Snapshot> {
+    return $Call.ByID(509035089, sessionID, reasoning).then(($result: any) => {
+        return $$createType0($result);
+    });
 }
 
 export function Snapshot(): $CancellablePromise<desktop$0.Snapshot> {
     return $Call.ByID(431882765).then(($result: any) => {
+        return $$createType0($result);
+    });
+}
+
+export function UpdateTodoStatus(sessionID: string, revision: number, itemID: string, status: string): $CancellablePromise<desktop$0.Snapshot> {
+    return $Call.ByID(2868152134, sessionID, revision, itemID, status).then(($result: any) => {
         return $$createType0($result);
     });
 }

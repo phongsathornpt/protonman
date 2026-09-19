@@ -46,6 +46,11 @@ func TestReduceSessionSelectionRequiresKnownSession(t *testing.T) {
 	if state.ActiveSessionID != "known" {
 		t.Fatalf("active session = %q, want known", state.ActiveSessionID)
 	}
+
+	state = Reduce(state, Event{Kind: EventSessionDeselected})
+	if state.ActiveSessionID != "" {
+		t.Fatalf("active session after deselect = %q, want empty", state.ActiveSessionID)
+	}
 }
 
 func TestReduceDoesNotAliasTimeline(t *testing.T) {
@@ -92,6 +97,23 @@ func TestReduceTracksPermissionInbox(t *testing.T) {
 	assertStatus(t, state, "s1", TaskRunning)
 	if len(state.PermissionInbox) != 0 {
 		t.Fatalf("permission inbox not cleared: %#v", state.PermissionInbox)
+	}
+}
+
+func TestReduceResetsSessionTimelineAndPermissions(t *testing.T) {
+	state := State{
+		Sessions:        []SessionState{{ID: "s1", Timeline: []TimelineItem{{Kind: TimelineAssistant, Text: "old"}}, Subagents: []SubagentState{{ID: "a1"}}}},
+		PermissionInbox: []PermissionRequest{{RequestID: "r1"}},
+	}
+
+	state = Reduce(state, Event{Kind: EventSessionTimelineReset, SessionID: "s1"})
+	state = Reduce(state, Event{Kind: EventPermissionsCleared})
+
+	if len(state.Sessions[0].Timeline) != 0 || len(state.Sessions[0].Subagents) != 0 {
+		t.Fatalf("session projection was not reset: %#v", state.Sessions[0])
+	}
+	if len(state.PermissionInbox) != 0 {
+		t.Fatalf("permission inbox was not cleared: %#v", state.PermissionInbox)
 	}
 }
 

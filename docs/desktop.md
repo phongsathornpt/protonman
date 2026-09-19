@@ -68,11 +68,20 @@ build path and matching dependencies.
 
 ## Runtime migration status
 
-The Wails shell and framework-free desktop controller are in place. ACP session
-supervision, reconnect, permissions, agent management, MCP integrations,
-runtime controls, and the complete session UI are being moved behind this
-controller incrementally. Until those slices land, the desktop shell exposes
-only the migration bridge smoke surface.
+The first usable desktop chat slice is in place. The Wails controller starts and
+supervises the local ACP process, initializes and loads sessions, streams user
+and assistant messages, projects tool activity, handles permission requests,
+supports cancellation and permission-mode switching, and emits typed snapshots
+to the React workspace.
+
+The current UI covers the core coding loop plus session history loading,
+provider and model selection from the configured provider catalogs, runtime reasoning and
+low-concurrency controls, permission decisions, context summaries for the
+active goal/TODO/memory state, and live subagent activity. The CLI ACP server
+remains the source of truth; the desktop also exposes close/delete controls for
+the active session, revisioned TODO status updates, and explicit memory forget
+actions. The advanced new-session setup also supports additional absolute
+workspace roots and one optional stdio MCP server.
 
 The CLI ACP server and existing runtime behavior remain unchanged during this
 migration.

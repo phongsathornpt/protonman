@@ -276,6 +276,7 @@ func TestACPSessionLoadAndReplay(t *testing.T) {
 		Messages: []session.Message{
 			{Role: model.RoleUser, Content: "Hello Protonman"},
 			{Role: model.RoleAssistant, Content: "Hello from Protonman Agent"},
+			{Role: model.RoleAssistant, Content: "Historical tool bash result:\nName = Protonman"},
 		},
 		UpdatedAt: time.Now().UTC(),
 	})
@@ -298,6 +299,12 @@ func TestACPSessionLoadAndReplay(t *testing.T) {
 	}
 	if !strings.Contains(out, "agent_message_chunk") || !strings.Contains(out, "Hello from Protonman Agent") {
 		t.Fatalf("missing replayed assistant message: %s", out)
+	}
+	if !strings.Contains(out, `"sessionUpdate":"tool_call"`) || !strings.Contains(out, `"title":"Historical tool bash"`) {
+		t.Fatalf("historical tool was not replayed as tool activity: %s", out)
+	}
+	if !strings.Contains(out, `"sessionUpdate":"tool_call_update"`) || !strings.Contains(out, "Name = Protonman") {
+		t.Fatalf("historical tool output was not replayed as tool activity: %s", out)
 	}
 }
 

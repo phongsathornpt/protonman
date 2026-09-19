@@ -5,18 +5,398 @@
 // @ts-ignore: Unused imports
 import { Create as $Create } from "@wailsio/runtime";
 
-/**
- * Snapshot is the initial Wails frontend contract. It is intentionally small
- * until the existing desktop controller responsibilities are moved behind this
- * boundary.
- */
+export class ContextView {
+    "goal": string;
+    "todo": TodoView;
+    "memory": MemoryView;
+
+    /** Creates a new ContextView instance. */
+    constructor($$source: Partial<ContextView> = {}) {
+        if (!("goal" in $$source)) {
+            this["goal"] = "";
+        }
+        if (!("todo" in $$source)) {
+            this["todo"] = (new TodoView());
+        }
+        if (!("memory" in $$source)) {
+            this["memory"] = (new MemoryView());
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ContextView instance from a string or object.
+     */
+    static createFrom($$source: any = {}): ContextView {
+        const $$createField1_0 = $$createType0;
+        const $$createField2_0 = $$createType1;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("todo" in $$parsedSource) {
+            $$parsedSource["todo"] = $$createField1_0($$parsedSource["todo"]);
+        }
+        if ("memory" in $$parsedSource) {
+            $$parsedSource["memory"] = $$createField2_0($$parsedSource["memory"]);
+        }
+        return new ContextView($$parsedSource as Partial<ContextView>);
+    }
+}
+
+export class MCPServerView {
+    "name": string;
+    "command": string;
+    "args"?: string[];
+    "env"?: string[];
+
+    /** Creates a new MCPServerView instance. */
+    constructor($$source: Partial<MCPServerView> = {}) {
+        if (!("name" in $$source)) {
+            this["name"] = "";
+        }
+        if (!("command" in $$source)) {
+            this["command"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new MCPServerView instance from a string or object.
+     */
+    static createFrom($$source: any = {}): MCPServerView {
+        const $$createField2_0 = $$createType2;
+        const $$createField3_0 = $$createType2;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("args" in $$parsedSource) {
+            $$parsedSource["args"] = $$createField2_0($$parsedSource["args"]);
+        }
+        if ("env" in $$parsedSource) {
+            $$parsedSource["env"] = $$createField3_0($$parsedSource["env"]);
+        }
+        return new MCPServerView($$parsedSource as Partial<MCPServerView>);
+    }
+}
+
+export class MemoryEntryView {
+    "id": string;
+    "scope": string;
+    "kind": string;
+    "key": string;
+    "value": string;
+    "confidence": number;
+    "usageCount": number;
+
+    /** Creates a new MemoryEntryView instance. */
+    constructor($$source: Partial<MemoryEntryView> = {}) {
+        if (!("id" in $$source)) {
+            this["id"] = "";
+        }
+        if (!("scope" in $$source)) {
+            this["scope"] = "";
+        }
+        if (!("kind" in $$source)) {
+            this["kind"] = "";
+        }
+        if (!("key" in $$source)) {
+            this["key"] = "";
+        }
+        if (!("value" in $$source)) {
+            this["value"] = "";
+        }
+        if (!("confidence" in $$source)) {
+            this["confidence"] = 0;
+        }
+        if (!("usageCount" in $$source)) {
+            this["usageCount"] = 0;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new MemoryEntryView instance from a string or object.
+     */
+    static createFrom($$source: any = {}): MemoryEntryView {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new MemoryEntryView($$parsedSource as Partial<MemoryEntryView>);
+    }
+}
+
+export class MemoryView {
+    "workspaceKey": string;
+    "workspace": MemoryEntryView[];
+    "global": MemoryEntryView[];
+
+    /** Creates a new MemoryView instance. */
+    constructor($$source: Partial<MemoryView> = {}) {
+        if (!("workspaceKey" in $$source)) {
+            this["workspaceKey"] = "";
+        }
+        if (!("workspace" in $$source)) {
+            this["workspace"] = [];
+        }
+        if (!("global" in $$source)) {
+            this["global"] = [];
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new MemoryView instance from a string or object.
+     */
+    static createFrom($$source: any = {}): MemoryView {
+        const $$createField1_0 = $$createType4;
+        const $$createField2_0 = $$createType4;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("workspace" in $$parsedSource) {
+            $$parsedSource["workspace"] = $$createField1_0($$parsedSource["workspace"]);
+        }
+        if ("global" in $$parsedSource) {
+            $$parsedSource["global"] = $$createField2_0($$parsedSource["global"]);
+        }
+        return new MemoryView($$parsedSource as Partial<MemoryView>);
+    }
+}
+
+export class ModelOptionView {
+    "value": string;
+    "name": string;
+    "description"?: string;
+
+    /** Creates a new ModelOptionView instance. */
+    constructor($$source: Partial<ModelOptionView> = {}) {
+        if (!("value" in $$source)) {
+            this["value"] = "";
+        }
+        if (!("name" in $$source)) {
+            this["name"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ModelOptionView instance from a string or object.
+     */
+    static createFrom($$source: any = {}): ModelOptionView {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new ModelOptionView($$parsedSource as Partial<ModelOptionView>);
+    }
+}
+
+export class PermissionView {
+    "requestId": string;
+    "sessionId": string;
+    "title": string;
+    "detail": string;
+    "options": PermissionViewOption[];
+
+    /** Creates a new PermissionView instance. */
+    constructor($$source: Partial<PermissionView> = {}) {
+        if (!("requestId" in $$source)) {
+            this["requestId"] = "";
+        }
+        if (!("sessionId" in $$source)) {
+            this["sessionId"] = "";
+        }
+        if (!("title" in $$source)) {
+            this["title"] = "";
+        }
+        if (!("detail" in $$source)) {
+            this["detail"] = "";
+        }
+        if (!("options" in $$source)) {
+            this["options"] = [];
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new PermissionView instance from a string or object.
+     */
+    static createFrom($$source: any = {}): PermissionView {
+        const $$createField4_0 = $$createType6;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("options" in $$parsedSource) {
+            $$parsedSource["options"] = $$createField4_0($$parsedSource["options"]);
+        }
+        return new PermissionView($$parsedSource as Partial<PermissionView>);
+    }
+}
+
+export class PermissionViewOption {
+    "id": string;
+    "name": string;
+    "kind": string;
+
+    /** Creates a new PermissionViewOption instance. */
+    constructor($$source: Partial<PermissionViewOption> = {}) {
+        if (!("id" in $$source)) {
+            this["id"] = "";
+        }
+        if (!("name" in $$source)) {
+            this["name"] = "";
+        }
+        if (!("kind" in $$source)) {
+            this["kind"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new PermissionViewOption instance from a string or object.
+     */
+    static createFrom($$source: any = {}): PermissionViewOption {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new PermissionViewOption($$parsedSource as Partial<PermissionViewOption>);
+    }
+}
+
+export class RuntimeView {
+    "provider": string;
+    "model": string;
+    "reasoning": string;
+    "lowConcurrency": string;
+
+    /** Creates a new RuntimeView instance. */
+    constructor($$source: Partial<RuntimeView> = {}) {
+        if (!("provider" in $$source)) {
+            this["provider"] = "";
+        }
+        if (!("model" in $$source)) {
+            this["model"] = "";
+        }
+        if (!("reasoning" in $$source)) {
+            this["reasoning"] = "";
+        }
+        if (!("lowConcurrency" in $$source)) {
+            this["lowConcurrency"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new RuntimeView instance from a string or object.
+     */
+    static createFrom($$source: any = {}): RuntimeView {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new RuntimeView($$parsedSource as Partial<RuntimeView>);
+    }
+}
+
+export class SessionSnapshot {
+    "id": string;
+    "title": string;
+    "workspace": string;
+    "mode": string;
+    "status": string;
+    "timeline": TimelineView[];
+    "subagents": SubagentView[];
+    "context": ContextView;
+    "runtime": RuntimeView;
+    "providerOptions": ModelOptionView[];
+    "modelOptions": ModelOptionView[];
+    "modelOptionsError"?: string;
+
+    /** Creates a new SessionSnapshot instance. */
+    constructor($$source: Partial<SessionSnapshot> = {}) {
+        if (!("id" in $$source)) {
+            this["id"] = "";
+        }
+        if (!("title" in $$source)) {
+            this["title"] = "";
+        }
+        if (!("workspace" in $$source)) {
+            this["workspace"] = "";
+        }
+        if (!("mode" in $$source)) {
+            this["mode"] = "";
+        }
+        if (!("status" in $$source)) {
+            this["status"] = "";
+        }
+        if (!("timeline" in $$source)) {
+            this["timeline"] = [];
+        }
+        if (!("subagents" in $$source)) {
+            this["subagents"] = [];
+        }
+        if (!("context" in $$source)) {
+            this["context"] = (new ContextView());
+        }
+        if (!("runtime" in $$source)) {
+            this["runtime"] = (new RuntimeView());
+        }
+        if (!("providerOptions" in $$source)) {
+            this["providerOptions"] = [];
+        }
+        if (!("modelOptions" in $$source)) {
+            this["modelOptions"] = [];
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new SessionSnapshot instance from a string or object.
+     */
+    static createFrom($$source: any = {}): SessionSnapshot {
+        const $$createField5_0 = $$createType8;
+        const $$createField6_0 = $$createType10;
+        const $$createField7_0 = $$createType11;
+        const $$createField8_0 = $$createType12;
+        const $$createField9_0 = $$createType14;
+        const $$createField10_0 = $$createType14;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("timeline" in $$parsedSource) {
+            $$parsedSource["timeline"] = $$createField5_0($$parsedSource["timeline"]);
+        }
+        if ("subagents" in $$parsedSource) {
+            $$parsedSource["subagents"] = $$createField6_0($$parsedSource["subagents"]);
+        }
+        if ("context" in $$parsedSource) {
+            $$parsedSource["context"] = $$createField7_0($$parsedSource["context"]);
+        }
+        if ("runtime" in $$parsedSource) {
+            $$parsedSource["runtime"] = $$createField8_0($$parsedSource["runtime"]);
+        }
+        if ("providerOptions" in $$parsedSource) {
+            $$parsedSource["providerOptions"] = $$createField9_0($$parsedSource["providerOptions"]);
+        }
+        if ("modelOptions" in $$parsedSource) {
+            $$parsedSource["modelOptions"] = $$createField10_0($$parsedSource["modelOptions"]);
+        }
+        return new SessionSnapshot($$parsedSource as Partial<SessionSnapshot>);
+    }
+}
+
 export class Snapshot {
     "status": string;
+    "connection": string;
+    "activeSessionId": string;
+    "sessions": SessionSnapshot[];
+    "permissionInbox": PermissionView[];
 
     /** Creates a new Snapshot instance. */
     constructor($$source: Partial<Snapshot> = {}) {
         if (!("status" in $$source)) {
             this["status"] = "";
+        }
+        if (!("connection" in $$source)) {
+            this["connection"] = "";
+        }
+        if (!("activeSessionId" in $$source)) {
+            this["activeSessionId"] = "";
+        }
+        if (!("sessions" in $$source)) {
+            this["sessions"] = [];
+        }
+        if (!("permissionInbox" in $$source)) {
+            this["permissionInbox"] = [];
         }
 
         Object.assign(this, $$source);
@@ -26,7 +406,197 @@ export class Snapshot {
      * Creates a new Snapshot instance from a string or object.
      */
     static createFrom($$source: any = {}): Snapshot {
+        const $$createField3_0 = $$createType16;
+        const $$createField4_0 = $$createType18;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("sessions" in $$parsedSource) {
+            $$parsedSource["sessions"] = $$createField3_0($$parsedSource["sessions"]);
+        }
+        if ("permissionInbox" in $$parsedSource) {
+            $$parsedSource["permissionInbox"] = $$createField4_0($$parsedSource["permissionInbox"]);
+        }
         return new Snapshot($$parsedSource as Partial<Snapshot>);
     }
 }
+
+export class SubagentView {
+    "id": string;
+    "profile": string;
+    "task": string;
+    "summary": string;
+    "status": string;
+
+    /** Creates a new SubagentView instance. */
+    constructor($$source: Partial<SubagentView> = {}) {
+        if (!("id" in $$source)) {
+            this["id"] = "";
+        }
+        if (!("profile" in $$source)) {
+            this["profile"] = "";
+        }
+        if (!("task" in $$source)) {
+            this["task"] = "";
+        }
+        if (!("summary" in $$source)) {
+            this["summary"] = "";
+        }
+        if (!("status" in $$source)) {
+            this["status"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new SubagentView instance from a string or object.
+     */
+    static createFrom($$source: any = {}): SubagentView {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new SubagentView($$parsedSource as Partial<SubagentView>);
+    }
+}
+
+export class TimelineView {
+    "kind": string;
+    "id": string;
+    "title": string;
+    "text": string;
+    "status": string;
+
+    /** Creates a new TimelineView instance. */
+    constructor($$source: Partial<TimelineView> = {}) {
+        if (!("kind" in $$source)) {
+            this["kind"] = "";
+        }
+        if (!("id" in $$source)) {
+            this["id"] = "";
+        }
+        if (!("title" in $$source)) {
+            this["title"] = "";
+        }
+        if (!("text" in $$source)) {
+            this["text"] = "";
+        }
+        if (!("status" in $$source)) {
+            this["status"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new TimelineView instance from a string or object.
+     */
+    static createFrom($$source: any = {}): TimelineView {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new TimelineView($$parsedSource as Partial<TimelineView>);
+    }
+}
+
+export class TodoItemView {
+    "id": string;
+    "text": string;
+    "status": string;
+
+    /** Creates a new TodoItemView instance. */
+    constructor($$source: Partial<TodoItemView> = {}) {
+        if (!("id" in $$source)) {
+            this["id"] = "";
+        }
+        if (!("text" in $$source)) {
+            this["text"] = "";
+        }
+        if (!("status" in $$source)) {
+            this["status"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new TodoItemView instance from a string or object.
+     */
+    static createFrom($$source: any = {}): TodoItemView {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new TodoItemView($$parsedSource as Partial<TodoItemView>);
+    }
+}
+
+export class TodoOperationView {
+    "op": string;
+    "id": string;
+    "text"?: string;
+    "status"?: string;
+
+    /** Creates a new TodoOperationView instance. */
+    constructor($$source: Partial<TodoOperationView> = {}) {
+        if (!("op" in $$source)) {
+            this["op"] = "";
+        }
+        if (!("id" in $$source)) {
+            this["id"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new TodoOperationView instance from a string or object.
+     */
+    static createFrom($$source: any = {}): TodoOperationView {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new TodoOperationView($$parsedSource as Partial<TodoOperationView>);
+    }
+}
+
+export class TodoView {
+    "revision": number;
+    "items": TodoItemView[];
+
+    /** Creates a new TodoView instance. */
+    constructor($$source: Partial<TodoView> = {}) {
+        if (!("revision" in $$source)) {
+            this["revision"] = 0;
+        }
+        if (!("items" in $$source)) {
+            this["items"] = [];
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new TodoView instance from a string or object.
+     */
+    static createFrom($$source: any = {}): TodoView {
+        const $$createField1_0 = $$createType20;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("items" in $$parsedSource) {
+            $$parsedSource["items"] = $$createField1_0($$parsedSource["items"]);
+        }
+        return new TodoView($$parsedSource as Partial<TodoView>);
+    }
+}
+
+// Private type creation functions
+const $$createType0 = TodoView.createFrom;
+const $$createType1 = MemoryView.createFrom;
+const $$createType2 = $Create.Array($Create.Any);
+const $$createType3 = MemoryEntryView.createFrom;
+const $$createType4 = $Create.Array($$createType3);
+const $$createType5 = PermissionViewOption.createFrom;
+const $$createType6 = $Create.Array($$createType5);
+const $$createType7 = TimelineView.createFrom;
+const $$createType8 = $Create.Array($$createType7);
+const $$createType9 = SubagentView.createFrom;
+const $$createType10 = $Create.Array($$createType9);
+const $$createType11 = ContextView.createFrom;
+const $$createType12 = RuntimeView.createFrom;
+const $$createType13 = ModelOptionView.createFrom;
+const $$createType14 = $Create.Array($$createType13);
+const $$createType15 = SessionSnapshot.createFrom;
+const $$createType16 = $Create.Array($$createType15);
+const $$createType17 = PermissionView.createFrom;
+const $$createType18 = $Create.Array($$createType17);
+const $$createType19 = TodoItemView.createFrom;
+const $$createType20 = $Create.Array($$createType19);
