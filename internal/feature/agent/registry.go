@@ -24,8 +24,11 @@ func (c *Coordinator) Wait(ctx context.Context, id string, timeout time.Duration
 	done := entry.done
 	state := entry.status.State
 	c.agentsMu.RUnlock()
-	if state.Terminal() {
-		return c.waitSnapshot(id)
+	if done == nil {
+		if state.Terminal() {
+			return c.waitSnapshot(id)
+		}
+		return WaitResult{}, fmt.Errorf("%w: %q", ErrNotFound, id)
 	}
 
 	if timeout <= 0 {
