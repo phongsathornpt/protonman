@@ -8,6 +8,7 @@ require (
 	charm.land/lipgloss/v2 v2.0.6
 	fyne.io/fyne/v2 v2.8.1
 	github.com/charmbracelet/x/ansi v0.11.8
+	github.com/pmezard/go-difflib v1.0.0
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3
 	golang.design/x/clipboard v0.8.0
 	golang.org/x/image v0.46.0
@@ -49,7 +50,6 @@ require (
 	github.com/muesli/cancelreader v0.2.2 // indirect
 	github.com/nfnt/resize v0.0.0-20180221191011-83c6a9932646 // indirect
 	github.com/nicksnyder/go-i18n/v2 v2.5.1 // indirect
-	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/rymdport/portal v0.4.2 // indirect
 	github.com/sahilm/fuzzy v0.1.3 // indirect

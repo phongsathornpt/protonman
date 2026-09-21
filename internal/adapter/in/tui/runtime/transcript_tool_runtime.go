@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -149,7 +150,37 @@ func (m *bubbleModel) completedToolCell(callID string, name string, body string,
 			}
 			return &tuihistory.ExecCell{CallID: typed.CallID, Name: typed.Name, Command: typed.Command, StartedAt: typed.StartedAt, Duration: duration, Body: body, Stdout: result.Stdout, Stderr: result.Stderr, ExitCode: result.ExitCode, Truncated: result.Truncated, StdoutTruncated: result.StdoutTruncated, StderrTruncated: result.StderrTruncated, Denied: result.Denied, FailureCode: failureCode, Icons: typed.Icons}
 		case *tuihistory.PatchCell:
-			return &tuihistory.PatchCell{CallID: typed.CallID, Name: typed.Name, Summary: typed.Summary, Paths: append([]string{}, typed.Paths...), Body: body, Truncated: result.Truncated, Denied: result.Denied, FailureCode: failureCode, Icons: typed.Icons, Attempts: typed.Attempts, Retrying: false, CheckpointID: result.CheckpointID}
+			diffText := ""
+			var adds, dels int
+			if len(result.StructuredOutput) > 0 {
+				var payload struct {
+					Diff      string `json:"diff"`
+					Additions int    `json:"additions"`
+					Deletions int    `json:"deletions"`
+				}
+				if json.Unmarshal(result.StructuredOutput, &payload) == nil {
+					diffText = payload.Diff
+					adds = payload.Additions
+					dels = payload.Deletions
+				}
+			}
+			return &tuihistory.PatchCell{
+				CallID:       typed.CallID,
+				Name:         typed.Name,
+				Summary:      typed.Summary,
+				Paths:        append([]string{}, typed.Paths...),
+				Body:         body,
+				Diff:         diffText,
+				Additions:    adds,
+				Deletions:    dels,
+				Truncated:    result.Truncated,
+				Denied:       result.Denied,
+				FailureCode:  failureCode,
+				Icons:        typed.Icons,
+				Attempts:     typed.Attempts,
+				Retrying:     false,
+				CheckpointID: result.CheckpointID,
+			}
 		case *tuihistory.AgentToolCell:
 			return &tuihistory.AgentToolCell{CallID: typed.CallID, Name: typed.Name, Target: typed.Target, Summary: toolview.SummarizeOutput(typed.Name, tool.KindAgent, typed.Target, body, result.ExitCode, result.Truncated), Icons: typed.Icons}
 		case *tuihistory.ToolCell:

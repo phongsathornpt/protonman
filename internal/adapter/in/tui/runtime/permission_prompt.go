@@ -3,8 +3,12 @@ package runtime
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/paneutil"
+	"io"
+	"os"
+	"path/filepath"
 	"strings"
+
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/paneutil"
 
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
@@ -12,6 +16,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/permissionpolicy"
 	panecommon "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane/common"
 	permissionpane "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane/permission"
+	"github.com/phongsathornpt/protonman/internal/base/diffutil"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 )
@@ -35,9 +40,15 @@ func shortcutHintFor(options []permissionOptionItem) string {
 }
 
 type permissionPaneView struct {
-	pending permissionRequest
-	parked  bool
-	index   int
+	pending      permissionRequest
+	parked       bool
+	index        int
+	initialized  bool
+	title        string
+	tone         panecommon.Tone
+	detailExtras []string
+	diffPreview  []string
+	diffOmitted  int
 }
 
 func (*permissionPaneView) ID() string                             { return permissionViewID }
@@ -131,31 +142,129 @@ func (v *permissionPaneView) HandlePaneKey(ctx paneRenderContext, message tea.Ke
 	}
 }
 
-func (v *permissionPaneView) card(ctx paneRenderContext) string {
-	request := v.pending.Request
-	options := permissionpolicy.Options(v.pending.Request, ctx.projectTrusted, ctx.hasWorkDir)
-	labels := make([]string, 0, len(options))
-	for _, option := range options {
-		labels = append(labels, option.Label)
+func (v *permissionPaneView) ensureInitialized(workDir string) {
+	if v.initialized {
+		return
 	}
-	shortcutHint := shortcutHintFor(options)
-	title := "Permission required"
-	tone := panecommon.ToneWarning
-	detailExtras := make([]string, 0, 3)
+	v.initialized = true
+	request := v.pending.Request
+	v.title = "Permission required"
+	v.tone = panecommon.ToneWarning
+	v.detailExtras = make([]string, 0, 3)
+
 	switch request.ToolKind {
 	case permission.ToolRead, permission.ToolGrep, permission.ToolTask, permission.ToolAgent:
 		switch request.ToolKind {
 		case permission.ToolTask:
-			title = "Task plan change"
+			v.title = "Task plan change"
 		case permission.ToolAgent:
-			title = "Agent orchestration"
+			v.title = "Agent orchestration"
 		default:
-			title = "Permission request — read only"
+			v.title = "Permission request — read only"
 		}
-		tone = panecommon.ToneUser
+		v.tone = panecommon.ToneUser
 	case permission.ToolEdit:
-		title = "Permission required — modifies workspace"
-		tone = panecommon.ToneError
+		v.title = "Permission required — modifies workspace"
+		v.tone = panecommon.ToneError
+		var editInput struct {
+			Action    string `json:"action"`
+			FilePath  string `json:"filePath"`
+			Path      string `json:"path"`
+			OldString string `json:"oldString"`
+			NewString string `json:"newString"`
+			Patch     string `json:"patch"`
+			Content   string `json:"content"`
+		}
+		_ = json.Unmarshal(request.Arguments, &editInput)
+		targetPath := editInput.FilePath
+		if targetPath == "" {
+			targetPath = editInput.Path
+		}
+		action := strings.ToLower(strings.TrimSpace(editInput.Action))
+		if action == "" {
+			action = "edit"
+		}
+		switch action {
+		case "replace":
+			if editInput.OldString != "" || editInput.NewString != "" {
+				diff := diffutil.UnifiedDiff(editInput.OldString, editInput.NewString, targetPath, 1)
+				if diff != "" {
+					adds, dels := diffutil.DiffStats(diff)
+					badge := diffutil.StatBadge(adds, dels)
+					if badge != "" {
+						v.detailExtras = append(v.detailExtras, fmt.Sprintf("Action: replace · %s", badge))
+					} else {
+						v.detailExtras = append(v.detailExtras, "Action: replace")
+					}
+					v.diffPreview, v.diffOmitted = diffutil.ExtractPreview(diff, 6)
+				} else {
+					v.detailExtras = append(v.detailExtras, "Action: replace")
+				}
+			} else {
+				v.detailExtras = append(v.detailExtras, "Action: replace")
+			}
+		case "patch":
+			if editInput.Patch != "" {
+				adds, dels := diffutil.DiffStats(editInput.Patch)
+				badge := diffutil.StatBadge(adds, dels)
+				targets := extractPatchTargets(editInput.Patch)
+				if len(targets) > 0 {
+					targetStr := strings.Join(targets, ", ")
+					if len(targets) > 3 {
+						targetStr = fmt.Sprintf("%d files (%s, …)", len(targets), strings.Join(targets[:3], ", "))
+					}
+					if badge != "" {
+						v.detailExtras = append(v.detailExtras, fmt.Sprintf("Action: patch · %s · targets: %s", badge, targetStr))
+					} else {
+						v.detailExtras = append(v.detailExtras, fmt.Sprintf("Action: patch · targets: %s", targetStr))
+					}
+				} else if badge != "" {
+					v.detailExtras = append(v.detailExtras, fmt.Sprintf("Action: patch · %s", badge))
+				} else {
+					v.detailExtras = append(v.detailExtras, "Action: patch")
+				}
+				v.diffPreview, v.diffOmitted = diffutil.ExtractPreview(editInput.Patch, 6)
+			} else {
+				v.detailExtras = append(v.detailExtras, "Action: patch")
+			}
+		case "write":
+			if editInput.Content != "" || targetPath != "" {
+				existingBytes, exists := readExistingFileForDiff(workDir, targetPath)
+				var diff string
+				if exists {
+					diff = diffutil.UnifiedDiff(string(existingBytes), editInput.Content, targetPath, 1)
+				} else {
+					diff = diffutil.NewFileDiff(targetPath, editInput.Content, 1)
+				}
+				if diff != "" {
+					adds, dels := diffutil.DiffStats(diff)
+					badge := diffutil.StatBadge(adds, dels)
+					if badge != "" {
+						v.detailExtras = append(v.detailExtras, fmt.Sprintf("Action: write · %s (%d bytes)", badge, len(editInput.Content)))
+					} else if editInput.Content == "" {
+						v.detailExtras = append(v.detailExtras, "Action: write (empty file)")
+					} else {
+						lineCount := strings.Count(editInput.Content, "\n") + 1
+						lineWord := "lines"
+						if lineCount == 1 {
+							lineWord = "line"
+						}
+						v.detailExtras = append(v.detailExtras, fmt.Sprintf("Action: write · %d %s (%d bytes)", lineCount, lineWord, len(editInput.Content)))
+					}
+					v.diffPreview, v.diffOmitted = diffutil.ExtractPreview(diff, 6)
+				} else {
+					if exists {
+						v.detailExtras = append(v.detailExtras, "Action: write (no changes)")
+					} else {
+						v.detailExtras = append(v.detailExtras, "Action: write (empty file)")
+					}
+				}
+			} else {
+				v.detailExtras = append(v.detailExtras, "Action: write (empty file)")
+			}
+		case "restore":
+			v.detailExtras = append(v.detailExtras, "Action: restore checkpoint")
+		}
 	case permission.ToolBash:
 		var input struct {
 			Command string `json:"command"`
@@ -165,54 +274,68 @@ func (v *permissionPaneView) card(ctx paneRenderContext) string {
 		analysis := tool.AnalyzeCommand(input.Command)
 		switch analysis.Scope {
 		case tool.CommandScopePublish:
-			title, tone = "Permission required — publishes package", panecommon.ToneError
+			v.title, v.tone = "Permission required — publishes package", panecommon.ToneError
 		case tool.CommandScopeDeployment:
 			if analysis.Risk == tool.CommandRiskRemoteDestructive {
-				title = "Permission required — destructive deployment change"
+				v.title = "Permission required — destructive deployment change"
 			} else {
-				title = "Permission required — changes deployment"
+				v.title = "Permission required — changes deployment"
 			}
-			tone = panecommon.ToneError
+			v.tone = panecommon.ToneError
 		case tool.CommandScopeRemote:
 			if analysis.Risk == tool.CommandRiskRemoteDestructive {
-				title = "Permission required — destructively modifies remote"
+				v.title = "Permission required — destructively modifies remote"
 			} else {
-				title = "Permission required — modifies remote"
+				v.title = "Permission required — modifies remote"
 			}
-			tone = panecommon.ToneError
+			v.tone = panecommon.ToneError
 		default:
 			switch analysis.Effect {
 			case tool.CommandEffectReadOnly:
-				title, tone = "Permission request — shell read only", panecommon.ToneUser
+				v.title, v.tone = "Permission request — shell read only", panecommon.ToneUser
 			case tool.CommandEffectMutating:
-				title, tone = "Permission required — shell modifies state", panecommon.ToneError
+				v.title, v.tone = "Permission required — shell modifies state", panecommon.ToneError
 			default:
-				title = "Permission required — shell effects unknown"
+				v.title = "Permission required — shell effects unknown"
 			}
 		}
 		cwd := strings.TrimSpace(input.Cwd)
 		if cwd == "" {
 			cwd = "."
 		}
-		detailExtras = append(detailExtras, "Cwd: "+cwd)
+		v.detailExtras = append(v.detailExtras, "Cwd: "+cwd)
 		if analysis.Scope != tool.CommandScopeUnknown {
-			detailExtras = append(detailExtras, "Scope: "+string(analysis.Scope))
+			v.detailExtras = append(v.detailExtras, "Scope: "+string(analysis.Scope))
 		}
 		if analysis.Reason != "" {
-			detailExtras = append(detailExtras, fmt.Sprintf("Effect: %s · %s", analysis.Effect, analysis.Reason))
+			v.detailExtras = append(v.detailExtras, fmt.Sprintf("Effect: %s · %s", analysis.Effect, analysis.Reason))
 		}
 	}
+}
+
+func (v *permissionPaneView) card(ctx paneRenderContext) string {
+	v.ensureInitialized(ctx.workDir)
+	request := v.pending.Request
+	options := permissionpolicy.Options(v.pending.Request, ctx.projectTrusted, ctx.hasWorkDir)
+	labels := make([]string, 0, len(options))
+	for _, option := range options {
+		labels = append(labels, option.Label)
+	}
+	shortcutHint := shortcutHintFor(options)
+
 	result := permissionpane.PermissionView(permissionpane.PermissionSnapshot{
 		Width:        ctx.width,
 		Height:       ctx.height,
 		Parked:       v.parked,
 		Index:        v.index,
-		Title:        title,
-		Tone:         tone,
+		Title:        v.title,
+		Tone:         v.tone,
 		ToolName:     tool.DisplayName(request.ToolName),
 		ToolKind:     string(request.ToolKind),
 		Detail:       request.Detail,
-		DetailExtras: detailExtras,
+		DetailExtras: v.detailExtras,
+		DiffPreview:  v.diffPreview,
+		DiffOmitted:  v.diffOmitted,
 		Options:      labels,
 		ShortcutHint: shortcutHint,
 	})
@@ -320,4 +443,48 @@ func (m *bubbleModel) resolvePermission(option permissionOption) tea.Cmd {
 	}
 	m.syncSlashView()
 	return saveCmd
+}
+
+func extractPatchTargets(patch string) []string {
+	lines := strings.Split(patch, "\n")
+	targets := make([]string, 0, 2)
+	for _, l := range lines {
+		trimmed := strings.TrimSpace(l)
+		for _, prefix := range []string{"*** Update File: ", "*** Add File: ", "*** Delete File: "} {
+			if strings.HasPrefix(trimmed, prefix) {
+				path := strings.TrimSpace(strings.TrimPrefix(trimmed, prefix))
+				if path != "" {
+					targets = append(targets, path)
+				}
+			}
+		}
+	}
+	return targets
+}
+
+func readExistingFileForDiff(workDir, targetPath string) ([]byte, bool) {
+	if targetPath == "" {
+		return nil, false
+	}
+	fullPath := targetPath
+	if workDir != "" && !filepath.IsAbs(fullPath) {
+		fullPath = filepath.Join(workDir, fullPath)
+	}
+	fi, err := os.Lstat(fullPath)
+	if err != nil || !fi.Mode().IsRegular() {
+		return nil, false
+	}
+	if fi.Size() > diffutil.MaxDiffInputBytes {
+		return nil, false
+	}
+	f, err := os.Open(fullPath)
+	if err != nil {
+		return nil, false
+	}
+	defer f.Close()
+	data, err := io.ReadAll(io.LimitReader(f, diffutil.MaxDiffInputBytes+1))
+	if err != nil || int64(len(data)) > diffutil.MaxDiffInputBytes {
+		return nil, false
+	}
+	return data, true
 }

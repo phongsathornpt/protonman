@@ -59,6 +59,49 @@ func TestEditFacadeDispatchesActions(t *testing.T) {
 	}
 }
 
+func TestEditProducesDiffStructuredOutput(t *testing.T) {
+	ws := newTestWorkspace(t, nil)
+	store := &recordingCheckpointStore{id: "cp-edit"}
+	handler := NewEdit(ws, store)
+
+	// 1. Write file produces diff with additions
+	res, err := handler.Execute(context.Background(), newJSONCall(t, "edit-write", "edit", map[string]any{
+		"action": "write", "filePath": "test.go", "content": "package main\n\nfunc Run() {}\n",
+	}))
+	if err != nil {
+		t.Fatalf("write error: %v", err)
+	}
+	if len(res.StructuredOutput) == 0 {
+		t.Fatalf("expected StructuredOutput from write, got empty")
+	}
+	if !strings.Contains(string(res.StructuredOutput), `"diff":`) || !strings.Contains(string(res.StructuredOutput), `+func Run() {}`) {
+		t.Fatalf("expected diff in StructuredOutput: %s", res.StructuredOutput)
+	}
+	if !strings.Contains(string(res.StructuredOutput), `diff --git a/test.go b/test.go`) {
+		t.Fatalf("expected git diff header in StructuredOutput: %s", res.StructuredOutput)
+	}
+	if !strings.Contains(string(res.StructuredOutput), `new file mode 100644`) {
+		t.Fatalf("expected new file mode in StructuredOutput: %s", res.StructuredOutput)
+	}
+
+	// 2. Replace produces diff with both additions and deletions
+	res, err = handler.Execute(context.Background(), newJSONCall(t, "edit-replace", "edit", map[string]any{
+		"action": "replace", "filePath": "test.go", "oldString": "func Run() {}", "newString": "func Run() error {\n\treturn nil\n}",
+	}))
+	if err != nil {
+		t.Fatalf("replace error: %v", err)
+	}
+	if !strings.Contains(string(res.StructuredOutput), `-func Run() {}`) || !strings.Contains(string(res.StructuredOutput), `+func Run() error {`) {
+		t.Fatalf("expected replacement diff in StructuredOutput: %s", res.StructuredOutput)
+	}
+	if !strings.Contains(string(res.StructuredOutput), `"additions":3`) || !strings.Contains(string(res.StructuredOutput), `"deletions":1`) {
+		t.Fatalf("expected additions:3 and deletions:1 in StructuredOutput: %s", res.StructuredOutput)
+	}
+	if !strings.Contains(string(res.StructuredOutput), `diff --git a/test.go b/test.go`) {
+		t.Fatalf("expected git diff header in StructuredOutput: %s", res.StructuredOutput)
+	}
+}
+
 func TestEditFacadeSemanticsFollowAction(t *testing.T) {
 	handler := NewEdit(newTestWorkspace(t, nil), &recordingCheckpointStore{id: "cp"})
 	definition := handler.Definition()

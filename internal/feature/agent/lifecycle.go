@@ -409,7 +409,7 @@ func (c *Coordinator) Run(ctx context.Context, req Request) (Result, error) {
 	c.agentsMu.RLock()
 	terminal := e.status.State.Terminal()
 	c.agentsMu.RUnlock()
-	if terminal {
+	if done == nil && terminal {
 		return c.blockingResult(h.ID, h.Profile)
 	}
 	t := req.Timeout

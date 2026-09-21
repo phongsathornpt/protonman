@@ -7,6 +7,7 @@ import (
 	panecommon "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane/common"
 	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/style"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/textview"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/toolview"
 )
 
 type PermissionSnapshot struct {
@@ -20,6 +21,8 @@ type PermissionSnapshot struct {
 	ToolKind     string
 	Detail       string
 	DetailExtras []string
+	DiffPreview  []string
+	DiffOmitted  int
 	Options      []string
 	ShortcutHint string
 }
@@ -79,6 +82,29 @@ func PermissionView(snapshot PermissionSnapshot) PermissionRender {
 		detailLines = append(detailLines[:maxDetailLines], fmt.Sprintf("… (%d more lines truncated)", omitted))
 	}
 	rows = append(rows, tuistyle.MutedStyle.Render(strings.Join(detailLines, "\n")))
+	if mode != panecommon.LayoutTiny && len(snapshot.DiffPreview) > 0 {
+		maxDiffLines := 5
+		if mode == panecommon.LayoutCompact {
+			maxDiffLines = 2
+		}
+		visible := snapshot.DiffPreview
+		omitted := snapshot.DiffOmitted
+		if len(visible) > maxDiffLines {
+			omitted += len(visible) - maxDiffLines
+			visible = visible[:maxDiffLines]
+		}
+		for _, line := range visible {
+			styled, isDiff := toolview.StyleDiffLine(line)
+			if !isDiff {
+				styled = tuistyle.MutedStyle.Render(line)
+			}
+			clamped := textview.TruncateEllipsis(styled, max(1, maxWidth-4))
+			rows = append(rows, "  "+clamped)
+		}
+		if omitted > 0 {
+			rows = append(rows, tuistyle.ToolFoldStyle.Render(fmt.Sprintf("  … (%d more diff lines truncated)", omitted)))
+		}
+	}
 	for i, option := range snapshot.Options {
 		marker := "  "
 		if i == index {

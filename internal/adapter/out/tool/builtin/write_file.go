@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/phongsathornpt/protonman/internal/base/diffutil"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/core/workspace"
 	"github.com/phongsathornpt/protonman/internal/platform/checkpoint"
@@ -144,11 +145,26 @@ func (h writeFileHandler) Execute(ctx context.Context, call tool.Call) (tool.Res
 	}
 	h.workspace.MarkMutationOwned(ctx, resolvedPath)
 	newDigest := sha256.Sum256([]byte(input.Content))
+	diff := ""
+	if exists {
+		diff = diffutil.UnifiedDiff(string(existing), input.Content, displayPath, 3)
+	} else {
+		diff = diffutil.NewFileDiff(displayPath, input.Content, 3)
+	}
+	adds, dels := diffutil.DiffStats(diff)
+	structured, _ := json.Marshal(map[string]any{
+		"path":      displayPath,
+		"action":    "write",
+		"additions": adds,
+		"deletions": dels,
+		"diff":      diff,
+	})
 	return tool.Result{
 		CallID:           call.ID,
 		ToolName:         call.Name,
 		Output:           fmt.Sprintf("Wrote file successfully to %s.", displayPath),
 		SHA256:           fmt.Sprintf("%x", newDigest[:]),
+		StructuredOutput: structured,
 		CheckpointID:     checkpointID,
 		MutationCoverage: tool.MutationCoverageFull,
 		AffectedPaths:    []string{displayPath},

@@ -169,3 +169,66 @@ func TestPatchCellRetryPresentation(t *testing.T) {
 		t.Errorf("denied RawLines expected '[denied]', got: %#v", deniedRaw)
 	}
 }
+
+func TestPatchCellVisualDiffPresentation(t *testing.T) {
+	diffContent := strings.Join([]string{
+		"diff --git a/service.go b/service.go",
+		"index 1234567..89abcdef 100644",
+		"--- a/service.go",
+		"+++ b/service.go",
+		"@@ -10,3 +10,5 @@ func Init() error {",
+		"   config := loadConfig()",
+		"-  return start(config)",
+		"+  if err := validate(config); err != nil {",
+		"+    return err",
+		"+  }",
+		"+  return start(config)",
+		" }",
+		" // more lines",
+		" // extra lines to test folding",
+	}, "\n")
+
+	cell := &PatchCell{
+		CallID:    "call-diff",
+		Name:      "edit",
+		Paths:     []string{"service.go"},
+		Additions: 4,
+		Deletions: 1,
+		Diff:      diffContent,
+		Icons:     tuistyle.UnicodeIcons,
+	}
+
+	rendered := cell.RenderWidth(80)
+	joined := ansi.Strip(strings.Join(rendered, "\n"))
+
+	// 1. Header has stat badge +4 -1
+	if !strings.Contains(joined, "+4 -1") {
+		t.Fatalf("expected '+4 -1' badge in header, got:\n%s", joined)
+	}
+
+	// 2. Diff hunk header and added/deleted lines are rendered
+	if !strings.Contains(joined, "@@ -10,3 +10,5 @@") {
+		t.Fatalf("expected hunk header in render, got:\n%s", joined)
+	}
+	if !strings.Contains(joined, "-  return start(config)") {
+		t.Fatalf("expected deletion line in render, got:\n%s", joined)
+	}
+	if !strings.Contains(joined, "+  if err := validate(config)") {
+		t.Fatalf("expected addition line in render, got:\n%s", joined)
+	}
+
+	// 3. Fold indicator appears when diff exceeds preview limit (5 lines)
+	if !strings.Contains(joined, "more lines · ctrl+t for full diff") {
+		t.Fatalf("expected fold hint in render, got:\n%s", joined)
+	}
+
+	// 4. RawLines contains full diff including git headers
+	rawLines := cell.RawLines()
+	rawJoined := strings.Join(rawLines, "\n")
+	if !strings.Contains(rawJoined, "diff --git a/service.go b/service.go") {
+		t.Fatalf("expected git diff header in raw lines, got:\n%s", rawJoined)
+	}
+	if !strings.Contains(rawJoined, "+  return start(config)") || !strings.Contains(rawJoined, "// extra lines to test folding") {
+		t.Fatalf("expected raw lines to include full diff, got:\n%s", rawJoined)
+	}
+}

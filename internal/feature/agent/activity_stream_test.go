@@ -22,17 +22,21 @@ func TestWaitActivityForTurnReturnsOrderedCompletionBatch(t *testing.T) {
 		}),
 	)
 	defer coord.Close()
+	handles := make([]Handle, 3)
 	for i := 0; i < 3; i++ {
-		if _, err := coord.Spawn(context.Background(), Request{
+		h, err := coord.Spawn(context.Background(), Request{
 			SessionID: "session-a", ParentID: "turn-1", Profile: ProfileAgility,
 			Task: fmt.Sprintf("task-%d", i),
-		}); err != nil {
+		})
+		if err != nil {
 			t.Fatal(err)
 		}
+		handles[i] = h
 	}
-	deadline := time.Now().Add(time.Second)
-	for len(coord.Active()) != 0 && time.Now().Before(deadline) {
-		time.Sleep(time.Millisecond)
+	for _, h := range handles {
+		if _, err := coord.Wait(context.Background(), h.ID, time.Second); err != nil {
+			t.Fatal(err)
+		}
 	}
 	result, err := coord.WaitActivityForTurn(context.Background(), TurnRef{SessionID: "session-a", TurnID: "turn-1"}, time.Second)
 	if err != nil {

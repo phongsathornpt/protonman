@@ -48,7 +48,7 @@ internal/adapter/in/            inbound adapters
   desktop/                      Fyne desktop frontend (`-tags desktop`; drives the CLI over ACP)
 internal/adapter/out/           driven infrastructure adapters
   acpclient/                    ACP client used by the desktop frontend
-  config/                       layered TOML loading and persistence
+  config/                       layered JSON configuration loading and persistence
   memoryfs/                     file-backed memory repository
   model/                        provider discovery and SDK adaptation
   sessionfs/                    file-backed session repository
@@ -81,14 +81,15 @@ Do not weaken those tests to make an architectural violation pass.
 
 Leaf packages only. They must not import any other `internal/*` or `cmd/*` package.
 Current responsibilities include build metadata, command-output analysis,
-context helpers, environment parsing, failure classification, glob matching,
-path utilities, string utilities, and global runtime defaults.
+context helpers, diff computation and formatting (`diffutil`), environment parsing,
+failure classification, glob matching, path utilities, string utilities, and global runtime defaults.
 
 ### `internal/core/*`
 
 Pure domain contracts and policies:
 
 - `agentidentity`: root versus delegated agent identity typing
+- `agentprofile`: parsed agent profile types (`universal`, `strength`, `agility`, `intelligence`)
 - `conversation`: provider-neutral conversation retention and historical tool-message policy
 - `memory`: memory entry contracts and repository port
 - `modelcatalog`: remote model catalog entries
@@ -96,7 +97,9 @@ Pure domain contracts and policies:
 - `modelconfig`: provider and model selection records
 - `modelprofile`: model metadata/capability policy
 - `permission`: permission modes, rules, grants, request evaluation
+- `project`: project domain contracts and trust policies
 - `session`: session aggregate, repository port, state/resource ownership
+- `telemetry`: pure telemetry domain contracts and event types
 - `tool`: tool definitions, registry interfaces, metadata, safety/effect contracts
 - `workspace`: authorized root, protected paths, mutation synchronization
 
@@ -324,6 +327,12 @@ Built-in workspace tools include:
 - `bash`
 - `edit`
 
+The `edit` tool (`write`, `replace`, `patch`) produces git-compatible unified diffs and stats
+(`+additions`, `-deletions`) via `internal/base/diffutil`, populated into
+`StructuredOutput` for presentation and contract validation. Diff generation is
+defensively bounded by `MaxDiffInputBytes` (2 MB) and `MaxDiffLines` (15,000 lines)
+to protect against latency spikes or quadratic comparison overhead.
+
 Feature tools add `web`, task tools, skill activation, agent lifecycle
 operations, and dynamically discovered MCP tools.
 
@@ -414,7 +423,7 @@ created checkpoint while deterministically pruning older records.
 
 ## Configuration and Runtime State
 
-User filesystem layout is centralized in `internal/app/appdirs`:
+User filesystem layout is centralized in `internal/platform/appdirs`:
 
 ```text
 ~/.protonman/
@@ -722,6 +731,9 @@ make test-architecture-desktop
 # Full race detector
 make test-race
 
+# Report release-style binary sizes and gzip footprint
+make size
+
 # Format and vet
 make lint
 
@@ -774,7 +786,7 @@ When implementing a change, place it according to ownership:
 | prompt wording/composition | `internal/engine/prompt` |
 | model/tool turn behavior | `internal/engine/turn` |
 | permission execution pipeline | `internal/engine/toolcall` + `internal/core/permission` |
-| user/project TOML persistence | `internal/adapter/out/config`, exposed via `internal/app` |
+| user/project JSON persistence | `internal/adapter/out/config`, exposed via `internal/app` |
 | terminal interaction/rendering | `internal/adapter/in/tui` |
 | desktop frontend/rendering | `internal/adapter/in/desktop` (`-tags desktop`) |
 | desktop presentation state | `internal/feature/desktop` |
@@ -790,7 +802,7 @@ When implementing a change, place it according to ownership:
 
 `internal/base/runtimepolicy` is the single source of truth for product runtime defaults. `internal/adapter/out/config.DefaultSnapshot()` is the only constructor for a fresh effective config snapshot; do not add alias constants for runtime defaults inside config or TUI packages.
 
-User and project TOML mutation must reuse the shared atomic document persistence primitive in `internal/adapter/out/config/store.go`, while preserving scope-specific security checks and file modes. Persisted TOML structs are a compatibility boundary: never embed runtime `ProviderConfig` or `ModelConfig` directly in `fileDocument`; use explicit conversion at load/save boundaries. See `docs/settings.md` for the current settings architecture and migration rules.
+User and project JSON mutation must reuse the shared atomic document persistence primitive in `internal/adapter/out/config/store.go`, while preserving scope-specific security checks and file modes. Persisted JSON structs are a compatibility boundary: never embed runtime `ProviderConfig` or `ModelConfig` directly in `fileDocument`; use explicit conversion at load/save boundaries. See `docs/settings.md` for the current settings architecture.
 
 ## Implementation Style
 

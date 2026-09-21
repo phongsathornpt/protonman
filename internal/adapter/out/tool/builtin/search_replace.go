@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/phongsathornpt/protonman/internal/base/diffutil"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/core/workspace"
 	"github.com/phongsathornpt/protonman/internal/platform/checkpoint"
@@ -126,7 +127,8 @@ func (h searchReplaceHandler) Execute(ctx context.Context, call tool.Call) (tool
 			}, fmt.Errorf("create %q: %w", input.FilePath, err)
 		}
 		h.workspace.MarkMutationOwned(ctx, resolvedPath)
-		return editResult(call, displayPath, "created", checkpointID)
+		diff := diffutil.NewFileDiff(displayPath, input.NewString, 3)
+		return editResult(call, displayPath, "created", checkpointID, diff)
 	}
 	if !exists {
 		return tool.Result{}, fmt.Errorf("edit target %q does not exist", input.FilePath)
@@ -154,14 +156,25 @@ func (h searchReplaceHandler) Execute(ctx context.Context, call tool.Call) (tool
 		}, fmt.Errorf("update %q: %w", input.FilePath, err)
 	}
 	h.workspace.MarkMutationOwned(ctx, resolvedPath)
-	return editResult(call, displayPath, "updated", checkpointID)
+	diff := diffutil.UnifiedDiff(content, updated, displayPath, 3)
+	return editResult(call, displayPath, "updated", checkpointID, diff)
 }
 
-func editResult(call tool.Call, path string, action string, checkpointID string) (tool.Result, error) {
+func editResult(call tool.Call, path string, action string, checkpointID string, diff string) (tool.Result, error) {
+	adds, dels := diffutil.DiffStats(diff)
+	payload := map[string]any{
+		"path":      path,
+		"action":    action,
+		"additions": adds,
+		"deletions": dels,
+		"diff":      diff,
+	}
+	structured, _ := json.Marshal(payload)
 	return tool.Result{
 		CallID:           call.ID,
 		ToolName:         call.Name,
 		Output:           fmt.Sprintf("The file %s has been %s.", path, action),
+		StructuredOutput: structured,
 		CheckpointID:     checkpointID,
 		MutationCoverage: tool.MutationCoverageFull,
 		AffectedPaths:    []string{path},

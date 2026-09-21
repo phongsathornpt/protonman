@@ -2,6 +2,7 @@ package history
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -108,7 +109,9 @@ func (c ExecCell) RenderWidth(width int) []string {
 
 	if !c.Running {
 		contentWidth := max(1, width-4)
-		for _, line := range c.renderOutputLines() {
+		lines := c.renderOutputLines()
+		isDiff := isDiffOutput(c.Command, lines)
+		for _, line := range lines {
 			style := tuistyle.BodyStyle
 			if strings.TrimSpace(line) == "stderr:" {
 				style = tuistyle.WarningStyle
@@ -118,11 +121,13 @@ func (c ExecCell) RenderWidth(width int) []string {
 			if !isFoldIndicator && ansi.StringWidth(clean) > contentWidth {
 				clean = textview.TruncateEllipsis(clean, contentWidth)
 			}
-			if styled, isDiff := toolview.StyleDiffLine(clean); isDiff {
-				for _, wrapped := range safeWrappedLines(styled, max(1, width-2)) {
-					out = append(out, "  "+wrapped)
+			if isDiff {
+				if styled, isDiffLine := toolview.StyleDiffLine(clean); isDiffLine {
+					for _, wrapped := range safeWrappedLines(styled, max(1, width-2)) {
+						out = append(out, "  "+wrapped)
+					}
+					continue
 				}
-				continue
 			}
 			for _, wrapped := range safeWrappedLines(clean, max(1, width-2)) {
 				out = append(out, style.Render("  "+wrapped))
@@ -130,6 +135,71 @@ func (c ExecCell) RenderWidth(width int) []string {
 		}
 	}
 	return out
+}
+
+func isDiffOutput(command string, lines []string) bool {
+	if isDiffCommand(command) {
+		return true
+	}
+	for _, l := range lines {
+		trimmed := strings.TrimSpace(l)
+		if strings.HasPrefix(trimmed, "diff --git ") || strings.HasPrefix(trimmed, "@@") {
+			return true
+		}
+	}
+	return false
+}
+
+func isDiffCommand(command string) bool {
+	segments := strings.FieldsFunc(command, func(r rune) bool {
+		return r == '|' || r == ';' || r == '&'
+	})
+	for _, seg := range segments {
+		fields := strings.Fields(strings.ToLower(seg))
+		if len(fields) == 0 {
+			continue
+		}
+		cmd := filepath.Base(fields[0])
+		if cmd == "diff" || cmd == "colordiff" || cmd == "patch" {
+			return true
+		}
+		if cmd == "git" && len(fields) > 1 {
+			sub := ""
+			subIdx := -1
+			skipNext := false
+			for i := 1; i < len(fields); i++ {
+				if skipNext {
+					skipNext = false
+					continue
+				}
+				arg := fields[i]
+				if arg == "-c" || arg == "--git-dir" || arg == "--work-tree" {
+					skipNext = true
+					continue
+				}
+				if strings.HasPrefix(arg, "-") {
+					continue
+				}
+				sub = arg
+				subIdx = i
+				break
+			}
+			if sub == "diff" || sub == "show" {
+				return true
+			}
+			if sub == "log" && subIdx >= 0 {
+				for _, arg := range fields[subIdx+1:] {
+					if arg == "-p" || arg == "--patch" || arg == "-u" {
+						return true
+					}
+				}
+			}
+		}
+		if (cmd == "svn" || cmd == "hg") && len(fields) > 1 && fields[1] == "diff" {
+			return true
+		}
+	}
+	return false
 }
 
 func renderExecMetaLine(summary string, duration time.Duration, width int) string {

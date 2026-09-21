@@ -88,6 +88,10 @@ func (m *bubbleModel) invalidateViewportView() {
 	m.liveViewCacheValid = false
 }
 
+func (m *bubbleModel) invalidateLiveView() {
+	m.liveViewCacheValid = false
+}
+
 func (m *bubbleModel) footerView() string {
 	if m == nil || m.panes.bottom == nil {
 		return ""
@@ -344,15 +348,27 @@ func (m *bubbleModel) applyFrameLayout(scroll viewportScrollSnapshot, frame fram
 	m.layout.generation++
 	frame.generation = m.layout.generation
 	m.layout.frame = frame
-	m.invalidateViewportView()
 	m.layout.geometry = panecommon.ResolveFrameGeometry(m.layout.width, m.layout.height, frame.height)
 	viewportHeight := m.layout.geometry.ViewportHeight
-	if m.viewport.Width() != m.layout.width || m.viewport.Height() != viewportHeight {
+	sizeChanged := m.viewport.Width() != m.layout.width || m.viewport.Height() != viewportHeight
+	if sizeChanged {
 		m.viewport.SetWidth(m.layout.width)
 		m.viewport.SetHeight(viewportHeight)
 		m.invalidateViewportView()
+	} else {
+		m.invalidateLiveView()
 	}
-	m.refreshViewportWithScroll(scroll)
+
+	historyChanged := false
+	if m.historyState != nil {
+		committedRev, activeRev := m.historyState.Revisions()
+		historyChanged = committedRev != m.conversationViewport.committedRevision ||
+			activeRev != m.conversationViewport.activeRevision
+	}
+
+	if sizeChanged || historyChanged {
+		m.refreshViewportWithScroll(scroll)
+	}
 }
 
 func (m *bubbleModel) refreshFrameLayout() {
@@ -368,8 +384,59 @@ func (m *bubbleModel) refreshFrameLayout() {
 	m.layout.generation++
 	frame.generation = m.layout.generation
 	m.layout.frame = frame
-	m.invalidateViewportView()
+	m.invalidateLiveView()
 	m.layout.geometry = panecommon.ResolveFrameGeometry(m.layout.width, m.layout.height, frame.height)
+}
+
+func (m *bubbleModel) refreshStatusFrame() {
+	if m == nil {
+		return
+	}
+	newStatus := m.statusView()
+	oldStatusHeight := 0
+	if m.layout.frame.status != "" {
+		oldStatusHeight = lipgloss.Height(m.layout.frame.status)
+	}
+	newStatusHeight := 0
+	if newStatus != "" {
+		newStatusHeight = lipgloss.Height(newStatus)
+	}
+	if oldStatusHeight != newStatusHeight {
+		m.requestRelayout()
+		return
+	}
+	m.layout.generation++
+	m.layout.frame.generation = m.layout.generation
+	m.layout.frame.status = newStatus
+	m.invalidateLiveView()
+}
+
+func (m *bubbleModel) refreshComposerFrame() {
+	if m == nil {
+		return
+	}
+	if !m.panes.bottom.composerVisible() {
+		return
+	}
+	profile := m.layoutProfile()
+	keepLowerRule := profile.Mode != panecommon.LayoutTiny || m.layout.frame.top == ""
+	newComposer := composerContentView(m.promptView(), keepLowerRule)
+	oldComposerHeight := 0
+	if m.layout.frame.composer != "" {
+		oldComposerHeight = lipgloss.Height(m.layout.frame.composer)
+	}
+	newComposerHeight := 0
+	if newComposer != "" {
+		newComposerHeight = lipgloss.Height(newComposer)
+	}
+	if oldComposerHeight != newComposerHeight {
+		m.requestRelayout()
+		return
+	}
+	m.layout.generation++
+	m.layout.frame.generation = m.layout.generation
+	m.layout.frame.composer = newComposer
+	m.invalidateLiveView()
 }
 
 func (m *bubbleModel) refreshViewport() {

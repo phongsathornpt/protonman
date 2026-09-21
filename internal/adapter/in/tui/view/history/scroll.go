@@ -134,7 +134,37 @@ func sameHistoryCell(left, right HistoryCell) bool {
 	if left == nil || right == nil {
 		return left == nil && right == nil
 	}
-	return reflect.ValueOf(left).Kind() == reflect.Pointer &&
-		reflect.ValueOf(right).Kind() == reflect.Pointer &&
-		reflect.ValueOf(left).Pointer() == reflect.ValueOf(right).Pointer()
+	switch l := left.(type) {
+	case *AssistantCell:
+		r, ok := right.(*AssistantCell)
+		return ok && l == r
+	case *UserCell:
+		r, ok := right.(*UserCell)
+		return ok && l == r
+	case *ToolCell:
+		r, ok := right.(*ToolCell)
+		return ok && l == r
+	case *PatchCell:
+		r, ok := right.(*PatchCell)
+		return ok && l == r
+	case *ExecCell:
+		r, ok := right.(*ExecCell)
+		return ok && l == r
+	case *AgentRunCell:
+		r, ok := right.(*AgentRunCell)
+		return ok && l == r
+	case *AgentToolCell:
+		r, ok := right.(*AgentToolCell)
+		return ok && l == r
+	case *SystemCell:
+		r, ok := right.(*SystemCell)
+		return ok && l == r
+	case *ErrorCell:
+		r, ok := right.(*ErrorCell)
+		return ok && l == r
+	default:
+		return reflect.ValueOf(left).Kind() == reflect.Pointer &&
+			reflect.ValueOf(right).Kind() == reflect.Pointer &&
+			reflect.ValueOf(left).Pointer() == reflect.ValueOf(right).Pointer()
+	}
 }

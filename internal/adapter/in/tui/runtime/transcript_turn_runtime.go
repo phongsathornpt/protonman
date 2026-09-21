@@ -85,20 +85,14 @@ func (m *bubbleModel) appendTurnFailure(err error) {
 	classified := ClassifyOpenCodeError(err, m.activeProvider, m.activeModel)
 	if classified.Kind == ErrorKindCancelled {
 		text := "turn cancelled"
-		cells := m.ensureHistoryState().Cells()
-		if n := len(cells); n > 0 {
-			if last, ok := cells[n-1].(*tuihistory.SystemCell); ok && last.Text == text {
-				return
-			}
+		if last, ok := m.ensureHistoryState().LastCell().(*tuihistory.SystemCell); ok && last.Text == text {
+			return
 		}
 		m.ensureHistoryState().Append(&tuihistory.SystemCell{Text: text})
 		return
 	}
-	cells := m.ensureHistoryState().Cells()
-	if n := len(cells); n > 0 {
-		if last, ok := cells[n-1].(*tuihistory.ErrorCell); ok && last.Text == classified.Message && last.Title == classified.Title {
-			return
-		}
+	if last, ok := m.ensureHistoryState().LastCell().(*tuihistory.ErrorCell); ok && last.Text == classified.Message && last.Title == classified.Title {
+		return
 	}
 	m.ensureHistoryState().Append(&tuihistory.ErrorCell{ErrorKind: classified.Kind, Title: classified.Title, Badge: classified.Badge, Text: classified.Message, Suggestions: classified.Suggestions, RawDetails: classified.RawDetails, Retryable: classified.Retryable})
 }
