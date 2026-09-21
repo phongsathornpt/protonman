@@ -127,7 +127,7 @@ func (h searchReplaceHandler) Execute(ctx context.Context, call tool.Call) (tool
 			}, fmt.Errorf("create %q: %w", input.FilePath, err)
 		}
 		h.workspace.MarkMutationOwned(ctx, resolvedPath)
-		diff := diffutil.UnifiedDiff("", input.NewString, displayPath, 3)
+		diff := diffutil.NewFileDiff(displayPath, input.NewString, 3)
 		return editResult(call, displayPath, "created", checkpointID, diff)
 	}
 	if !exists {

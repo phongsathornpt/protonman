@@ -16,13 +16,17 @@ const (
 	MaxDiffInputBytes = 2 * 1024 * 1024 // 2 MB
 	// MaxDiffLines bounds line counts to protect against quadratic diff comparisons.
 	MaxDiffLines = 15000
+	// EmptyBlobHash is Git's standard 7-character abbreviated hash for an empty blob (blob 0\0).
+	EmptyBlobHash = "e69de29"
+	// NullBlobHash represents an absent/untracked object in Git diffs (/dev/null).
+	NullBlobHash = "0000000"
 )
 
 // GitBlobHash computes git's standard 7-character abbreviated object hash for content.
 // When content is empty (representing a non-existent file in new or deleted states), it returns "0000000".
 func GitBlobHash(content string) string {
 	if content == "" {
-		return "0000000"
+		return NullBlobHash
 	}
 	h := sha1.New()
 	fmt.Fprintf(h, "blob %d\x00", len(content))
@@ -41,11 +45,32 @@ func GitDiff(original, modified, filename string, contextLines int) string {
 	return UnifiedDiff(original, modified, filename, contextLines)
 }
 
+// NewFileDiff computes a git-compatible unified diff for a newly created file.
+// When content is empty, it emits a new file mode header with the standard empty blob hash.
+func NewFileDiff(filename, content string, contextLines int) string {
+	clean := cleanDiffPath(filename)
+	if content == "" {
+		var header strings.Builder
+		header.WriteString(fmt.Sprintf("diff --git a/%s b/%s\n", clean, clean))
+		header.WriteString("new file mode 100644\n")
+		header.WriteString(fmt.Sprintf("index 0000000..%s\n", EmptyBlobHash))
+		return header.String()
+	}
+	diff := GitDiffFile(filename, filename, "", content, contextLines)
+	if diff != "" {
+		return diff
+	}
+	var header strings.Builder
+	header.WriteString(fmt.Sprintf("diff --git a/%s b/%s\n", clean, clean))
+	header.WriteString("new file mode 100644\n")
+	header.WriteString(fmt.Sprintf("index 0000000..%s\n", GitBlobHash(content)))
+	return header.String()
+}
+
 // GitDiffFile computes a git-compatible unified diff between original and modified text,
 // supporting file creation, modification, deletion, and renames.
 func GitDiffFile(fromPath, toPath, original, modified string, contextLines int) string {
-	cleanFrom := cleanDiffPath(fromPath)
-	cleanTo := cleanDiffPath(toPath)
+	cleanFrom, cleanTo := resolveDiffPaths(fromPath, toPath)
 
 	if cleanFrom == cleanTo && original == modified {
 		return ""
@@ -64,7 +89,7 @@ func GitDiffFile(fromPath, toPath, original, modified string, contextLines int) 
 		header.WriteString(fmt.Sprintf("diff --git a/%s b/%s\n", cleanFrom, cleanTo))
 		header.WriteString("similarity index 100%\n")
 		header.WriteString(fmt.Sprintf("rename from %s\n", cleanFrom))
-		header.WriteString(fmt.Sprintf("rename to %s", cleanTo))
+		header.WriteString(fmt.Sprintf("rename to %s\n", cleanTo))
 		return header.String()
 	}
 
@@ -121,16 +146,29 @@ func GitDiffFile(fromPath, toPath, original, modified string, contextLines int) 
 	}
 
 	if body != "" {
-		return header.String() + body
+		return header.String() + body + "\n"
 	}
-	return strings.TrimSuffix(header.String(), "\n")
+	return header.String()
+}
+
+func resolveDiffPaths(fromPath, toPath string) (string, string) {
+	cFrom := cleanDiffPath(fromPath)
+	cTo := cleanDiffPath(toPath)
+
+	// Detect if caller passed git-prefixed headers "a/foo" and "b/foo"
+	if strings.HasPrefix(cFrom, "a/") && strings.HasPrefix(cTo, "b/") {
+		subFrom := strings.TrimPrefix(cFrom, "a/")
+		subTo := strings.TrimPrefix(cTo, "b/")
+		if subFrom == subTo {
+			return subFrom, subTo
+		}
+	}
+	return cFrom, cTo
 }
 
 func cleanDiffPath(path string) string {
 	clean := strings.TrimSpace(path)
 	clean = strings.ReplaceAll(clean, "\\", "/")
-	clean = strings.TrimPrefix(clean, "a/")
-	clean = strings.TrimPrefix(clean, "b/")
 	clean = strings.TrimPrefix(clean, "./")
 	clean = strings.TrimPrefix(clean, "/")
 	if clean == "" || clean == "." {
@@ -140,25 +178,30 @@ func cleanDiffPath(path string) string {
 }
 
 func formatOversizedNotice(filename string, origLen, modLen int) string {
-	return fmt.Sprintf("diff oversized for %s (%d bytes -> %d bytes, exceeds limit)", filename, origLen, modLen)
+	return fmt.Sprintf("diff oversized for %s (%d bytes -> %d bytes, exceeds limit)\n", filename, origLen, modLen)
 }
 
 // DiffStats counts additions and deletions in a unified diff text.
-// Header lines (+++, ---, diff, index, @@, mode, rename) are excluded from the counts.
+// Header lines (+++, ---, diff, index, @@, mode, rename) and context lines are excluded.
 func DiffStats(diffText string) (additions, deletions int) {
 	if strings.TrimSpace(diffText) == "" {
 		return 0, 0
 	}
 	lines := strings.Split(diffText, "\n")
 	for _, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, "+++") || strings.HasPrefix(trimmed, "---") {
+		line = strings.TrimSuffix(line, "\r")
+		if line == "" {
 			continue
 		}
-		if strings.HasPrefix(trimmed, "+") {
-			additions++
-		} else if strings.HasPrefix(trimmed, "-") {
-			deletions++
+		// In unified diff and Codex patches, additions start with '+' and deletions with '-' in column 0.
+		if strings.HasPrefix(line, "+") {
+			if !strings.HasPrefix(line, "+++") {
+				additions++
+			}
+		} else if strings.HasPrefix(line, "-") {
+			if !strings.HasPrefix(line, "---") {
+				deletions++
+			}
 		}
 	}
 	return additions, deletions
@@ -185,10 +228,18 @@ func ExtractPreview(diffText string, maxLines int) (preview []string, remaining 
 	if strings.TrimSpace(diffText) == "" {
 		return nil, 0
 	}
-	allLines := strings.Split(diffText, "\n")
+	rawLines := strings.Split(diffText, "\n")
+	allLines := make([]string, 0, len(rawLines))
+	for _, l := range rawLines {
+		allLines = append(allLines, strings.TrimSuffix(l, "\r"))
+	}
+	// Drop trailing blank line resulting from standard trailing newline
+	if len(allLines) > 0 && allLines[len(allLines)-1] == "" {
+		allLines = allLines[:len(allLines)-1]
+	}
 
 	// Skip leading git/diff headers so the preview starts right at the hunk header
-	startIdx := 0
+	startIdx := -1
 	for i, line := range allLines {
 		trimmed := strings.TrimSpace(line)
 		if strings.HasPrefix(trimmed, "@@") {
@@ -197,7 +248,13 @@ func ExtractPreview(diffText string, maxLines int) (preview []string, remaining 
 		}
 	}
 
-	contentLines := allLines[startIdx:]
+	var contentLines []string
+	if startIdx >= 0 {
+		contentLines = allLines[startIdx:]
+	} else {
+		contentLines = allLines
+	}
+
 	if maxLines <= 0 || len(contentLines) <= maxLines {
 		return contentLines, 0
 	}

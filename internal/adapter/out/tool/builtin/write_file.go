@@ -149,7 +149,7 @@ func (h writeFileHandler) Execute(ctx context.Context, call tool.Call) (tool.Res
 	if exists {
 		diff = diffutil.UnifiedDiff(string(existing), input.Content, displayPath, 3)
 	} else {
-		diff = diffutil.UnifiedDiff("", input.Content, displayPath, 3)
+		diff = diffutil.NewFileDiff(displayPath, input.Content, 3)
 	}
 	adds, dels := diffutil.DiffStats(diff)
 	structured, _ := json.Marshal(map[string]any{

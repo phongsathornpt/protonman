@@ -13,7 +13,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/core/workspace"
 )
 
-const MaxProjectInstructionsBytes = 32 * 1024
+const MaxProjectInstructionsBytes = 64 * 1024
 
 // LoadProjectInstructions returns the workspace-level agent instructions.
 // AGENTS.override.md takes precedence over AGENTS.md when both exist.

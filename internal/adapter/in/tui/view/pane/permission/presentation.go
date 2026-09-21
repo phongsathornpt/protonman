@@ -22,6 +22,7 @@ type PermissionSnapshot struct {
 	Detail       string
 	DetailExtras []string
 	DiffPreview  []string
+	DiffOmitted  int
 	Options      []string
 	ShortcutHint string
 }
@@ -87,9 +88,9 @@ func PermissionView(snapshot PermissionSnapshot) PermissionRender {
 			maxDiffLines = 2
 		}
 		visible := snapshot.DiffPreview
-		omitted := 0
+		omitted := snapshot.DiffOmitted
 		if len(visible) > maxDiffLines {
-			omitted = len(visible) - maxDiffLines
+			omitted += len(visible) - maxDiffLines
 			visible = visible[:maxDiffLines]
 		}
 		for _, line := range visible {
@@ -101,7 +102,7 @@ func PermissionView(snapshot PermissionSnapshot) PermissionRender {
 			rows = append(rows, "  "+clamped)
 		}
 		if omitted > 0 {
-			rows = append(rows, tuistyle.ToolFoldStyle.Render(fmt.Sprintf("  … (+%d more diff lines truncated)", omitted)))
+			rows = append(rows, tuistyle.ToolFoldStyle.Render(fmt.Sprintf("  … (%d more diff lines truncated)", omitted)))
 		}
 	}
 	for i, option := range snapshot.Options {

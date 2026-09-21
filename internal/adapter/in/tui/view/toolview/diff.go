@@ -9,17 +9,20 @@ import (
 
 // StyleDiffLine checks if a line looks like a diff line and applies syntax coloring.
 func StyleDiffLine(line string) (string, bool) {
+	if line == "" {
+		return line, false
+	}
 	trimmed := strings.TrimSpace(line)
-	if strings.HasPrefix(trimmed, "+++ ") || strings.HasPrefix(trimmed, "--- ") {
+	if strings.HasPrefix(line, "+++ ") || strings.HasPrefix(line, "--- ") {
 		return tuistyle.MutedStyle.Bold(true).Render(line), true
 	}
-	if strings.HasPrefix(trimmed, "+") {
+	if strings.HasPrefix(line, "+") && !strings.HasPrefix(line, "+++") {
 		return tuistyle.DiffAddStyle.Render(line), true
 	}
-	if strings.HasPrefix(trimmed, "-") {
+	if strings.HasPrefix(line, "-") && !strings.HasPrefix(line, "---") {
 		return tuistyle.DiffDeleteStyle.Render(line), true
 	}
-	if strings.HasPrefix(trimmed, "@@") {
+	if strings.HasPrefix(line, "@@") || strings.HasPrefix(trimmed, "@@") {
 		return tuistyle.DiffHunkStyle.Render(line), true
 	}
 	if strings.HasPrefix(trimmed, "diff --git ") || strings.HasPrefix(trimmed, "index ") ||
