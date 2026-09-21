@@ -163,23 +163,6 @@ func (c *AssistantCell) renderAssistantIncremental(text string, width int) []str
 	return out
 }
 
-func (c *AssistantCell) renderMarkdownIncremental(text string, width int) []string {
-	if strings.ContainsRune(text, '\r') {
-		c.renderCache = assistantRenderCache{}
-		return textview.RenderMarkdownLines(text, width)
-	}
-	cache, completeEnd := c.updateAssistantRenderCache(text, width)
-	out := append([]string(nil), cache.lines...)
-	state := cache.state
-	if tail := text[completeEnd:]; tail != "" {
-		out = append(out, textview.RenderMarkdownLine(tail, width, &state)...)
-	}
-	if state.InFence() {
-		out = append(out, tuistyle.MarkdownCodeStyle.Render("  └─ code (unterminated)"))
-	}
-	return textview.TrimTrailingBlankLines(out)
-}
-
 func (c *AssistantCell) updateAssistantRenderCache(text string, width int) (*assistantRenderCache, int) {
 	cache := &c.renderCache
 	if cache.width != width || cache.processed > len(text) || !assistantCachePrefixMatches(text, cache) {

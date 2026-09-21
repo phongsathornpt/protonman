@@ -361,8 +361,3 @@ func projectFolderNames(project desktopstate.ProjectState) string {
 	}
 	return strings.Join(names, ", ")
 }
-
-func projectExists(path string) bool {
-	info, err := os.Stat(path)
-	return err == nil && info.IsDir()
-}

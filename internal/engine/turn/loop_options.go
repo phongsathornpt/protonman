@@ -77,14 +77,6 @@ func WithGroundingEvidence(evidence tool.EvidenceKind) Option {
 	}
 }
 
-// WithRequireInitialToolUse is retained for internal compatibility. Required
-// initial tool use now means successful workspace grounding, not any tool call.
-func WithRequireInitialToolUse(required bool) Option {
-	if required {
-		return WithGroundingEvidence(tool.EvidenceWorkspace)
-	}
-	return WithGroundingEvidence(tool.EvidenceNone)
-}
 
 // WithMaxToolCalls configures an optional cumulative hard-cap override.
 // Zero uses the progress-aware stagnant-call budget and emergency ceiling.
@@ -197,10 +189,3 @@ func WithSkillRegistry(registry *skill.Registry) Option {
 	}
 }
 
-// WithRuntimeContext configures asynchronous external turn context providers.
-func WithRuntimeContext(provider RuntimeContextProvider) Option {
-	return func(loop *Loop) error {
-		loop.runtimeContext = provider
-		return nil
-	}
-}

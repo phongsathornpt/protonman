@@ -1,8 +1,6 @@
 package runtime
 
 import (
-	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -10,6 +8,7 @@ import (
 	"charm.land/bubbles/v2/key"
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/permissionpolicy"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/transcriptutil"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/state/agentui"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/state/runtimeui"
@@ -161,17 +160,21 @@ func (m bubbleModel) shortcutHint() string {
 
 func (m *bubbleModel) cyclePermission() {
 	mode := m.service.Mode()
+	var err error
 	switch {
 	case m.planMode:
 		m.setPlanEnabled(false)
-		_ = m.setPermissionMode(permission.ModeAlwaysApprove)
+		err = m.setPermissionMode(permission.ModeAlwaysApprove)
 	case mode == permission.ModeAlwaysApprove:
-		_ = m.setPermissionMode(permission.ModeAsk)
+		err = m.setPermissionMode(permission.ModeAsk)
 	default:
 		if mode != permission.ModeAsk && mode != permission.ModeAuto {
-			_ = m.setPermissionMode(permission.ModeAsk)
+			err = m.setPermissionMode(permission.ModeAsk)
 		}
 		m.setPlanEnabled(true)
+	}
+	if err != nil {
+		m.appendError(fmt.Sprintf("failed to update permission mode: %v", err))
 	}
 	m.syncPermissionModePane()
 	m.requestRelayout()
@@ -185,32 +188,9 @@ func (m *bubbleModel) setPlanEnabled(enabled bool) {
 		m.agents.SetCallGuard(nil)
 		return
 	}
-	guard := func(_ context.Context, request permission.Request) error {
-		if !m.planMode {
-			return nil
-		}
-		switch request.ToolKind {
-		case permission.ToolRead, permission.ToolGrep, permission.ToolWeb, permission.ToolTask:
-			return nil
-		case permission.ToolBash:
-			var input struct {
-				Command string `json:"command"`
-			}
-			if json.Unmarshal(request.Arguments, &input) == nil && tool.AnalyzeCommand(input.Command).Effect == tool.CommandEffectReadOnly {
-				return nil
-			}
-		case permission.ToolAgent:
-			if request.ToolName == "subagent" {
-				var input struct {
-					Action string `json:"action"`
-				}
-				if json.Unmarshal(request.Arguments, &input) == nil && (input.Action == "wait" || input.Action == "get" || input.Action == "list") {
-					return nil
-				}
-			}
-		}
-		return fmt.Errorf("plan mode is read-only; %s tool %q is blocked", request.ToolKind, request.ToolName)
-	}
+	guard := permissionpolicy.NewPlanModeGuard(func() bool {
+		return m != nil && m.planMode
+	})
 	m.service.SetCallGuard(guard)
 	m.agents.SetCallGuard(guard)
 }

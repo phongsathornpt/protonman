@@ -125,12 +125,6 @@ func (m *bubbleModel) appendToolResult(result tool.Result, err error) {
 	}
 }
 
-func (m bubbleModel) renderBlocks() []string {
-	if m.historyState == nil {
-		return nil
-	}
-	return m.historyState.RenderLines()
-}
 
 func plainTranscript(model *bubbleModel) string {
 	if model == nil || model.historyState == nil {

@@ -24,7 +24,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/platform/appdirs"
 )
 
-const providerViewID = "add_provider"
+const providerViewID = "provider-editor"
 
 type providerPaneState int
 

@@ -78,8 +78,3 @@ func (b Bindings) Composer(message tea.KeyPressMsg) Action {
 	}
 	return None
 }
-
-// Classify preserves the existing focused composer API for callers and tests.
-func Classify(message tea.KeyPressMsg, newline, submit key.Binding) Action {
-	return (Bindings{Newline: newline, Submit: submit}).Composer(message)
-}

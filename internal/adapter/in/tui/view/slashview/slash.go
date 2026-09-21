@@ -119,10 +119,6 @@ func ParseCommand(line string) ParsedCommand {
 	return parsed
 }
 
-func SplitCommand(line string) (name string, argument string, rest []string) {
-	parsed := ParseCommand(line)
-	return parsed.Name, parsed.Argument, parsed.Parts
-}
 
 func LookupCommand(name string) (Command, bool) {
 	name = CanonicalName(name)

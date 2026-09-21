@@ -64,8 +64,3 @@ func PadRight(text string, width int) string {
 	}
 	return text + strings.Repeat(" ", width-visible)
 }
-
-// Fit truncates then right-pads text to exactly width terminal cells when possible.
-func Fit(text string, width int) string {
-	return PadRight(Truncate(text, width), width)
-}

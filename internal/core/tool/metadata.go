@@ -52,12 +52,6 @@ func MetadataForName(name string) (Metadata, bool) {
 	return spec.Metadata, true
 }
 
-func titleConstant(value string) func(map[string]any) string {
-	return func(map[string]any) string { return value }
-}
-func targetConstant(value string) func(map[string]any) string {
-	return func(map[string]any) string { return value }
-}
 
 func titleSubagent(args map[string]any) string {
 	switch strings.ToLower(ExtractString(args, "action")) {
@@ -261,28 +255,6 @@ func targetGrep(args map[string]any) string {
 		return fmt.Sprintf("%q", pattern)
 	}
 	return ""
-}
-func titleInspectCode(args map[string]any) string {
-	query := ExtractString(args, "query", "pattern")
-	path := ExtractString(args, "path")
-	if query == "" {
-		return "Inspect code"
-	}
-	if path != "" && path != "." {
-		return fmt.Sprintf("Inspect %q in %s", TruncateRunes(query, 30), path)
-	}
-	return fmt.Sprintf("Inspect %q", TruncateRunes(query, 40))
-}
-func targetInspectCode(args map[string]any) string {
-	query := ExtractString(args, "query", "pattern")
-	path := ExtractString(args, "path")
-	if path == "" {
-		path = "."
-	}
-	if query == "" {
-		return path
-	}
-	return fmt.Sprintf("%q in %s", query, path)
 }
 func titleBash(args map[string]any) string {
 	if cmd := ExtractString(args, "command", "cmd"); cmd != "" {

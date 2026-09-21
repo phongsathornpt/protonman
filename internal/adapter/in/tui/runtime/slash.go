@@ -218,20 +218,9 @@ func isCommandLine(line string) bool {
 	return true
 }
 
-func splitCommand(line string) (string, string, []string) {
-	return slashview.SplitCommand(line)
-}
 
 func parseCommand(line string) slashview.ParsedCommand {
 	return slashview.ParseCommand(line)
-}
-
-func canonicalSlashName(name string) string {
-	return slashview.CanonicalName(name)
-}
-
-func fuzzyContains(target, query string) bool {
-	return slashview.FuzzyContains(target, query)
 }
 
 type slashContext = slashview.Context
@@ -253,13 +242,6 @@ func (m bubbleModel) parseSlashContext() (slashContext, bool) {
 	return slashview.ParseContext(prompt.Value())
 }
 
-func (m bubbleModel) slashQuery() (prefix string, query string, ok bool) {
-	context, ok := m.parseSlashContext()
-	if !ok {
-		return "", "", false
-	}
-	return context.Prefix, context.Query, true
-}
 
 func (m bubbleModel) slashMatches() []slashCommand {
 	context, ok := m.parseSlashContext()

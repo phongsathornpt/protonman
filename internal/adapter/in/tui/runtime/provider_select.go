@@ -16,7 +16,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/app"
 )
 
-const providerSelectViewID = "provider_select"
+const providerSelectViewID = "provider-select"
 
 const maxProviderListRows = 5
 

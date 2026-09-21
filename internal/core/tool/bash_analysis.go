@@ -120,9 +120,6 @@ func verificationWords(words []string) (string, bool) {
 	return "", false
 }
 
-// ClassifyCommandEffect preserves the existing API while delegating to the
-// richer analyzer.
-func ClassifyCommandEffect(command string) CommandEffect { return AnalyzeCommand(command).Effect }
 
 func commandRiskRank(risk CommandRisk) int {
 	switch risk {

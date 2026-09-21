@@ -132,17 +132,6 @@ func (c ExecCell) RenderWidth(width int) []string {
 	return out
 }
 
-func alignExecDuration(header, duration string, width int) string {
-	if duration == "" {
-		return header
-	}
-	gap := width - ansi.StringWidth(header) - ansi.StringWidth(duration)
-	if gap < 2 {
-		return header + tuistyle.ToolSummaryStyle.Render(tuistyle.GlyphSep+duration)
-	}
-	return header + strings.Repeat(" ", gap) + tuistyle.ToolSummaryStyle.Render(duration)
-}
-
 func renderExecMetaLine(summary string, duration time.Duration, width int) string {
 	text := sanitizeBubbleText(strings.TrimSpace(summary))
 	durationText := ""

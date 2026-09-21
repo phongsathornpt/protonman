@@ -262,6 +262,24 @@ func TestUserSettingsUseCase(t *testing.T) {
 	}
 }
 
+func TestServicesSaveActiveSkills(t *testing.T) {
+	homeDir := t.TempDir()
+	workDir := t.TempDir()
+	store := config.NewUserSettingsStore(homeDir)
+	userSettings := app.NewUserSettings(store)
+	projects := app.NewProjects(config.ProjectSettingsStore{}, project.Lifecycle{})
+
+	services := app.Services{
+		Projects:     projects,
+		UserSettings: userSettings,
+	}
+
+	// When no project root exists, saves to user settings
+	if err := services.SaveActiveSkills(workDir, []string{"global-skill"}); err != nil {
+		t.Fatalf("services.SaveActiveSkills error = %v", err)
+	}
+}
+
 func TestModelsUseCase(t *testing.T) {
 	models := app.NewModels(model.Catalog{})
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
