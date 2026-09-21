@@ -93,15 +93,21 @@ func (s *HistoryState) RunningTools() []RunningTool {
 	if s == nil {
 		return nil
 	}
-	cells := s.Cells()
 	out := make([]RunningTool, 0)
-	for _, cell := range cells {
+	inspect := func(cell HistoryCell) {
+		if cell == nil {
+			return
+		}
 		running, ok := cell.(runningHistoryTool)
 		if !ok || !running.historyToolRunning() {
-			continue
+			return
 		}
 		out = append(out, RunningTool{CallID: running.historyToolID(), Name: running.historyToolName(), Target: runningToolTarget(cell)})
 	}
+	for _, cell := range s.committed {
+		inspect(cell)
+	}
+	inspect(s.active)
 	return out
 }
 
@@ -255,22 +261,23 @@ func (s *HistoryState) FinalizeRetryingTools() {
 	if s == nil {
 		return
 	}
-	finalize := func(c HistoryCell) bool {
-		if patch, ok := c.(*PatchCell); ok && patch.Retrying {
-			patch.Retrying = false
-			patch.Running = false
-			return true
-		}
-		return false
+	changed := false
+	if patch, ok := s.active.(*PatchCell); ok && patch.Retrying {
+		patch.Retrying = false
+		patch.Running = false
+		changed = true
 	}
-	changed := finalize(s.active)
 	for _, cell := range s.committed {
-		oldLines := historyCellLineCount(cell, s.renderWidth)
-		if finalize(cell) {
-			changed = true
-			newLines := historyCellLineCount(cell, s.renderWidth)
-			s.committedLines += (newLines - oldLines)
+		patch, ok := cell.(*PatchCell)
+		if !ok || !patch.Retrying {
+			continue
 		}
+		oldLines := historyCellLineCount(patch, s.renderWidth)
+		patch.Retrying = false
+		patch.Running = false
+		changed = true
+		newLines := historyCellLineCount(patch, s.renderWidth)
+		s.committedLines += (newLines - oldLines)
 	}
 	if s.committedLines < 0 {
 		s.committedLines = 0

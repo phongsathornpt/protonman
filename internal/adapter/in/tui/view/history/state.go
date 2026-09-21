@@ -78,6 +78,20 @@ func (s *HistoryState) Cells() []HistoryCell {
 	return cells
 }
 
+// LastCell returns the active cell if present, or the newest committed cell.
+func (s *HistoryState) LastCell() HistoryCell {
+	if s == nil {
+		return nil
+	}
+	if s.active != nil {
+		return s.active
+	}
+	if len(s.committed) > 0 {
+		return s.committed[len(s.committed)-1]
+	}
+	return nil
+}
+
 func (s *HistoryState) Committed() []HistoryCell {
 	return append([]HistoryCell{}, s.committed...)
 }

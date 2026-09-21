@@ -76,14 +76,14 @@ func (m *bubbleModel) promptView() string {
 }
 
 func renderPromptDivider(style lipgloss.Style, width int, focused bool) string {
-	line := strings.Repeat("─", maxInt(1, width))
+	width = maxInt(1, width)
 	if !focused {
-		return style.Render(line)
+		return style.Render(strings.Repeat("─", width))
 	}
 
-	accentWidth := minInt(8, len([]rune(line)))
+	accentWidth := minInt(8, width)
 	accent := strings.Repeat("─", accentWidth)
-	neutral := strings.Repeat("─", len([]rune(line))-accentWidth)
+	neutral := strings.Repeat("─", width-accentWidth)
 	return tuistyle.PromptDividerFocused.Render(accent) +
 		tuistyle.PromptDividerIdle.Render(neutral)
 }
@@ -285,6 +285,10 @@ type sessionHeaderCache struct {
 	workDir     string
 	branch      string
 	branchValid bool
+	visionModel string
+	visionProv  string
+	vision      bool
+	visionValid bool
 }
 
 func (m *bubbleModel) sessionHeaderView() string {
@@ -321,8 +325,16 @@ func (m *bubbleModel) activeModelSupportsVision() bool {
 	if m == nil || strings.TrimSpace(m.activeModel) == "" {
 		return false
 	}
+	cache := &m.sessionHeaderCache
+	if cache.visionValid && cache.visionModel == m.activeModel && cache.visionProv == m.activeProvider {
+		return cache.vision
+	}
 	profile := model.ResolveModelProfile(m.activeProvider, m.activeModel, nil)
-	return profile.Capabilities.Vision == modelprofile.SupportYes
+	cache.vision = profile.Capabilities.Vision == modelprofile.SupportYes
+	cache.visionModel = m.activeModel
+	cache.visionProv = m.activeProvider
+	cache.visionValid = true
+	return cache.vision
 }
 
 func (m *bubbleModel) invalidateSessionHeaderBranch() {

@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	tea "charm.land/bubbletea/v2"
+	"github.com/phongsathornpt/protonman/internal/core/tool"
 	applicationturn "github.com/phongsathornpt/protonman/internal/engine/turn"
 )
 
@@ -203,6 +205,23 @@ func BenchmarkViewBusyLongHistory(b *testing.B) {
 	}
 }
 
+func BenchmarkAnimationTickViewLongHistory(b *testing.B) {
+	m := newBubbleModel(context.Background(), nil, nil, nil, nil, newPermissionBridge(), "/tmp/proton")
+	m.resize(100, 30)
+	m.busy = true
+	m.conversationViewport.setFollowing(true)
+	for i := 0; i < 500; i++ {
+		m.historyState.Append(&AssistantCell{Text: fmt.Sprintf("Answer %d with **markdown** and `code`.", i)})
+	}
+	m.refreshViewport()
+	b.ResetTimer()
+	b.ReportAllocs()
+	for b.Loop() {
+		m.refreshStatusFrame()
+		_ = m.View().Content
+	}
+}
+
 func BenchmarkRelayoutLongPrompt(b *testing.B) {
 	m := newBubbleModel(context.Background(), nil, nil, nil, nil, newPermissionBridge(), "/tmp/proton")
 	m.resize(80, 24)
@@ -212,5 +231,48 @@ func BenchmarkRelayoutLongPrompt(b *testing.B) {
 	for b.Loop() {
 		m.requestRelayout()
 		m.reconcileLayout()
+	}
+}
+
+func BenchmarkKeystrokeLongHistory(b *testing.B) {
+	m := newBubbleModel(context.Background(), nil, nil, nil, nil, newPermissionBridge(), "/tmp/proton")
+	m.resize(100, 30)
+	for i := 0; i < 500; i++ {
+		m.historyState.Append(&UserCell{Text: fmt.Sprintf("Question %d", i)})
+		m.historyState.Append(&AssistantCell{Text: fmt.Sprintf("Answer %d with **markdown** and `code`.", i)})
+	}
+	m.refreshViewport()
+	msgChar := tea.KeyPressMsg{Code: 'a', Text: "a"}
+	msgBack := tea.KeyPressMsg{Code: tea.KeyBackspace}
+	b.ResetTimer()
+	b.ReportAllocs()
+	for b.Loop() {
+		_, _ = m.Update(msgChar)
+		_, _ = m.Update(msgBack)
+	}
+}
+
+func BenchmarkFinalizeRetryingTools100Cells(b *testing.B) {
+	state := NewHistoryState(50000)
+	for i := 0; i < 50; i++ {
+		state.Append(&UserCell{Text: fmt.Sprintf("question %d", i)})
+		state.Append(&AssistantCell{Text: fmt.Sprintf("answer %d with **markdown** and `code`", i)})
+	}
+	b.ResetTimer()
+	b.ReportAllocs()
+	for b.Loop() {
+		state.FinalizeRetryingTools()
+	}
+}
+
+func BenchmarkRunningTools100Cells(b *testing.B) {
+	state := NewHistoryState(50000)
+	for i := 0; i < 100; i++ {
+		state.Append(&ToolCell{CallID: fmt.Sprintf("call-%d", i), Name: "read", Target: fmt.Sprintf("file-%d.go", i), ToolKind: tool.KindRead, Summary: "ok"})
+	}
+	b.ResetTimer()
+	b.ReportAllocs()
+	for b.Loop() {
+		_ = state.RunningTools()
 	}
 }

@@ -244,7 +244,7 @@ func (m *bubbleModel) updateAnimationEvent(msg tea.Msg) (tea.Cmd, bool) {
 		if !m.busy {
 			return nil, true
 		}
-		m.refreshFrameLayout()
+		m.refreshStatusFrame()
 		return command, true
 	case cursor.BlinkMsg:
 		if m.reducedMotion {
@@ -263,7 +263,7 @@ func (m *bubbleModel) updateAnimationEvent(msg tea.Msg) (tea.Cmd, bool) {
 		if prompt != nil {
 			updated, command := prompt.Update(message)
 			*prompt = updated
-			m.refreshFrameLayout()
+			m.refreshComposerFrame()
 			return command, true
 		}
 		return nil, true
@@ -334,7 +334,7 @@ func (m *bubbleModel) updateRuntimeEvent(msg tea.Msg) (tea.Cmd, bool) {
 	case transientnotice.Expired:
 		if message.ID == m.transientNoticeID {
 			m.transientNotice = ""
-			m.refreshFrameLayout()
+			m.refreshStatusFrame()
 		}
 		return nil, true
 	case turnmsg.Delta:
