@@ -10,6 +10,12 @@ func TestUnifiedDiff(t *testing.T) {
 	mod := "func Hello() string {\n\treturn \"Protonman\"\n}\n"
 
 	diff := UnifiedDiff(orig, mod, "hello.go", 1)
+	if !strings.Contains(diff, "diff --git a/hello.go b/hello.go") {
+		t.Fatalf("expected diff --git header, got:\n%s", diff)
+	}
+	if !strings.Contains(diff, "index ") {
+		t.Fatalf("expected index line, got:\n%s", diff)
+	}
 	if !strings.Contains(diff, "--- a/hello.go") {
 		t.Fatalf("expected --- header, got:\n%s", diff)
 	}
@@ -30,6 +36,71 @@ func TestUnifiedDiff(t *testing.T) {
 	badge := StatBadge(adds, dels)
 	if badge != "+1 -1" {
 		t.Fatalf("expected badge '+1 -1', got %q", badge)
+	}
+}
+
+func TestUnifiedDiffNewFile(t *testing.T) {
+	mod := "package main\n\nfunc main() {}\n"
+	diff := UnifiedDiff("", mod, "new.go", 3)
+	if !strings.Contains(diff, "diff --git a/new.go b/new.go") {
+		t.Fatalf("expected diff --git header, got:\n%s", diff)
+	}
+	if !strings.Contains(diff, "new file mode 100644") {
+		t.Fatalf("expected new file mode header, got:\n%s", diff)
+	}
+	if !strings.Contains(diff, "index 0000000..") {
+		t.Fatalf("expected index 0000000.. header, got:\n%s", diff)
+	}
+	if !strings.Contains(diff, "--- /dev/null") {
+		t.Fatalf("expected --- /dev/null, got:\n%s", diff)
+	}
+	if !strings.Contains(diff, "+++ b/new.go") {
+		t.Fatalf("expected +++ b/new.go, got:\n%s", diff)
+	}
+	adds, dels := DiffStats(diff)
+	if adds != 3 || dels != 0 {
+		t.Fatalf("expected +3 -0, got +%d -%d", adds, dels)
+	}
+}
+
+func TestUnifiedDiffDeletedFile(t *testing.T) {
+	orig := "package main\n\nfunc main() {}\n"
+	diff := UnifiedDiff(orig, "", "deleted.go", 3)
+	if !strings.Contains(diff, "diff --git a/deleted.go b/deleted.go") {
+		t.Fatalf("expected diff --git header, got:\n%s", diff)
+	}
+	if !strings.Contains(diff, "deleted file mode 100644") {
+		t.Fatalf("expected deleted file mode header, got:\n%s", diff)
+	}
+	if !strings.Contains(diff, "..0000000") {
+		t.Fatalf("expected ..0000000 in index line, got:\n%s", diff)
+	}
+	if !strings.Contains(diff, "--- a/deleted.go") {
+		t.Fatalf("expected --- a/deleted.go, got:\n%s", diff)
+	}
+	if !strings.Contains(diff, "+++ /dev/null") {
+		t.Fatalf("expected +++ /dev/null, got:\n%s", diff)
+	}
+	adds, dels := DiffStats(diff)
+	if adds != 0 || dels != 3 {
+		t.Fatalf("expected +0 -3, got +%d -%d", adds, dels)
+	}
+}
+
+func TestGitDiffRename(t *testing.T) {
+	content := "package main\n"
+	diff := GitDiffFile("old.go", "new.go", content, content, 3)
+	if !strings.Contains(diff, "diff --git a/old.go b/new.go") {
+		t.Fatalf("expected diff --git header, got:\n%s", diff)
+	}
+	if !strings.Contains(diff, "similarity index 100%") {
+		t.Fatalf("expected similarity index header, got:\n%s", diff)
+	}
+	if !strings.Contains(diff, "rename from old.go") {
+		t.Fatalf("expected rename from header, got:\n%s", diff)
+	}
+	if !strings.Contains(diff, "rename to new.go") {
+		t.Fatalf("expected rename to header, got:\n%s", diff)
 	}
 }
 

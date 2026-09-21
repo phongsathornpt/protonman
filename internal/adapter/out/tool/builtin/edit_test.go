@@ -77,6 +77,12 @@ func TestEditProducesDiffStructuredOutput(t *testing.T) {
 	if !strings.Contains(string(res.StructuredOutput), `"diff":`) || !strings.Contains(string(res.StructuredOutput), `+func Run() {}`) {
 		t.Fatalf("expected diff in StructuredOutput: %s", res.StructuredOutput)
 	}
+	if !strings.Contains(string(res.StructuredOutput), `diff --git a/test.go b/test.go`) {
+		t.Fatalf("expected git diff header in StructuredOutput: %s", res.StructuredOutput)
+	}
+	if !strings.Contains(string(res.StructuredOutput), `new file mode 100644`) {
+		t.Fatalf("expected new file mode in StructuredOutput: %s", res.StructuredOutput)
+	}
 
 	// 2. Replace produces diff with both additions and deletions
 	res, err = handler.Execute(context.Background(), newJSONCall(t, "edit-replace", "edit", map[string]any{
@@ -90,6 +96,9 @@ func TestEditProducesDiffStructuredOutput(t *testing.T) {
 	}
 	if !strings.Contains(string(res.StructuredOutput), `"additions":3`) || !strings.Contains(string(res.StructuredOutput), `"deletions":1`) {
 		t.Fatalf("expected additions:3 and deletions:1 in StructuredOutput: %s", res.StructuredOutput)
+	}
+	if !strings.Contains(string(res.StructuredOutput), `diff --git a/test.go b/test.go`) {
+		t.Fatalf("expected git diff header in StructuredOutput: %s", res.StructuredOutput)
 	}
 }
 

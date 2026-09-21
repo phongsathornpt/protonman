@@ -208,15 +208,20 @@ func (v *permissionPaneView) card(ctx paneRenderContext) string {
 			}
 		case "write":
 			if editInput.Content != "" {
-				lineCount := strings.Count(editInput.Content, "\n") + 1
-				detailExtras = append(detailExtras, fmt.Sprintf("Action: write · %d lines (%d bytes)", lineCount, len(editInput.Content)))
-				lines := strings.Split(editInput.Content, "\n")
-				limit := min(4, len(lines))
-				for _, l := range lines[:limit] {
-					diffPreview = append(diffPreview, "+ "+l)
-				}
-				if len(lines) > limit {
-					diffPreview = append(diffPreview, fmt.Sprintf("… (+%d more lines)", len(lines)-limit))
+				diff := diffutil.UnifiedDiff("", editInput.Content, targetPath, 1)
+				if diff != "" {
+					adds, dels := diffutil.DiffStats(diff)
+					badge := diffutil.StatBadge(adds, dels)
+					if badge != "" {
+						detailExtras = append(detailExtras, fmt.Sprintf("Action: write · %s (%d bytes)", badge, len(editInput.Content)))
+					} else {
+						lineCount := strings.Count(editInput.Content, "\n") + 1
+						detailExtras = append(detailExtras, fmt.Sprintf("Action: write · %d lines (%d bytes)", lineCount, len(editInput.Content)))
+					}
+					preview, _ := diffutil.ExtractPreview(diff, 6)
+					diffPreview = preview
+				} else {
+					detailExtras = append(detailExtras, "Action: write (empty file)")
 				}
 			} else {
 				detailExtras = append(detailExtras, "Action: write (empty file)")

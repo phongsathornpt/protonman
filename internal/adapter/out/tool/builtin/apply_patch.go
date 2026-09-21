@@ -65,6 +65,7 @@ type plannedPatchChange struct {
 	kind        patchOperationKind
 	path        string
 	displayPath string
+	movePath    string
 	destination string
 	content     string
 	oldContent  string
@@ -263,7 +264,12 @@ func (h applyPatchHandler) Execute(ctx context.Context, call tool.Call) (tool.Re
 	var diffParts []string
 	totalAdds, totalDels := 0, 0
 	for _, change := range changes {
-		d := diffutil.UnifiedDiff(change.oldContent, change.content, change.displayPath, 3)
+		fromPath := change.displayPath
+		toPath := change.displayPath
+		if change.movePath != "" {
+			toPath = change.movePath
+		}
+		d := diffutil.GitDiffFile(fromPath, toPath, change.oldContent, change.content, 3)
 		if d != "" {
 			diffParts = append(diffParts, d)
 			a, del := diffutil.DiffStats(d)
@@ -369,6 +375,7 @@ func (h applyPatchHandler) planPatch(ctx context.Context, operations []patchOper
 				kind:        patchUpdate,
 				path:        path,
 				displayPath: operation.path,
+				movePath:    operation.movePath,
 				destination: destination,
 				content:     updated,
 				oldContent:  string(contents),

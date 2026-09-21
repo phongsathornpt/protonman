@@ -172,6 +172,8 @@ func TestPatchCellRetryPresentation(t *testing.T) {
 
 func TestPatchCellVisualDiffPresentation(t *testing.T) {
 	diffContent := strings.Join([]string{
+		"diff --git a/service.go b/service.go",
+		"index 1234567..89abcdef 100644",
 		"--- a/service.go",
 		"+++ b/service.go",
 		"@@ -10,3 +10,5 @@ func Init() error {",
@@ -220,9 +222,12 @@ func TestPatchCellVisualDiffPresentation(t *testing.T) {
 		t.Fatalf("expected fold hint in render, got:\n%s", joined)
 	}
 
-	// 4. RawLines contains full diff
+	// 4. RawLines contains full diff including git headers
 	rawLines := cell.RawLines()
 	rawJoined := strings.Join(rawLines, "\n")
+	if !strings.Contains(rawJoined, "diff --git a/service.go b/service.go") {
+		t.Fatalf("expected git diff header in raw lines, got:\n%s", rawJoined)
+	}
 	if !strings.Contains(rawJoined, "+  return start(config)") || !strings.Contains(rawJoined, "// extra lines to test folding") {
 		t.Fatalf("expected raw lines to include full diff, got:\n%s", rawJoined)
 	}

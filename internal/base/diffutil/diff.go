@@ -1,6 +1,8 @@
 package diffutil
 
 import (
+	"crypto/sha1"
+	"encoding/hex"
 	"fmt"
 	"strings"
 
@@ -16,36 +18,77 @@ const (
 	MaxDiffLines = 15000
 )
 
-// UnifiedDiff computes a standard unified diff between original and modified text.
+// GitBlobHash computes git's standard 7-character abbreviated object hash for content.
+// When content is empty (representing a non-existent file in new or deleted states), it returns "0000000".
+func GitBlobHash(content string) string {
+	if content == "" {
+		return "0000000"
+	}
+	h := sha1.New()
+	fmt.Fprintf(h, "blob %d\x00", len(content))
+	h.Write([]byte(content))
+	return hex.EncodeToString(h.Sum(nil))[:7]
+}
+
+// UnifiedDiff computes a git-compatible unified diff between original and modified text.
 // If both texts are identical, it returns an empty string.
 func UnifiedDiff(original, modified, filename string, contextLines int) string {
-	if original == modified {
+	return GitDiffFile(filename, filename, original, modified, contextLines)
+}
+
+// GitDiff is an alias for UnifiedDiff, computing a git-compatible unified diff.
+func GitDiff(original, modified, filename string, contextLines int) string {
+	return UnifiedDiff(original, modified, filename, contextLines)
+}
+
+// GitDiffFile computes a git-compatible unified diff between original and modified text,
+// supporting file creation, modification, deletion, and renames.
+func GitDiffFile(fromPath, toPath, original, modified string, contextLines int) string {
+	cleanFrom := cleanDiffPath(fromPath)
+	cleanTo := cleanDiffPath(toPath)
+
+	if cleanFrom == cleanTo && original == modified {
 		return ""
 	}
+
 	if len(original) > MaxDiffInputBytes || len(modified) > MaxDiffInputBytes {
-		return formatOversizedNotice(filename, len(original), len(modified))
+		return formatOversizedNotice(cleanTo, len(original), len(modified))
 	}
 	if contextLines < 0 {
 		contextLines = DefaultContextLines
 	}
 
-	cleanPath := strings.TrimSpace(filename)
-	if cleanPath == "" {
-		cleanPath = "file"
+	// Pure rename with identical content
+	if cleanFrom != cleanTo && original == modified {
+		var header strings.Builder
+		header.WriteString(fmt.Sprintf("diff --git a/%s b/%s\n", cleanFrom, cleanTo))
+		header.WriteString("similarity index 100%\n")
+		header.WriteString(fmt.Sprintf("rename from %s\n", cleanFrom))
+		header.WriteString(fmt.Sprintf("rename to %s", cleanTo))
+		return header.String()
 	}
 
 	origLines := difflib.SplitLines(original)
 	modLines := difflib.SplitLines(modified)
 
 	if len(origLines) > MaxDiffLines || len(modLines) > MaxDiffLines {
-		return formatOversizedNotice(filename, len(original), len(modified))
+		return formatOversizedNotice(cleanTo, len(original), len(modified))
+	}
+
+	fromFile := "a/" + cleanFrom
+	toFile := "b/" + cleanTo
+	if original == "" {
+		fromFile = "/dev/null"
+	}
+	if modified == "" {
+		toFile = "/dev/null"
 	}
 
 	diff := difflib.UnifiedDiff{
 		A:        origLines,
 		B:        modLines,
-		FromFile: "a/" + cleanPath,
-		ToFile:   "b/" + cleanPath,
+		FromFile: fromFile,
+		ToFile:   toFile,
 		Context:  contextLines,
 	}
 
@@ -53,7 +96,47 @@ func UnifiedDiff(original, modified, filename string, contextLines int) string {
 	if err != nil {
 		return ""
 	}
-	return strings.TrimSuffix(result, "\n")
+	body := strings.TrimSpace(result)
+	if body == "" && cleanFrom == cleanTo {
+		return ""
+	}
+
+	var header strings.Builder
+	header.WriteString(fmt.Sprintf("diff --git a/%s b/%s\n", cleanFrom, cleanTo))
+	oldHash := GitBlobHash(original)
+	newHash := GitBlobHash(modified)
+
+	if original == "" {
+		header.WriteString("new file mode 100644\n")
+		header.WriteString(fmt.Sprintf("index 0000000..%s\n", newHash))
+	} else if modified == "" {
+		header.WriteString("deleted file mode 100644\n")
+		header.WriteString(fmt.Sprintf("index %s..0000000\n", oldHash))
+	} else if cleanFrom != cleanTo {
+		header.WriteString(fmt.Sprintf("rename from %s\n", cleanFrom))
+		header.WriteString(fmt.Sprintf("rename to %s\n", cleanTo))
+		header.WriteString(fmt.Sprintf("index %s..%s 100644\n", oldHash, newHash))
+	} else {
+		header.WriteString(fmt.Sprintf("index %s..%s 100644\n", oldHash, newHash))
+	}
+
+	if body != "" {
+		return header.String() + body
+	}
+	return strings.TrimSuffix(header.String(), "\n")
+}
+
+func cleanDiffPath(path string) string {
+	clean := strings.TrimSpace(path)
+	clean = strings.ReplaceAll(clean, "\\", "/")
+	clean = strings.TrimPrefix(clean, "a/")
+	clean = strings.TrimPrefix(clean, "b/")
+	clean = strings.TrimPrefix(clean, "./")
+	clean = strings.TrimPrefix(clean, "/")
+	if clean == "" || clean == "." {
+		return "file"
+	}
+	return clean
 }
 
 func formatOversizedNotice(filename string, origLen, modLen int) string {
@@ -61,7 +144,7 @@ func formatOversizedNotice(filename string, origLen, modLen int) string {
 }
 
 // DiffStats counts additions and deletions in a unified diff text.
-// Header lines (+++, ---, diff, index, @@) are excluded from the counts.
+// Header lines (+++, ---, diff, index, @@, mode, rename) are excluded from the counts.
 func DiffStats(diffText string) (additions, deletions int) {
 	if strings.TrimSpace(diffText) == "" {
 		return 0, 0
@@ -104,7 +187,7 @@ func ExtractPreview(diffText string, maxLines int) (preview []string, remaining 
 	}
 	allLines := strings.Split(diffText, "\n")
 
-	// Skip leading "--- " or "+++ " lines so the preview starts right at the hunk header
+	// Skip leading git/diff headers so the preview starts right at the hunk header
 	startIdx := 0
 	for i, line := range allLines {
 		trimmed := strings.TrimSpace(line)

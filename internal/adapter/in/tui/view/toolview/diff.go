@@ -22,8 +22,14 @@ func StyleDiffLine(line string) (string, bool) {
 	if strings.HasPrefix(trimmed, "@@") {
 		return tuistyle.DiffHunkStyle.Render(line), true
 	}
-	if strings.HasPrefix(trimmed, "diff --git ") || strings.HasPrefix(trimmed, "index ") {
+	if strings.HasPrefix(trimmed, "diff --git ") || strings.HasPrefix(trimmed, "index ") ||
+		strings.HasPrefix(trimmed, "new file mode ") || strings.HasPrefix(trimmed, "deleted file mode ") ||
+		strings.HasPrefix(trimmed, "similarity index ") || strings.HasPrefix(trimmed, "rename from ") ||
+		strings.HasPrefix(trimmed, "rename to ") || strings.HasPrefix(trimmed, "Binary files ") {
 		return tuistyle.MutedStyle.Bold(true).Render(line), true
+	}
+	if strings.HasPrefix(trimmed, "\\ ") || trimmed == "\\ No newline at end of file" {
+		return tuistyle.MutedStyle.Render(line), true
 	}
 	return line, false
 }
