@@ -36,5 +36,6 @@ func NewMinimalList(items []list.Item, delegate list.ItemDelegate, width, height
 	picker.SetShowStatusBar(false)
 	picker.SetShowPagination(false)
 	picker.SetShowHelp(false)
+	picker.Filter = SmartFilter
 	return picker
 }

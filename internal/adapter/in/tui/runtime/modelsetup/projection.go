@@ -24,7 +24,36 @@ func Project(models []model.RemoteModel, providerName, activeProvider, activeMod
 }
 
 func FilterValue(item Projection) string {
-	return strings.Join([]string{item.Model.ID, item.Model.Name, item.Model.Provider, strings.Join(item.Model.Features, " ")}, " ")
+	parts := make([]string, 0, 9)
+	if id := strings.TrimSpace(item.Model.ID); id != "" {
+		parts = append(parts, id)
+	}
+	if name := strings.TrimSpace(item.Model.Name); name != "" && !strings.EqualFold(name, item.Model.ID) {
+		parts = append(parts, name)
+	}
+	if display := strings.TrimSpace(modelpicker.DisplayName(item.Model)); display != "" && !strings.EqualFold(display, item.Model.ID) && !strings.EqualFold(display, item.Model.Name) {
+		parts = append(parts, display)
+	}
+	if prov := strings.TrimSpace(item.ProviderName); prov != "" {
+		parts = append(parts, prov)
+	}
+	if vendor := strings.TrimSpace(item.Model.Provider); vendor != "" && !strings.EqualFold(vendor, item.ProviderName) {
+		parts = append(parts, vendor)
+	}
+	if model.IsFreeModel(item.Model.ID) {
+		parts = append(parts, "free")
+	}
+	if len(item.Model.Features) > 0 {
+		parts = append(parts, strings.Join(item.Model.Features, " "))
+	}
+	resolved := model.ResolveRemoteMetadata(item.ProviderName, item.Model)
+	if limits := modelpicker.FormatTokenLimits(resolved.Profile.ContextWindow, resolved.Profile.MaxInputTokens, resolved.Profile.MaxOutputTokens); limits != "" {
+		parts = append(parts, limits)
+	}
+	if reasoning := reasoningpolicy.Summary(item.ProviderName, item.Model, true); reasoning != "" {
+		parts = append(parts, "reasoning thinking "+reasoning)
+	}
+	return strings.Join(parts, " ")
 }
 func Title(item Projection) string {
 	return modelpicker.DisplayName(item.Model)

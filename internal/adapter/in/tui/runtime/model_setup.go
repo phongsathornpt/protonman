@@ -339,8 +339,14 @@ func (v *modelSetupPaneView) Render(ctx paneRenderContext) string {
 		rows = append(rows, errorStyle.Render("Failed to load models"), mutedStyle.Render(truncateWithEllipsis(v.err.Error(), maxInt(1, ctx.width-8))))
 	case len(v.picker.Items()) == 0 && !v.picker.SettingFilter() && !v.picker.IsFiltered():
 		rows = append(rows, mutedStyle.Render("No models available."))
+	case len(v.picker.Items()) == 0 && v.picker.SettingFilter():
+		rows = append(rows, mutedStyle.Render("Search: "+v.picker.FilterValue())+brandStyle.Render("█"), mutedStyle.Render("No models available."))
 	case len(v.picker.VisibleItems()) == 0 && strings.TrimSpace(v.picker.FilterValue()) != "":
-		rows = append(rows, mutedStyle.Render("Search: "+v.picker.FilterValue()), mutedStyle.Render("No matches."))
+		searchPrompt := mutedStyle.Render("Search: " + v.picker.FilterValue())
+		if v.picker.SettingFilter() {
+			searchPrompt += brandStyle.Render("█")
+		}
+		rows = append(rows, searchPrompt, mutedStyle.Render("No matches."))
 	default:
 		rows = append(rows, v.modelRows(ctx)...)
 		showSelectionStatus = true
@@ -351,7 +357,11 @@ func (v *modelSetupPaneView) Render(ctx paneRenderContext) string {
 		rows = append(rows, labels)
 	}
 	if mode != layoutTiny {
-		rows = appendPaneGroup(rows, modelSetupHelp(maxInt(1, ctx.width-6), len(v.reasoningChoices) > 1))
+		if v.picker.SettingFilter() {
+			rows = appendPaneGroup(rows, paneKeyboardHelp(maxInt(1, ctx.width-6), "↑/↓", "Navigate", "enter", "Select", "esc", "Cancel Search"))
+		} else {
+			rows = appendPaneGroup(rows, modelSetupHelp(maxInt(1, ctx.width-6), len(v.reasoningChoices) > 1))
+		}
 	}
 	if showSelectionStatus {
 		if status := v.selectionStatus(maxInt(1, ctx.width-6)); status != "" {
@@ -368,8 +378,10 @@ func (v *modelSetupPaneView) modelRows(ctx paneRenderContext) []string {
 	}
 	start, end := paneWindow(len(items), v.picker.Index(), maxModelSetupRows, layoutModeForHeight(ctx.height))
 	rows := make([]string, 0, end-start+1)
-	if v.picker.SettingFilter() || v.picker.IsFiltered() {
-		rows = append(rows, mutedStyle.Render("Search: ")+userStyle.Render(v.picker.FilterValue()))
+	if v.picker.SettingFilter() {
+		rows = append(rows, mutedStyle.Render("Search: "+v.picker.FilterValue())+brandStyle.Render("█"))
+	} else if v.picker.IsFiltered() {
+		rows = append(rows, mutedStyle.Render("Search: "+v.picker.FilterValue()))
 	}
 	width := maxInt(1, ctx.width-8)
 	for i := start; i < end; i++ {
@@ -434,9 +446,9 @@ func padRight(value string, width int) string {
 
 func modelSetupHelp(width int, adjustableEffort bool) string {
 	if adjustableEffort {
-		return paneKeyboardHelp(width, "↑/↓", "Navigate", "←/→", "Effort", "enter", "Select", "esc", "Go Back")
+		return paneKeyboardHelp(width, "↑/↓", "Navigate", "/", "Filter", "←/→", "Effort", "enter", "Select", "esc", "Go Back")
 	}
-	return paneKeyboardHelp(width, "↑/↓", "Navigate", "enter", "Select", "esc", "Go Back")
+	return paneKeyboardHelp(width, "↑/↓", "Navigate", "/", "Filter", "enter", "Select", "esc", "Go Back")
 }
 
 func (v *modelSetupPaneView) effortLayout() (string, string) {
@@ -510,18 +522,68 @@ func (v *modelSetupPaneView) selectionStatus(width int) string {
 	return paneRightStatus(width, status)
 }
 
-func (v *modelSetupPaneView) HandlePaneKey(_ paneRenderContext, message tea.KeyPressMsg) paneKeyResult {
+func (v *modelSetupPaneView) HandlePaneMsg(_ paneRenderContext, msg tea.Msg) paneKeyResult {
+	if v == nil {
+		return paneKeyResult{}
+	}
 	v.initPicker()
-	if v.picker.SettingFilter() {
-		updated, cmd := v.picker.Update(message)
+	if _, ok := msg.(list.FilterMatchesMsg); ok {
+		updated, cmd := v.picker.Update(msg)
 		v.picker = updated
 		v.syncPickerProjection()
 		v.resize(v.layoutWidth, v.layoutHeight)
 		v.syncReasoningForSelection(v.reasoningPreference)
 		return paneKeyResult{handled: true, cmd: cmd}
 	}
+	return paneKeyResult{}
+}
+
+func (v *modelSetupPaneView) HandlePaneKey(_ paneRenderContext, message tea.KeyPressMsg) paneKeyResult {
+	v.initPicker()
+	if v.picker.SettingFilter() {
+		switch {
+		case key.Matches(message, paneutil.Keys.Confirm):
+			item, ok := v.picker.SelectedItem().(modelListItem)
+			if ok {
+				return paneKeyResult{
+					handled: true,
+					action: paneAction{
+						kind:         paneActionApplyModelSetup,
+						providerName: v.activeProviderName(),
+						modelID:      item.model.ID,
+						reasoning:    v.selectedReasoning(),
+					},
+				}
+			}
+			return paneKeyResult{handled: true}
+		case key.Matches(message, paneutil.Keys.Up):
+			v.picker.CursorUp()
+			v.syncPickerProjection()
+			v.syncReasoningForSelection(v.reasoningPreference)
+			return paneKeyResult{handled: true}
+		case key.Matches(message, paneutil.Keys.Down):
+			v.picker.CursorDown()
+			v.syncPickerProjection()
+			v.syncReasoningForSelection(v.reasoningPreference)
+			return paneKeyResult{handled: true}
+		case key.Matches(message, modelSetupKeys.Escape):
+			v.picker.ResetFilter()
+			v.syncPickerProjection()
+			v.resize(v.layoutWidth, v.layoutHeight)
+			v.syncReasoningForSelection(v.reasoningPreference)
+			return paneKeyResult{handled: true}
+		default:
+			updated, cmd := v.picker.Update(message)
+			v.picker = updated
+			v.syncPickerProjection()
+			v.resize(v.layoutWidth, v.layoutHeight)
+			v.syncReasoningForSelection(v.reasoningPreference)
+			return paneKeyResult{handled: true, cmd: cmd}
+		}
+	}
 	switch {
 	case key.Matches(message, modelSetupKeys.Filter):
+		v.picker.SetFilterText("")
 		v.picker.SetFilterState(list.Filtering)
 		v.syncPickerProjection()
 		v.resize(v.layoutWidth, v.layoutHeight)

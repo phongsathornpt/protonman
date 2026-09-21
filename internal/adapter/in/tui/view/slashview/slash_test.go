@@ -60,6 +60,12 @@ func TestCanonicalAndFuzzyMatching(t *testing.T) {
 	if FuzzyContains("provider", "pxd") {
 		t.Fatal("unexpected fuzzy match")
 	}
+	if !FuzzyContains("résumé-modèle", "rmd") {
+		t.Fatal("expected unicode rune fuzzy match")
+	}
+	if !FuzzyContains("日本語モデル", "日モ") {
+		t.Fatal("expected cjk unicode rune fuzzy match")
+	}
 }
 
 func TestSkillMatchesCarryPresentationMetadata(t *testing.T) {

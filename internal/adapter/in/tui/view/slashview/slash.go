@@ -139,11 +139,12 @@ func FuzzyContains(target, query string) bool {
 	if strings.Contains(target, query) {
 		return true
 	}
+	targetRunes := []rune(target)
 	ti := 0
 	for _, q := range query {
 		found := false
-		for ti < len(target) {
-			if rune(target[ti]) == q {
+		for ti < len(targetRunes) {
+			if targetRunes[ti] == q {
 				ti++
 				found = true
 				break

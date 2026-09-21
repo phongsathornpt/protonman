@@ -424,6 +424,20 @@ func (v *skillsPaneView) Render(ctx paneRenderContext) string {
 	return renderModalRows(ctx, panecommon.ToneColor(panecommon.ToneAssistant), rows)
 }
 
+func (v *skillsPaneView) HandlePaneMsg(ctx paneRenderContext, msg tea.Msg) paneKeyResult {
+	if v == nil {
+		return paneKeyResult{}
+	}
+	v.ensurePicker(ctx)
+	if _, ok := msg.(list.FilterMatchesMsg); ok {
+		updated, cmd := v.picker.Update(msg)
+		v.picker = updated
+		v.syncTitle(ctx)
+		return paneKeyResult{handled: true, cmd: cmd}
+	}
+	return paneKeyResult{}
+}
+
 func (v *skillsPaneView) HandlePaneKey(ctx paneRenderContext, message tea.KeyPressMsg) paneKeyResult {
 	v.ensurePicker(ctx)
 	if !v.initialized || len(ctx.skillItems) == 0 {
@@ -596,6 +610,18 @@ func (v *sessionResumePaneView) Render(ctx paneRenderContext) string {
 	}
 	rows := paneSection("Sessions", listRows, help, status, ctx.width)
 	return renderModalRows(ctx, panecommon.ToneColor(panecommon.ToneAssistant), rows)
+}
+
+func (v *sessionResumePaneView) HandlePaneMsg(_ paneRenderContext, msg tea.Msg) paneKeyResult {
+	if v == nil {
+		return paneKeyResult{}
+	}
+	if _, ok := msg.(list.FilterMatchesMsg); ok {
+		updated, cmd := v.picker.Update(msg)
+		v.picker = updated
+		return paneKeyResult{handled: true, cmd: cmd}
+	}
+	return paneKeyResult{}
 }
 
 func (v *sessionResumePaneView) HandlePaneKey(_ paneRenderContext, message tea.KeyPressMsg) paneKeyResult {

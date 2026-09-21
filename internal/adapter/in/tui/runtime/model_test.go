@@ -1034,6 +1034,7 @@ func TestModelSetupEmptyFilterShowsSearchInput(t *testing.T) {
 	if !ok || view == nil {
 		t.Fatal("expected modelSetupViewID open")
 	}
+	view.setModels([]domainmodel.RemoteModel{{ID: "model-0", Name: "Model Zero"}}, view.activeProviderName(), "")
 	view.picker.SetFilterText("nonexistent-model-xyz")
 	view.picker.SetFilterState(list.Filtering)
 	view.syncPickerProjection()
@@ -1163,6 +1164,157 @@ func TestModelSetupEnterOnZeroMatchesDoesNotOpenProviderEditor(t *testing.T) {
 	}
 	if bModel.panes.bottom.has(providerViewID) {
 		t.Fatal("enter on 0 models should not open providerViewID")
+	}
+}
+
+func TestModelSetupEnterWhileActivelySettingFilterSelectsModel(t *testing.T) {
+	bModel := newTestSkillsModel(t, 1)
+	bModel.executeCommand("/model")
+	view, ok := bModel.panes.bottom.find(modelSetupViewID).(*modelSetupPaneView)
+	if !ok || view == nil {
+		t.Fatal("expected modelSetupViewID open")
+	}
+	view.setModels([]domainmodel.RemoteModel{{ID: "deepseek-chat", Name: "DeepSeek Chat"}}, view.activeProviderName(), "")
+	bModel.handlePaneKey(testText("/"))
+	if !view.picker.SettingFilter() {
+		t.Fatal("expected SettingFilter() == true")
+	}
+	view.picker.Select(0)
+
+	handled, cmd := bModel.handlePaneKey(testKey(tea.KeyEnter))
+	if !handled {
+		t.Fatal("enter while actively setting filter was not handled")
+	}
+	if cmd == nil {
+		t.Fatal("expected model setup apply command returned on enter while setting filter")
+	}
+	if bModel.panes.bottom.has(modelSetupViewID) {
+		t.Fatal("expected model setup closed after enter selection")
+	}
+}
+
+func TestModelSetupSearchModeLiveFilteringAndSelection(t *testing.T) {
+	bModel := newTestSkillsModel(t, 1)
+	bModel.executeCommand("/model")
+	view, ok := bModel.panes.bottom.find(modelSetupViewID).(*modelSetupPaneView)
+	if !ok || view == nil {
+		t.Fatal("expected modelSetupViewID open")
+	}
+	view.setModels([]domainmodel.RemoteModel{
+		{ID: "deepseek-chat", Name: "DeepSeek Chat"},
+		{ID: "qwen-flash", Name: "Qwen Flash"},
+		{ID: "gpt-4o", Name: "GPT 4o"},
+	}, view.activeProviderName(), "")
+
+	bModel.handlePaneKey(testText("/"))
+	view.picker.SetFilterText("qwen")
+	view.syncPickerProjection()
+
+	if len(view.models) != 1 || view.models[0].ID != "qwen-flash" {
+		t.Fatalf("expected 1 filtered model 'qwen-flash', got %#v", view.models)
+	}
+
+	handled, cmd := bModel.handlePaneKey(testKey(tea.KeyEnter))
+	if !handled || cmd == nil {
+		t.Fatal("enter did not select filtered model")
+	}
+	if bModel.panes.bottom.has(modelSetupViewID) {
+		t.Fatal("expected model setup closed after selecting qwen-flash")
+	}
+}
+
+func TestModelSetupArrowKeyNavigationWhileFiltering(t *testing.T) {
+	bModel := newTestSkillsModel(t, 1)
+	bModel.executeCommand("/model")
+	view, ok := bModel.panes.bottom.find(modelSetupViewID).(*modelSetupPaneView)
+	if !ok || view == nil {
+		t.Fatal("expected modelSetupViewID open")
+	}
+	view.setModels([]domainmodel.RemoteModel{
+		{ID: "model-0", Name: "Model Zero"},
+		{ID: "model-1", Name: "Model One"},
+	}, view.activeProviderName(), "")
+	bModel.handlePaneKey(testText("/"))
+	if !view.picker.SettingFilter() {
+		t.Fatal("expected SettingFilter() == true")
+	}
+	if len(view.picker.VisibleItems()) != 2 {
+		t.Fatalf("visible items = %d, want 2", len(view.picker.VisibleItems()))
+	}
+
+	handled, _ := bModel.handlePaneKey(testKey(tea.KeyDown))
+	if !handled {
+		t.Fatal("down key was not handled while filtering")
+	}
+	if view.picker.Index() != 1 {
+		t.Fatalf("cursor index = %d, want 1 after Down", view.picker.Index())
+	}
+
+	handled, _ = bModel.handlePaneKey(testKey(tea.KeyUp))
+	if !handled {
+		t.Fatal("up key was not handled while filtering")
+	}
+	if view.picker.Index() != 0 {
+		t.Fatalf("cursor index = %d, want 0 after Up", view.picker.Index())
+	}
+}
+
+func TestModelSetupHelpShowsFilterAndCancelSearch(t *testing.T) {
+	bModel := newTestSkillsModel(t, 1)
+	bModel.executeCommand("/model")
+	view, ok := bModel.panes.bottom.find(modelSetupViewID).(*modelSetupPaneView)
+	if !ok || view == nil {
+		t.Fatal("expected modelSetupViewID open")
+	}
+	view.setModels([]domainmodel.RemoteModel{{ID: "model-0"}}, view.activeProviderName(), "")
+
+	renderedBrowsing := view.Render(newPaneRenderContext(bModel))
+	if !strings.Contains(renderedBrowsing, "filter") {
+		t.Fatalf("expected 'filter' in browsing help: %s", renderedBrowsing)
+	}
+
+	view.picker.SetFilterState(list.Filtering)
+	renderedFiltering := view.Render(newPaneRenderContext(bModel))
+	if !strings.Contains(renderedFiltering, "cancel search") {
+		t.Fatalf("expected 'cancel search' in filtering help: %s", renderedFiltering)
+	}
+}
+
+func TestModelSetupEmptyListWhileSearchingShowsNoModelsAvailable(t *testing.T) {
+	bModel := newTestSkillsModel(t, 1)
+	bModel.executeCommand("/model")
+	view, ok := bModel.panes.bottom.find(modelSetupViewID).(*modelSetupPaneView)
+	if !ok || view == nil {
+		t.Fatal("expected modelSetupViewID open")
+	}
+	view.setModels(nil, view.activeProviderName(), "")
+	view.picker.SetFilterText("gpt")
+	view.picker.SetFilterState(list.Filtering)
+
+	rendered := view.Render(newPaneRenderContext(bModel))
+	if !strings.Contains(rendered, "No models available.") {
+		t.Fatalf("expected 'No models available.' for empty list during search: %s", rendered)
+	}
+	if strings.Contains(rendered, "No matches.") {
+		t.Fatalf("empty model list must not report 'No matches.': %s", rendered)
+	}
+}
+
+func TestModelSetupHandlePaneMsgFilterMatches(t *testing.T) {
+	bModel := newTestSkillsModel(t, 1)
+	bModel.executeCommand("/model")
+	view, ok := bModel.panes.bottom.find(modelSetupViewID).(*modelSetupPaneView)
+	if !ok || view == nil {
+		t.Fatal("expected modelSetupViewID open")
+	}
+	view.setModels([]domainmodel.RemoteModel{
+		{ID: "alpha", Name: "Alpha"},
+		{ID: "beta", Name: "Beta"},
+	}, view.activeProviderName(), "")
+
+	res := view.HandlePaneMsg(newPaneRenderContext(bModel), list.FilterMatchesMsg(nil))
+	if !res.handled {
+		t.Fatal("expected FilterMatchesMsg handled by HandlePaneMsg")
 	}
 }
 
