@@ -119,7 +119,6 @@ func ParseCommand(line string) ParsedCommand {
 	return parsed
 }
 
-
 func LookupCommand(name string) (Command, bool) {
 	name = CanonicalName(name)
 	for _, command := range Catalog() {

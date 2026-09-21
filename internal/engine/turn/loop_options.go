@@ -77,7 +77,6 @@ func WithGroundingEvidence(evidence tool.EvidenceKind) Option {
 	}
 }
 
-
 // WithMaxToolCalls configures an optional cumulative hard-cap override.
 // Zero uses the progress-aware stagnant-call budget and emergency ceiling.
 func WithMaxToolCalls(calls int) Option {
@@ -188,4 +187,3 @@ func WithSkillRegistry(registry *skill.Registry) Option {
 		return nil
 	}
 }
-

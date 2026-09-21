@@ -59,7 +59,6 @@ func filterProjects(projects []desktopstate.ProjectState, sessions []desktopstat
 	return filtered
 }
 
-
 func sidebarRowIndexForSession(rows []sidebarRow, sessionID string) int {
 	for i := range rows {
 		if rows[i].Kind == sidebarSessionRow && rows[i].SessionID == sessionID {

@@ -218,7 +218,6 @@ func isCommandLine(line string) bool {
 	return true
 }
 
-
 func parseCommand(line string) slashview.ParsedCommand {
 	return slashview.ParseCommand(line)
 }
@@ -241,7 +240,6 @@ func (m bubbleModel) parseSlashContext() (slashContext, bool) {
 	}
 	return slashview.ParseContext(prompt.Value())
 }
-
 
 func (m bubbleModel) slashMatches() []slashCommand {
 	context, ok := m.parseSlashContext()

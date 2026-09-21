@@ -225,7 +225,6 @@ func toolDisciplineSection(spec Spec) string {
 	return strings.Join(lines, "\n")
 }
 
-
 func workspaceSection(_ Spec) string {
 	return `# Workspace
 - Workspace tool root: .

@@ -52,7 +52,6 @@ func MetadataForName(name string) (Metadata, bool) {
 	return spec.Metadata, true
 }
 
-
 func titleSubagent(args map[string]any) string {
 	switch strings.ToLower(ExtractString(args, "action")) {
 	case "spawn":

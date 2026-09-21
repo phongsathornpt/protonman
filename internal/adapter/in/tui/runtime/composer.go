@@ -147,7 +147,6 @@ func (p *bottomPane) attachImage(path string) {
 	p.composer.attachments.attachImage(&p.composer.input, path)
 }
 
-
 func (p *bottomPane) setIcons(icons tuistyle.IconSet) {
 	if p == nil {
 		return
@@ -533,7 +532,6 @@ func (m *bubbleModel) imageInputsNotSupportedMessage() string {
 	}
 	return fmt.Sprintf("model %s does not support image inputs; remove images or switch models", modelID)
 }
-
 
 func normalizePastedPath(content string, workDir string) string {
 	trimmed := strings.TrimSpace(content)

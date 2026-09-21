@@ -120,7 +120,6 @@ func verificationWords(words []string) (string, bool) {
 	return "", false
 }
 
-
 func commandRiskRank(risk CommandRisk) int {
 	switch risk {
 	case CommandRiskRemoteDestructive:

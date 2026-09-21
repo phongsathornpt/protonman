@@ -28,8 +28,13 @@ When changing Protonman:
 4. Preserve unrelated user work and repository state.
 5. Add or update tests for behavioral changes.
 6. Run the narrowest useful verifier first, then broaden according to risk.
-7. Do not claim verification that did not actually run.
-8. Do not create commits, branches, releases, or deployments unless explicitly requested.
+7. Run standard verification:
+   - `make lint`
+   - `make test`
+   - `make test-race` when concurrency-sensitive code changed
+   - `make build`
+8. Do not claim verification that did not actually run.
+9. Do not create commits, branches, releases, or deployments unless explicitly requested.
 
 ## Repository Shape
 
@@ -689,6 +694,12 @@ boundary that owns the resource. Avoid magic-number drift across packages.
 
 Use focused tests during development and the full suite before declaring a
 cross-cutting change complete.
+
+Standard verification sequence:
+- `make lint`
+- `make test`
+- `make test-race` when concurrency-sensitive code changed
+- `make build`
 
 Common commands:
 

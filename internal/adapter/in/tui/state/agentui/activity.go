@@ -59,7 +59,6 @@ func (i ActivityIntent) Label() string {
 	}
 }
 
-
 // LegendCompact returns a single-line summary of the status labels for help and pane displays.
 func LegendCompact() string {
 	return "W8 queued · Roam explore · Farm read · Skill think · Gank search · Push edit · Defend test · B cancel · Ready done"

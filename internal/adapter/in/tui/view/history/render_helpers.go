@@ -19,7 +19,6 @@ func rawTextLines(text string) []string {
 	return lines
 }
 
-
 func safeWrappedLines(text string, width int) []string {
 	text = strings.TrimRight(strings.ReplaceAll(text, "\r\n", "\n"), "\n")
 	if text == "" {

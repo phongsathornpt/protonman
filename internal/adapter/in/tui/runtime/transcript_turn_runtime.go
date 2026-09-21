@@ -125,7 +125,6 @@ func (m *bubbleModel) appendToolResult(result tool.Result, err error) {
 	}
 }
 
-
 func plainTranscript(model *bubbleModel) string {
 	if model == nil || model.historyState == nil {
 		return ""

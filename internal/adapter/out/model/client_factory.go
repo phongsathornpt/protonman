@@ -43,7 +43,6 @@ func WithClientName(clientName string) ClientOption {
 	return func(c *clientConfig) { c.clientName = clientName }
 }
 
-
 func WithAgentProfile(profile string) ClientOption {
 	return func(c *clientConfig) { c.agentProfile = strings.TrimSpace(profile) }
 }

@@ -30,7 +30,6 @@ const (
 
 type permissionOptionItem = permissionpolicy.Item
 
-
 func shortcutHintFor(options []permissionOptionItem) string {
 	return permissionpolicy.ShortcutHint(options)
 }
