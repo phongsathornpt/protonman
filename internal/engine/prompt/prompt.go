@@ -225,15 +225,6 @@ func toolDisciplineSection(spec Spec) string {
 	return strings.Join(lines, "\n")
 }
 
-func hasTool(spec Spec, name string) bool {
-	for _, candidate := range spec.AvailableTools {
-		if candidate == name {
-			return true
-		}
-	}
-	return false
-}
-
 func workspaceSection(_ Spec) string {
 	return `# Workspace
 - Workspace tool root: .

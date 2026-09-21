@@ -183,8 +183,8 @@ func TestClassifyCommandEffect(t *testing.T) {
 		"find . -delete":          CommandEffectMutating,
 	}
 	for command, want := range tests {
-		if got := ClassifyCommandEffect(command); got != want {
-			t.Fatalf("ClassifyCommandEffect(%q) = %q, want %q", command, got, want)
+		if got := AnalyzeCommand(command).Effect; got != want {
+			t.Fatalf("AnalyzeCommand(%q).Effect = %q, want %q", command, got, want)
 		}
 	}
 }

@@ -81,20 +81,3 @@ func Classify(line string) Command {
 		Rest:     parsed.Rest,
 	}
 }
-
-func Usage(kind Kind) string {
-	switch kind {
-	case KindClear:
-		return "usage: /clear"
-	case KindTodo:
-		return "usage: /todo [show|hide]"
-	case KindCall:
-		return "usage: /call <tool> <json>"
-	case KindResume:
-		return "usage: /resume [session-id|latest]"
-	case KindSkills:
-		return "usage: /skills [toggle|activate|deactivate|check|lock] <name>"
-	default:
-		return ""
-	}
-}

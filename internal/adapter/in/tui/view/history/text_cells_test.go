@@ -28,8 +28,8 @@ func TestAssistantIncrementalMarkdownMatchesFullRenderer(t *testing.T) {
 		text += chunk
 		cell.Text = text
 		trimmed := strings.TrimRight(text, "\n")
-		got := cell.renderMarkdownIncremental(trimmed, 48)
-		want := textview.RenderMarkdownLines(trimmed, 48)
+		got := cell.RenderWidth(50)
+		want := decorateAssistantLines(textview.RenderMarkdownLines(trimmed, 48), 0)
 		if !reflect.DeepEqual(got, want) {
 			t.Fatalf("chunk %d incremental render mismatch\ngot:  %#v\nwant: %#v", i, got, want)
 		}

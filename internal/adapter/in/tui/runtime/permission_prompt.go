@@ -30,20 +30,6 @@ const (
 
 type permissionOptionItem = permissionpolicy.Item
 
-func permissionOptionsFor(request permission.Request, projectTrusted bool, hasWorkDir bool) []permissionOptionItem {
-	return permissionpolicy.Options(request, projectTrusted, hasWorkDir)
-}
-
-func (v *permissionPaneView) options(m *bubbleModel) []permissionOptionItem {
-	projectTrusted := false
-	hasWorkDir := false
-	if m != nil {
-		projectTrusted = m.projectTrusted
-		hasWorkDir = m.workDir != ""
-	}
-	return permissionpolicy.Options(v.pending.Request, projectTrusted, hasWorkDir)
-}
-
 func shortcutHintFor(options []permissionOptionItem) string {
 	return permissionpolicy.ShortcutHint(options)
 }

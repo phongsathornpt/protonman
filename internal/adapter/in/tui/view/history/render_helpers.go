@@ -19,14 +19,6 @@ func rawTextLines(text string) []string {
 	return lines
 }
 
-func renderStyledLines(text string, style func(string) string) []string {
-	lines := rawTextLines(text)
-	for i := range lines {
-		lines[i] = style(lines[i])
-	}
-	return lines
-}
-
 func safeWrappedLines(text string, width int) []string {
 	text = strings.TrimRight(strings.ReplaceAll(text, "\r\n", "\n"), "\n")
 	if text == "" {

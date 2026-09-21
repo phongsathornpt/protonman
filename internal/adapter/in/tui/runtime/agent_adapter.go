@@ -127,4 +127,3 @@ func (m *bubbleModel) openAgentsPane() tea.Cmd {
 	m.requestRelayout()
 	return nil
 }
-func agentModelLabel(st agent.AgentStatus) string { return agentpane.AgentModelLabel(st) }

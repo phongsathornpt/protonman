@@ -43,14 +43,6 @@ func WithClientName(clientName string) ClientOption {
 	return func(c *clientConfig) { c.clientName = clientName }
 }
 
-func WithUserAgent(userAgent string) ClientOption {
-	return func(c *clientConfig) { c.userAgent = userAgent }
-}
-
-func WithAgentType(agentType agentidentity.Type) ClientOption {
-	return func(c *clientConfig) { c.agentType = agentType }
-}
-
 func WithAgentProfile(profile string) ClientOption {
 	return func(c *clientConfig) { c.agentProfile = strings.TrimSpace(profile) }
 }

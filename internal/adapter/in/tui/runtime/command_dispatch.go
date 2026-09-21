@@ -246,7 +246,7 @@ func (m *bubbleModel) resumeSession(targetID string) tea.Cmd {
 		if m.conversation != nil {
 			currentMsgs = m.conversation.SnapshotMessages()
 		}
-		_ = m.sessions.SaveCurrent(m.ctx, app.SessionDetail{
+		if err := m.sessions.SaveCurrent(m.ctx, app.SessionDetail{
 			ID:                 m.sessionID,
 			WorkspaceKey:       m.workspaceKey,
 			PermissionMode:     permMode,
@@ -256,7 +256,9 @@ func (m *bubbleModel) resumeSession(targetID string) tea.Cmd {
 			ReasoningEffort:    effortStr,
 			LowConcurrencyMode: m.lowConcurrencyMode.String(),
 			Messages:           currentMsgs,
-		})
+		}); err != nil {
+			m.appendError(fmt.Sprintf("failed to save outgoing session %s: %v", m.sessionID, err))
+		}
 	}
 
 	// Apply incoming controls
@@ -282,7 +284,9 @@ func (m *bubbleModel) resumeSession(targetID string) tea.Cmd {
 	}
 	if m.skills != nil && len(detail.ActiveSkills) > 0 {
 		for _, name := range detail.ActiveSkills {
-			_ = m.skills.Activate(name)
+			if err := m.skills.Activate(name); err != nil {
+				m.appendError(fmt.Sprintf("failed to activate skill %q: %v", name, err))
+			}
 		}
 	}
 
@@ -293,7 +297,9 @@ func (m *bubbleModel) resumeSession(targetID string) tea.Cmd {
 		if m.todoHandlerFactory != nil {
 			handler := m.todoHandlerFactory(todoStore, detail.ID)
 			if reg, ok := m.registry.(tool.Registrar); ok {
-				_ = reg.Register(handler)
+				if err := reg.Register(handler); err != nil {
+					m.appendError(fmt.Sprintf("failed to register todo handler: %v", err))
+				}
 			}
 		}
 		m.applyTodoSnapshot(todoStore.Snapshot())
@@ -390,13 +396,6 @@ func (m *bubbleModel) lowConcurrencyEffective() bool {
 		baseURL = provider.BaseURL
 	}
 	return model.IsProvider(model.DefaultOpenCodeName, providerName, baseURL) && model.IsFreeModel(m.activeModel)
-}
-
-func (m *bubbleModel) lowConcurrencyFooterLabel() string {
-	if m.lowConcurrencyEffective() {
-		return "LOW"
-	}
-	return ""
 }
 
 func (m *bubbleModel) showTransientNotice(text string) tea.Cmd {
@@ -778,16 +777,8 @@ func (m *bubbleModel) persistActiveSkills() {
 	}
 	active := m.skills.ActivatedList()
 	slices.Sort(active)
-	// First condition: if have .protonman folder in project save here first
-	if appdirs.HasProjectRoot("", m.workDir) {
-		if err := m.application.Projects.SaveActiveSkills(m.workDir, active); err != nil {
-			m.appendError(fmt.Sprintf("Failed to save project skill list: %v", err))
-		}
-		return
-	}
-	// Else save in global
-	if err := m.application.UserSettings.SaveActiveSkills(active); err != nil {
-		m.appendError(fmt.Sprintf("Failed to save global skill list: %v", err))
+	if err := m.application.SaveActiveSkills(m.workDir, active); err != nil {
+		m.appendError(fmt.Sprintf("Failed to save active skills: %v", err))
 	}
 }
 

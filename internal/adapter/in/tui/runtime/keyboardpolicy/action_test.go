@@ -7,9 +7,10 @@ import (
 	tea "charm.land/bubbletea/v2"
 )
 
-func TestClassifyPrefersNewlineOverSubmit(t *testing.T) {
+func TestComposerPrefersNewlineOverSubmit(t *testing.T) {
 	binding := key.NewBinding(key.WithKeys("enter"))
-	if got := Classify(tea.KeyPressMsg{Code: tea.KeyEnter}, binding, binding); got != Newline {
+	bindings := Bindings{Newline: binding, Submit: binding}
+	if got := bindings.Composer(tea.KeyPressMsg{Code: tea.KeyEnter}); got != Newline {
 		t.Fatalf("action = %v, want newline", got)
 	}
 }

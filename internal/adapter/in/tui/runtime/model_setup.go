@@ -23,7 +23,7 @@ import (
 	"github.com/phongsathornpt/protonman/proton-sdk/domain"
 )
 
-const modelSetupViewID = "model_setup"
+const modelSetupViewID = "model-setup"
 const maxModelSetupRows = 6
 
 type modelSetupAppliedMsg struct {
