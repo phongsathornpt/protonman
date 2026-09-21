@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/phongsathornpt/protonman/internal/base/diffutil"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/core/workspace"
 	"github.com/phongsathornpt/protonman/internal/platform/checkpoint"
@@ -63,8 +64,10 @@ type patchChunk struct {
 type plannedPatchChange struct {
 	kind        patchOperationKind
 	path        string
+	displayPath string
 	destination string
 	content     string
+	oldContent  string
 }
 
 // NewApplyPatch returns the Codex-format multi-file patch adapter.
@@ -257,10 +260,30 @@ func (h applyPatchHandler) Execute(ctx context.Context, call tool.Call) (tool.Re
 		}
 	}
 	h.workspace.MarkMutationOwned(ctx, checkpointPaths...)
+	var diffParts []string
+	totalAdds, totalDels := 0, 0
+	for _, change := range changes {
+		d := diffutil.UnifiedDiff(change.oldContent, change.content, change.displayPath, 3)
+		if d != "" {
+			diffParts = append(diffParts, d)
+			a, del := diffutil.DiffStats(d)
+			totalAdds += a
+			totalDels += del
+		}
+	}
+	combinedDiff := strings.Join(diffParts, "\n")
+	structured, _ := json.Marshal(map[string]any{
+		"paths":     affectedPaths,
+		"action":    "patch",
+		"additions": totalAdds,
+		"deletions": totalDels,
+		"diff":      combinedDiff,
+	})
 	return tool.Result{
 		CallID:           call.ID,
 		ToolName:         call.Name,
 		Output:           output.String(),
+		StructuredOutput: structured,
 		CheckpointID:     checkpointID,
 		MutationCoverage: tool.MutationCoverageFull,
 		AffectedPaths:    affectedPaths,
@@ -291,9 +314,10 @@ func (h applyPatchHandler) planPatch(ctx context.Context, operations []patchOper
 				return nil, fmt.Errorf("add %q: %w", operation.path, err)
 			}
 			changes = append(changes, plannedPatchChange{
-				kind:    patchAdd,
-				path:    path,
-				content: operation.content,
+				kind:        patchAdd,
+				path:        path,
+				displayPath: operation.path,
+				content:     operation.content,
 			})
 		case patchDelete:
 			contents, exists, err := readEditFile(ctx, h.workspace, path)
@@ -306,7 +330,12 @@ func (h applyPatchHandler) planPatch(ctx context.Context, operations []patchOper
 			if contents == nil {
 				return nil, fmt.Errorf("delete %q: target is not a regular file", operation.path)
 			}
-			changes = append(changes, plannedPatchChange{kind: patchDelete, path: path})
+			changes = append(changes, plannedPatchChange{
+				kind:        patchDelete,
+				path:        path,
+				displayPath: operation.path,
+				oldContent:  string(contents),
+			})
 		case patchUpdate:
 			contents, exists, err := readEditFile(ctx, h.workspace, path)
 			if err != nil {
@@ -321,9 +350,11 @@ func (h applyPatchHandler) planPatch(ctx context.Context, operations []patchOper
 			}
 			if operation.movePath == "" {
 				changes = append(changes, plannedPatchChange{
-					kind:    patchUpdate,
-					path:    path,
-					content: updated,
+					kind:        patchUpdate,
+					path:        path,
+					displayPath: operation.path,
+					content:     updated,
+					oldContent:  string(contents),
 				})
 				continue
 			}
@@ -337,8 +368,10 @@ func (h applyPatchHandler) planPatch(ctx context.Context, operations []patchOper
 			changes = append(changes, plannedPatchChange{
 				kind:        patchUpdate,
 				path:        path,
+				displayPath: operation.path,
 				destination: destination,
 				content:     updated,
+				oldContent:  string(contents),
 			})
 		default:
 			return nil, fmt.Errorf("unknown patch operation kind %s", operation.kind)

@@ -12,6 +12,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/permissionpolicy"
 	panecommon "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane/common"
 	permissionpane "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane/permission"
+	"github.com/phongsathornpt/protonman/internal/base/diffutil"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 )
@@ -142,6 +143,7 @@ func (v *permissionPaneView) card(ctx paneRenderContext) string {
 	title := "Permission required"
 	tone := panecommon.ToneWarning
 	detailExtras := make([]string, 0, 3)
+	var diffPreview []string
 	switch request.ToolKind {
 	case permission.ToolRead, permission.ToolGrep, permission.ToolTask, permission.ToolAgent:
 		switch request.ToolKind {
@@ -156,6 +158,72 @@ func (v *permissionPaneView) card(ctx paneRenderContext) string {
 	case permission.ToolEdit:
 		title = "Permission required — modifies workspace"
 		tone = panecommon.ToneError
+		var editInput struct {
+			Action    string `json:"action"`
+			FilePath  string `json:"filePath"`
+			Path      string `json:"path"`
+			OldString string `json:"oldString"`
+			NewString string `json:"newString"`
+			Patch     string `json:"patch"`
+			Content   string `json:"content"`
+		}
+		_ = json.Unmarshal(request.Arguments, &editInput)
+		targetPath := editInput.FilePath
+		if targetPath == "" {
+			targetPath = editInput.Path
+		}
+		action := strings.ToLower(strings.TrimSpace(editInput.Action))
+		if action == "" {
+			action = "edit"
+		}
+		switch action {
+		case "replace":
+			if editInput.OldString != "" || editInput.NewString != "" {
+				diff := diffutil.UnifiedDiff(editInput.OldString, editInput.NewString, targetPath, 1)
+				if diff != "" {
+					adds, dels := diffutil.DiffStats(diff)
+					badge := diffutil.StatBadge(adds, dels)
+					if badge != "" {
+						detailExtras = append(detailExtras, fmt.Sprintf("Action: replace · %s", badge))
+					} else {
+						detailExtras = append(detailExtras, "Action: replace")
+					}
+					preview, _ := diffutil.ExtractPreview(diff, 6)
+					diffPreview = preview
+				} else {
+					detailExtras = append(detailExtras, "Action: replace")
+				}
+			}
+		case "patch":
+			if editInput.Patch != "" {
+				adds, dels := diffutil.DiffStats(editInput.Patch)
+				badge := diffutil.StatBadge(adds, dels)
+				if badge != "" {
+					detailExtras = append(detailExtras, fmt.Sprintf("Action: patch · %s", badge))
+				} else {
+					detailExtras = append(detailExtras, "Action: patch")
+				}
+				preview, _ := diffutil.ExtractPreview(editInput.Patch, 6)
+				diffPreview = preview
+			}
+		case "write":
+			if editInput.Content != "" {
+				lineCount := strings.Count(editInput.Content, "\n") + 1
+				detailExtras = append(detailExtras, fmt.Sprintf("Action: write · %d lines (%d bytes)", lineCount, len(editInput.Content)))
+				lines := strings.Split(editInput.Content, "\n")
+				limit := min(4, len(lines))
+				for _, l := range lines[:limit] {
+					diffPreview = append(diffPreview, "+ "+l)
+				}
+				if len(lines) > limit {
+					diffPreview = append(diffPreview, fmt.Sprintf("… (+%d more lines)", len(lines)-limit))
+				}
+			} else {
+				detailExtras = append(detailExtras, "Action: write (empty file)")
+			}
+		case "restore":
+			detailExtras = append(detailExtras, "Action: restore checkpoint")
+		}
 	case permission.ToolBash:
 		var input struct {
 			Command string `json:"command"`
@@ -213,6 +281,7 @@ func (v *permissionPaneView) card(ctx paneRenderContext) string {
 		ToolKind:     string(request.ToolKind),
 		Detail:       request.Detail,
 		DetailExtras: detailExtras,
+		DiffPreview:  diffPreview,
 		Options:      labels,
 		ShortcutHint: shortcutHint,
 	})

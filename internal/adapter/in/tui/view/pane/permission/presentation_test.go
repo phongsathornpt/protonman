@@ -75,3 +75,23 @@ func TestPermissionViewParkedUsesInlinePresentation(t *testing.T) {
 		t.Fatalf("parked inline width = %d, want <= %d", width, snapshot.Width-2)
 	}
 }
+
+func TestPermissionViewRendersDiffPreview(t *testing.T) {
+	snapshot := permissionFixture(80, 24)
+	snapshot.DiffPreview = []string{
+		"@@ -1,3 +1,4 @@",
+		"-old line",
+		"+new line",
+		"+extra line",
+	}
+
+	rendered := PermissionView(snapshot)
+	plain := ansi.Strip(strings.Join(rendered.Rows, "\n"))
+
+	if !strings.Contains(plain, "@@ -1,3 +1,4 @@") {
+		t.Fatalf("expected hunk header in permission view, got:\n%s", plain)
+	}
+	if !strings.Contains(plain, "-old line") || !strings.Contains(plain, "+new line") {
+		t.Fatalf("expected diff lines in permission view, got:\n%s", plain)
+	}
+}

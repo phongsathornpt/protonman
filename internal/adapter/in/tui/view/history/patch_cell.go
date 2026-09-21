@@ -20,6 +20,9 @@ type PatchCell struct {
 	Summary     string
 	Paths       []string
 	Body        string
+	Diff        string // Unified diff text
+	Additions   int    // Count of added lines
+	Deletions   int    // Count of deleted lines
 	Running     bool
 	Truncated   bool
 	Denied      bool
@@ -107,16 +110,29 @@ func (c PatchCell) RenderWidth(width int) []string {
 		}
 	}
 
-	// 2. Format responsive target if singlePath
+	// 2. Format stat badge (+N -M) if diff stats exist
+	statBadge := ""
+	if !c.Running && c.FailureCode == "" && !c.Denied && (c.Additions > 0 || c.Deletions > 0) {
+		var parts []string
+		if c.Additions > 0 {
+			parts = append(parts, tuistyle.DiffAddStyle.Render(fmt.Sprintf("+%d", c.Additions)))
+		}
+		if c.Deletions > 0 {
+			parts = append(parts, tuistyle.DiffDeleteStyle.Render(fmt.Sprintf("-%d", c.Deletions)))
+		}
+		statBadge = "  " + strings.Join(parts, " ")
+	}
+
+	// 3. Format responsive target if singlePath
 	targetFormatted := ""
 	if rawTarget != "" {
-		reserved := ansi.StringWidth(glyph) + ansi.StringWidth(title) + ansi.StringWidth(metaText) + 2
+		reserved := ansi.StringWidth(glyph) + ansi.StringWidth(title) + ansi.StringWidth(metaText) + ansi.StringWidth(statBadge) + 2
 		targetFormatted = " " + toolview.FormatPathWidth(rawTarget, max(6, width-reserved))
 	}
 
-	// 3. Assemble header line with calm, semantic styling
+	// 4. Assemble header line with calm, semantic styling
 	labelStyled := tuistyle.MutedStyle.Render(title)
-	headerLine := glyphStyle.Render(glyph) + labelStyled + targetFormatted
+	headerLine := glyphStyle.Render(glyph) + labelStyled + targetFormatted + statBadge
 	if metaText != "" {
 		headerLine += metaStyle.Render(metaText)
 	}
@@ -167,10 +183,30 @@ func (c PatchCell) RenderWidth(width int) []string {
 				out = append(out, line)
 			}
 		}
+
+		// C. Render syntax-colored diff preview (up to 5 lines) with progressive fold indicator
+		if c.Diff != "" {
+			previewLines, remaining := toolview.ExtractDiffPreview(c.Diff, 5)
+			for _, line := range previewLines {
+				styled, isDiff := toolview.StyleDiffLine(line)
+				if !isDiff {
+					styled = tuistyle.MutedStyle.Render(line)
+				}
+				for _, wrapped := range safeWrappedLines(styled, max(1, width-2)) {
+					out = append(out, "  "+wrapped)
+				}
+			}
+			if remaining > 0 {
+				foldMsg := tuistyle.ToolFoldStyle.Render(fmt.Sprintf("  … (+%d more lines · ctrl+t for full diff)", remaining))
+				for _, line := range wrapStyledLines(foldMsg, width) {
+					out = append(out, line)
+				}
+			}
+		}
 	}
 
-	// C. If body has diff lines (e.g. patch diffs), render them folded
-	if !c.Running && c.Body != "" && (c.Denied || c.FailureCode != "" || len(c.Paths) == 0) {
+	// D. If body has diff lines (e.g. patch diffs without structured diff), render them folded
+	if !c.Running && c.Diff == "" && c.Body != "" && (c.Denied || c.FailureCode != "" || len(c.Paths) == 0) {
 		bodyLines := resultBodyLines(c.Body, nil, c.Truncated, c.Denied, c.FailureCode)
 		if len(bodyLines) > 0 {
 			folded := toolview.FormatOutputFold(bodyLines, 3)
@@ -239,6 +275,9 @@ func (c PatchCell) RawLines() []string {
 	}
 	if c.Attempts > 1 {
 		out = append(out, fmt.Sprintf("attempts: %d", c.Attempts))
+	}
+	if c.Diff != "" {
+		out = append(out, strings.Split(c.Diff, "\n")...)
 	}
 	out = append(out, resultBodyLines(c.Body, nil, c.Truncated, c.Denied, c.FailureCode)...)
 	return out

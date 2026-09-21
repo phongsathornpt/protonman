@@ -1,8 +1,10 @@
 package toolview
 
 import (
-	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/style"
 	"strings"
+
+	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/style"
+	"github.com/phongsathornpt/protonman/internal/base/diffutil"
 )
 
 // StyleDiffLine checks if a line looks like a diff line and applies syntax coloring.
@@ -24,4 +26,10 @@ func StyleDiffLine(line string) (string, bool) {
 		return tuistyle.MutedStyle.Bold(true).Render(line), true
 	}
 	return line, false
+}
+
+// ExtractDiffPreview extracts up to maxLines from a unified diff text starting at the first hunk header,
+// returning the preview lines and the count of omitted diff lines.
+func ExtractDiffPreview(diffText string, maxLines int) ([]string, int) {
+	return diffutil.ExtractPreview(diffText, maxLines)
 }
