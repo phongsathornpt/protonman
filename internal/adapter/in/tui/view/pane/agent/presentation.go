@@ -67,21 +67,21 @@ func AgentRows(snapshot AgentsSnapshot) []string {
 		header := AgentDisplayProfile(st) + "  " + textview.PadRight(activityLabel, 10) + " " + FormatElapsed(AgentDisplayDuration(st, now))
 		rows = append(rows, agentStateStyle(st.State).Render(strings.TrimSpace(header)))
 		if task := strings.TrimSpace(st.Task); task != "" {
-			rows = append(rows, "  "+textview.TruncateEllipsis(task, max(1, snapshot.Width-8)))
+			rows = append(rows, "  "+textview.TruncateEllipsis(task, panecommon.PaneContentWidth(snapshot.Width)))
 		}
 		if len(st.DependsOn) > 0 {
 			deps := "deps · " + strings.Join(st.DependsOn, ", ")
-			rows = append(rows, tuistyle.MutedStyle.Render("  "+textview.TruncateEllipsis(deps, max(1, snapshot.Width-8))))
+			rows = append(rows, tuistyle.MutedStyle.Render("  "+textview.TruncateEllipsis(deps, panecommon.PaneContentWidth(snapshot.Width))))
 		}
 		if label := AgentModelLabel(st); label != "" {
-			rows = append(rows, tuistyle.MutedStyle.Render("  "+textview.TruncateEllipsis(label, max(1, snapshot.Width-8))))
+			rows = append(rows, tuistyle.MutedStyle.Render("  "+textview.TruncateEllipsis(label, panecommon.PaneContentWidth(snapshot.Width))))
 		}
 		if activity := currentActivity; activity != "" && showCurrentActivity {
-			rows = append(rows, tuistyle.MutedStyle.Render("  "+textview.TruncateEllipsis(activity, max(1, snapshot.Width-8))))
+			rows = append(rows, tuistyle.MutedStyle.Render("  "+textview.TruncateEllipsis(activity, panecommon.PaneContentWidth(snapshot.Width))))
 		} else if reason := strings.TrimSpace(st.Reason); reason != "" {
-			rows = append(rows, tuistyle.ErrorStyle.Render("  "+textview.TruncateEllipsis(reason, max(1, snapshot.Width-8))))
+			rows = append(rows, tuistyle.ErrorStyle.Render("  "+textview.TruncateEllipsis(reason, panecommon.PaneContentWidth(snapshot.Width))))
 		}
-		rows = append(rows, tuistyle.MutedStyle.Render(textview.TruncateEllipsis("  id: "+st.ID, max(1, snapshot.Width-8))))
+		rows = append(rows, tuistyle.MutedStyle.Render(textview.TruncateEllipsis("  id: "+st.ID, panecommon.PaneContentWidth(snapshot.Width))))
 	}
 	if hidden := len(retained) - len(visible); hidden > 0 {
 		rows = append(rows, tuistyle.MutedStyle.Render(fmt.Sprintf("… %d more retained", hidden)))

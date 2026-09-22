@@ -9,8 +9,10 @@ import (
 	"errors"
 	"fmt"
 	"github.com/charmbracelet/x/ansi"
+	tuiconv "github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/conversation"
 	crashview "github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/crash"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/transcriptutil"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/state/runtimeui"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/execview"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
@@ -971,7 +973,7 @@ func TestDrainQueueReleasesBackingWhenEmpty(t *testing.T) {
 func TestQueueFullPreservesDraft(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, nil)
 	m.busy = true
-	for i := 0; i < maxQueuedPrompts; i++ {
+	for i := 0; i < tuiconv.DefaultMaxQueuedPrompts; i++ {
 		m.conversation.Enqueue(fmt.Sprintf("queued-%d", i))
 	}
 	m.panes.bottom.prompt().SetValue("keep this draft")
@@ -981,15 +983,15 @@ func TestQueueFullPreservesDraft(t *testing.T) {
 	if got := m.panes.bottom.prompt().Value(); got != "keep this draft" {
 		t.Fatalf("draft = %q, want preserved input", got)
 	}
-	if got := m.conversation.QueueLen(); got != maxQueuedPrompts {
-		t.Fatalf("queue len = %d, want %d", got, maxQueuedPrompts)
+	if got := m.conversation.QueueLen(); got != tuiconv.DefaultMaxQueuedPrompts {
+		t.Fatalf("queue len = %d, want %d", got, tuiconv.DefaultMaxQueuedPrompts)
 	}
 }
 
 func TestQueueEchoTruncatesLongPrompt(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, nil)
 	m.busy = true
-	long := strings.Repeat("x", maxQueuePreviewRunes+200)
+	long := strings.Repeat("x", tuiconv.DefaultMaxQueuePreviewRunes+200)
 	m.panes.bottom.prompt().SetValue(long)
 	_ = m.submit()
 	plain := plainTranscript(m)
@@ -1531,6 +1533,18 @@ func TestPaneKeyboardHelpStaysSingleLine(t *testing.T) {
 			t.Fatalf("help width=%d exceeds %d: %q", got, width, help)
 		}
 	}
+}
+
+func modelRetryStatus(retry sdk.RetryEvent, now time.Time) (string, string, bool) {
+	activity, metaParts, ok := runtimeui.RetryStatus(retry, now)
+	if !ok {
+		return "", "", false
+	}
+	meta := strings.Join(metaParts, " · ")
+	if meta != "" {
+		meta = " · " + meta
+	}
+	return activity, meta, true
 }
 
 func TestModelRetryStatusCountsDownFromRetryDeadline(t *testing.T) {

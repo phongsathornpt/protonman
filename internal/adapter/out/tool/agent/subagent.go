@@ -11,15 +11,17 @@ import (
 	"github.com/phongsathornpt/protonman/internal/feature/agent"
 )
 
+// subagentAction is the typed form of the shared action vocabulary owned by
+// feature/agent; the wire values must never be duplicated as literals here.
 type subagentAction string
 
 const (
-	subagentActionSpawn  subagentAction = "spawn"
-	subagentActionWait   subagentAction = "wait"
-	subagentActionGet    subagentAction = "get"
-	subagentActionList   subagentAction = "list"
-	subagentActionCancel subagentAction = "cancel"
-	subagentActionResume subagentAction = "resume"
+	subagentActionSpawn  = subagentAction(tool.ActionSpawn)
+	subagentActionWait   = subagentAction(tool.ActionWait)
+	subagentActionGet    = subagentAction(tool.ActionGet)
+	subagentActionList   = subagentAction(tool.ActionList)
+	subagentActionCancel = subagentAction(tool.ActionCancel)
+	subagentActionResume = subagentAction(tool.ActionResume)
 )
 
 type subagentHandler struct {
@@ -70,7 +72,7 @@ func subagentInputSchema() map[string]any {
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
-			"action":         map[string]any{"type": "string", "enum": []string{"spawn", "wait", "get", "list", "cancel", "resume"}, "description": "Operation: spawn delegates work with automatic result delivery; wait/get/list are diagnostic inspection; cancel/resume explicitly control existing work"},
+			"action":         map[string]any{"type": "string", "enum": []string{tool.ActionSpawn, tool.ActionWait, tool.ActionGet, tool.ActionList, tool.ActionCancel, tool.ActionResume}, "description": "Operation: spawn delegates work with automatic result delivery; wait/get/list are diagnostic inspection; cancel/resume explicitly control existing work"},
 			"task":           map[string]any{"type": "string", "description": "Task for action=spawn"},
 			"profile":        map[string]any{"type": "string", "enum": agentprofile.SubagentProfileNames(), "description": agentprofile.SubagentProfileSchemaDescription()},
 			"context":        map[string]any{"type": "string", "description": "Optional background context for action=spawn"},
@@ -115,17 +117,17 @@ func withActionSchema(action subagentAction, schema map[string]any) map[string]a
 
 func (h subagentHandler) child(action string) (tool.Handler, bool) {
 	switch strings.ToLower(strings.TrimSpace(action)) {
-	case "spawn":
+	case tool.ActionSpawn:
 		return h.spawn, true
-	case "wait":
+	case tool.ActionWait:
 		return h.wait, true
-	case "get":
+	case tool.ActionGet:
 		return h.get, true
-	case "list":
+	case tool.ActionList:
 		return h.list, true
-	case "cancel":
+	case tool.ActionCancel:
 		return h.cancel, true
-	case "resume":
+	case tool.ActionResume:
 		return h.resume, true
 	default:
 		return nil, false

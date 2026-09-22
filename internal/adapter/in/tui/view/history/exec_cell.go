@@ -80,7 +80,7 @@ func (c ExecCell) RenderWidth(width int) []string {
 			case c.ExitCode != nil:
 				summary = fmt.Sprintf("exit %d", *c.ExitCode)
 			case c.FailureCode != "":
-				summary = string(c.FailureCode)
+				summary = toolview.FailureLabel(c.Name, tool.KindBash, c.FailureCode)
 			default:
 				summary = "failed"
 			}
@@ -312,6 +312,8 @@ func (c ExecCell) outputLines(includeStatus bool) []string {
 			lines = append(lines, "denied")
 		}
 		if c.FailureCode != "" && !(c.ExitCode != nil && c.FailureCode == tool.ErrorCodeCommandFailed) {
+			// Raw diagnostics keep the structured code; rendered headers
+			// humanize it through toolview.FailureLabel.
 			lines = append(lines, "failure: "+string(c.FailureCode))
 		}
 	}

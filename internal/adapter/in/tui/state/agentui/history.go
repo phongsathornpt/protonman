@@ -35,7 +35,7 @@ func (t *Tracker) RememberRun(call tool.Call) {
 		t.pendingActions = make(map[string]string)
 	}
 	t.pendingRuns[call.ID] = RunFromCall(call)
-	t.pendingActions[call.ID] = "spawn"
+	t.pendingActions[call.ID] = tool.ActionSpawn
 }
 
 func (t *Tracker) TouchOperation(name string, call tool.Call, state *history.HistoryState) {
@@ -47,7 +47,7 @@ func (t *Tracker) TouchOperation(name string, call tool.Call, state *history.His
 		t.pendingActions = make(map[string]string)
 	}
 	t.pendingActions[call.ID] = action
-	if action == "wait" {
+	if action == tool.ActionWait {
 		return
 	}
 	id := extractStringArg(call.Arguments, "agent_id")
@@ -62,11 +62,11 @@ func (t *Tracker) TouchOperation(name string, call tool.Call, state *history.His
 		return
 	}
 	switch action {
-	case "get":
+	case tool.ActionGet:
 		cell.Activity = "checking status"
-	case "cancel":
+	case tool.ActionCancel:
 		cell.State, cell.Activity = agent.StateCanceling, "canceling"
-	case "resume":
+	case tool.ActionResume:
 		cell.Activity = "resuming"
 	}
 	state.TouchAgentRun(id)

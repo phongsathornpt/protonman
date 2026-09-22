@@ -176,7 +176,7 @@ func (v *todoPaneView) ensurePicker(ctx paneRenderContext) {
 		return
 	}
 	v.icons = tuistyle.OrUnicodeIcons(v.icons)
-	v.picker = paneutil.NewMinimalList(todoListItems(ctx.todos, v.icons), todoSetupDelegate{}, max(1, ctx.width-8), max(1, min(14, ctx.height-4)))
+	v.picker = paneutil.NewMinimalList(todoListItems(ctx.todos, v.icons), todoSetupDelegate{}, panecommon.PaneContentWidth(ctx.width), max(1, min(14, ctx.height-4)))
 	v.picker.SetFilteringEnabled(false)
 	v.picker.SetStatusBarItemName("task", "tasks")
 	v.lastItems = tododomain.CloneItems(ctx.todos)
@@ -235,7 +235,7 @@ func (v *todoPaneView) resize(ctx paneRenderContext) {
 	if !v.initialized {
 		return
 	}
-	v.picker.SetSize(max(1, ctx.width-8), max(1, min(8, ctx.height-6)))
+	v.picker.SetSize(panecommon.PaneContentWidth(ctx.width), max(1, min(8, ctx.height-6)))
 	v.syncTitle(ctx)
 }
 
@@ -298,7 +298,7 @@ func (v *todoPaneView) Render(ctx paneRenderContext) string {
 			status = "id: " + selected.item.ID + " · " + status
 		}
 		if layoutModeForHeight(ctx.height) != layoutTiny {
-			footer = paneHelpStatusLine(max(1, ctx.width-6), help, status)
+			footer = paneHelpStatusLine(panecommon.PaneHelpWidth(ctx.width), help, status)
 		} else if status != "" {
 			footer = paneRightStatus(ctx.width, status)
 		}

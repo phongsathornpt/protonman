@@ -1,7 +1,10 @@
 package history
 
 import (
+	"strings"
 	"testing"
+
+	"github.com/phongsathornpt/protonman/internal/core/tool"
 )
 
 func TestIsDiffCommand(t *testing.T) {
@@ -69,5 +72,34 @@ func TestIsDiffOutput(t *testing.T) {
 	}
 	if isDiffOutput("go test ./internal/base/diffutil/...", plainLines) {
 		t.Error("expected isDiffOutput = false for go test output")
+	}
+}
+
+func TestExecCellRenderedFailureUsesHumanLabel(t *testing.T) {
+	cell := ExecCell{
+		Name:        "bash",
+		Command:     "go test ./...",
+		Stdout:      "some output",
+		FailureCode: tool.ErrorCodeDeadlineExceeded,
+	}
+	rendered := strings.Join(cell.RenderWidth(80), "\n")
+	if !strings.Contains(rendered, "timed out") {
+		t.Fatalf("rendered failure label missing:\n%s", rendered)
+	}
+	if strings.Contains(rendered, "deadline_exceeded") {
+		t.Fatalf("rendered failure leaked raw code:\n%s", rendered)
+	}
+}
+
+func TestExecCellRawLinesKeepStructuredCode(t *testing.T) {
+	cell := ExecCell{
+		Name:        "bash",
+		Command:     "go test ./...",
+		Stdout:      "some output",
+		FailureCode: tool.ErrorCodeDeadlineExceeded,
+	}
+	raw := strings.Join(cell.RawLines(), "\n")
+	if !strings.Contains(raw, "deadline_exceeded") {
+		t.Fatalf("raw lines must keep the structured code for diagnostics:\n%s", raw)
 	}
 }

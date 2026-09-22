@@ -16,6 +16,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/paneutil"
 	providerdomain "github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/provider"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/reasoningpolicy"
+	panecommon "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane/common"
 	providerpane "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane/provider"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
@@ -47,7 +48,7 @@ const (
 	providerFieldCount    = providerdomain.FieldCount
 )
 
-const maxProviderSelectRows = 8
+const maxProviderSelectRows = 7
 
 type providerPaneView struct {
 	state          providerPaneState
@@ -631,7 +632,7 @@ func (v *providerPaneView) ensureModelPicker() {
 	if !v.modelPickerSet {
 		delegate := list.NewDefaultDelegate()
 		delegate.SetSpacing(0)
-		v.modelPicker = paneutil.NewMinimalList(items, delegate, defaultBubbleWidth-8, maxProviderSelectRows)
+		v.modelPicker = paneutil.NewMinimalList(items, delegate, panecommon.PaneContentWidth(defaultBubbleWidth), maxProviderSelectRows)
 		v.modelPicker.SetFilteringEnabled(false)
 		v.modelPicker.SetStatusBarItemName("model", "models")
 		v.modelPicker.InfiniteScrolling = true
@@ -644,7 +645,7 @@ func (v *providerPaneView) ensureModelPicker() {
 func (v *providerPaneView) Render(ctx paneRenderContext) string {
 	if v.state == providerStateSelectModel {
 		items := v.modelPicker.VisibleItems()
-		start, end := paneWindow(len(items), v.modelPicker.Index(), 7, layoutModeForHeight(ctx.height))
+		start, end := paneWindow(len(items), v.modelPicker.Index(), maxProviderSelectRows, layoutModeForHeight(ctx.height))
 		listRows := make([]string, 0, end-start)
 		for index := start; index < end; index++ {
 			item, ok := items[index].(providerEditorModelItem)
@@ -732,14 +733,14 @@ func (v *providerPaneView) resize(width, height int) {
 		return
 	}
 	v.ensureModelPicker()
-	visibleRows := 7
+	visibleRows := maxProviderSelectRows
 	switch layoutModeForHeight(height) {
 	case layoutTiny:
 		visibleRows = 2
 	case layoutCompact:
 		visibleRows = 4
 	}
-	v.modelPicker.SetSize(max(1, width-8), visibleRows)
+	v.modelPicker.SetSize(panecommon.PaneContentWidth(width), visibleRows)
 }
 
 func providerEditorSnapshot(ctx paneRenderContext, v *providerPaneView) providerpane.ProviderEditorSnapshot {
@@ -781,5 +782,6 @@ func renderProviderModal(ctx paneRenderContext, border color.Color, rows []strin
 }
 
 func providerModalContentWidth(ctx paneRenderContext) int {
-	return max(1, max(1, ctx.width-4)-6)
+	// Modal inset: 4 outer + 6 inner; max(1, max(1, ctx.width-4)-6) == max(1, ctx.width-10).
+	return max(1, ctx.width-10)
 }

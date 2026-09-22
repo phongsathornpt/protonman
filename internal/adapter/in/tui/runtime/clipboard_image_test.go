@@ -9,6 +9,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/clipboardimage"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 )
 
@@ -22,7 +23,7 @@ func testClipboardPNG(t *testing.T) []byte {
 }
 
 func TestWriteClipboardTempPNGUsesPrivateFile(t *testing.T) {
-	path, err := writeClipboardTempPNG(testClipboardPNG(t))
+	path, err := clipboardimage.WriteTempPNG(testClipboardPNG(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -51,7 +52,7 @@ func TestClipboardImageShortcutStartsAsyncRead(t *testing.T) {
 func TestClipboardImageResultAttachesToMatchingDraftAndResetCleansTemp(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	m.panes.bottom.prompt().SetValue("inspect")
-	path, err := writeClipboardTempPNG(testClipboardPNG(t))
+	path, err := clipboardimage.WriteTempPNG(testClipboardPNG(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,7 +75,7 @@ func TestClipboardImageResultAttachesToMatchingDraftAndResetCleansTemp(t *testin
 func TestClipboardImageStaleDraftDeletesTemp(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	m.panes.bottom.prompt().SetValue("new draft")
-	path, err := writeClipboardTempPNG(testClipboardPNG(t))
+	path, err := clipboardimage.WriteTempPNG(testClipboardPNG(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,7 +93,7 @@ func TestClipboardTempOwnershipTransfersIntoQueue(t *testing.T) {
 	m.busy = true
 	prompt := m.panes.bottom.prompt()
 	prompt.SetValue("queue this")
-	path, err := writeClipboardTempPNG(testClipboardPNG(t))
+	path, err := clipboardimage.WriteTempPNG(testClipboardPNG(t))
 	if err != nil {
 		t.Fatal(err)
 	}

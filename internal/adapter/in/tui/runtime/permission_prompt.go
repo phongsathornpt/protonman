@@ -374,13 +374,13 @@ func (v *permissionPaneView) card(ctx paneRenderContext) string {
 	if v.parked {
 		helpBindings = []string{"tab", "Review", "pgup/pgdn", "Scroll", "esc", "Back"}
 	}
-	rows = appendPaneGroup(rows, paneKeyboardHelp(max(1, ctx.width-6), helpBindings...))
+	rows = appendPaneGroup(rows, paneKeyboardHelp(panecommon.PaneHelpWidth(ctx.width), helpBindings...))
 	status := tool.DisplayName(request.ToolName)
 	if len(labels) > 0 {
 		index := max(0, min(v.index, len(labels)-1))
 		status += " · " + labels[index]
 	}
-	rows = append(rows, paneRightStatus(max(1, ctx.width-6), status))
+	rows = append(rows, paneRightStatus(panecommon.PaneHelpWidth(ctx.width), status))
 	return renderModalRows(ctx, paneToneColor(result.Tone), rows)
 }
 

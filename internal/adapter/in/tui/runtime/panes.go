@@ -49,7 +49,7 @@ func (*shortcutsPaneView) Render(ctx paneRenderContext) string {
 		shortcutRow(keys.Quit),
 	}
 	if layoutModeForHeight(ctx.height) == layoutNormal && ctx.subagentsEnabled {
-		legend := truncateWithEllipsis("Status: "+agentui.LegendCompact(), max(1, ctx.width-8))
+		legend := truncateWithEllipsis("Status: "+agentui.LegendCompact(), panecommon.PaneContentWidth(ctx.width))
 		rows = append(rows, "", mutedStyle.Render(legend))
 	}
 	help := paneKeyboardHelp(ctx.width-4, "esc/?", "Go Back")
@@ -347,7 +347,7 @@ func skillListItems(items []skillListItem) []list.Item {
 }
 
 func skillsListWidth(ctx paneRenderContext) int {
-	return max(1, ctx.width-8)
+	return panecommon.PaneContentWidth(ctx.width)
 }
 
 func skillsListHeight(ctx paneRenderContext) int {
@@ -415,7 +415,7 @@ func (v *skillsPaneView) Render(ctx paneRenderContext) string {
 			prefix = tuistyle.SelectionStyle.Render(glyphPrompt)
 			style = tuistyle.SelectionStyle
 		}
-		listRows = append(listRows, prefix+style.Render(truncateWithEllipsis(item.Title(), max(1, ctx.width-8))))
+		listRows = append(listRows, prefix+style.Render(truncateWithEllipsis(item.Title(), panecommon.PaneContentWidth(ctx.width))))
 	}
 	status := fmt.Sprintf("%d/%d active", active, len(ctx.skillItems))
 	if len(items) > end-start {
@@ -533,7 +533,7 @@ func (v *sessionResumePaneView) selectedItem() (sessionListItem, bool) {
 const maxSessionResumeRows = 7
 
 func sessionResumeListWidth(ctx paneRenderContext) int {
-	return max(1, ctx.width-8)
+	return panecommon.PaneContentWidth(ctx.width)
 }
 
 func sessionResumeListHeight(ctx paneRenderContext) int {
@@ -561,7 +561,7 @@ func (v *sessionResumePaneView) Render(ctx paneRenderContext) string {
 	if v.picker.SettingFilter() || v.picker.IsFiltered() {
 		listRows = append(listRows, mutedStyle.Render("Search: ")+userStyle.Render(v.picker.FilterValue()))
 	}
-	contentWidth := max(1, ctx.width-8)
+	contentWidth := panecommon.PaneContentWidth(ctx.width)
 	for index := start; index < end; index++ {
 		item, ok := items[index].(sessionListItem)
 		if !ok {

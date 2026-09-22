@@ -183,7 +183,7 @@ func (v *providerSelectPaneView) resize(width, height int) {
 		return
 	}
 	v.initPicker()
-	v.picker.SetSize(max(1, width-8), max(1, min(maxProviderListRows, height-6)))
+	v.picker.SetSize(panecommon.PaneContentWidth(width), max(1, min(maxProviderListRows, height-6)))
 }
 
 func (v *providerSelectPaneView) Render(ctx paneRenderContext) string {

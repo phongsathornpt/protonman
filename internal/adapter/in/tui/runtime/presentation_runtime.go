@@ -21,7 +21,6 @@ import (
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/feature/agent"
-	"github.com/phongsathornpt/protonman/proton-sdk/domain"
 )
 
 func promptPlaceholder(hasRunner bool, mode permission.Mode, planMode bool) string {
@@ -118,7 +117,7 @@ type contextualHelp []key.Binding
 func (h contextualHelp) ShortHelp() []key.Binding  { return h }
 func (h contextualHelp) FullHelp() [][]key.Binding { return [][]key.Binding{h} }
 
-func (m bubbleModel) shortcutHint() string {
+func (m *bubbleModel) shortcutHint() string {
 	if view := m.permissionView(); view != nil {
 		return m.infoView()
 	}
@@ -188,7 +187,7 @@ func (m *bubbleModel) setPlanEnabled(enabled bool) {
 	m.agents.SetCallGuard(guard)
 }
 
-func (m bubbleModel) runtimeStatusState(now time.Time) runtimeui.State {
+func (m *bubbleModel) runtimeStatusState(now time.Time) runtimeui.State {
 	agentSnapshot := m.turnAgentSnapshot()
 	activeAgents, _, _, _ := agentActivityCounts(agentSnapshot)
 	agentActivity := ""
@@ -225,7 +224,7 @@ func (m bubbleModel) runtimeStatusState(now time.Time) runtimeui.State {
 	})
 }
 
-func (m bubbleModel) statusView() string {
+func (m *bubbleModel) statusView() string {
 	profile := m.layoutProfile()
 	maxWidth := profile.ContentWidth(m.layout.width)
 	state := m.runtimeStatusState(time.Now())
@@ -376,7 +375,7 @@ func (m *bubbleModel) invalidateSessionHeaderBranch() {
 // rootActivityLabel is the deterministic busy label for the primary agent when
 // no tool, retry, or explicit activity is available. It comes from the active
 // profile's activity vocabulary rather than a generic assistant word.
-func (m bubbleModel) rootActivityLabel() string {
+func (m *bubbleModel) rootActivityLabel() string {
 	profile, err := agentprofile.ParseProfile(strings.TrimSpace(m.agentProfile))
 	if err != nil || !profile.Valid() {
 		profile = agentprofile.ProfileUniversal
@@ -436,7 +435,7 @@ func agentActivityRank(intent agentui.ActivityIntent) int {
 	}
 }
 
-func (m bubbleModel) turnAgentSnapshot() []agent.AgentStatus {
+func (m *bubbleModel) turnAgentSnapshot() []agent.AgentStatus {
 	if m.activeTurnOwner == "" {
 		return m.agentSnapshot
 	}
@@ -488,18 +487,4 @@ func (m *bubbleModel) infoView() string {
 
 func formatElapsed(duration time.Duration) string {
 	return agentpane.FormatElapsed(duration)
-}
-
-// modelRetryStatus is retained as a compatibility seam for focused runtime
-// tests; retry wording itself is owned by state/runtimeui.
-func modelRetryStatus(retry domain.RetryEvent, now time.Time) (string, string, bool) {
-	activity, metaParts, ok := runtimeui.RetryStatus(retry, now)
-	if !ok {
-		return "", "", false
-	}
-	meta := strings.Join(metaParts, " · ")
-	if meta != "" {
-		meta = " · " + meta
-	}
-	return activity, meta, true
 }

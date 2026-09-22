@@ -11,6 +11,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/paneutil"
+	panecommon "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane/common"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/slashview"
 	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/style"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/textview"
@@ -58,6 +59,12 @@ func (slashCommandDelegate) Render(w io.Writer, m list.Model, index int, item li
 	_, _ = fmt.Fprint(w, prefix+nameStyle.Render(name)+"  "+mutedStyle.Render(description))
 }
 
+// slashPickerWidth returns the list width for the slash completion picker. The
+// picker sits below the composer and uses a 4-cell horizontal inset.
+func slashPickerWidth(width int) int {
+	return max(1, width-4)
+}
+
 type slashPaneView struct {
 	picker  list.Model
 	ready   bool
@@ -75,7 +82,7 @@ func (v *slashPaneView) sync(ctx paneRenderContext) {
 		items = append(items, slashListItem{command: command})
 	}
 	if !v.ready {
-		v.picker = paneutil.NewMinimalList(items, slashCommandDelegate{}, max(1, ctx.width-4), maxSlashRows)
+		v.picker = paneutil.NewMinimalList(items, slashCommandDelegate{}, slashPickerWidth(ctx.width), maxSlashRows)
 		v.picker.SetFilteringEnabled(false)
 		// Slash completion owns navigation through list.Update; help lives in the shared composer footer.
 		v.picker.InfiniteScrolling = true
@@ -84,7 +91,7 @@ func (v *slashPaneView) sync(ctx paneRenderContext) {
 		_ = v.picker.SetItems(items)
 	}
 	visibleRows := min(maxSlashRows, len(matches))
-	v.picker.SetSize(max(1, ctx.width-4), max(1, visibleRows))
+	v.picker.SetSize(slashPickerWidth(ctx.width), max(1, visibleRows))
 	if len(matches) == 0 {
 		return
 	}
@@ -100,7 +107,7 @@ func (v *slashPaneView) Render(ctx paneRenderContext) string {
 	}
 	rows := v.commandRows(ctx)
 	if layoutModeForHeight(ctx.height) != layoutTiny {
-		width := max(1, ctx.width-6)
+		width := panecommon.PaneHelpWidth(ctx.width)
 		statusText := v.selectionStatusText()
 		helpWidth := max(1, width-ansi.StringWidth(statusText)-1)
 		rows = append(rows, paneHelpStatusLine(width, slashPickerHelp(helpWidth), statusText))
@@ -117,7 +124,7 @@ func (v *slashPaneView) commandRows(ctx paneRenderContext) []string {
 	}
 	start, end := paneWindow(len(items), v.picker.Index(), maxSlashRows, layoutModeForHeight(ctx.height))
 	rows := make([]string, 0, end-start)
-	available := max(1, ctx.width-6)
+	available := panecommon.PaneHelpWidth(ctx.width)
 	nameColumnWidth := 0
 	for i := start; i < end; i++ {
 		entry, ok := items[i].(slashListItem)
@@ -230,7 +237,7 @@ const (
 	slashKindLow     = slashview.ContextLowConcurrency
 )
 
-func (m bubbleModel) parseSlashContext() (slashContext, bool) {
+func (m *bubbleModel) parseSlashContext() (slashContext, bool) {
 	if m.panes.bottom == nil || m.panes.bottom.bashMode() || m.panes.bottom.has(permissionViewID) || m.panes.bottom.has(skillsViewID) {
 		return slashContext{}, false
 	}
@@ -241,7 +248,7 @@ func (m bubbleModel) parseSlashContext() (slashContext, bool) {
 	return slashview.ParseContext(prompt.Value())
 }
 
-func (m bubbleModel) slashMatches() []slashCommand {
+func (m *bubbleModel) slashMatches() []slashCommand {
 	context, ok := m.parseSlashContext()
 	if !ok {
 		return nil
@@ -286,7 +293,7 @@ func (m *bubbleModel) syncSlashView() {
 	view.sync(newPaneRenderContext(m))
 }
 
-func (m bubbleModel) slashOpen() bool {
+func (m *bubbleModel) slashOpen() bool {
 	return len(m.slashMatches()) > 0
 }
 

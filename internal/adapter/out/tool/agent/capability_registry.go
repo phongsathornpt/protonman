@@ -121,7 +121,7 @@ func lifecycleOnlySubagentDefinition(def tool.Definition) tool.Definition {
 	for key, value := range action {
 		nextAction[key] = value
 	}
-	nextAction["enum"] = []string{"wait", "get", "list", "cancel"}
+	nextAction["enum"] = []string{tool.ActionWait, tool.ActionGet, tool.ActionList, tool.ActionCancel}
 	nextProperties["action"] = nextAction
 	input["properties"] = nextProperties
 	def.InputSchema = input

@@ -320,7 +320,7 @@ func paneRightStatus(width int, text string) string {
 	if text == "" || width <= 0 {
 		return ""
 	}
-	available := max(1, width-6)
+	available := panecommon.PaneHelpWidth(width)
 	text = truncateWithEllipsis(text, available)
 	padding := max(0, available-ansi.StringWidth(text))
 	return strings.Repeat(" ", padding) + mutedStyle.Render(text)

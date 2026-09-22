@@ -12,6 +12,8 @@ import (
 
 var titleRegex = regexp.MustCompile(`(?i)<title[^>]*>([\s\S]*?)</title>`)
 
+const maxWebTitleWidth = 45
+
 func summarizeWebFetch(body string, truncated bool) string {
 	if body == "" {
 		return "0 B"
@@ -30,7 +32,7 @@ func summarizeWebFetch(body string, truncated bool) string {
 		rawTitle := html.UnescapeString(strings.TrimSpace(matches[1]))
 		rawTitle = strings.Join(strings.Fields(rawTitle), " ")
 		if rawTitle != "" {
-			return fmt.Sprintf("%q (%s)", textview.TruncateEllipsis(rawTitle, 45), sizeStr)
+			return fmt.Sprintf("%q (%s)", textview.TruncateEllipsis(rawTitle, maxWebTitleWidth), sizeStr)
 		}
 	}
 

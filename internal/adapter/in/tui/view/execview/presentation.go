@@ -59,8 +59,8 @@ func Present(command, stdout, stderr string) Presentation {
 	}
 
 	p := Presentation{Family: family, Action: action, Title: title}
-	if profile := execProfileForFamily(family); profile != nil && profile.Summarize != nil {
-		profile.Summarize(&p, combined)
+	if summarize := familySummarizers[family]; summarize != nil {
+		summarize(&p, combined)
 	}
 	return p
 }

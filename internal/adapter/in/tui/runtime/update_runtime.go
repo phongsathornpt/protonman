@@ -23,10 +23,6 @@ type clipboardImageLoadedMsg struct {
 	err              error
 }
 
-func writeClipboardTempPNG(raw []byte) (string, error) {
-	return clipboardimage.WriteTempPNG(raw)
-}
-
 func loadClipboardImage(draftText string, draftAttachments int) tea.Cmd {
 	return func() tea.Msg {
 		loaded := clipboardimage.Load()

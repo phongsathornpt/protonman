@@ -90,11 +90,6 @@ func (m *bubbleModel) debugKeyPress(message tea.KeyPressMsg) {
 	)
 }
 
-const (
-	maxQueuedPrompts     = 32
-	maxQueuePreviewRunes = 160
-)
-
 func (m *bubbleModel) composerInput() tuiconv.QueuedInput {
 	if m == nil || m.panes.bottom == nil || m.panes.bottom.prompt() == nil {
 		return tuiconv.QueuedInput{}
@@ -178,7 +173,7 @@ func (m *bubbleModel) enqueueInput(input tuiconv.QueuedInput) bool {
 		return false
 	}
 	preview := submissionDisplayText(input)
-	m.appendMuted(fmt.Sprintf("queued (%d): %s", m.conversation.QueueLen(), tuiconv.QueuePreview(preview, maxQueuePreviewRunes)))
+	m.appendMuted(fmt.Sprintf("queued (%d): %s", m.conversation.QueueLen(), tuiconv.QueuePreview(preview, tuiconv.DefaultMaxQueuePreviewRunes)))
 	return true
 }
 
