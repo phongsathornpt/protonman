@@ -53,22 +53,26 @@ func rubyExecTitle(name string, args []string, action string) string {
 func summarizeRubyExec(p *Presentation, output string) {
 	if p.Title == "RSpec" {
 		if m := rspecSummaryRE.FindStringSubmatch(output); len(m) > 0 {
-			examples, failed := atoiExec(m[1]), atoiExec(m[2])
+			examples, okExamples := atoiExec(m[1])
+			failed, okFailed := atoiExec(m[2])
 			pending := 0
-			if len(m) > 3 {
-				pending = atoiExec(m[3])
+			okPending := true
+			// A non-participating optional capture means 0; only a failed
+			// parse of a present capture aborts the summary (fail-safe).
+			if len(m) > 3 && m[3] != "" {
+				pending, okPending = atoiExec(m[3])
 			}
-			parts := []string{pluralCount(examples, "example", "examples"), pluralCount(failed, "failure", "failures")}
-			if pending > 0 {
-				parts = append(parts, pluralCount(pending, "pending", "pending"))
+			if okExamples && okFailed && okPending {
+				parts := []string{pluralCount(examples, "example", "examples"), pluralCount(failed, "failure", "failures")}
+				if pending > 0 {
+					parts = append(parts, pluralCount(pending, "pending", "pending"))
+				}
+				p.Summary = strings.Join(parts, " · ")
+				p.SuppressRaw = failed == 0
 			}
-			p.Summary = strings.Join(parts, " · ")
-			p.SuppressRaw = failed == 0
 		}
 	} else if p.Action == "check" && strings.Contains(output, "Syntax OK") {
 		p.Summary, p.SuppressRaw = "syntax OK", true
 	}
-	if failures := firstFailureLines(output, 3); len(failures) > 0 {
-		p.Details = failures
-	}
+	attachFailureDetails(p, output)
 }

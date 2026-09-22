@@ -51,13 +51,13 @@ func SmartFilter(term string, targets []string) []list.Rank {
 
 			for wIdx, word := range targetWords {
 				if word == token {
-					score := 5000 - minInt(wIdx*10, 500)
+					score := 5000 - min(wIdx*10, 500)
 					if score > bestTokenScore {
 						bestTokenScore = score
 					}
 					tokenMatched = true
 				} else if strings.HasPrefix(word, token) {
-					score := 3000 - minInt(wIdx*10, 500)
+					score := 3000 - min(wIdx*10, 500)
 					if score > bestTokenScore {
 						bestTokenScore = score
 					}
@@ -66,7 +66,7 @@ func SmartFilter(term string, targets []string) []list.Rank {
 			}
 
 			if idx := strings.Index(lowerTarget, token); idx >= 0 {
-				score := 2000 - minInt(idx*5, 500)
+				score := 2000 - min(idx*5, 500)
 				if score > bestTokenScore {
 					bestTokenScore = score
 				}
@@ -95,7 +95,7 @@ func SmartFilter(term string, targets []string) []list.Rank {
 		}
 
 		if allMatched {
-			itemScore += maxInt(0, 500-len(lowerTarget))
+			itemScore += max(0, 500-len(lowerTarget))
 			candidates = append(candidates, candidate{
 				index:          i,
 				score:          itemScore,
@@ -142,11 +142,4 @@ func deduplicateIndices(indices []int) []int {
 		}
 	}
 	return out
-}
-
-func maxInt(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
 }

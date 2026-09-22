@@ -49,7 +49,7 @@ func (*shortcutsPaneView) Render(ctx paneRenderContext) string {
 		shortcutRow(keys.Quit),
 	}
 	if layoutModeForHeight(ctx.height) == layoutNormal && ctx.subagentsEnabled {
-		legend := truncateWithEllipsis("Status: "+agentui.LegendCompact(), maxInt(1, ctx.width-8))
+		legend := truncateWithEllipsis("Status: "+agentui.LegendCompact(), max(1, ctx.width-8))
 		rows = append(rows, "", mutedStyle.Render(legend))
 	}
 	help := paneKeyboardHelp(ctx.width-4, "esc/?", "Go Back")
@@ -309,7 +309,7 @@ func (skillSetupDelegate) Render(w io.Writer, m list.Model, index int, item list
 		prefix = tuistyle.SelectionStyle.Render(glyphPrompt)
 		style = tuistyle.SelectionStyle
 	}
-	_, _ = fmt.Fprint(w, prefix+style.Render(truncateWithEllipsis(entry.Title(), maxInt(1, m.Width()-2))))
+	_, _ = fmt.Fprint(w, prefix+style.Render(truncateWithEllipsis(entry.Title(), max(1, m.Width()-2))))
 }
 
 type skillsPaneView struct {
@@ -347,11 +347,11 @@ func skillListItems(items []skillListItem) []list.Item {
 }
 
 func skillsListWidth(ctx paneRenderContext) int {
-	return maxInt(1, ctx.width-8)
+	return max(1, ctx.width-8)
 }
 
 func skillsListHeight(ctx paneRenderContext) int {
-	return maxInt(4, min(8, ctx.height-6))
+	return max(4, min(8, ctx.height-6))
 }
 
 func (v *skillsPaneView) syncTitle(ctx paneRenderContext) {
@@ -395,9 +395,9 @@ func (v *skillsPaneView) Render(ctx paneRenderContext) string {
 		help = paneKeyboardHelp(ctx.width-4, "↑/↓", "Navigate", "enter/space", "Toggle", "/", "Filter", "esc", "Close")
 	}
 	items := v.picker.VisibleItems()
-	maxVisible := maxInt(3, minInt(8, ctx.height-6))
+	maxVisible := max(3, min(8, ctx.height-6))
 	if layoutModeForHeight(ctx.height) == layoutTiny {
-		maxVisible = minInt(2, maxVisible)
+		maxVisible = min(2, maxVisible)
 	}
 	start, end := paneWindow(len(items), v.picker.Index(), maxVisible, layoutModeForHeight(ctx.height))
 	listRows := make([]string, 0, end-start+1)
@@ -415,7 +415,7 @@ func (v *skillsPaneView) Render(ctx paneRenderContext) string {
 			prefix = tuistyle.SelectionStyle.Render(glyphPrompt)
 			style = tuistyle.SelectionStyle
 		}
-		listRows = append(listRows, prefix+style.Render(truncateWithEllipsis(item.Title(), maxInt(1, ctx.width-8))))
+		listRows = append(listRows, prefix+style.Render(truncateWithEllipsis(item.Title(), max(1, ctx.width-8))))
 	}
 	status := fmt.Sprintf("%d/%d active", active, len(ctx.skillItems))
 	if len(items) > end-start {
@@ -533,11 +533,11 @@ func (v *sessionResumePaneView) selectedItem() (sessionListItem, bool) {
 const maxSessionResumeRows = 7
 
 func sessionResumeListWidth(ctx paneRenderContext) int {
-	return maxInt(1, ctx.width-8)
+	return max(1, ctx.width-8)
 }
 
 func sessionResumeListHeight(ctx paneRenderContext) int {
-	return maxInt(4, min(maxSessionResumeRows, ctx.height-6))
+	return max(4, min(maxSessionResumeRows, ctx.height-6))
 }
 
 func (v *sessionResumePaneView) resize(ctx paneRenderContext) {
@@ -561,7 +561,7 @@ func (v *sessionResumePaneView) Render(ctx paneRenderContext) string {
 	if v.picker.SettingFilter() || v.picker.IsFiltered() {
 		listRows = append(listRows, mutedStyle.Render("Search: ")+userStyle.Render(v.picker.FilterValue()))
 	}
-	contentWidth := maxInt(1, ctx.width-8)
+	contentWidth := max(1, ctx.width-8)
 	for index := start; index < end; index++ {
 		item, ok := items[index].(sessionListItem)
 		if !ok {
@@ -595,7 +595,7 @@ func (v *sessionResumePaneView) Render(ctx paneRenderContext) string {
 			rem = 10
 		}
 		idFormatted := truncateWithEllipsis(idLabel, rem)
-		gap := maxInt(2, contentWidth-len([]rune(idFormatted))-currentTagWidth-metaWidth-2)
+		gap := max(2, contentWidth-len([]rune(idFormatted))-currentTagWidth-metaWidth-2)
 		line := prefix + style.Render(idFormatted) + currentTag + strings.Repeat(" ", gap) + mutedStyle.Render(meta)
 		listRows = append(listRows, line)
 	}

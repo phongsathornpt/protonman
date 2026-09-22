@@ -35,7 +35,6 @@ import (
 const (
 	defaultBubbleWidth      = 80
 	defaultBubbleHeight     = 24
-	promptRows              = 1
 	composerNewlineEnhanced = "ctrl+enter"
 	composerNewlineFallback = "ctrl+j"
 )

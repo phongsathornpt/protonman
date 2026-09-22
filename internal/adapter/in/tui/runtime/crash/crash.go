@@ -16,11 +16,27 @@ import (
 	"strings"
 )
 
+// CopyState reports how the most recent copy request was delivered so the
+// crash screen never claims clipboard success it cannot support.
+type CopyState uint8
+
+const (
+	// CopyStatePending is the state before any copy was requested.
+	CopyStatePending CopyState = iota
+	// CopyStateConfirmed means a local clipboard tool accepted the report.
+	CopyStateConfirmed
+	// CopyStateTerminal means only a terminal escape sequence was written;
+	// clipboard support depends on the terminal.
+	CopyStateTerminal
+	// CopyStateFailed means no delivery mechanism succeeded.
+	CopyStateFailed
+)
+
 type CrashModel struct {
 	errMessage   string
 	stackTrace   string
 	report       string
-	copied       bool
+	copyState    CopyState
 	width        int
 	height       int
 	scrollOffset int
@@ -77,8 +93,7 @@ func (m *CrashModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.quitting = true
 			return m, tea.Quit
 		case "c":
-			_ = copyToClipboard(m.report)
-			m.copied = true
+			m.copyState = copyToClipboard(m.report)
 			return m, nil
 		case "up", "k":
 			if m.scrollOffset > 0 {
@@ -116,12 +131,16 @@ func (m *CrashModel) View() tea.View {
 	errText := textview.SafeWrappedLines(m.errMessage, innerWidth)
 	parts = append(parts, errBoxStyle.Render(lipgloss.NewStyle().Foreground(tuistyle.AccentError).Bold(true).Render(strings.Join(errText, "\n"))))
 	copyLabel := "[c] Copy report"
-	if m.copied {
+	copyStyle := lipgloss.NewStyle().Foreground(tuistyle.AccentUser)
+	switch m.copyState {
+	case CopyStateConfirmed:
 		copyLabel = "[✓ Copied to clipboard]"
-	}
-	copyStyle := lipgloss.NewStyle().Foreground(tuistyle.AccentSuccess).Bold(m.copied)
-	if !m.copied {
-		copyStyle = lipgloss.NewStyle().Foreground(tuistyle.AccentUser)
+		copyStyle = lipgloss.NewStyle().Foreground(tuistyle.AccentSuccess).Bold(true)
+	case CopyStateTerminal:
+		copyLabel = "[~ Sent to terminal — clipboard support varies]"
+	case CopyStateFailed:
+		copyLabel = "[!] Copy failed — select the report text manually"
+		copyStyle = tuistyle.ErrorStyle
 	}
 	actions := lipgloss.JoinHorizontal(lipgloss.Center, copyStyle.Render(copyLabel), "   ", tuistyle.CommandStyle.Render("[r] Restart"), "   ", tuistyle.MutedStyle.Render("[q] Quit"))
 	actions = strings.Join(textview.SafeWrappedLines(actions, max(1, m.width-2)), "\n")
@@ -157,27 +176,43 @@ func (m *CrashModel) View() tea.View {
 	return view
 }
 
-func copyToClipboard(text string) error {
+// copyToClipboard attempts report delivery and reports how trustworthy the
+// result is: a local clipboard tool confirmed success, only a terminal escape
+// sequence was written, or nothing could be delivered.
+func copyToClipboard(text string) CopyState {
 	encoded := base64.StdEncoding.EncodeToString([]byte(text))
 	osc52 := fmt.Sprintf("\x1b]52;c;%s\x07", encoded)
-	_, _ = os.Stdout.WriteString(osc52)
+	_, oscErr := os.Stdout.WriteString(osc52)
+	if runLocalClipboardTool(text) {
+		return CopyStateConfirmed
+	}
+	if oscErr == nil {
+		return CopyStateTerminal
+	}
+	return CopyStateFailed
+}
+
+// runLocalClipboardTool reports whether a platform clipboard helper accepted
+// the text. An absent helper is not a failure; the terminal escape remains.
+func runLocalClipboardTool(text string) bool {
 	switch runtime.GOOS {
 	case "darwin":
 		cmd := exec.Command("pbcopy")
 		cmd.Stdin = strings.NewReader(text)
-		_ = cmd.Run()
+		return cmd.Run() == nil
 	case "linux":
 		if _, err := exec.LookPath("wl-copy"); err == nil {
 			cmd := exec.Command("wl-copy")
 			cmd.Stdin = strings.NewReader(text)
-			_ = cmd.Run()
-		} else if _, err := exec.LookPath("xclip"); err == nil {
+			return cmd.Run() == nil
+		}
+		if _, err := exec.LookPath("xclip"); err == nil {
 			cmd := exec.Command("xclip", "-selection", "clipboard")
 			cmd.Stdin = strings.NewReader(text)
-			_ = cmd.Run()
+			return cmd.Run() == nil
 		}
 	}
-	return nil
+	return false
 }
 
 // RestartRequested reports whether the crash screen requested a TUI restart.
@@ -191,7 +226,10 @@ func (m *CrashModel) ScrollOffset() int {
 	return m.scrollOffset
 }
 
-// Copied reports whether the crash report was copied during this view session.
-func (m *CrashModel) Copied() bool {
-	return m != nil && m.copied
+// CopyState reports how the last copy request was delivered.
+func (m *CrashModel) CopyState() CopyState {
+	if m == nil {
+		return CopyStatePending
+	}
+	return m.copyState
 }

@@ -2,7 +2,6 @@ package execview
 
 import (
 	"regexp"
-	"strconv"
 	"strings"
 )
 
@@ -35,15 +34,25 @@ func summarizeRustExec(p *Presentation, output string) {
 		matches := cargoTestResultRE.FindAllStringSubmatch(output, -1)
 		if len(matches) > 0 {
 			counts := testCounts{}
+			parsed := true
 			for _, m := range matches {
-				counts.Passed += atoiExec(m[1])
-				counts.Failed += atoiExec(m[2])
-				counts.Ignored += atoiExec(m[3])
+				passed, okPassed := atoiExec(m[1])
+				failed, okFailed := atoiExec(m[2])
+				ignored, okIgnored := atoiExec(m[3])
+				if !okPassed || !okFailed || !okIgnored {
+					parsed = false
+					break
+				}
+				counts.Passed += passed
+				counts.Failed += failed
+				counts.Ignored += ignored
 			}
-			p.Summary = formatTestCounts(counts)
-			p.SuppressRaw = counts.Failed == 0
-			if counts.Failed > 0 {
-				p.Details = firstFailureLines(output, 3)
+			if parsed {
+				p.Summary = formatTestCounts(counts)
+				p.SuppressRaw = counts.Failed == 0
+				if counts.Failed > 0 {
+					p.Details = firstFailureLines(output, 3)
+				}
 			}
 		}
 	case "check", "build", "clippy":
@@ -63,8 +72,6 @@ func summarizeRustExec(p *Presentation, output string) {
 		}
 	}
 }
-
-func atoiExec(value string) int { n, _ := strconv.Atoi(value); return n }
 
 func countExecLines(output, prefix string) int {
 	count := 0

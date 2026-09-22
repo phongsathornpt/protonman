@@ -202,7 +202,7 @@ func spliceVisual(dst, src string, left, width int) string {
 	}
 	srcWidth := ansi.StringWidth(src)
 	if left+srcWidth > width {
-		src = ansi.Truncate(src, maxInt(0, width-left), "")
+		src = ansi.Truncate(src, max(0, width-left), "")
 		srcWidth = ansi.StringWidth(src)
 	}
 	prefix := ansi.Cut(dst, 0, left)
@@ -211,13 +211,6 @@ func spliceVisual(dst, src string, left, width int) string {
 		suffix = ansi.Cut(dst, end, width)
 	}
 	return padVisual(prefix+src+suffix, width)
-}
-
-func maxInt(left int, right int) int {
-	if left > right {
-		return left
-	}
-	return right
 }
 
 type OpenCodeErrorKind = diagnostic.Kind
@@ -297,7 +290,7 @@ func paneKeyboardHelp(width int, bindings ...string) string {
 	if ansi.StringWidth(line) <= width {
 		return line
 	}
-	return mutedStyle.Render(truncateWithEllipsis(ansi.Strip(line), maxInt(1, width)))
+	return mutedStyle.Render(truncateWithEllipsis(ansi.Strip(line), max(1, width)))
 }
 
 func paneHelpStatusLine(width int, help string, status string) string {
@@ -318,7 +311,7 @@ func paneHelpStatusLine(width int, help string, status string) string {
 		return paneRightStatus(width, status)
 	}
 	help = truncateWithEllipsis(help, helpWidth)
-	gap := maxInt(1, width-ansi.StringWidth(help)-statusWidth)
+	gap := max(1, width-ansi.StringWidth(help)-statusWidth)
 	return help + strings.Repeat(" ", gap) + mutedStyle.Render(status)
 }
 
@@ -327,9 +320,9 @@ func paneRightStatus(width int, text string) string {
 	if text == "" || width <= 0 {
 		return ""
 	}
-	available := maxInt(1, width-6)
+	available := max(1, width-6)
 	text = truncateWithEllipsis(text, available)
-	padding := maxInt(0, available-ansi.StringWidth(text))
+	padding := max(0, available-ansi.StringWidth(text))
 	return strings.Repeat(" ", padding) + mutedStyle.Render(text)
 }
 

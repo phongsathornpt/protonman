@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"regexp"
 	"strconv"
 	"strings"
 
@@ -380,7 +379,7 @@ func Classify(err error, activeProvider string, activeModel string) Error {
 	// 15. MCP Server Failures (MCPFailed)
 	if strings.Contains(raw, "MCPFailed") || strings.Contains(raw, "MCP server") {
 		serverName := "server"
-		if m := regexp.MustCompile(`MCP server ["']?([^"'\s]+)["']? failed`).FindStringSubmatch(raw); len(m) > 1 {
+		if m := mcpServerFailedPattern.FindStringSubmatch(raw); len(m) > 1 {
 			serverName = m[1]
 		}
 		return Error{

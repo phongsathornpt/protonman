@@ -25,3 +25,32 @@ func TestCrashViewFitsTinyTerminals(t *testing.T) {
 		}
 	}
 }
+
+func TestCopyLabelStatesStayHonest(t *testing.T) {
+	model := NewCrashModel("boom", []byte("stack"))
+	cases := []struct {
+		state CopyState
+		want  string
+	}{
+		{CopyStatePending, "[c] Copy report"},
+		{CopyStateConfirmed, "[✓ Copied to clipboard]"},
+		{CopyStateTerminal, "[~ Sent to terminal"},
+		{CopyStateFailed, "[!] Copy failed"},
+	}
+	for _, tc := range cases {
+		model.copyState = tc.state
+		view := model.View().Content
+		if !strings.Contains(view, tc.want) {
+			t.Fatalf("state %v view missing %q:\n%s", tc.state, tc.want, view)
+		}
+	}
+	// Only a confirmed delivery may claim the system clipboard was written.
+	model.copyState = CopyStateTerminal
+	if got := model.View().Content; strings.Contains(got, "Copied to clipboard") {
+		t.Fatalf("terminal-only copy claimed system clipboard:\n%s", got)
+	}
+	model.copyState = CopyStateFailed
+	if got := model.View().Content; strings.Contains(got, "Copied to clipboard") || strings.Contains(got, "Sent to terminal") {
+		t.Fatalf("failed copy claimed delivery:\n%s", got)
+	}
+}

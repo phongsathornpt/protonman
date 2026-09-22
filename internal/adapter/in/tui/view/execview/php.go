@@ -62,30 +62,34 @@ func summarizePHPExec(p *Presentation, output string) {
 	if p.Action == "lint" && strings.Contains(strings.ToLower(output), "no syntax errors detected") {
 		p.Summary, p.SuppressRaw = "valid syntax", true
 	}
-	if failures := firstFailureLines(output, 3); len(failures) > 0 {
-		p.Details = failures
-	}
+	attachFailureDetails(p, output)
 }
 
 func summarizePHPUnitExec(p *Presentation, output string) {
 	if m := phpunitTestsRE.FindStringSubmatch(output); len(m) > 0 {
-		total := atoiExec(m[1])
+		total, okTotal := atoiExec(m[1])
 		failed, errs, skipped := 0, 0, 0
-		if len(m) > 2 {
-			failed = atoiExec(m[2])
+		okFailed, okErrs, okSkipped := true, true, true
+		// A non-participating optional capture means 0; only a failed parse
+		// of a present capture aborts the summary (fail-safe).
+		if len(m) > 2 && m[2] != "" {
+			failed, okFailed = atoiExec(m[2])
 		}
-		if len(m) > 3 {
-			errs = atoiExec(m[3])
+		if len(m) > 3 && m[3] != "" {
+			errs, okErrs = atoiExec(m[3])
 		}
-		if len(m) > 4 {
-			skipped = atoiExec(m[4])
+		if len(m) > 4 && m[4] != "" {
+			skipped, okSkipped = atoiExec(m[4])
 		}
-		p.Summary = formatTestCounts(testCounts{Passed: total - failed - errs - skipped, Failed: failed, Errors: errs, Skipped: skipped})
-		p.SuppressRaw = failed == 0 && errs == 0
+		if okTotal && okFailed && okErrs && okSkipped {
+			p.Summary = formatTestCounts(testCounts{Passed: total - failed - errs - skipped, Failed: failed, Errors: errs, Skipped: skipped})
+			p.SuppressRaw = failed == 0 && errs == 0
+		}
 	} else if m := phpunitOKRE.FindStringSubmatch(output); len(m) == 2 {
-		p.Summary, p.SuppressRaw = formatTestCounts(testCounts{Passed: atoiExec(m[1])}), true
+		passed, ok := atoiExec(m[1])
+		if ok {
+			p.Summary, p.SuppressRaw = formatTestCounts(testCounts{Passed: passed}), true
+		}
 	}
-	if failures := firstFailureLines(output, 3); len(failures) > 0 {
-		p.Details = failures
-	}
+	attachFailureDetails(p, output)
 }

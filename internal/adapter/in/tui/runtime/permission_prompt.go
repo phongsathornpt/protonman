@@ -167,15 +167,7 @@ func (v *permissionPaneView) ensureInitialized(workDir string) {
 	case permission.ToolEdit:
 		v.title = "Permission required — modifies workspace"
 		v.tone = panecommon.ToneError
-		var editInput struct {
-			Action    string `json:"action"`
-			FilePath  string `json:"filePath"`
-			Path      string `json:"path"`
-			OldString string `json:"oldString"`
-			NewString string `json:"newString"`
-			Patch     string `json:"patch"`
-			Content   string `json:"content"`
-		}
+		var editInput permissionEditInput
 		_ = json.Unmarshal(request.Arguments, &editInput)
 		targetPath := editInput.FilePath
 		if targetPath == "" {
@@ -187,130 +179,160 @@ func (v *permissionPaneView) ensureInitialized(workDir string) {
 		}
 		switch action {
 		case "replace":
-			if editInput.OldString != "" || editInput.NewString != "" {
-				diff := diffutil.UnifiedDiff(editInput.OldString, editInput.NewString, targetPath, 1)
-				if diff != "" {
-					adds, dels := diffutil.DiffStats(diff)
-					badge := diffutil.StatBadge(adds, dels)
-					if badge != "" {
-						v.detailExtras = append(v.detailExtras, fmt.Sprintf("Action: replace · %s", badge))
-					} else {
-						v.detailExtras = append(v.detailExtras, "Action: replace")
-					}
-					v.diffPreview, v.diffOmitted = diffutil.ExtractPreview(diff, 6)
-				} else {
-					v.detailExtras = append(v.detailExtras, "Action: replace")
-				}
-			} else {
-				v.detailExtras = append(v.detailExtras, "Action: replace")
-			}
+			v.describeReplaceAction(editInput, targetPath)
 		case "patch":
-			if editInput.Patch != "" {
-				adds, dels := diffutil.DiffStats(editInput.Patch)
-				badge := diffutil.StatBadge(adds, dels)
-				targets := extractPatchTargets(editInput.Patch)
-				if len(targets) > 0 {
-					targetStr := strings.Join(targets, ", ")
-					if len(targets) > 3 {
-						targetStr = fmt.Sprintf("%d files (%s, …)", len(targets), strings.Join(targets[:3], ", "))
-					}
-					if badge != "" {
-						v.detailExtras = append(v.detailExtras, fmt.Sprintf("Action: patch · %s · targets: %s", badge, targetStr))
-					} else {
-						v.detailExtras = append(v.detailExtras, fmt.Sprintf("Action: patch · targets: %s", targetStr))
-					}
-				} else if badge != "" {
-					v.detailExtras = append(v.detailExtras, fmt.Sprintf("Action: patch · %s", badge))
-				} else {
-					v.detailExtras = append(v.detailExtras, "Action: patch")
-				}
-				v.diffPreview, v.diffOmitted = diffutil.ExtractPreview(editInput.Patch, 6)
-			} else {
-				v.detailExtras = append(v.detailExtras, "Action: patch")
-			}
+			v.describePatchAction(editInput)
 		case "write":
-			if editInput.Content != "" || targetPath != "" {
-				existingBytes, exists := readExistingFileForDiff(workDir, targetPath)
-				var diff string
-				if exists {
-					diff = diffutil.UnifiedDiff(string(existingBytes), editInput.Content, targetPath, 1)
-				} else {
-					diff = diffutil.NewFileDiff(targetPath, editInput.Content, 1)
-				}
-				if diff != "" {
-					adds, dels := diffutil.DiffStats(diff)
-					badge := diffutil.StatBadge(adds, dels)
-					if badge != "" {
-						v.detailExtras = append(v.detailExtras, fmt.Sprintf("Action: write · %s (%d bytes)", badge, len(editInput.Content)))
-					} else if editInput.Content == "" {
-						v.detailExtras = append(v.detailExtras, "Action: write (empty file)")
-					} else {
-						lineCount := strings.Count(editInput.Content, "\n") + 1
-						lineWord := "lines"
-						if lineCount == 1 {
-							lineWord = "line"
-						}
-						v.detailExtras = append(v.detailExtras, fmt.Sprintf("Action: write · %d %s (%d bytes)", lineCount, lineWord, len(editInput.Content)))
-					}
-					v.diffPreview, v.diffOmitted = diffutil.ExtractPreview(diff, 6)
-				} else {
-					if exists {
-						v.detailExtras = append(v.detailExtras, "Action: write (no changes)")
-					} else {
-						v.detailExtras = append(v.detailExtras, "Action: write (empty file)")
-					}
-				}
-			} else {
-				v.detailExtras = append(v.detailExtras, "Action: write (empty file)")
-			}
+			v.describeWriteAction(editInput, targetPath, workDir)
 		case "restore":
 			v.detailExtras = append(v.detailExtras, "Action: restore checkpoint")
 		}
 	case permission.ToolBash:
-		var input struct {
-			Command string `json:"command"`
-			Cwd     string `json:"cwd,omitempty"`
+		v.describeBashAction(request.Arguments)
+	}
+}
+
+// permissionEditInput is the parsed argument set of an edit tool call.
+type permissionEditInput struct {
+	Action    string `json:"action"`
+	FilePath  string `json:"filePath"`
+	Path      string `json:"path"`
+	OldString string `json:"oldString"`
+	NewString string `json:"newString"`
+	Patch     string `json:"patch"`
+	Content   string `json:"content"`
+}
+
+func (v *permissionPaneView) describeReplaceAction(editInput permissionEditInput, targetPath string) {
+	if editInput.OldString != "" || editInput.NewString != "" {
+		diff := diffutil.UnifiedDiff(editInput.OldString, editInput.NewString, targetPath, 1)
+		if diff != "" {
+			adds, dels := diffutil.DiffStats(diff)
+			badge := diffutil.StatBadge(adds, dels)
+			if badge != "" {
+				v.detailExtras = append(v.detailExtras, fmt.Sprintf("Action: replace · %s", badge))
+			} else {
+				v.detailExtras = append(v.detailExtras, "Action: replace")
+			}
+			v.diffPreview, v.diffOmitted = diffutil.ExtractPreview(diff, 6)
+		} else {
+			v.detailExtras = append(v.detailExtras, "Action: replace")
 		}
-		_ = json.Unmarshal(request.Arguments, &input)
-		analysis := tool.AnalyzeCommand(input.Command)
-		switch analysis.Scope {
-		case tool.CommandScopePublish:
-			v.title, v.tone = "Permission required — publishes package", panecommon.ToneError
-		case tool.CommandScopeDeployment:
-			if analysis.Risk == tool.CommandRiskRemoteDestructive {
-				v.title = "Permission required — destructive deployment change"
-			} else {
-				v.title = "Permission required — changes deployment"
+	} else {
+		v.detailExtras = append(v.detailExtras, "Action: replace")
+	}
+}
+
+func (v *permissionPaneView) describePatchAction(editInput permissionEditInput) {
+	if editInput.Patch != "" {
+		adds, dels := diffutil.DiffStats(editInput.Patch)
+		badge := diffutil.StatBadge(adds, dels)
+		targets := extractPatchTargets(editInput.Patch)
+		if len(targets) > 0 {
+			targetStr := strings.Join(targets, ", ")
+			if len(targets) > 3 {
+				targetStr = fmt.Sprintf("%d files (%s, …)", len(targets), strings.Join(targets[:3], ", "))
 			}
-			v.tone = panecommon.ToneError
-		case tool.CommandScopeRemote:
-			if analysis.Risk == tool.CommandRiskRemoteDestructive {
-				v.title = "Permission required — destructively modifies remote"
+			if badge != "" {
+				v.detailExtras = append(v.detailExtras, fmt.Sprintf("Action: patch · %s · targets: %s", badge, targetStr))
 			} else {
-				v.title = "Permission required — modifies remote"
+				v.detailExtras = append(v.detailExtras, fmt.Sprintf("Action: patch · targets: %s", targetStr))
 			}
-			v.tone = panecommon.ToneError
+		} else if badge != "" {
+			v.detailExtras = append(v.detailExtras, fmt.Sprintf("Action: patch · %s", badge))
+		} else {
+			v.detailExtras = append(v.detailExtras, "Action: patch")
+		}
+		v.diffPreview, v.diffOmitted = diffutil.ExtractPreview(editInput.Patch, 6)
+	} else {
+		v.detailExtras = append(v.detailExtras, "Action: patch")
+	}
+}
+
+// describeWriteAction builds the write detail line and diff preview. It may
+// read the workspace via readExistingFileForDiff, so it must only run from
+// ensureInitialized at open time — never from Render/card.
+func (v *permissionPaneView) describeWriteAction(editInput permissionEditInput, targetPath, workDir string) {
+	if editInput.Content != "" || targetPath != "" {
+		existingBytes, exists := readExistingFileForDiff(workDir, targetPath)
+		var diff string
+		if exists {
+			diff = diffutil.UnifiedDiff(string(existingBytes), editInput.Content, targetPath, 1)
+		} else {
+			diff = diffutil.NewFileDiff(targetPath, editInput.Content, 1)
+		}
+		if diff != "" {
+			adds, dels := diffutil.DiffStats(diff)
+			badge := diffutil.StatBadge(adds, dels)
+			if badge != "" {
+				v.detailExtras = append(v.detailExtras, fmt.Sprintf("Action: write · %s (%d bytes)", badge, len(editInput.Content)))
+			} else if editInput.Content == "" {
+				v.detailExtras = append(v.detailExtras, "Action: write (empty file)")
+			} else {
+				lineCount := strings.Count(editInput.Content, "\n") + 1
+				lineWord := "lines"
+				if lineCount == 1 {
+					lineWord = "line"
+				}
+				v.detailExtras = append(v.detailExtras, fmt.Sprintf("Action: write · %d %s (%d bytes)", lineCount, lineWord, len(editInput.Content)))
+			}
+			v.diffPreview, v.diffOmitted = diffutil.ExtractPreview(diff, 6)
+		} else {
+			if exists {
+				v.detailExtras = append(v.detailExtras, "Action: write (no changes)")
+			} else {
+				v.detailExtras = append(v.detailExtras, "Action: write (empty file)")
+			}
+		}
+	} else {
+		v.detailExtras = append(v.detailExtras, "Action: write (empty file)")
+	}
+}
+
+func (v *permissionPaneView) describeBashAction(arguments json.RawMessage) {
+	var input struct {
+		Command string `json:"command"`
+		Cwd     string `json:"cwd,omitempty"`
+	}
+	_ = json.Unmarshal(arguments, &input)
+	analysis := tool.AnalyzeCommand(input.Command)
+	switch analysis.Scope {
+	case tool.CommandScopePublish:
+		v.title, v.tone = "Permission required — publishes package", panecommon.ToneError
+	case tool.CommandScopeDeployment:
+		if analysis.Risk == tool.CommandRiskRemoteDestructive {
+			v.title = "Permission required — destructive deployment change"
+		} else {
+			v.title = "Permission required — changes deployment"
+		}
+		v.tone = panecommon.ToneError
+	case tool.CommandScopeRemote:
+		if analysis.Risk == tool.CommandRiskRemoteDestructive {
+			v.title = "Permission required — destructively modifies remote"
+		} else {
+			v.title = "Permission required — modifies remote"
+		}
+		v.tone = panecommon.ToneError
+	default:
+		switch analysis.Effect {
+		case tool.CommandEffectReadOnly:
+			v.title, v.tone = "Permission request — shell read only", panecommon.ToneUser
+		case tool.CommandEffectMutating:
+			v.title, v.tone = "Permission required — shell modifies state", panecommon.ToneError
 		default:
-			switch analysis.Effect {
-			case tool.CommandEffectReadOnly:
-				v.title, v.tone = "Permission request — shell read only", panecommon.ToneUser
-			case tool.CommandEffectMutating:
-				v.title, v.tone = "Permission required — shell modifies state", panecommon.ToneError
-			default:
-				v.title = "Permission required — shell effects unknown"
-			}
+			v.title = "Permission required — shell effects unknown"
 		}
-		cwd := strings.TrimSpace(input.Cwd)
-		if cwd == "" {
-			cwd = "."
-		}
-		v.detailExtras = append(v.detailExtras, "Cwd: "+cwd)
-		if analysis.Scope != tool.CommandScopeUnknown {
-			v.detailExtras = append(v.detailExtras, "Scope: "+string(analysis.Scope))
-		}
-		if analysis.Reason != "" {
-			v.detailExtras = append(v.detailExtras, fmt.Sprintf("Effect: %s · %s", analysis.Effect, analysis.Reason))
-		}
+	}
+	cwd := strings.TrimSpace(input.Cwd)
+	if cwd == "" {
+		cwd = "."
+	}
+	v.detailExtras = append(v.detailExtras, "Cwd: "+cwd)
+	if analysis.Scope != tool.CommandScopeUnknown {
+		v.detailExtras = append(v.detailExtras, "Scope: "+string(analysis.Scope))
+	}
+	if analysis.Reason != "" {
+		v.detailExtras = append(v.detailExtras, fmt.Sprintf("Effect: %s · %s", analysis.Effect, analysis.Reason))
 	}
 }
 
@@ -352,13 +374,13 @@ func (v *permissionPaneView) card(ctx paneRenderContext) string {
 	if v.parked {
 		helpBindings = []string{"tab", "Review", "pgup/pgdn", "Scroll", "esc", "Back"}
 	}
-	rows = appendPaneGroup(rows, paneKeyboardHelp(maxInt(1, ctx.width-6), helpBindings...))
+	rows = appendPaneGroup(rows, paneKeyboardHelp(max(1, ctx.width-6), helpBindings...))
 	status := tool.DisplayName(request.ToolName)
 	if len(labels) > 0 {
-		index := maxInt(0, minInt(v.index, len(labels)-1))
+		index := max(0, min(v.index, len(labels)-1))
 		status += " · " + labels[index]
 	}
-	rows = append(rows, paneRightStatus(maxInt(1, ctx.width-6), status))
+	rows = append(rows, paneRightStatus(max(1, ctx.width-6), status))
 	return renderModalRows(ctx, paneToneColor(result.Tone), rows)
 }
 

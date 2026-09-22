@@ -38,3 +38,29 @@ func TestExecSummaryPrimitives(t *testing.T) {
 		t.Fatalf("firstFailureLines = %#v", lines)
 	}
 }
+
+func TestAttachFailureDetails(t *testing.T) {
+	p := &Presentation{}
+	attachFailureDetails(p, "ok\nFAIL one\nerror two\npanic: three\nfailure four\n")
+	want := []string{"FAIL one", "error two", "panic: three"}
+	if strings.Join(p.Details, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("Details = %#v, want %#v", p.Details, want)
+	}
+
+	p = &Presentation{}
+	attachFailureDetails(p, "all tests passed\nnothing to report\n")
+	if len(p.Details) != 0 {
+		t.Fatalf("Details = %#v, want empty", p.Details)
+	}
+}
+
+func TestAtoiExecReportsParseFailure(t *testing.T) {
+	if n, ok := atoiExec("42"); !ok || n != 42 {
+		t.Fatalf("atoiExec(\"42\") = %d, %v; want 42, true", n, ok)
+	}
+	// 25 digits overflows int on every supported platform; strconv must
+	// report the failure instead of yielding a fabricated MaxInt count.
+	if n, ok := atoiExec("1234567890123456789012345"); ok {
+		t.Fatalf("atoiExec(25-digit value) = %d, true; want _, false", n)
+	}
+}

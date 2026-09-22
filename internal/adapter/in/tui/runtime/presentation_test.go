@@ -921,8 +921,10 @@ func TestCrashModelNavigation(t *testing.T) {
 		t.Fatalf("expected scrollOffset 0, got %d", m.ScrollOffset())
 	}
 	_, _ = m.Update(testText("c"))
-	if !m.Copied() {
-		t.Fatal("expected copied flag to be set")
+	switch m.CopyState() {
+	case crashview.CopyStateConfirmed, crashview.CopyStateTerminal:
+	default:
+		t.Fatalf("expected copy attempt to report delivery, got state %v", m.CopyState())
 	}
 	_, cmd := m.Update(testText("r"))
 	if !m.RestartRequested() {
@@ -1074,7 +1076,7 @@ func TestSessionHeaderSitsAtTopWithoutFloatingBox(t *testing.T) {
 	view := testPlain(model.View().Content)
 	plain := sanitizeBubbleText(view)
 	if idx := strings.Index(plain, `/\`); idx < 0 || idx > 8 {
-		t.Fatalf("session header is not at the top of the view: %q", plain[:minInt(80, len(plain))])
+		t.Fatalf("session header is not at the top of the view: %q", plain[:min(80, len(plain))])
 	}
 	if strings.Count(view, "╭") > 1 {
 		t.Fatalf("idle view has extra boxes: %s", view)
@@ -1584,5 +1586,37 @@ func TestSessionHeaderOwnsActiveGoalState(t *testing.T) {
 	}
 	if got := ansi.Strip(m.statusView()); got != "" {
 		t.Fatalf("idle status duplicated active goal: %q", got)
+	}
+}
+
+// TestViewRenderingStaysSideEffectFree pins the rendering contract: View and
+// its helpers may only read presentation state. Memoization caches are
+// refreshed exclusively at the Update boundary (primeViewCaches).
+func TestViewRenderingStaysSideEffectFree(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.resize(80, 24)
+
+	_ = m.renderedViewport()
+	_ = m.liveView()
+	_ = m.View()
+
+	if m.viewportViewCache.valid {
+		t.Fatal("renderedViewport mutated its memoization cache; View-path rendering must stay read-only")
+	}
+	if m.liveViewCacheValid {
+		t.Fatal("liveView mutated its memoization cache; View-path rendering must stay read-only")
+	}
+
+	if _, cmd := m.Update(nil); cmd != nil {
+		t.Fatalf("unhandled nil message produced command %v", cmd)
+	}
+	if !m.viewportViewCache.valid {
+		t.Fatal("Update boundary did not prime the viewport view cache")
+	}
+	if !m.liveViewCacheValid {
+		t.Fatal("Update boundary did not prime the live view cache")
+	}
+	if got, want := m.liveView(), m.computeLiveView(); got != want {
+		t.Fatal("primed live view diverged from a fresh computation")
 	}
 }

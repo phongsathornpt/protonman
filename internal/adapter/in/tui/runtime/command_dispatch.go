@@ -210,6 +210,36 @@ func (m *bubbleModel) resumeSession(targetID string) tea.Cmd {
 		return nil
 	}
 
+	detail, ok := m.fetchSessionDetail(targetID)
+	if !ok {
+		return nil
+	}
+
+	m.saveOutgoingSession()
+	m.restoreSessionControls(detail)
+	m.restoreSessionSkills(detail)
+	m.rebindSessionTodo(detail)
+	m.rebindSessionAgents(detail.ID)
+	m.reloadSessionConversation(detail)
+
+	// Reconfigure runner
+	m.reconfigureRunner()
+
+	// Close session resume pane if open
+	if m.panes.bottom.has(sessionResumeViewID) {
+		m.panes.bottom.remove(sessionResumeViewID)
+	}
+
+	m.appendMuted("resumed session " + detail.ID)
+	m.refreshViewport()
+	m.requestRelayout()
+	return nil
+}
+
+// fetchSessionDetail loads the resume target ("latest" resolves within the
+// current workspace first). Load failures are reported to the transcript; the
+// bool reports whether a usable detail was found.
+func (m *bubbleModel) fetchSessionDetail(targetID string) (*app.SessionDetail, bool) {
 	var detail *app.SessionDetail
 	var err error
 	if strings.EqualFold(targetID, "latest") {
@@ -222,47 +252,55 @@ func (m *bubbleModel) resumeSession(targetID string) tea.Cmd {
 	}
 	if err != nil {
 		m.appendError("failed to resume session: " + err.Error())
-		return nil
+		return nil, false
 	}
 	if detail == nil {
 		m.appendError("session not found")
-		return nil
+		return nil, false
 	}
+	return detail, true
+}
 
-	// Persist outgoing session
-	if m.sessionID != "" {
-		var activeSkills []string
-		if m.skills != nil {
-			activeSkills = m.skills.ActivatedList()
-		}
-		permMode := "ask"
-		if m.service != nil {
-			permMode = m.service.Mode().String()
-		}
-		effortStr := "auto"
-		if m.reasoningEffort != "" {
-			effortStr = string(m.reasoningEffort)
-		}
-		var currentMsgs []model.Message
-		if m.conversation != nil {
-			currentMsgs = m.conversation.SnapshotMessages()
-		}
-		if err := m.sessions.SaveCurrent(m.ctx, app.SessionDetail{
-			ID:                 m.sessionID,
-			WorkspaceKey:       m.workspaceKey,
-			PermissionMode:     permMode,
-			ActiveSkills:       activeSkills,
-			ActiveGoal:         m.activeGoal,
-			AgentProfile:       m.agentProfile,
-			ReasoningEffort:    effortStr,
-			LowConcurrencyMode: m.lowConcurrencyMode.String(),
-			Messages:           currentMsgs,
-		}); err != nil {
-			m.appendError(fmt.Sprintf("failed to save outgoing session %s: %v", m.sessionID, err))
-		}
+// saveOutgoingSession persists the controls and messages of the session being
+// left; failures are reported but do not abort the switch.
+func (m *bubbleModel) saveOutgoingSession() {
+	if m.sessionID == "" {
+		return
 	}
+	var activeSkills []string
+	if m.skills != nil {
+		activeSkills = m.skills.ActivatedList()
+	}
+	permMode := "ask"
+	if m.service != nil {
+		permMode = m.service.Mode().String()
+	}
+	effortStr := "auto"
+	if m.reasoningEffort != "" {
+		effortStr = string(m.reasoningEffort)
+	}
+	var currentMsgs []model.Message
+	if m.conversation != nil {
+		currentMsgs = m.conversation.SnapshotMessages()
+	}
+	if err := m.sessions.SaveCurrent(m.ctx, app.SessionDetail{
+		ID:                 m.sessionID,
+		WorkspaceKey:       m.workspaceKey,
+		PermissionMode:     permMode,
+		ActiveSkills:       activeSkills,
+		ActiveGoal:         m.activeGoal,
+		AgentProfile:       m.agentProfile,
+		ReasoningEffort:    effortStr,
+		LowConcurrencyMode: m.lowConcurrencyMode.String(),
+		Messages:           currentMsgs,
+	}); err != nil {
+		m.appendError(fmt.Sprintf("failed to save outgoing session %s: %v", m.sessionID, err))
+	}
+}
 
-	// Apply incoming controls
+// restoreSessionControls applies the incoming session's identity, goal, and
+// reasoning, low-concurrency, and permission-mode controls.
+func (m *bubbleModel) restoreSessionControls(detail *app.SessionDetail) {
 	m.sessionID = detail.ID
 	m.activeGoal = detail.ActiveGoal
 	if detail.AgentProfile != "" {
@@ -285,38 +323,54 @@ func (m *bubbleModel) resumeSession(targetID string) tea.Cmd {
 			}
 		}
 	}
-	if m.skills != nil && len(detail.ActiveSkills) > 0 {
-		for _, name := range detail.ActiveSkills {
-			if err := m.skills.Activate(name); err != nil {
-				m.appendError(fmt.Sprintf("failed to activate skill %q: %v", name, err))
-			}
+}
+
+// restoreSessionSkills activates the incoming session's saved skills, reporting
+// per-skill failures without aborting the switch.
+func (m *bubbleModel) restoreSessionSkills(detail *app.SessionDetail) {
+	if m.skills == nil || len(detail.ActiveSkills) == 0 {
+		return
+	}
+	for _, name := range detail.ActiveSkills {
+		if err := m.skills.Activate(name); err != nil {
+			m.appendError(fmt.Sprintf("failed to activate skill %q: %v", name, err))
 		}
 	}
+}
 
-	// Rebind TODO store
+// rebindSessionTodo swaps in the target session's TODO store and re-registers
+// its handler; a failed open keeps the previous store.
+func (m *bubbleModel) rebindSessionTodo(detail *app.SessionDetail) {
 	todoStore, todoErr := m.sessions.OpenTodoStore(m.ctx, detail.ID, detail.ActiveGoal)
-	if todoErr == nil && todoStore != nil {
-		m.todoStore = todoStore
-		if m.todoHandlerFactory != nil {
-			handler := m.todoHandlerFactory(todoStore, detail.ID)
-			if reg, ok := m.registry.(tool.Registrar); ok {
-				if err := reg.Register(handler); err != nil {
-					m.appendError(fmt.Sprintf("failed to register todo handler: %v", err))
-				}
+	if todoErr != nil || todoStore == nil {
+		return
+	}
+	m.todoStore = todoStore
+	if m.todoHandlerFactory != nil {
+		handler := m.todoHandlerFactory(todoStore, detail.ID)
+		if reg, ok := m.registry.(tool.Registrar); ok {
+			if err := reg.Register(handler); err != nil {
+				m.appendError(fmt.Sprintf("failed to register todo handler: %v", err))
 			}
 		}
-		m.applyTodoSnapshot(todoStore.Snapshot())
 	}
+	m.applyTodoSnapshot(todoStore.Snapshot())
+}
 
-	// Rebind agents for session
+// rebindSessionAgents repoints agent lifecycle state at the target session and
+// resets the per-session activity projection.
+func (m *bubbleModel) rebindSessionAgents(sessionID string) {
 	if m.agents.Available() {
-		m.agents = m.agents.ForSession(detail.ID)
+		m.agents = m.agents.ForSession(sessionID)
 		m.agentSnapshot = m.agents.List()
 	}
 	m.agentActivity = make(map[string]AgentActivity)
 	m.activity = runtimeui.ActivityReady
+}
 
-	// Reset history and load messages
+// reloadSessionConversation replaces retained history and messages with the
+// target session's conversation and returns the viewport to the live tail.
+func (m *bubbleModel) reloadSessionConversation(detail *app.SessionDetail) {
 	if m.conversation != nil {
 		m.conversation.Reset()
 		if len(detail.Messages) > 0 {
@@ -328,19 +382,6 @@ func (m *bubbleModel) resumeSession(targetID string) tea.Cmd {
 	m.conversationViewport = conversationViewportState{mode: viewportFollowing}
 	m.panes.showTranscript = false
 	m.refreshTranscriptViewport(true)
-
-	// Reconfigure runner
-	m.reconfigureRunner()
-
-	// Close session resume pane if open
-	if m.panes.bottom.has(sessionResumeViewID) {
-		m.panes.bottom.remove(sessionResumeViewID)
-	}
-
-	m.appendMuted("resumed session " + detail.ID)
-	m.refreshViewport()
-	m.requestRelayout()
-	return nil
 }
 
 // Low concurrency command (/low)
@@ -518,9 +559,7 @@ func (m *bubbleModel) appendProviderList() {
 
 func (m *bubbleModel) openSkillsPane() tea.Cmd {
 	if m.skills == nil || len(m.skills.List()) == 0 {
-		m.appendLine("No agent skills discovered.")
-		m.appendLine(fmt.Sprintf("Place skills in %s or .protonman/skills/ (with PROTONMAN_TRUST_PROJECT=1).", appdirs.UserSkillsDisplay()))
-		m.refreshViewport()
+		m.appendNoSkillsDiscovered()
 		return nil
 	}
 	if !m.panes.bottom.has(skillsViewID) {
@@ -542,169 +581,202 @@ func (m *bubbleModel) toggleSkillsPane() tea.Cmd {
 func (m *bubbleModel) handleSkillsCommand(argument string, parts []string) tea.Cmd {
 	trimmedArg := strings.TrimSpace(argument)
 	if m.skills == nil || len(m.skills.List()) == 0 {
-		m.appendLine("No agent skills discovered.")
-		m.appendLine(fmt.Sprintf("Place skills in %s or .protonman/skills/ (with PROTONMAN_TRUST_PROJECT=1).", appdirs.UserSkillsDisplay()))
-		m.refreshViewport()
+		m.appendNoSkillsDiscovered()
 		return nil
 	}
-	if trimmedArg == "" {
+	switch trimmedArg {
+	case "":
 		return m.openSkillsPane()
-	}
-	if trimmedArg == "active" {
-		active := m.skills.ActivatedList()
-		if len(active) == 0 {
-			m.appendLine("No active agent skills in this session.")
-			m.appendLine("Activate skills using /skills <name> or the skill tool.")
-		} else {
-			m.appendLine(fmt.Sprintf("Active Agent Skills (%d):", len(active)))
-			for _, name := range active {
-				m.appendLine(fmt.Sprintf("  [x] %s", name))
-			}
-		}
-		m.refreshViewport()
-		return nil
-	}
-	if trimmedArg == "check" || trimmedArg == "verify" {
-		lockPath := m.skills.ProjectLockPath()
-		if lockPath == "" {
-			lockPath = filepath.Join(m.workDir, skill.LockFileName)
-		}
-		lock, err := skill.ReadLockFile(lockPath)
-		if err != nil || len(lock.Skills) == 0 {
-			m.appendLine(fmt.Sprintf("No project skill lock found (%s).", lockPath))
-			m.appendLine("Use /skills lock to generate a lockfile for project skills.")
-			m.refreshViewport()
-			return nil
-		}
-
-		projectSkills := make([]skill.Skill, 0)
-		for _, s := range m.skills.List() {
-			if s.Scope == skill.ScopeProject {
-				projectSkills = append(projectSkills, s)
-			}
-		}
-		report := skill.VerifyProjectSkills(lock, projectSkills)
-		report.LockPath = lockPath
-		m.skills.SetProjectLock(lockPath, &report)
-
-		m.appendLine(fmt.Sprintf("Project Skill Lock (%s):", report.LockPath))
-		verified, drifted, missing, unlocked := report.Summary()
-		m.appendLine(fmt.Sprintf("  Summary: %d verified, %d drifted, %d missing, %d unlocked", verified, drifted, missing, unlocked))
-		for _, res := range report.Results {
-			switch res.Status {
-			case skill.LockStatusVerified:
-				m.appendLine(fmt.Sprintf("  [verified] %s (%s)", res.Name, shortHash(res.ComputedHash)))
-			case skill.LockStatusDrifted:
-				m.appendError(fmt.Sprintf("  [drifted]  %s: expected %s, got %s", res.Name, shortHash(res.ExpectedHash), shortHash(res.ComputedHash)))
-			case skill.LockStatusMissing:
-				m.appendError(fmt.Sprintf("  [missing]  %s: expected %s (not on disk)", res.Name, shortHash(res.ExpectedHash)))
-			case skill.LockStatusUnlocked:
-				m.appendLine(fmt.Sprintf("  [unlocked] %s: on disk but not locked", res.Name))
-			}
-		}
-		if report.IsClean() {
-			m.appendLine("All locked skills verified cleanly.")
-		}
-		m.refreshViewport()
-		return nil
-	}
-	if trimmedArg == "lock" {
-		projectSkills := make([]skill.Skill, 0)
-		for _, s := range m.skills.List() {
-			if s.Scope == skill.ScopeProject {
-				projectSkills = append(projectSkills, s)
-			}
-		}
-		if len(projectSkills) == 0 {
-			m.appendError("No project skills found to lock. Only project-scoped skills can be locked.")
-			m.refreshViewport()
-			return nil
-		}
-
-		lockPath := m.skills.ProjectLockPath()
-		if lockPath == "" {
-			lockPath = filepath.Join(m.workDir, skill.LockFileName)
-		}
-
-		existingLock, _ := skill.ReadLockFile(lockPath)
-		newLock, err := skill.GenerateProjectLock(projectSkills, &existingLock)
-		if err != nil {
-			m.appendError(fmt.Sprintf("generate project skill lock: %v", err))
-			m.refreshViewport()
-			return nil
-		}
-
-		if err := skill.WriteLockFile(lockPath, newLock); err != nil {
-			m.appendError(fmt.Sprintf("write project skill lock: %v", err))
-			m.refreshViewport()
-			return nil
-		}
-
-		report := skill.VerifyProjectSkills(newLock, projectSkills)
-		report.LockPath = lockPath
-		m.skills.SetProjectLock(lockPath, &report)
-
-		m.appendLine(fmt.Sprintf("Locked %d project skill(s) to %s.", len(newLock.Skills), lockPath))
-		m.refreshViewport()
-		return nil
-	}
-	if trimmedArg == "toggle" {
-		if len(parts) < 3 || strings.TrimSpace(parts[2]) == "" {
-			m.appendError("usage: /skills toggle <name>")
-			m.refreshViewport()
-			return nil
-		}
-		target := strings.TrimSpace(parts[2])
-		active, err := m.skills.Toggle(target)
-		if err != nil {
-			m.appendError(err.Error())
-			m.refreshViewport()
-			return nil
-		}
-		m.persistActiveSkills()
-		if view, _ := m.panes.bottom.find(skillsViewID).(*skillsPaneView); view != nil {
-			_ = view.refreshItems(newPaneRenderContext(m))
-		}
-		state := "deactivated"
-		box := "[ ]"
-		if active {
-			state = "activated"
-			box = "[x]"
-		}
-		m.appendLine(fmt.Sprintf("%s Skill %q %s.", box, target, state))
-		m.refreshViewport()
-		return nil
-	}
-	if trimmedArg == "deactivate" || trimmedArg == "disable" || trimmedArg == "remove" || trimmedArg == "off" {
-		if len(parts) < 3 || strings.TrimSpace(parts[2]) == "" {
-			m.appendError(fmt.Sprintf("usage: /skills %s <name>", trimmedArg))
-			m.refreshViewport()
-			return nil
-		}
-		target := strings.TrimSpace(parts[2])
-		if _, ok := m.skills.Lookup(target); !ok {
-			m.appendError(fmt.Sprintf("skill %q not found; try /skills to list available skills", target))
-			m.refreshViewport()
-			return nil
-		}
-		if !m.skills.IsActivated(target) {
-			m.appendLine(fmt.Sprintf("[ ] Skill %q is not active.", target))
-			m.refreshViewport()
-			return nil
-		}
-		m.skills.Deactivate(target)
-		m.persistActiveSkills()
-		if view, _ := m.panes.bottom.find(skillsViewID).(*skillsPaneView); view != nil {
-			_ = view.refreshItems(newPaneRenderContext(m))
-		}
-		m.appendLine(fmt.Sprintf("[ ] Skill %q deactivated.", target))
-		m.refreshViewport()
-		return nil
+	case "active":
+		return m.skillsActiveList()
+	case "check", "verify":
+		return m.skillsLockStatus()
+	case "lock":
+		return m.skillsLockGenerate()
+	case "toggle":
+		return m.skillsToggle(parts)
+	case "deactivate", "disable", "remove", "off":
+		return m.skillsDeactivate(trimmedArg, parts)
 	}
 	target := trimmedArg
 	if (trimmedArg == "activate" || trimmedArg == "enable" || trimmedArg == "on") && len(parts) >= 3 {
 		target = strings.TrimSpace(parts[2])
 	}
+	return m.skillsActivate(target)
+}
+
+// appendNoSkillsDiscovered reports the empty-discovery state shared by bare
+// /skills and the skills pane opener.
+func (m *bubbleModel) appendNoSkillsDiscovered() {
+	m.appendLine("No agent skills discovered.")
+	m.appendLine(fmt.Sprintf("Place skills in %s or .protonman/skills/ (with PROTONMAN_TRUST_PROJECT=1).", appdirs.UserSkillsDisplay()))
+	m.refreshViewport()
+}
+
+// skillsActiveList implements /skills active.
+func (m *bubbleModel) skillsActiveList() tea.Cmd {
+	active := m.skills.ActivatedList()
+	if len(active) == 0 {
+		m.appendLine("No active agent skills in this session.")
+		m.appendLine("Activate skills using /skills <name> or the skill tool.")
+	} else {
+		m.appendLine(fmt.Sprintf("Active Agent Skills (%d):", len(active)))
+		for _, name := range active {
+			m.appendLine(fmt.Sprintf("  [x] %s", name))
+		}
+	}
+	m.refreshViewport()
+	return nil
+}
+
+// projectLockPath resolves the project skill lockfile location, falling back
+// to the workspace root when no project lock is registered.
+func (m *bubbleModel) projectLockPath() string {
+	if lockPath := m.skills.ProjectLockPath(); lockPath != "" {
+		return lockPath
+	}
+	return filepath.Join(m.workDir, skill.LockFileName)
+}
+
+// projectScopedSkills lists discovered skills bound to the current project.
+func (m *bubbleModel) projectScopedSkills() []skill.Skill {
+	projectSkills := make([]skill.Skill, 0)
+	for _, s := range m.skills.List() {
+		if s.Scope == skill.ScopeProject {
+			projectSkills = append(projectSkills, s)
+		}
+	}
+	return projectSkills
+}
+
+// skillsLockStatus implements /skills check|verify.
+func (m *bubbleModel) skillsLockStatus() tea.Cmd {
+	lockPath := m.projectLockPath()
+	lock, err := skill.ReadLockFile(lockPath)
+	if err != nil || len(lock.Skills) == 0 {
+		m.appendLine(fmt.Sprintf("No project skill lock found (%s).", lockPath))
+		m.appendLine("Use /skills lock to generate a lockfile for project skills.")
+		m.refreshViewport()
+		return nil
+	}
+
+	projectSkills := m.projectScopedSkills()
+	report := skill.VerifyProjectSkills(lock, projectSkills)
+	report.LockPath = lockPath
+	m.skills.SetProjectLock(lockPath, &report)
+
+	m.appendLine(fmt.Sprintf("Project Skill Lock (%s):", report.LockPath))
+	verified, drifted, missing, unlocked := report.Summary()
+	m.appendLine(fmt.Sprintf("  Summary: %d verified, %d drifted, %d missing, %d unlocked", verified, drifted, missing, unlocked))
+	for _, res := range report.Results {
+		switch res.Status {
+		case skill.LockStatusVerified:
+			m.appendLine(fmt.Sprintf("  [verified] %s (%s)", res.Name, shortHash(res.ComputedHash)))
+		case skill.LockStatusDrifted:
+			m.appendError(fmt.Sprintf("  [drifted]  %s: expected %s, got %s", res.Name, shortHash(res.ExpectedHash), shortHash(res.ComputedHash)))
+		case skill.LockStatusMissing:
+			m.appendError(fmt.Sprintf("  [missing]  %s: expected %s (not on disk)", res.Name, shortHash(res.ExpectedHash)))
+		case skill.LockStatusUnlocked:
+			m.appendLine(fmt.Sprintf("  [unlocked] %s: on disk but not locked", res.Name))
+		}
+	}
+	if report.IsClean() {
+		m.appendLine("All locked skills verified cleanly.")
+	}
+	m.refreshViewport()
+	return nil
+}
+
+// skillsLockGenerate implements /skills lock.
+func (m *bubbleModel) skillsLockGenerate() tea.Cmd {
+	projectSkills := m.projectScopedSkills()
+	if len(projectSkills) == 0 {
+		m.appendError("No project skills found to lock. Only project-scoped skills can be locked.")
+		m.refreshViewport()
+		return nil
+	}
+
+	lockPath := m.projectLockPath()
+	existingLock, _ := skill.ReadLockFile(lockPath)
+	newLock, err := skill.GenerateProjectLock(projectSkills, &existingLock)
+	if err != nil {
+		m.appendError(fmt.Sprintf("generate project skill lock: %v", err))
+		m.refreshViewport()
+		return nil
+	}
+
+	if err := skill.WriteLockFile(lockPath, newLock); err != nil {
+		m.appendError(fmt.Sprintf("write project skill lock: %v", err))
+		m.refreshViewport()
+		return nil
+	}
+
+	report := skill.VerifyProjectSkills(newLock, projectSkills)
+	report.LockPath = lockPath
+	m.skills.SetProjectLock(lockPath, &report)
+
+	m.appendLine(fmt.Sprintf("Locked %d project skill(s) to %s.", len(newLock.Skills), lockPath))
+	m.refreshViewport()
+	return nil
+}
+
+// skillsToggle implements /skills toggle <name>.
+func (m *bubbleModel) skillsToggle(parts []string) tea.Cmd {
+	if len(parts) < 3 || strings.TrimSpace(parts[2]) == "" {
+		m.appendError("usage: /skills toggle <name>")
+		m.refreshViewport()
+		return nil
+	}
+	target := strings.TrimSpace(parts[2])
+	active, err := m.skills.Toggle(target)
+	if err != nil {
+		m.appendError(err.Error())
+		m.refreshViewport()
+		return nil
+	}
+	m.persistActiveSkills()
+	m.refreshSkillsPane()
+	state := "deactivated"
+	box := "[ ]"
+	if active {
+		state = "activated"
+		box = "[x]"
+	}
+	m.appendLine(fmt.Sprintf("%s Skill %q %s.", box, target, state))
+	m.refreshViewport()
+	return nil
+}
+
+// skillsDeactivate implements the /skills deactivation verbs; verb is the
+// user-typed subcommand used in the usage message.
+func (m *bubbleModel) skillsDeactivate(verb string, parts []string) tea.Cmd {
+	if len(parts) < 3 || strings.TrimSpace(parts[2]) == "" {
+		m.appendError(fmt.Sprintf("usage: /skills %s <name>", verb))
+		m.refreshViewport()
+		return nil
+	}
+	target := strings.TrimSpace(parts[2])
+	if _, ok := m.skills.Lookup(target); !ok {
+		m.appendError(fmt.Sprintf("skill %q not found; try /skills to list available skills", target))
+		m.refreshViewport()
+		return nil
+	}
+	if !m.skills.IsActivated(target) {
+		m.appendLine(fmt.Sprintf("[ ] Skill %q is not active.", target))
+		m.refreshViewport()
+		return nil
+	}
+	m.skills.Deactivate(target)
+	m.persistActiveSkills()
+	m.refreshSkillsPane()
+	m.appendLine(fmt.Sprintf("[ ] Skill %q deactivated.", target))
+	m.refreshViewport()
+	return nil
+}
+
+// skillsActivate activates the named skill (or activation-verb target) and
+// lists its bundled resources.
+func (m *bubbleModel) skillsActivate(target string) tea.Cmd {
 	s, ok := m.skills.Lookup(target)
 	if !ok {
 		m.appendError(fmt.Sprintf("skill %q not found; try /skills to list available skills", target))
@@ -722,9 +794,7 @@ func (m *bubbleModel) handleSkillsCommand(argument string, parts []string) tea.C
 		return nil
 	}
 	m.persistActiveSkills()
-	if view, _ := m.panes.bottom.find(skillsViewID).(*skillsPaneView); view != nil {
-		_ = view.refreshItems(newPaneRenderContext(m))
-	}
+	m.refreshSkillsPane()
 	m.appendLine(fmt.Sprintf("[x] Activated skill %s [%s]: %s", s.Name, s.Scope, s.Description))
 	if len(s.Resources) > 0 {
 		if len(s.Resources) <= 5 {
@@ -738,6 +808,13 @@ func (m *bubbleModel) handleSkillsCommand(argument string, parts []string) tea.C
 	}
 	m.refreshViewport()
 	return nil
+}
+
+// refreshSkillsPane reloads the skills picker after activation changes.
+func (m *bubbleModel) refreshSkillsPane() {
+	if view, _ := m.panes.bottom.find(skillsViewID).(*skillsPaneView); view != nil {
+		_ = view.refreshItems(newPaneRenderContext(m))
+	}
 }
 
 // Tool call commands (/call)

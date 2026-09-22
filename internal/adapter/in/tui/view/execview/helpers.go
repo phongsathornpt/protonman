@@ -2,6 +2,7 @@ package execview
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -52,6 +53,18 @@ func pluralCount(n int, singular, plural string) string {
 		return fmt.Sprintf("1 %s", singular)
 	}
 	return fmt.Sprintf("%d %s", n, plural)
+}
+
+// atoiExec parses a regex capture group and reports failure instead of
+// silently returning a fabricated count. Callers fail safe: if any required
+// capture for a summary fails to parse, they skip the summary entirely and
+// leave SuppressRaw false so the raw output stays visible.
+func atoiExec(value string) (int, bool) {
+	n, err := strconv.Atoi(value)
+	if err != nil {
+		return 0, false
+	}
+	return n, true
 }
 
 // FormatDuration renders compact execution durations for terminal presentation.
@@ -125,6 +138,14 @@ func firstFailureLines(output string, limit int) []string {
 		lower := strings.ToLower(strings.TrimSpace(line))
 		return strings.Contains(lower, "fail") || strings.Contains(lower, "error") || strings.HasPrefix(lower, "panic:")
 	}, limit)
+}
+
+// attachFailureDetails sets p.Details to the first 3 failure lines of output,
+// leaving Details untouched when no failure lines are found.
+func attachFailureDetails(p *Presentation, output string) {
+	if failures := firstFailureLines(output, 3); len(failures) > 0 {
+		p.Details = failures
+	}
 }
 
 func firstNonFlagArg(args []string) string {

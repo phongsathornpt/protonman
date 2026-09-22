@@ -1,6 +1,7 @@
 package agentui
 
 import (
+	"log/slog"
 	"strings"
 	"time"
 
@@ -11,7 +12,10 @@ import (
 
 func (t *Tracker) ApplyToolResult(name string, result tool.Result, body string, state *history.HistoryState) bool {
 	publicName := strings.TrimSpace(name)
-	parsed := ParseToolResult(body)
+	parsed, ok := ParseToolResult(body)
+	if !ok {
+		slog.Debug("subagent result envelope malformed", "call_id", result.CallID, "bytes", len(body))
+	}
 	action := strings.ToLower(strings.TrimSpace(parsed.Action))
 	if action == "" {
 		action = strings.ToLower(strings.TrimSpace(t.pendingActions[result.CallID]))

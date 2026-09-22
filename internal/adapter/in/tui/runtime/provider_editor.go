@@ -657,7 +657,7 @@ func (v *providerPaneView) Render(ctx paneRenderContext) string {
 				prefix = brandStyle.Render(glyphPrompt)
 				style = bodyStyle.Bold(true)
 			}
-			listRows = append(listRows, prefix+style.Render(truncateWithEllipsis(item.title, maxInt(1, providerModalContentWidth(ctx)-4))))
+			listRows = append(listRows, prefix+style.Render(truncateWithEllipsis(item.title, max(1, providerModalContentWidth(ctx)-4))))
 		}
 		help := paneKeyboardHelp(providerModalContentWidth(ctx), "↑/↓", "Navigate", "enter", "Select", "esc", "Go Back")
 		status := ""
@@ -717,7 +717,7 @@ func providerEditorKeyboardHelp(width int, state providerPaneState, editing, act
 }
 
 func (v *providerPaneView) resizeInputs(width int) {
-	inputWidth := maxInt(1, width-18)
+	inputWidth := max(1, width-18)
 	v.nameInput.SetWidth(inputWidth)
 	v.endpointInput.SetWidth(inputWidth)
 	v.apiKeyInput.SetWidth(inputWidth)
@@ -739,7 +739,7 @@ func (v *providerPaneView) resize(width, height int) {
 	case layoutCompact:
 		visibleRows = 4
 	}
-	v.modelPicker.SetSize(maxInt(1, width-8), visibleRows)
+	v.modelPicker.SetSize(max(1, width-8), visibleRows)
 }
 
 func providerEditorSnapshot(ctx paneRenderContext, v *providerPaneView) providerpane.ProviderEditorSnapshot {
@@ -781,5 +781,5 @@ func renderProviderModal(ctx paneRenderContext, border color.Color, rows []strin
 }
 
 func providerModalContentWidth(ctx paneRenderContext) int {
-	return maxInt(1, maxInt(1, ctx.width-4)-6)
+	return max(1, max(1, ctx.width-4)-6)
 }

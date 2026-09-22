@@ -200,12 +200,17 @@ func (m *bubbleModel) startTurnMessage(userMessage model.Message) tea.Cmd {
 	history := m.conversation.SnapshotMessages()
 	startedAt := time.Now()
 	slog.DebugContext(ctx, "tui turn started", "prompt_bytes", len(userMessage.Content), "content_parts", len(userMessage.Parts), "history_messages", len(history))
+	// Capture model-owned references on the Update thread before spawning:
+	// the worker must never read mutable fields, because runner
+	// reconfiguration can replace m.runner while this turn is still finishing.
+	runner := m.runner
+	uiCtx := m.ctx
 	go func() {
 		queueTerminal := func(result app.Result, err error) {
 			select {
 			case events <- turnmsg.Done{Result: result, Err: err}:
 				slog.DebugContext(ctx, "tui turn terminal message queued")
-			case <-m.ctx.Done():
+			case <-uiCtx.Done():
 				slog.DebugContext(ctx, "tui turn terminal message dropped", "reason", "ui_context_done")
 			}
 		}
@@ -218,7 +223,7 @@ func (m *bubbleModel) startTurnMessage(userMessage model.Message) tea.Cmd {
 			close(events)
 			slog.DebugContext(ctx, "tui turn event channel closed", "duration_ms", time.Since(startedAt).Milliseconds())
 		}()
-		result, err := m.runner.Run(ctx, history, func(runCtx context.Context, event app.Event) error {
+		result, err := runner.Run(ctx, history, func(runCtx context.Context, event app.Event) error {
 			select {
 			case events <- turnmsg.Delta{Event: event}:
 				return nil

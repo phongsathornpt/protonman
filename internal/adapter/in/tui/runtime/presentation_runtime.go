@@ -42,15 +42,8 @@ func (m *bubbleModel) resetTranscript() {
 	m.refreshTranscriptViewport(true)
 }
 
-func minInt(left int, right int) int {
-	if left < right {
-		return left
-	}
-	return right
-}
-
 func composerUsableWidth(terminalWidth int) int {
-	return maxInt(1, terminalWidth)
+	return max(1, terminalWidth)
 }
 
 func (m *bubbleModel) promptView() string {
@@ -76,12 +69,12 @@ func (m *bubbleModel) promptView() string {
 }
 
 func renderPromptDivider(style lipgloss.Style, width int, focused bool) string {
-	width = maxInt(1, width)
+	width = max(1, width)
 	if !focused {
 		return style.Render(strings.Repeat("─", width))
 	}
 
-	accentWidth := minInt(8, width)
+	accentWidth := min(8, width)
 	accent := strings.Repeat("─", accentWidth)
 	neutral := strings.Repeat("─", width-accentWidth)
 	return tuistyle.PromptDividerFocused.Render(accent) +
@@ -246,7 +239,7 @@ func (m bubbleModel) statusView() string {
 		if meta != "" {
 			line += " · " + meta
 		}
-		return warningStyle.Render(truncateWithEllipsis(line, maxInt(1, maxWidth)))
+		return warningStyle.Render(truncateWithEllipsis(line, max(1, maxWidth)))
 	}
 
 	icons := tuistyle.OrUnicodeIcons(m.icons)
@@ -270,13 +263,13 @@ func (m bubbleModel) statusView() string {
 	suffix := ""
 	if meta != "" {
 		const minimumActivityWidth = 8
-		metaBudget := maxInt(0, maxWidth-prefixWidth-minimumActivityWidth-3)
+		metaBudget := max(0, maxWidth-prefixWidth-minimumActivityWidth-3)
 		if metaBudget > 0 {
 			meta = truncateWithEllipsis(meta, metaBudget)
 			suffix = " · " + meta
 		}
 	}
-	contentWidth := maxInt(1, maxWidth-prefixWidth-ansi.StringWidth(suffix))
+	contentWidth := max(1, maxWidth-prefixWidth-ansi.StringWidth(suffix))
 	activity := truncateWithEllipsis(activityText, contentWidth)
 	return prefix + systemStyle.Render(activity) + mutedStyle.Render(suffix)
 }
@@ -299,21 +292,13 @@ func (m *bubbleModel) sessionHeaderView() string {
 	if !profile.ShowHeader {
 		return ""
 	}
-	cache := &m.sessionHeaderCache
-	if cache.workDir != m.workDir {
-		*cache = sessionHeaderCache{workDir: m.workDir}
-	}
-	if !cache.branchValid {
-		cache.branch = transcriptutil.DetectGitBranch(m.workDir)
-		cache.branchValid = true
-	}
 	return renderSessionHeader(sessionHeaderModel{
 		Width:          profile.ContentWidth(m.layout.width),
 		Model:          m.activeModel,
 		Vision:         m.activeModelSupportsVision(),
 		LowConcurrency: m.lowConcurrencyEffective(),
 		GoalActive:     strings.TrimSpace(m.activeGoal) != "",
-		Branch:         cache.branch,
+		Branch:         m.sessionHeaderBranch(),
 		Workspace:      transcriptutil.FormatWorkspaceDisplay(m.workDir),
 		Compact:        profile.CompactHeader(),
 		Minimal:        profile.MinimalHeader(),
@@ -321,6 +306,8 @@ func (m *bubbleModel) sessionHeaderView() string {
 	})
 }
 
+// activeModelSupportsVision reads primed vision capability state; profile
+// resolution runs in primeSessionHeaderCache at the Update boundary.
 func (m *bubbleModel) activeModelSupportsVision() bool {
 	if m == nil || strings.TrimSpace(m.activeModel) == "" {
 		return false
@@ -329,12 +316,54 @@ func (m *bubbleModel) activeModelSupportsVision() bool {
 	if cache.visionValid && cache.visionModel == m.activeModel && cache.visionProv == m.activeProvider {
 		return cache.vision
 	}
-	profile := model.ResolveModelProfile(m.activeProvider, m.activeModel, nil)
-	cache.vision = profile.Capabilities.Vision == modelprofile.SupportYes
-	cache.visionModel = m.activeModel
-	cache.visionProv = m.activeProvider
-	cache.visionValid = true
-	return cache.vision
+	return false
+}
+
+// sessionHeaderBranch returns the primed branch without touching disk;
+// primeSessionHeaderCache owns the git probe at the Update boundary.
+func (m *bubbleModel) sessionHeaderBranch() string {
+	if m == nil || m.sessionHeaderCache.workDir != m.workDir || !m.sessionHeaderCache.branchValid {
+		return ""
+	}
+	return m.sessionHeaderCache.branch
+}
+
+// primeSessionHeaderCache resolves header metadata that needs filesystem or
+// profile lookups — git branch and model vision capability — so the header
+// helpers stay pure reads. It runs at the Update boundary (resize and after
+// every Update) and requests a relayout when a resolved value changes.
+func (m *bubbleModel) primeSessionHeaderCache() {
+	if m == nil {
+		return
+	}
+	cache := &m.sessionHeaderCache
+	if cache.workDir != m.workDir {
+		*cache = sessionHeaderCache{workDir: m.workDir}
+	}
+	dirty := false
+	if !cache.branchValid {
+		branch := transcriptutil.DetectGitBranch(m.workDir)
+		if branch != cache.branch {
+			dirty = true
+		}
+		cache.branch = branch
+		cache.branchValid = true
+	}
+	if strings.TrimSpace(m.activeModel) != "" &&
+		(!cache.visionValid || cache.visionModel != m.activeModel || cache.visionProv != m.activeProvider) {
+		profile := model.ResolveModelProfile(m.activeProvider, m.activeModel, nil)
+		vision := profile.Capabilities.Vision == modelprofile.SupportYes
+		if vision != cache.vision {
+			dirty = true
+		}
+		cache.vision = vision
+		cache.visionModel = m.activeModel
+		cache.visionProv = m.activeProvider
+		cache.visionValid = true
+	}
+	if dirty {
+		m.requestRelayout()
+	}
 }
 
 func (m *bubbleModel) invalidateSessionHeaderBranch() {

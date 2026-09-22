@@ -162,16 +162,21 @@ func intentForTool(kind tool.Kind, target string, profile agent.Profile) Activit
 	}
 }
 
+// looksLikeVerification classifies bash activity as empirical verification.
+// It delegates to the canonical core classifier first; turn-engine verification
+// gating stays fail-closed on make because recipes are arbitrary, but
+// presentation may still label the well-known make verifiers as Defending.
 func looksLikeVerification(target string) bool {
-	command := strings.ToLower(strings.TrimSpace(target))
-	for _, marker := range []string{
-		"go test", "go vet", "cargo test", "cargo clippy", "pytest", "bun test",
-		"npm test", "npm run test", "pnpm test", "yarn test", "make test", "make lint",
-		"golangci-lint", "eslint", "oxlint", "tsc ", "tsc --", "typecheck",
-	} {
-		if strings.Contains(command, marker) {
-			return true
-		}
+	if _, ok := tool.VerificationCommand(target); ok {
+		return true
+	}
+	fields := strings.Fields(target)
+	if len(fields) < 2 || fields[0] != "make" {
+		return false
+	}
+	switch fields[1] {
+	case "test", "lint":
+		return true
 	}
 	return false
 }

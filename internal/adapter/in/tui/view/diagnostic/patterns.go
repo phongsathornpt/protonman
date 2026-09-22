@@ -41,6 +41,7 @@ var overflowExclusions = []*regexp.Regexp{
 var statusPattern = regexp.MustCompile(`(?i)(?:status|code)\s*[:=]?\s*(\d{3})`)
 var modelErrorPattern = regexp.MustCompile(`(?i)model\s+([a-zA-Z0-9_.:/-]+)\s+is not supported`)
 var modelNotFoundPattern = regexp.MustCompile(`(?i)model\s+['"]?([a-zA-Z0-9_.:/-]+)['"]?\s+(?:not found|does not exist)`)
+var mcpServerFailedPattern = regexp.MustCompile(`MCP server ["']?([^"'\s]+)["']? failed`)
 
 func isContextOverflow(msg string) bool {
 	for _, ex := range overflowExclusions {

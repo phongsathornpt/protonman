@@ -901,7 +901,7 @@ func TestMouseWheelOnlyScrollsInsideTranscriptViewport(t *testing.T) {
 	if m.viewport.YOffset() != bottom || !m.conversationViewport.following() {
 		t.Fatalf("wheel over chrome changed viewport: offset=%d want=%d follow=%v", m.viewport.YOffset(), bottom, m.conversationViewport.following())
 	}
-	updated, _ = m.Update(tea.MouseWheelMsg{X: 4, Y: maxInt(0, m.viewport.Height()-1), Button: tea.MouseWheelUp})
+	updated, _ = m.Update(tea.MouseWheelMsg{X: 4, Y: max(0, m.viewport.Height()-1), Button: tea.MouseWheelUp})
 	m = updated.(*bubbleModel)
 	if m.viewport.YOffset() >= bottom || m.conversationViewport.following() {
 		t.Fatalf("wheel inside transcript did not scroll: offset=%d bottom=%d follow=%v", m.viewport.YOffset(), bottom, m.conversationViewport.following())
@@ -916,7 +916,7 @@ func TestScrolledViewportDefersActiveTailRefreshUntilScroll(t *testing.T) {
 	}
 	m.refreshViewport()
 	m.conversationViewport.setFollowing(false)
-	m.viewport.SetYOffset(maxInt(1, m.viewport.TotalLineCount()/3))
+	m.viewport.SetYOffset(max(1, m.viewport.TotalLineCount()/3))
 	beforeLines := m.viewport.TotalLineCount()
 	beforeOffset := m.viewport.YOffset()
 
@@ -937,7 +937,7 @@ func TestPageDownHydratesDeferredTail(t *testing.T) {
 	}
 	m.refreshViewport()
 	m.conversationViewport.setFollowing(false)
-	m.viewport.SetYOffset(maxInt(1, m.viewport.TotalLineCount()/3))
+	m.viewport.SetYOffset(max(1, m.viewport.TotalLineCount()/3))
 	beforeLines := m.viewport.TotalLineCount()
 	m.historyState.AppendAssistantDelta("live one\nlive two\nlive three")
 	m.refreshViewport()
@@ -962,7 +962,7 @@ func TestSessionHeaderCachesGitBranchUntilInvalidated(t *testing.T) {
 		t.Fatal(err)
 	}
 	m := newBubbleModel(context.Background(), nil, nil, nil, nil, newPermissionBridge(), workDir)
-	m.resize(80, 24)
+	m.resize(80, 24) // resize primes header metadata like the Update boundary
 	first := testPlain(m.sessionHeaderView())
 	if !strings.Contains(first, "main") {
 		t.Fatalf("initial session header branch missing: %q", first)
@@ -970,10 +970,13 @@ func TestSessionHeaderCachesGitBranchUntilInvalidated(t *testing.T) {
 	if err := os.WriteFile(head, []byte("ref: refs/heads/dev\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	// Header reads stay pure: priming again must honor the cache until invalidated.
+	m.primeSessionHeaderCache()
 	if cached := testPlain(m.sessionHeaderView()); !strings.Contains(cached, "main") {
 		t.Fatalf("session header unexpectedly reread git metadata: %q", cached)
 	}
 	m.invalidateSessionHeaderBranch()
+	m.primeSessionHeaderCache()
 	if refreshed := testPlain(m.sessionHeaderView()); !strings.Contains(refreshed, "dev") {
 		t.Fatalf("invalidated session header branch did not refresh: %q", refreshed)
 	}

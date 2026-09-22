@@ -37,42 +37,50 @@ func summarizeJVMExec(p *Presentation, output string) {
 	if strings.HasPrefix(p.Title, "Javac ") && strings.TrimSpace(output) == "" {
 		p.SuppressRaw = true
 	}
-	if failures := firstFailureLines(output, 3); len(failures) > 0 {
-		p.Details = failures
-	}
+	attachFailureDetails(p, output)
 }
 
 func summarizeMavenExec(p *Presentation, output string) {
 	matches := mavenTestsRE.FindAllStringSubmatch(output, -1)
 	if len(matches) > 0 {
 		counts := testCounts{}
+		parsed := true
 		for _, m := range matches {
-			total, failed, errs, skipped := atoiExec(m[1]), atoiExec(m[2]), atoiExec(m[3]), atoiExec(m[4])
+			total, okTotal := atoiExec(m[1])
+			failed, okFailed := atoiExec(m[2])
+			errs, okErrs := atoiExec(m[3])
+			skipped, okSkipped := atoiExec(m[4])
+			if !okTotal || !okFailed || !okErrs || !okSkipped {
+				parsed = false
+				break
+			}
 			counts.Passed += total - failed - errs - skipped
 			counts.Failed += failed
 			counts.Errors += errs
 			counts.Skipped += skipped
 		}
-		p.Summary = formatTestCounts(counts)
-		p.SuppressRaw = counts.Failed == 0 && counts.Errors == 0
+		if parsed {
+			p.Summary = formatTestCounts(counts)
+			p.SuppressRaw = counts.Failed == 0 && counts.Errors == 0
+		}
 	}
-	if failures := firstFailureLines(output, 3); len(failures) > 0 {
-		p.Details = failures
-	}
+	attachFailureDetails(p, output)
 }
 
 func summarizeGradleExec(p *Presentation, output string) {
 	if m := gradleTestsRE.FindStringSubmatch(output); len(m) > 0 {
-		total, failed := atoiExec(m[1]), 0
+		total, okTotal := atoiExec(m[1])
+		failed := 0
+		okFailed := true
 		if len(m) > 2 && m[2] != "" {
-			failed = atoiExec(m[2])
+			failed, okFailed = atoiExec(m[2])
 		}
-		p.Summary = formatTestCounts(testCounts{Passed: total - failed, Failed: failed})
-		p.SuppressRaw = failed == 0
+		if okTotal && okFailed {
+			p.Summary = formatTestCounts(testCounts{Passed: total - failed, Failed: failed})
+			p.SuppressRaw = failed == 0
+		}
 	} else if strings.Contains(output, "BUILD SUCCESSFUL") {
 		p.SuccessSummary, p.SuppressRaw = "build successful", true
 	}
-	if failures := firstFailureLines(output, 3); len(failures) > 0 {
-		p.Details = failures
-	}
+	attachFailureDetails(p, output)
 }
