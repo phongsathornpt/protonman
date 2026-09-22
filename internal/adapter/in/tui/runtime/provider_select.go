@@ -263,6 +263,19 @@ var providerSelectKeys = struct {
 	Filter: key.NewBinding(key.WithKeys("/")),
 }
 
+func (v *providerSelectPaneView) HandlePaneMsg(_ paneRenderContext, msg tea.Msg) paneKeyResult {
+	if v == nil {
+		return paneKeyResult{}
+	}
+	v.initPicker()
+	if _, ok := msg.(list.FilterMatchesMsg); ok {
+		updated, cmd := v.picker.Update(msg)
+		v.picker = updated
+		return paneKeyResult{handled: true, cmd: cmd}
+	}
+	return paneKeyResult{}
+}
+
 func (v *providerSelectPaneView) HandlePaneKey(_ paneRenderContext, message tea.KeyPressMsg) paneKeyResult {
 	v.initPicker()
 	if v.deleteConfirm {

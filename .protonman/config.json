@@ -1,28 +1,26 @@
 {
-  "permission": {
-    "default": "",
-    "rules": []
-  },
-  "workspace": {
-    "protected_paths": []
-  },
-  "ui": {
-    "permission_mode": ""
-  },
-  "sandbox": {
-    "profile": ""
-  },
+  "permission": {},
+  "workspace": {},
+  "ui": {},
+  "sandbox": {},
+  "model": {},
   "agent": {
     "subagents_enabled": true,
     "profile": "universal",
     "reasoning_effort": "auto"
   },
+  "runtime": {},
   "skills": {
     "active": [
       "golang-code-style",
       "golang-design-patterns",
       "golang-error-handling",
-      "golang-performance"
+      "golang-performance",
+      "golang-pro",
+      "htmx",
+      "ui-designer",
+      "ui-ux-pro-max",
+      "ux-researcher"
     ]
   }
 }
