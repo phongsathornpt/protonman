@@ -69,7 +69,5 @@ func summarizeKubectlExec(p *Presentation, output string) {
 			p.Summary = pluralCount(len(lines)-1, "resource", "resources")
 		}
 	}
-	if failures := firstFailureLines(output, 3); len(failures) > 0 {
-		p.Details = failures
-	}
+	attachFailureDetails(p, output)
 }

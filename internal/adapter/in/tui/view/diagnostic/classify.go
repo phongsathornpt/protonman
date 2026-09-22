@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"regexp"
 	"strconv"
 	"strings"
 
@@ -35,6 +34,7 @@ func Classify(err error, activeProvider string, activeModel string) Error {
 
 	raw := err.Error()
 
+	// 2. Provider returned no output after bounded recovery
 	if errors.Is(err, app.ErrEmptyResponse) {
 		return Error{
 			Kind:    KindEmptyResponse,
@@ -50,6 +50,7 @@ func Classify(err error, activeProvider string, activeModel string) Error {
 		}
 	}
 
+	// 3. Incomplete provider stream
 	if errors.Is(err, domain.ErrIncompleteStream) {
 		lower := strings.ToLower(raw)
 		if strings.Contains(lower, "produced no output before timeout") ||
@@ -82,6 +83,7 @@ func Classify(err error, activeProvider string, activeModel string) Error {
 		}
 	}
 
+	// 4. Tool dispatch unavailable
 	if errors.Is(err, app.ErrToolDispatchUnavailable) {
 		return Error{
 			Kind:    KindToolDispatch,
@@ -98,6 +100,7 @@ func Classify(err error, activeProvider string, activeModel string) Error {
 		}
 	}
 
+	// 5. Unresolved tool call
 	if errors.Is(err, app.ErrUnresolvedToolCall) {
 		return Error{
 			Kind:    KindToolDispatch,
@@ -113,7 +116,7 @@ func Classify(err error, activeProvider string, activeModel string) Error {
 		}
 	}
 
-	// 3. Permission Denials
+	// 6. Permission Denials
 	if strings.Contains(raw, "permission denied") || strings.Contains(raw, "QuestionRejectedError") || strings.Contains(raw, "specified a rule") {
 		return Error{
 			Kind:        KindPermissionDenied,
@@ -126,7 +129,7 @@ func Classify(err error, activeProvider string, activeModel string) Error {
 		}
 	}
 
-	// 3. Extract status code if present
+	// 7. Extract status code if present
 	statusCode := 0
 	if match := statusPattern.FindStringSubmatch(raw); len(match) > 1 {
 		if parsed, parseErr := strconv.Atoi(match[1]); parseErr == nil {
@@ -134,7 +137,7 @@ func Classify(err error, activeProvider string, activeModel string) Error {
 		}
 	}
 
-	// 4. Extract embedded JSON payload
+	// 8. Extract embedded JSON payload
 	var parsed parsedBody
 	var hasParsed bool
 	if idx := strings.Index(raw, "{"); idx != -1 {
@@ -150,7 +153,7 @@ func Classify(err error, activeProvider string, activeModel string) Error {
 		effMessage = parsed.Message
 	}
 
-	// 5. HTML gateway responses (Cloudflare / proxy error page)
+	// 9. HTML gateway responses (Cloudflare / proxy error page)
 	if strings.Contains(raw, "<!doctype html") || strings.Contains(raw, "<html") || strings.Contains(raw, "<!DOCTYPE html") {
 		if statusCode == 401 {
 			return Error{
@@ -186,7 +189,7 @@ func Classify(err error, activeProvider string, activeModel string) Error {
 		}
 	}
 
-	// 6. Model Not Supported / Not Found (OpenCode ModelError, ProviderModelNotFoundError, or 404)
+	// 10. Model Not Supported / Not Found (OpenCode ModelError, ProviderModelNotFoundError, or 404)
 	isModelError := parsed.ErrorType == "ModelError" ||
 		strings.Contains(raw, "is not supported") ||
 		strings.Contains(raw, "ProviderModelNotFoundError") ||
@@ -222,7 +225,7 @@ func Classify(err error, activeProvider string, activeModel string) Error {
 		}
 	}
 
-	// 7. Context Overflow (OpenCode 27 patterns, 413, or code context_length_exceeded)
+	// 11. Context Overflow (OpenCode 27 patterns, 413, or code context_length_exceeded)
 	if statusCode == 413 || parsed.ErrorCode == "context_length_exceeded" || isContextOverflow(raw) || isContextOverflow(effMessage) {
 		return Error{
 			Kind:    KindContextOverflow,
@@ -239,7 +242,7 @@ func Classify(err error, activeProvider string, activeModel string) Error {
 		}
 	}
 
-	// 8. Authentication & Authorization (401 Unauthorized)
+	// 12. Authentication & Authorization (401 Unauthorized)
 	if statusCode == 401 || parsed.ErrorType == "AuthError" || strings.Contains(strings.ToLower(raw), "unauthorized") || strings.Contains(strings.ToLower(raw), "invalid api key") {
 		return Error{
 			Kind:    KindAuthentication,
@@ -255,7 +258,7 @@ func Classify(err error, activeProvider string, activeModel string) Error {
 		}
 	}
 
-	// 9. Forbidden (403 Forbidden)
+	// 13. Forbidden (403 Forbidden)
 	if statusCode == 403 || strings.Contains(strings.ToLower(raw), "forbidden") || strings.Contains(strings.ToLower(raw), "access_denied") {
 		return Error{
 			Kind:    KindForbidden,
@@ -271,7 +274,7 @@ func Classify(err error, activeProvider string, activeModel string) Error {
 		}
 	}
 
-	// 10. Quota & Billing Exceeded
+	// 14. Quota & Billing Exceeded
 	if parsed.ErrorCode == "insufficient_quota" || strings.Contains(raw, "insufficient_quota") || strings.Contains(raw, "quota exceeded") {
 		return Error{
 			Kind:    KindQuotaExceeded,
@@ -287,7 +290,7 @@ func Classify(err error, activeProvider string, activeModel string) Error {
 		}
 	}
 
-	// 11. Rate Limit (429 Too Many Requests)
+	// 15. Rate Limit (429 Too Many Requests)
 	if statusCode == 429 || parsed.ErrorType == "RateLimitError" || strings.Contains(strings.ToLower(raw), "rate limit") || strings.Contains(strings.ToLower(raw), "too many requests") {
 		return Error{
 			Kind:    KindRateLimit,
@@ -304,7 +307,7 @@ func Classify(err error, activeProvider string, activeModel string) Error {
 		}
 	}
 
-	// 12. Server Overloaded & Upstream Failures (500, 502, 503, 504)
+	// 16. Server Overloaded & Upstream Failures (500, 502, 503, 504)
 	if statusCode == 500 || statusCode == 502 || statusCode == 503 || statusCode == 504 ||
 		strings.Contains(raw, "server_is_overloaded") ||
 		strings.Contains(raw, "server_error") ||
@@ -331,7 +334,7 @@ func Classify(err error, activeProvider string, activeModel string) Error {
 		}
 	}
 
-	// 13. Provider transport and stream failures. Keep this narrow: local
+	// 17. Provider transport and stream failures. Keep this narrow: local
 	// operation deadlines must not be presented as network failures.
 	lowerRaw := strings.ToLower(raw)
 	if strings.Contains(raw, "ProviderHeaderTimeoutError") ||
@@ -356,7 +359,7 @@ func Classify(err error, activeProvider string, activeModel string) Error {
 		}
 	}
 
-	// 14. Local/runtime deadline. This is deliberately separate from provider
+	// 18. Local/runtime deadline. This is deliberately separate from provider
 	// transport failures so a bounded turn, tool, or agent operation never tells
 	// the user to inspect their internet connection.
 	if errors.Is(err, context.DeadlineExceeded) ||
@@ -377,10 +380,10 @@ func Classify(err error, activeProvider string, activeModel string) Error {
 		}
 	}
 
-	// 15. MCP Server Failures (MCPFailed)
+	// 19. MCP Server Failures (MCPFailed)
 	if strings.Contains(raw, "MCPFailed") || strings.Contains(raw, "MCP server") {
 		serverName := "server"
-		if m := regexp.MustCompile(`MCP server ["']?([^"'\s]+)["']? failed`).FindStringSubmatch(raw); len(m) > 1 {
+		if m := mcpServerFailedPattern.FindStringSubmatch(raw); len(m) > 1 {
 			serverName = m[1]
 		}
 		return Error{
@@ -396,7 +399,7 @@ func Classify(err error, activeProvider string, activeModel string) Error {
 		}
 	}
 
-	// 15. Config Directory Typo (ConfigDirectoryTypoError)
+	// 20. Config Directory Typo (ConfigDirectoryTypoError)
 	if strings.Contains(raw, "ConfigDirectoryTypoError") || strings.Contains(raw, "is not valid. Rename the directory") {
 		return Error{
 			Kind:        KindConfigTypo,
@@ -408,7 +411,7 @@ func Classify(err error, activeProvider string, activeModel string) Error {
 		}
 	}
 
-	// 16. Config Errors (ConfigJsonError, ConfigInvalidError)
+	// 21. Config Errors (ConfigJsonError, ConfigInvalidError)
 	if strings.Contains(raw, "ConfigJsonError") || strings.Contains(raw, "ConfigInvalidError") || strings.Contains(raw, "Configuration is invalid") {
 		return Error{
 			Kind:    KindConfigInvalid,
@@ -423,7 +426,7 @@ func Classify(err error, activeProvider string, activeModel string) Error {
 		}
 	}
 
-	// 17. Tool Execution Failures
+	// 22. Tool Execution Failures
 	if strings.Contains(raw, "tool execution failed") || strings.Contains(raw, "[COMMAND_FAILED]") || strings.Contains(raw, "[FILE_NOT_FOUND]") {
 		return Error{
 			Kind:       KindToolFailed,
@@ -434,7 +437,7 @@ func Classify(err error, activeProvider string, activeModel string) Error {
 		}
 	}
 
-	// 18. Generic Fallback
+	// 23. Generic Fallback
 	cleanMsg := effMessage
 	if strings.HasPrefix(cleanMsg, "turn failed: ") {
 		cleanMsg = strings.TrimPrefix(cleanMsg, "turn failed: ")

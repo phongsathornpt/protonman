@@ -25,29 +25,33 @@ func (m *bubbleModel) View() tea.View {
 	return view
 }
 
+// renderedViewport returns the memoized viewport text. It is side-effect
+// free: when the cache is stale it recomputes without storing, and the
+// Update boundary (primeViewCaches) performs the actual refresh.
 func (m *bubbleModel) renderedViewport() string {
 	if m == nil {
 		return ""
 	}
-	cache := &m.viewportViewCache
-	lineCount := m.viewport.TotalLineCount()
-	if cache.valid && cache.width == m.viewport.Width() && cache.height == m.viewport.Height() &&
-		cache.yOffset == m.viewport.YOffset() && cache.lineCount == lineCount {
-		return cache.content
+	if !m.viewportViewCacheFresh() {
+		return m.viewport.View()
 	}
-	cache.content = m.viewport.View()
-	cache.width = m.viewport.Width()
-	cache.height = m.viewport.Height()
-	cache.yOffset = m.viewport.YOffset()
-	cache.lineCount = lineCount
-	cache.valid = true
-	return cache.content
+	return m.viewportViewCache.content
+}
+
+func (m *bubbleModel) viewportViewCacheFresh() bool {
+	cache := &m.viewportViewCache
+	return cache.valid && cache.width == m.viewport.Width() && cache.height == m.viewport.Height() &&
+		cache.yOffset == m.viewport.YOffset() && cache.lineCount == m.viewport.TotalLineCount()
 }
 
 func (m *bubbleModel) liveView() string {
 	if m.liveViewCacheValid {
 		return m.liveViewCache
 	}
+	return m.computeLiveView()
+}
+
+func (m *bubbleModel) computeLiveView() string {
 	frame := m.layout.frame
 	parts := make([]string, 0, 7)
 	if frame.header != "" {
@@ -78,9 +82,7 @@ func (m *bubbleModel) liveView() string {
 	if frame.footer != "" {
 		parts = append(parts, frame.footer)
 	}
-	m.liveViewCache = strings.Join(parts, "\n")
-	m.liveViewCacheValid = true
-	return m.liveViewCache
+	return strings.Join(parts, "\n")
 }
 
 func (m *bubbleModel) invalidateViewportView() {
@@ -92,17 +94,38 @@ func (m *bubbleModel) invalidateLiveView() {
 	m.liveViewCacheValid = false
 }
 
+// primeViewCaches refreshes memoized view content on the Update boundary so
+// View and pane Render methods stay read-only (AGENTS TUI rendering
+// contract). Caches start invalid; View falls back to pure computation until
+// this has run at least once.
+func (m *bubbleModel) primeViewCaches() {
+	if m == nil {
+		return
+	}
+	if !m.viewportViewCacheFresh() {
+		cache := &m.viewportViewCache
+		cache.content = m.viewport.View()
+		cache.width = m.viewport.Width()
+		cache.height = m.viewport.Height()
+		cache.yOffset = m.viewport.YOffset()
+		cache.lineCount = m.viewport.TotalLineCount()
+		cache.valid = true
+	}
+	if !m.liveViewCacheValid {
+		m.liveViewCache = m.computeLiveView()
+		m.liveViewCacheValid = true
+	}
+}
+
 func (m *bubbleModel) footerView() string {
 	if m == nil || m.panes.bottom == nil {
 		return ""
 	}
 	if top := m.panes.bottom.top(); top != nil {
-		if top.PresentationMode() == paneBlocking {
-			return ""
-		}
-		// Overlay panes own keyboard focus and render their own contextual help.
-		// Keep the composer visible for continuity, but do not show send/newline
-		// hints that are inactive (and often wrong) while the overlay is open.
+		// Any open pane owns keyboard focus: blocking panes swallow global
+		// shortcuts, and overlay panes render their own contextual help while
+		// the composer stays visible for continuity. Never show send/newline
+		// hints here — they are inactive (and often wrong) while a pane is open.
 		return ""
 	}
 	if !m.panes.bottom.composerVisible() {
@@ -116,7 +139,7 @@ func (m *bubbleModel) footerView() string {
 
 func (m *bubbleModel) idleContextFooter() string {
 	const inset = " "
-	width := maxInt(1, m.layoutProfile().ContentWidth(m.layout.width)-1)
+	width := max(1, m.layoutProfile().ContentWidth(m.layout.width)-1)
 	permission := m.permissionModeLabel()
 	reasoning := reasoningpolicy.EffortLabel(m.reasoningEffort)
 	submitHint := m.keys.Submit.Help().Key + " send"
@@ -157,7 +180,7 @@ func (m *bubbleModel) idleContextFooter() string {
 			if left == "" {
 				return inset + mutedStyle.Render(right)
 			}
-			spaces := strings.Repeat(" ", maxInt(1, width-ansi.StringWidth(left)-ansi.StringWidth(right)))
+			spaces := strings.Repeat(" ", max(1, width-ansi.StringWidth(left)-ansi.StringWidth(right)))
 			return inset + renderIdleFooter(left, spaces, right, submitHint, newlineHint)
 		}
 	}
@@ -196,14 +219,16 @@ func (m *bubbleModel) resize(width int, height int) {
 	if height <= 0 {
 		height = defaultBubbleHeight
 	}
+	// Resolve branch/vision metadata before any frame build in this resize.
+	m.primeSessionHeaderCache()
 	m.layout.width = width
 	m.layout.height = height
 	profile := m.layoutProfile()
 	m.help.SetWidth(profile.ContentWidth(width))
 	prompt := m.panes.bottom.prompt()
 	prompt.SetWidth(composerUsableWidth(width))
-	m.panes.transcript.SetWidth(maxInt(1, width-10))
-	m.panes.transcript.SetHeight(maxInt(1, height-10))
+	m.panes.transcript.SetWidth(max(1, width-10))
+	m.panes.transcript.SetHeight(max(1, height-10))
 	if view, _ := m.panes.bottom.find(modelSetupViewID).(*modelSetupPaneView); view != nil {
 		view.resize(width, height)
 	}
@@ -284,7 +309,7 @@ func (m *bubbleModel) buildFrameLayout() frameLayout {
 }
 
 func chromeDivider(width int) string {
-	return mutedStyle.Render(strings.Repeat("─", maxInt(1, width)))
+	return mutedStyle.Render(strings.Repeat("─", max(1, width)))
 }
 
 func composerContentView(view string, keepLowerRule bool) string {

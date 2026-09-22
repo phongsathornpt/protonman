@@ -26,7 +26,9 @@ func EvaluatePlanModeCall(request permission.Request) error {
 			var input struct {
 				Action string `json:"action"`
 			}
-			if json.Unmarshal(request.Arguments, &input) == nil && (input.Action == "wait" || input.Action == "get" || input.Action == "list") {
+			// Plan mode permits only diagnostic-inspection actions (wait/get/list);
+			// spawn/cancel/resume mutate lifecycle state or start new work.
+			if json.Unmarshal(request.Arguments, &input) == nil && (input.Action == tool.ActionWait || input.Action == tool.ActionGet || input.Action == tool.ActionList) {
 				return nil
 			}
 		}

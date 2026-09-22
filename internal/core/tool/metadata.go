@@ -54,17 +54,17 @@ func MetadataForName(name string) (Metadata, bool) {
 
 func titleSubagent(args map[string]any) string {
 	switch strings.ToLower(ExtractString(args, "action")) {
-	case "spawn":
+	case ActionSpawn:
 		return titleDelegateTask(args)
-	case "wait":
+	case ActionWait:
 		return "Wait for agent activity"
-	case "get":
+	case ActionGet:
 		return titleAgentID("Get agent status", "Get agent status")(args)
-	case "list":
+	case ActionList:
 		return "List subagents"
-	case "cancel":
+	case ActionCancel:
 		return titleAgentID("Cancel agent", "Cancel agent")(args)
-	case "resume":
+	case ActionResume:
 		return titleAgentID("Resume agent", "Resume agent")(args)
 	default:
 		return "Subagent"
@@ -72,7 +72,7 @@ func titleSubagent(args map[string]any) string {
 }
 
 func targetSubagent(args map[string]any) string {
-	if strings.EqualFold(ExtractString(args, "action"), "spawn") {
+	if strings.EqualFold(ExtractString(args, "action"), ActionSpawn) {
 		return targetDelegateTask(args)
 	}
 	if id := targetAgentID(args); id != "" {
@@ -83,9 +83,9 @@ func targetSubagent(args map[string]any) string {
 
 func titleTodo(args map[string]any) string {
 	switch strings.ToLower(ExtractString(args, "action")) {
-	case "get":
+	case ActionGet:
 		return "Check task list"
-	case "update":
+	case ActionUpdate:
 		return titleUpdateTodo(args)
 	default:
 		return "Tasks"
@@ -93,7 +93,7 @@ func titleTodo(args map[string]any) string {
 }
 
 func targetTodo(args map[string]any) string {
-	if strings.EqualFold(ExtractString(args, "action"), "update") {
+	if strings.EqualFold(ExtractString(args, "action"), ActionUpdate) {
 		return targetUpdateTodo(args)
 	}
 	return "task plan"

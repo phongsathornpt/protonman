@@ -44,9 +44,7 @@ func summarizeDockerExec(p *Presentation, output string) {
 			p.SuppressRaw = true
 		}
 	}
-	if failures := firstFailureLines(output, 3); len(failures) > 0 {
-		p.Details = failures
-	}
+	attachFailureDetails(p, output)
 }
 
 func hasExecLine(output, fragment string) bool {

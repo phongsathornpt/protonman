@@ -91,11 +91,11 @@ func (providerSelectDelegate) Render(w io.Writer, m list.Model, index int, item 
 		label += "  FREE"
 	}
 	marker := providerdomain.Marker(entry.selectionEntry())
-	width := maxInt(1, m.Width()-2)
+	width := max(1, m.Width()-2)
 	if marker != "" {
 		markerWidth := len([]rune(marker))
-		label = truncateWithEllipsis(label, maxInt(1, width-markerWidth-2))
-		gap := maxInt(2, width-len([]rune(label))-markerWidth)
+		label = truncateWithEllipsis(label, max(1, width-markerWidth-2))
+		gap := max(2, width-len([]rune(label))-markerWidth)
 		_, _ = fmt.Fprint(w, prefix+textStyle.Render(label)+strings.Repeat(" ", gap)+mutedStyle.Render(marker))
 	} else {
 		label = truncateWithEllipsis(label, width)
@@ -183,7 +183,7 @@ func (v *providerSelectPaneView) resize(width, height int) {
 		return
 	}
 	v.initPicker()
-	v.picker.SetSize(maxInt(1, width-8), maxInt(1, minInt(maxProviderListRows, height-6)))
+	v.picker.SetSize(panecommon.PaneContentWidth(width), max(1, min(maxProviderListRows, height-6)))
 }
 
 func (v *providerSelectPaneView) Render(ctx paneRenderContext) string {
@@ -240,11 +240,11 @@ func (v *providerSelectPaneView) Render(ctx paneRenderContext) string {
 			label += "  FREE"
 		}
 		marker := providerdomain.Marker(item.selectionEntry())
-		lineWidth := maxInt(1, providerModalContentWidth(ctx)-2)
+		lineWidth := max(1, providerModalContentWidth(ctx)-2)
 		if marker != "" {
 			markerWidth := len([]rune(marker))
-			label = truncateWithEllipsis(label, maxInt(1, lineWidth-markerWidth-2))
-			gap := maxInt(2, lineWidth-len([]rune(label))-markerWidth)
+			label = truncateWithEllipsis(label, max(1, lineWidth-markerWidth-2))
+			gap := max(2, lineWidth-len([]rune(label))-markerWidth)
 			listRows = append(listRows, prefix+textStyle.Render(label)+strings.Repeat(" ", gap)+mutedStyle.Render(marker))
 		} else {
 			listRows = append(listRows, prefix+textStyle.Render(truncateWithEllipsis(label, lineWidth)))

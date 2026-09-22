@@ -2,6 +2,7 @@ package agenttool
 
 import (
 	"github.com/phongsathornpt/protonman/internal/core/agentprofile"
+	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/feature/agent"
 )
 
@@ -105,7 +106,7 @@ func delegateTaskOutputSchema() map[string]any {
 
 func agentLifecycleOutputSchema(action subagentAction) map[string]any {
 	switch action {
-	case "wait":
+	case tool.ActionWait:
 		return map[string]any{"type": "object", "properties": map[string]any{
 			"timed_out": map[string]any{"type": "boolean"},
 			"event":     map[string]any{"type": []any{"object", "null"}},
@@ -113,13 +114,13 @@ func agentLifecycleOutputSchema(action subagentAction) map[string]any {
 			"cursor":    map[string]any{"type": "integer", "minimum": 0},
 			"truncated": map[string]any{"type": "boolean"},
 		}, "required": []any{"timed_out", "event", "events", "cursor", "truncated"}, "additionalProperties": false}
-	case "resume":
+	case tool.ActionResume:
 		return resumeAgentOutputSchema()
-	case "get", "cancel":
+	case tool.ActionGet, tool.ActionCancel:
 		return map[string]any{"type": "object", "properties": map[string]any{
 			"agent": agentStatusSchema(), "result": agentResultSchema(),
 		}, "required": []any{"agent", "result"}, "additionalProperties": false}
-	case "list":
+	case tool.ActionList:
 		return map[string]any{"type": "object", "properties": map[string]any{
 			"agents": map[string]any{"type": "array", "items": agentStatusSchema()},
 		}, "required": []any{"agents"}, "additionalProperties": false}

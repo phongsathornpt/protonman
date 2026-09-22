@@ -23,7 +23,5 @@ func summarizeMakeExec(p *Presentation, output string) {
 		p.SuccessSummary = "completed"
 		return
 	}
-	if failures := firstFailureLines(output, 3); len(failures) > 0 {
-		p.Details = failures
-	}
+	attachFailureDetails(p, output)
 }

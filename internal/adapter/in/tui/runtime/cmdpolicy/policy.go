@@ -1,8 +1,6 @@
 package cmdpolicy
 
 import (
-	"strings"
-
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/slashview"
 )
 
@@ -37,41 +35,28 @@ func (c Command) IsKnown() bool {
 	return c.Kind != KindUnknown
 }
 
+// kindsByName maps every canonical slash-command name to its kind. The name
+// list is owned by slashview.Catalog; TestKindTableMatchesCatalog enforces
+// exact set equality with it so the two registries cannot drift silently.
+var kindsByName = map[string]Kind{
+	"help":       KindHelp,
+	"permission": KindPermission,
+	"low":        KindLow,
+	"skills":     KindSkills,
+	"goal":       KindGoal,
+	"clear":      KindClear,
+	"todo":       KindTodo,
+	"model":      KindModel,
+	"provider":   KindProvider,
+	"agents":     KindAgents,
+	"call":       KindCall,
+	"resume":     KindResume,
+	"quit":       KindQuit,
+}
+
 func Classify(line string) Command {
 	parsed := slashview.ParseCommand(line)
-	name := strings.ToLower(strings.TrimSpace(parsed.Name))
-
-	var kind Kind
-	switch name {
-	case "help":
-		kind = KindHelp
-	case "permission":
-		kind = KindPermission
-	case "low":
-		kind = KindLow
-	case "skills":
-		kind = KindSkills
-	case "goal":
-		kind = KindGoal
-	case "clear":
-		kind = KindClear
-	case "todo":
-		kind = KindTodo
-	case "model":
-		kind = KindModel
-	case "provider":
-		kind = KindProvider
-	case "agents":
-		kind = KindAgents
-	case "call":
-		kind = KindCall
-	case "resume":
-		kind = KindResume
-	case "quit":
-		kind = KindQuit
-	default:
-		kind = KindUnknown
-	}
+	kind := kindsByName[slashview.CanonicalName(parsed.Name)]
 
 	return Command{
 		Kind:     kind,

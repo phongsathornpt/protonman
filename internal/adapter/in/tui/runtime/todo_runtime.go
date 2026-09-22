@@ -156,7 +156,7 @@ func (todoSetupDelegate) Render(w io.Writer, m list.Model, index int, item list.
 		textStyle = tuistyle.TodoSelectedStyle
 	}
 	glyph := todoStatusGlyph(entry.item.Status, icons)
-	availWidth := maxInt(1, m.Width()-4)
+	availWidth := max(1, m.Width()-4)
 	text := textStyle.Render(truncateWithEllipsis(entry.item.Text, availWidth))
 	_, _ = fmt.Fprint(w, prefix+glyph+text)
 }
@@ -176,7 +176,7 @@ func (v *todoPaneView) ensurePicker(ctx paneRenderContext) {
 		return
 	}
 	v.icons = tuistyle.OrUnicodeIcons(v.icons)
-	v.picker = paneutil.NewMinimalList(todoListItems(ctx.todos, v.icons), todoSetupDelegate{}, maxInt(1, ctx.width-8), maxInt(1, minInt(14, ctx.height-4)))
+	v.picker = paneutil.NewMinimalList(todoListItems(ctx.todos, v.icons), todoSetupDelegate{}, panecommon.PaneContentWidth(ctx.width), max(1, min(14, ctx.height-4)))
 	v.picker.SetFilteringEnabled(false)
 	v.picker.SetStatusBarItemName("task", "tasks")
 	v.lastItems = tododomain.CloneItems(ctx.todos)
@@ -235,7 +235,7 @@ func (v *todoPaneView) resize(ctx paneRenderContext) {
 	if !v.initialized {
 		return
 	}
-	v.picker.SetSize(maxInt(1, ctx.width-8), maxInt(1, minInt(8, ctx.height-6)))
+	v.picker.SetSize(panecommon.PaneContentWidth(ctx.width), max(1, min(8, ctx.height-6)))
 	v.syncTitle(ctx)
 }
 
@@ -259,13 +259,13 @@ func (v *todoPaneView) Render(ctx paneRenderContext) string {
 		help = paneKeyboardHelp(ctx.width-4, "↑/↓", "Navigate", "esc/enter", "Close")
 	}
 	items := v.picker.VisibleItems()
-	maxVisible := maxInt(3, minInt(10, ctx.height-6))
+	maxVisible := max(3, min(10, ctx.height-6))
 	if layoutModeForHeight(ctx.height) == layoutTiny {
-		maxVisible = minInt(2, maxVisible)
+		maxVisible = min(2, maxVisible)
 	}
 	start, end := paneWindow(len(items), v.picker.Index(), maxVisible, layoutModeForHeight(ctx.height))
 	listRows := make([]string, 0, end-start)
-	availTextWidth := maxInt(1, ctx.width-10)
+	availTextWidth := max(1, ctx.width-10)
 	for index := start; index < end; index++ {
 		item, ok := items[index].(todoListItem)
 		if !ok {
@@ -298,7 +298,7 @@ func (v *todoPaneView) Render(ctx paneRenderContext) string {
 			status = "id: " + selected.item.ID + " · " + status
 		}
 		if layoutModeForHeight(ctx.height) != layoutTiny {
-			footer = paneHelpStatusLine(maxInt(1, ctx.width-6), help, status)
+			footer = paneHelpStatusLine(panecommon.PaneHelpWidth(ctx.width), help, status)
 		} else if status != "" {
 			footer = paneRightStatus(ctx.width, status)
 		}

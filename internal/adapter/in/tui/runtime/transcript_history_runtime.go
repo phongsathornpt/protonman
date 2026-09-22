@@ -63,9 +63,9 @@ func (m *bubbleModel) appendToolCall(call tool.Call) {
 	} else {
 		m.activity = "calling " + tool.DisplayName(call.Name)
 	}
-	if call.Name == "subagent" {
+	if call.Name == tool.NameSubagent {
 		action := extractStringArg(call.Arguments, "action")
-		if action == "spawn" {
+		if action == tool.ActionSpawn {
 			m.rememberAgentRun(call)
 			state.StartToolCell(&tuihistory.AgentToolCell{CallID: call.ID, Name: call.Name, Target: target, Running: true, Icons: m.icons})
 		} else {

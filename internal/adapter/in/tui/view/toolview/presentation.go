@@ -20,38 +20,9 @@ func ExtractTarget(name string, kind tool.Kind, args json.RawMessage) (string, t
 	return target, kind
 }
 
-// KindGlyph returns the appropriate category glyph for a tool.
+// KindGlyph returns the appropriate category glyph for a tool using default Unicode icons.
 func KindGlyph(kind tool.Kind, name string) string {
-	switch kind {
-	case tool.KindWeb:
-		return tuistyle.GlyphWeb
-	case tool.KindRead:
-		trimmedName := strings.TrimSpace(name)
-		if trimmedName == tool.NameLS {
-			return tuistyle.GlyphDir
-		}
-		if trimmedName == "image" || trimmedName == "img2llm" || trimmedName == "image2llm" {
-			return tuistyle.GlyphImage
-		}
-		return tuistyle.GlyphRead
-	case tool.KindGrep:
-		return tuistyle.GlyphSearch
-	case tool.KindGit:
-		return "⌥ "
-	case tool.KindBash:
-		return tuistyle.GlyphExec
-	case tool.KindEdit:
-		return tuistyle.GlyphEdit
-	case tool.KindTask:
-		return tuistyle.GlyphTodoActive
-	case tool.KindAgent:
-		return tuistyle.GlyphAgent
-	}
-
-	if strings.TrimSpace(name) == tool.NameSkill {
-		return tuistyle.GlyphSkill
-	}
-	return tuistyle.GlyphGeneric
+	return KindGlyphWithIcons(tuistyle.UnicodeIcons, kind, name)
 }
 
 // SummarizeOutput produces a concise, high-signal semantic analysis summary

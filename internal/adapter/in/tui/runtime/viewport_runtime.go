@@ -52,7 +52,7 @@ func (m *bubbleModel) refreshViewportWithScroll(scroll viewportScrollSnapshot) {
 	content := ""
 	tailOnly := false
 	if scroll.follow && m.busy && m.historyState.Active() != nil {
-		content, tailOnly = m.historyState.RenderTailContent(maxInt(1, m.viewport.Height()))
+		content, tailOnly = m.historyState.RenderTailContent(max(1, m.viewport.Height()))
 	}
 	if !tailOnly {
 		content = m.fullViewportContent()

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 
 	"github.com/phongsathornpt/protonman/internal/core/permission"
+	"github.com/phongsathornpt/protonman/internal/core/tool"
 	tododomain "github.com/phongsathornpt/protonman/internal/feature/todo"
 )
 
@@ -19,11 +20,11 @@ func taskMetadataAutoAllowed(request permission.Request) bool {
 		return false
 	}
 	switch request.ToolName {
-	case "todo":
+	case tool.NameTodo:
 		switch input.Action {
-		case "get":
+		case tool.ActionGet:
 			return true
-		case "update":
+		case tool.ActionUpdate:
 			return tododomain.ClassifyPatch(input.Operations) == tododomain.PatchImpactStatusOnly
 		}
 	}

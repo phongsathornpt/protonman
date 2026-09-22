@@ -23,10 +23,6 @@ type clipboardImageLoadedMsg struct {
 	err              error
 }
 
-func writeClipboardTempPNG(raw []byte) (string, error) {
-	return clipboardimage.WriteTempPNG(raw)
-}
-
 func loadClipboardImage(draftText string, draftAttachments int) tea.Cmd {
 	return func() tea.Msg {
 		loaded := clipboardimage.Load()
@@ -86,7 +82,13 @@ func (m *bubbleModel) updateClipboardImageLoaded(message clipboardImageLoadedMsg
 }
 
 func (m *bubbleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	defer m.reconcileLayout()
+	// Resolve header metadata first so invalidations land, then reconcile
+	// layout, then refresh memoized view content — View() must stay read-only.
+	defer func() {
+		m.primeSessionHeaderCache()
+		m.reconcileLayout()
+		m.primeViewCaches()
+	}()
 	if command, handled := m.updateTerminalEvent(msg); handled {
 		return m, command
 	}

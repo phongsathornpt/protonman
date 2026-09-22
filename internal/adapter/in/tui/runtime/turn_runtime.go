@@ -14,6 +14,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	tuiconv "github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/conversation"
 	turnmsg "github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/turn"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/state/runtimeui"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/app"
 	"github.com/phongsathornpt/protonman/internal/feature/agent"
@@ -83,7 +84,7 @@ func (m *bubbleModel) updateImageSubmissionPrepared(message imageSubmissionPrepa
 	}
 	m.imagePreparing = false
 	m.pendingImageInput = nil
-	m.activity = "ready"
+	m.activity = runtimeui.ActivityReady
 	if message.err != nil {
 		m.appendError(message.err.Error())
 		m.restoreSubmissionToComposer(message.input)
@@ -104,7 +105,7 @@ func (m *bubbleModel) cancelImagePreparation() bool {
 	}
 	m.imagePreparationID++
 	m.imagePreparing = false
-	m.activity = "ready"
+	m.activity = runtimeui.ActivityReady
 	var pending *tuiconv.QueuedInput
 	if m.pendingImageInput != nil {
 		clone := m.pendingImageInput.Clone()
@@ -199,12 +200,17 @@ func (m *bubbleModel) startTurnMessage(userMessage model.Message) tea.Cmd {
 	history := m.conversation.SnapshotMessages()
 	startedAt := time.Now()
 	slog.DebugContext(ctx, "tui turn started", "prompt_bytes", len(userMessage.Content), "content_parts", len(userMessage.Parts), "history_messages", len(history))
+	// Capture model-owned references on the Update thread before spawning:
+	// the worker must never read mutable fields, because runner
+	// reconfiguration can replace m.runner while this turn is still finishing.
+	runner := m.runner
+	uiCtx := m.ctx
 	go func() {
 		queueTerminal := func(result app.Result, err error) {
 			select {
 			case events <- turnmsg.Done{Result: result, Err: err}:
 				slog.DebugContext(ctx, "tui turn terminal message queued")
-			case <-m.ctx.Done():
+			case <-uiCtx.Done():
 				slog.DebugContext(ctx, "tui turn terminal message dropped", "reason", "ui_context_done")
 			}
 		}
@@ -217,7 +223,7 @@ func (m *bubbleModel) startTurnMessage(userMessage model.Message) tea.Cmd {
 			close(events)
 			slog.DebugContext(ctx, "tui turn event channel closed", "duration_ms", time.Since(startedAt).Milliseconds())
 		}()
-		result, err := m.runner.Run(ctx, history, func(runCtx context.Context, event app.Event) error {
+		result, err := runner.Run(ctx, history, func(runCtx context.Context, event app.Event) error {
 			select {
 			case events <- turnmsg.Delta{Event: event}:
 				return nil
@@ -250,7 +256,7 @@ func (m *bubbleModel) cancelActiveTurn() int {
 	if !m.busy || m.turnCancel == nil {
 		return 0
 	}
-	m.activity = "canceling"
+	m.activity = runtimeui.ActivityCanceling
 	stopping := 0
 	if m.agents.Available() && m.activeTurnOwner != "" {
 		stopping = m.agents.CancelTurn(m.activeTurnOwner, agent.CancelTurnAndChildren)
@@ -355,7 +361,7 @@ func (s *turnModelState) bindTurn(cancel context.CancelFunc, events <-chan tea.M
 func (s *turnModelState) finishTurn() {
 	s.busy = false
 	s.busyStarted = time.Time{}
-	s.activity = "ready"
+	s.activity = runtimeui.ActivityReady
 	s.turnCancel = nil
 	s.turnEvents = nil
 	s.activeTurnOwner = ""

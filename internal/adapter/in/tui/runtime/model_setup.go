@@ -16,6 +16,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/paneutil"
 	providerdomain "github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/provider"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/reasoningpolicy"
+	panecommon "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane/common"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/app"
@@ -118,7 +119,7 @@ func (modelSetupDelegate) Render(w io.Writer, m list.Model, index int, item list
 		prefix = brandStyle.Render(glyphPrompt)
 		style = bodyStyle.Bold(true)
 	}
-	width := maxInt(1, m.Width()-2)
+	width := max(1, m.Width()-2)
 	label := truncateWithEllipsis(entry.Title(), width)
 	if entry.current {
 		const marker = "(current)"
@@ -127,7 +128,7 @@ func (modelSetupDelegate) Render(w io.Writer, m list.Model, index int, item list
 		if gap := width - labelWidth - markerWidth; gap >= 2 {
 			label += strings.Repeat(" ", gap) + mutedStyle.Render(marker)
 		} else {
-			label = truncateWithEllipsis(label, maxInt(1, width-markerWidth-2)) + "  " + mutedStyle.Render(marker)
+			label = truncateWithEllipsis(label, max(1, width-markerWidth-2)) + "  " + mutedStyle.Render(marker)
 		}
 	}
 	_, _ = fmt.Fprint(w, prefix+style.Render(label))
@@ -177,11 +178,11 @@ func (v *modelSetupPaneView) resize(width, height int) {
 	if visibleRows == 0 {
 		visibleRows = 1
 	}
-	visibleRows = minInt(maxModelSetupRows, visibleRows)
+	visibleRows = min(maxModelSetupRows, visibleRows)
 	if v.picker.SettingFilter() {
 		visibleRows++
 	}
-	v.picker.SetSize(maxInt(1, width-8), visibleRows)
+	v.picker.SetSize(panecommon.PaneContentWidth(width), visibleRows)
 }
 
 func (v *modelSetupPaneView) setModels(models []model.RemoteModel, activeProvider, activeModel string) {
@@ -336,7 +337,7 @@ func (v *modelSetupPaneView) Render(ctx paneRenderContext) string {
 	case v.loading:
 		rows = append(rows, mutedStyle.Render("Loading models…"))
 	case v.err != nil:
-		rows = append(rows, errorStyle.Render("Failed to load models"), mutedStyle.Render(truncateWithEllipsis(v.err.Error(), maxInt(1, ctx.width-8))))
+		rows = append(rows, errorStyle.Render("Failed to load models"), mutedStyle.Render(truncateWithEllipsis(v.err.Error(), panecommon.PaneContentWidth(ctx.width))))
 	case len(v.picker.Items()) == 0 && !v.picker.SettingFilter() && !v.picker.IsFiltered():
 		rows = append(rows, mutedStyle.Render("No models available."))
 	case len(v.picker.Items()) == 0 && v.picker.SettingFilter():
@@ -358,13 +359,13 @@ func (v *modelSetupPaneView) Render(ctx paneRenderContext) string {
 	}
 	if mode != layoutTiny {
 		if v.picker.SettingFilter() {
-			rows = appendPaneGroup(rows, paneKeyboardHelp(maxInt(1, ctx.width-6), "↑/↓", "Navigate", "enter", "Select", "esc", "Cancel Search"))
+			rows = appendPaneGroup(rows, paneKeyboardHelp(panecommon.PaneHelpWidth(ctx.width), "↑/↓", "Navigate", "enter", "Select", "esc", "Cancel Search"))
 		} else {
-			rows = appendPaneGroup(rows, modelSetupHelp(maxInt(1, ctx.width-6), len(v.reasoningChoices) > 1))
+			rows = appendPaneGroup(rows, modelSetupHelp(panecommon.PaneHelpWidth(ctx.width), len(v.reasoningChoices) > 1))
 		}
 	}
 	if showSelectionStatus {
-		if status := v.selectionStatus(maxInt(1, ctx.width-6)); status != "" {
+		if status := v.selectionStatus(panecommon.PaneHelpWidth(ctx.width)); status != "" {
 			rows = append(rows, status)
 		}
 	}
@@ -383,7 +384,7 @@ func (v *modelSetupPaneView) modelRows(ctx paneRenderContext) []string {
 	} else if v.picker.IsFiltered() {
 		rows = append(rows, mutedStyle.Render("Search: "+v.picker.FilterValue()))
 	}
-	width := maxInt(1, ctx.width-8)
+	width := panecommon.PaneContentWidth(ctx.width)
 	for i := start; i < end; i++ {
 		entry, ok := items[i].(modelListItem)
 		if !ok {
@@ -411,7 +412,7 @@ func renderModelRow(entry modelListItem, selected bool, width int) string {
 		nameStyle = bodyStyle.Bold(true)
 	}
 
-	available := maxInt(1, width-markerWidth)
+	available := max(1, width-markerWidth)
 	showMetadata := available-metadataWidth-nameMetaGap >= 8
 	nameWidth := available
 	if showMetadata {

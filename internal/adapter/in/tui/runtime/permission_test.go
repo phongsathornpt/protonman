@@ -9,6 +9,8 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -567,5 +569,58 @@ func TestPermissionModePickerAppliesAlwaysApprove(t *testing.T) {
 	_ = model.applyPaneAction(result.action)
 	if model.planMode || model.service.Mode() != permission.ModeAlwaysApprove {
 		t.Fatalf("always approve selection = plan=%v mode=%s", model.planMode, model.service.Mode())
+	}
+}
+
+func TestPermissionPaneInitializesAtOpenRenderStaysReadOnly(t *testing.T) {
+	workDir := t.TempDir()
+	target := filepath.Join(workDir, "target.txt")
+	if err := os.WriteFile(target, []byte("original content\n"), 0o644); err != nil {
+		t.Fatalf("write target: %v", err)
+	}
+
+	bridge := newPermissionBridge()
+	defer bridge.Close()
+	registry, _ := newBubbleTestRegistry()
+	service := newBubbleTestService(t, registry, permission.ModeAsk, permission.Config{})
+	model := newBubbleModel(context.Background(), service, registry, emptyTodoItems(), nil, bridge, workDir)
+	attachTestApplication(t, model)
+	model.resize(100, 30)
+
+	args, err := json.Marshal(map[string]string{
+		"action":   "write",
+		"filePath": "target.txt",
+		"content":  "replacement content\n",
+	})
+	if err != nil {
+		t.Fatalf("marshal arguments: %v", err)
+	}
+	model.openPermission(permissionRequest{
+		Request: permission.Request{
+			ToolName:  "edit",
+			ToolKind:  permission.ToolEdit,
+			Detail:    "target.txt",
+			Arguments: args,
+		},
+		Response: make(chan permissionResponse, 1),
+	})
+
+	view := model.permissionView()
+	if view == nil {
+		t.Fatal("permission pane not open after openPermission")
+	}
+	if !view.initialized {
+		t.Fatal("permission pane must initialize at open time, not on first render")
+	}
+	if len(view.diffPreview) == 0 {
+		t.Fatal("write diff preview must be prefetched at open time, before any render")
+	}
+
+	// A never-opened pane must stay untouched by Render: no lazy initialization,
+	// no workspace reads from the render path.
+	bare := &permissionPaneView{}
+	_ = bare.Render(newPaneRenderContext(model))
+	if bare.initialized {
+		t.Fatal("Render must not initialize the permission pane; initialization belongs to openPermission")
 	}
 }

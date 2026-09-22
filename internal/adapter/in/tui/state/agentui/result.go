@@ -19,7 +19,11 @@ func RunFromCall(call tool.Call) PendingRun {
 	return PendingRun{Profile: profile, Task: strings.TrimSpace(input.Task)}
 }
 
-func ParseToolResult(body string) ToolResult {
+// ParseToolResult parses the subagent structured-output envelope. The boolean
+// is false only when a non-empty body exists but is not valid JSON, so callers
+// can observe malformed envelopes instead of silently degrading to empty
+// state. An empty body is the documented plain-text fallback, not a failure.
+func ParseToolResult(body string) (ToolResult, bool) {
 	var payload struct {
 		Action      string        `json:"action"`
 		AgentID     string        `json:"agent_id"`
@@ -42,8 +46,11 @@ func ParseToolResult(body string) ToolResult {
 		} `json:"event"`
 		Agents []agent.AgentStatus `json:"agents"`
 	}
+	if strings.TrimSpace(body) == "" {
+		return ToolResult{}, true
+	}
 	if json.Unmarshal([]byte(body), &payload) != nil {
-		return ToolResult{}
+		return ToolResult{}, false
 	}
 	out := ToolResult{Action: strings.TrimSpace(payload.Action), AgentID: payload.AgentID, ResumedFrom: strings.TrimSpace(payload.ResumedFrom), Profile: payload.Profile, State: payload.Status, Reason: strings.TrimSpace(payload.Reason)}
 	if out.State == "" {
@@ -85,5 +92,5 @@ func ParseToolResult(body string) ToolResult {
 			break
 		}
 	}
-	return out
+	return out, true
 }

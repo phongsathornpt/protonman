@@ -46,6 +46,37 @@ func (p Phase) String() string {
 	}
 }
 
+// Activity sentinels form the raw-activity contract between the runtime
+// collector (which writes the activity string) and this projection. Writers
+// and readers must use these constants or the predicates below, never bare
+// string literals, so the protocol cannot drift across packages.
+const (
+	// ActivityReady marks an idle runtime with no explicit operation.
+	ActivityReady = "ready"
+	// ActivityCanceling marks an in-flight turn cancellation.
+	ActivityCanceling = "canceling"
+	// ActivityWaitingForPermission marks a blocking permission prompt.
+	ActivityWaitingForPermission = "waiting for permission"
+)
+
+// IsReady reports whether a raw activity is the ready sentinel. An empty
+// activity counts as ready for compatibility with fresh runtime state.
+func IsReady(activity string) bool {
+	a := strings.TrimSpace(activity)
+	return a == "" || a == ActivityReady
+}
+
+// IsCanceling reports whether a raw activity is the cancellation sentinel.
+func IsCanceling(activity string) bool {
+	return strings.TrimSpace(activity) == ActivityCanceling
+}
+
+// IsWaitingForPermission reports whether a raw activity is the blocking
+// permission sentinel.
+func IsWaitingForPermission(activity string) bool {
+	return strings.TrimSpace(activity) == ActivityWaitingForPermission
+}
+
 // Input contains runtime facts already known by the TUI. The projection does
 // not mutate execution state and therefore cannot drift from the turn engine.
 type Input struct {
@@ -94,7 +125,7 @@ func Project(input Input) State {
 	}
 
 	if input.Canceling {
-		activity := "canceling"
+		activity := ActivityCanceling
 		state := State{Phase: PhaseCanceling, Activity: activity}
 		if input.ActiveAgents > 0 {
 			if strings.TrimSpace(input.AgentActivity) != "" {
@@ -123,7 +154,7 @@ func Project(input Input) State {
 	runningTool := strings.TrimSpace(input.RunningTool)
 	if runningTool != "" {
 		activity := runningTool
-		if explicit != "" && explicit != "ready" {
+		if explicit != "" && explicit != ActivityReady {
 			activity = explicit
 		}
 		state := State{Phase: PhaseToolRunning, Activity: activity}
@@ -138,7 +169,7 @@ func Project(input Input) State {
 	}
 
 	activity := explicit
-	if activity == "" || activity == "ready" {
+	if IsReady(activity) {
 		activity = strings.TrimSpace(input.FallbackActivity)
 	}
 	if activity == "" {

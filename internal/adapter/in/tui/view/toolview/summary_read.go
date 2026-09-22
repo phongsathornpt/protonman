@@ -10,6 +10,14 @@ import (
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/textview"
 )
 
+const (
+	maxMetadataBodyWidth  = 120
+	maxTargetPatternWidth = 28
+	maxTargetQueryWidth   = 34
+	maxTargetURLWidth     = 48
+	maxExcerptWidth       = 65
+)
+
 func summarizeReadFile(body string, truncated bool) string {
 	return summarizeReadFileTarget("", body, truncated)
 }
@@ -19,7 +27,7 @@ func summarizeReadFileTarget(target string, body string, truncated bool) string 
 		return "0 B (empty file)"
 	}
 	if strings.HasPrefix(body, "image ") || strings.HasPrefix(body, "structured ") || strings.HasPrefix(body, "binary ") {
-		return textview.TruncateEllipsis(body, 120)
+		return textview.TruncateEllipsis(body, maxMetadataBodyWidth)
 	}
 	sizeStr := formatByteSize(len(body))
 	if truncated {
@@ -105,24 +113,24 @@ func FormatPath(target string) string {
 	if strings.Contains(target, " in ") {
 		parts := strings.SplitN(target, " in ", 2)
 		pattern := strings.Trim(parts[0], `"`)
-		if ansi.StringWidth(pattern) > 30 {
-			pattern = textview.TruncateEllipsis(pattern, 28)
+		if ansi.StringWidth(pattern) > maxTargetPatternWidth+2 {
+			pattern = textview.TruncateEllipsis(pattern, maxTargetPatternWidth)
 		}
 		return tuistyle.ToolTargetStyle.Render(fmt.Sprintf("%q", pattern)) + tuistyle.MutedStyle.Render(" in ") + FormatPath(parts[1])
 	}
 	// For quoted strings (e.g. web search query or grep pattern):
 	if strings.HasPrefix(target, `"`) && strings.HasSuffix(target, `"`) {
 		inner := strings.Trim(target, `"`)
-		if ansi.StringWidth(inner) > 36 {
-			inner = textview.TruncateEllipsis(inner, 34)
+		if ansi.StringWidth(inner) > maxTargetQueryWidth+2 {
+			inner = textview.TruncateEllipsis(inner, maxTargetQueryWidth)
 			return tuistyle.ToolTargetStyle.Render(fmt.Sprintf("%q", inner))
 		}
 		return tuistyle.ToolTargetStyle.Render(target)
 	}
 	// Check if URL:
 	if strings.HasPrefix(target, "http://") || strings.HasPrefix(target, "https://") {
-		if ansi.StringWidth(target) > 50 {
-			target = textview.TruncateEllipsis(target, 48)
+		if ansi.StringWidth(target) > maxTargetURLWidth+2 {
+			target = textview.TruncateEllipsis(target, maxTargetURLWidth)
 		}
 		return tuistyle.ToolTargetStyle.Render(target)
 	}
@@ -185,7 +193,7 @@ func ExtractReadFileExcerpt(body string) string {
 			strings.HasPrefix(trimmed, "# ") ||
 			strings.HasPrefix(trimmed, "## ") ||
 			strings.HasPrefix(trimmed, "module ") {
-			return textview.TruncateEllipsis(trimmed, 65)
+			return textview.TruncateEllipsis(trimmed, maxExcerptWidth)
 		}
 	}
 	return ""

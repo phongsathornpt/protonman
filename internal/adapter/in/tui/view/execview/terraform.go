@@ -23,15 +23,29 @@ func summarizeTerraformExec(p *Presentation, output string) {
 	switch p.Action {
 	case "plan":
 		if m := terraformPlanRE.FindStringSubmatch(output); len(m) == 4 {
-			p.Summary = fmt.Sprintf("+%d ~%d -%d", atoiExec(m[1]), atoiExec(m[2]), atoiExec(m[3]))
-			p.SuppressRaw = true
+			added, okAdded := atoiExec(m[1])
+			changed, okChanged := atoiExec(m[2])
+			destroyed, okDestroyed := atoiExec(m[3])
+			if okAdded && okChanged && okDestroyed {
+				p.Summary = fmt.Sprintf("+%d ~%d -%d", added, changed, destroyed)
+				p.SuppressRaw = true
+			}
 		} else if strings.Contains(output, "No changes.") {
 			p.Summary, p.SuppressRaw = "no changes", true
 		}
 	case "apply":
 		if m := terraformApplyRE.FindStringSubmatch(output); len(m) == 4 {
-			p.Summary = fmt.Sprintf("%d added · %d changed · %d destroyed", atoiExec(m[1]), atoiExec(m[2]), atoiExec(m[3]))
-			p.SuppressRaw = true
+			added, okAdded := atoiExec(m[1])
+			changed, okChanged := atoiExec(m[2])
+			destroyed, okDestroyed := atoiExec(m[3])
+			if okAdded && okChanged && okDestroyed {
+				p.Summary = strings.Join([]string{
+					pluralCount(added, "added", "added"),
+					pluralCount(changed, "changed", "changed"),
+					pluralCount(destroyed, "destroyed", "destroyed"),
+				}, " · ")
+				p.SuppressRaw = true
+			}
 		}
 	case "validate":
 		if strings.Contains(strings.ToLower(output), "configuration is valid") {
@@ -47,7 +61,5 @@ func summarizeTerraformExec(p *Presentation, output string) {
 			p.SuppressRaw = true
 		}
 	}
-	if failures := firstFailureLines(output, 3); len(failures) > 0 {
-		p.Details = failures
-	}
+	attachFailureDetails(p, output)
 }

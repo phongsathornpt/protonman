@@ -22,7 +22,7 @@ func summarizeAgentTool(name, body string) string {
 			action = strings.ToLower(strings.TrimSpace(tool.ExtractString(call.ArgumentsMap(), "action")))
 		}
 	}
-	if action == "list" {
+	if action == tool.ActionList {
 		agents, _ := payload["agents"].([]any)
 		active := 0
 		for _, raw := range agents {
@@ -46,12 +46,12 @@ func summarizeAgentTool(name, body string) string {
 	}
 	resultSummary := agentResultSummary(payload)
 	switch action {
-	case "spawn":
+	case tool.ActionSpawn:
 		if id != "" {
 			return fmt.Sprintf("spawned %s · %s", id, status)
 		}
 		return "subagent spawned"
-	case "wait":
+	case tool.ActionWait:
 		if timedOut, _ := payload["timed_out"].(bool); timedOut {
 			return "no new agent activity"
 		}
@@ -67,11 +67,11 @@ func summarizeAgentTool(name, body string) string {
 			}
 		}
 		return "agent activity received"
-	case "get":
+	case tool.ActionGet:
 		return joinAgentCompletionSummary(id, status, resultSummary)
-	case "cancel":
+	case tool.ActionCancel:
 		return fmt.Sprintf("cancel requested · %s", id)
-	case "resume":
+	case tool.ActionResume:
 		from, _ := payload["resumed_from"].(string)
 		if from != "" && id != "" {
 			return fmt.Sprintf("resumed %s as %s · %s", from, id, status)
@@ -85,13 +85,15 @@ func summarizeAgentTool(name, body string) string {
 	return "agent updated"
 }
 
+const maxAgentSummaryWidth = 96
+
 func agentResultSummary(payload map[string]any) string {
 	result, _ := payload["result"].(map[string]any)
 	if result == nil {
 		return ""
 	}
 	summary, _ := result["summary"].(string)
-	return textview.TruncateEllipsis(strings.TrimSpace(summary), 96)
+	return textview.TruncateEllipsis(strings.TrimSpace(summary), maxAgentSummaryWidth)
 }
 
 func joinAgentCompletionSummary(id, status, summary string) string {

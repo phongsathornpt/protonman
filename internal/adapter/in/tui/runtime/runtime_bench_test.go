@@ -181,7 +181,7 @@ func BenchmarkRefreshViewportScrolledLongHistory(b *testing.B) {
 	}
 	m.refreshViewport()
 	m.conversationViewport.setFollowing(false)
-	m.viewport.SetYOffset(maxInt(0, m.viewport.TotalLineCount()/2))
+	m.viewport.SetYOffset(max(0, m.viewport.TotalLineCount()/2))
 	b.ResetTimer()
 	b.ReportAllocs()
 	for b.Loop() {

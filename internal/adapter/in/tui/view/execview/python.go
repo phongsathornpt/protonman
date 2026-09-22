@@ -1,7 +1,6 @@
 package execview
 
 import (
-	"fmt"
 	"regexp"
 	"strconv"
 	"strings"
@@ -108,11 +107,11 @@ func summarizePytestExec(p *Presentation, output string) {
 	parts := make([]string, 0, 5)
 	for _, key := range []string{"passed", "failed", "errors", "error", "skipped", "xfailed"} {
 		if n := counts[key]; n > 0 {
-			label := key
 			if key == "error" || key == "errors" {
-				label = pluralWord(n, "error", "errors")
+				parts = append(parts, pluralCount(n, "error", "errors"))
+			} else {
+				parts = append(parts, pluralCount(n, key, key))
 			}
-			parts = append(parts, fmt.Sprintf("%d %s", n, label))
 		}
 	}
 	if len(parts) > 0 {
@@ -153,20 +152,13 @@ func summarizeUnittestExec(p *Presentation, output string) {
 	if passed < 0 {
 		passed = 0
 	}
-	parts := []string{fmt.Sprintf("%d passed", passed)}
+	parts := []string{pluralCount(passed, "passed", "passed")}
 	if failed > 0 {
-		parts = append(parts, fmt.Sprintf("%d failed", failed))
+		parts = append(parts, pluralCount(failed, "failed", "failed"))
 	}
 	if errors > 0 {
-		parts = append(parts, fmt.Sprintf("%d %s", errors, pluralWord(errors, "error", "errors")))
+		parts = append(parts, pluralCount(errors, "error", "errors"))
 	}
 	p.Summary = strings.Join(parts, " · ")
 	p.SuppressRaw = failed == 0 && errors == 0
-}
-
-func pluralWord(count int, singular, plural string) string {
-	if count == 1 {
-		return singular
-	}
-	return plural
 }

@@ -15,6 +15,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/modelcatalog"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/permissionbridge"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/state/agentui"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/state/runtimeui"
 	tuihistory "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/history"
 	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/style"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
@@ -34,7 +35,6 @@ import (
 const (
 	defaultBubbleWidth      = 80
 	defaultBubbleHeight     = 24
-	promptRows              = 1
 	composerNewlineEnhanced = "ctrl+enter"
 	composerNewlineFallback = "ctrl+j"
 )
@@ -266,7 +266,7 @@ func newBubbleModel(ctx context.Context, service *toolcall.Service, registry too
 			subagentsEnabled: true,
 			agentActivity:    make(map[string]AgentActivity),
 		},
-		turnModelState:  turnModelState{activity: "ready"},
+		turnModelState:  turnModelState{activity: runtimeui.ActivityReady},
 		modelSetupState: modelSetupState{configMutationGate: &asyncOperationGate{}},
 	}
 

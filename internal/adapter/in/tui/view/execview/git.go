@@ -3,7 +3,6 @@ package execview
 import (
 	"fmt"
 	"regexp"
-	"strconv"
 	"strings"
 )
 
@@ -69,9 +68,19 @@ func summarizeGitExec(p *Presentation, output string) {
 		p.SuppressRaw = true
 	case "diff":
 		if match := gitDiffStatRE.FindStringSubmatch(output); len(match) == 4 {
-			files, _ := strconv.Atoi(match[1])
-			adds, _ := strconv.Atoi(match[2])
-			dels, _ := strconv.Atoi(match[3])
+			files, filesOK := atoiExec(match[1])
+			adds, addsOK := 0, true
+			if match[2] != "" {
+				adds, addsOK = atoiExec(match[2])
+			}
+			dels, delsOK := 0, true
+			if match[3] != "" {
+				dels, delsOK = atoiExec(match[3])
+			}
+			if !filesOK || !addsOK || !delsOK {
+				// A failed parse must not fabricate counts or hide raw output.
+				return
+			}
 			parts := []string{pluralCount(files, "file", "files")}
 			if adds > 0 || dels > 0 {
 				parts = append(parts, fmt.Sprintf("+%d -%d", adds, dels))

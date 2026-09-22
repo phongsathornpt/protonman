@@ -75,9 +75,9 @@ func (h todoHandler) NormalizeArguments(arguments json.RawMessage) json.RawMessa
 
 func (h todoHandler) child(action string) (tool.Handler, bool) {
 	switch strings.ToLower(strings.TrimSpace(action)) {
-	case "get":
+	case tool.ActionGet:
 		return h.get, true
-	case "update":
+	case tool.ActionUpdate:
 		return h.update, true
 	default:
 		return nil, false
@@ -173,7 +173,7 @@ func (h todoHandler) resolve(arguments json.RawMessage) (json.RawMessage, tool.H
 	// sessionId is accepted as an informational echo of a get snapshot and is
 	// never forwarded to the patch handler, which does not own session identity.
 	delete(object, "sessionId")
-	if action == "get" {
+	if action == tool.ActionGet {
 		// operations means the model intended to patch. Failing loudly is safer
 		// than silently discarding an intended mutation.
 		if _, ok := object["operations"]; ok {

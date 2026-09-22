@@ -9,8 +9,10 @@ import (
 	"errors"
 	"fmt"
 	"github.com/charmbracelet/x/ansi"
+	tuiconv "github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/conversation"
 	crashview "github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/crash"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/transcriptutil"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/state/runtimeui"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/execview"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
@@ -921,8 +923,10 @@ func TestCrashModelNavigation(t *testing.T) {
 		t.Fatalf("expected scrollOffset 0, got %d", m.ScrollOffset())
 	}
 	_, _ = m.Update(testText("c"))
-	if !m.Copied() {
-		t.Fatal("expected copied flag to be set")
+	switch m.CopyState() {
+	case crashview.CopyStateConfirmed, crashview.CopyStateTerminal:
+	default:
+		t.Fatalf("expected copy attempt to report delivery, got state %v", m.CopyState())
 	}
 	_, cmd := m.Update(testText("r"))
 	if !m.RestartRequested() {
@@ -969,7 +973,7 @@ func TestDrainQueueReleasesBackingWhenEmpty(t *testing.T) {
 func TestQueueFullPreservesDraft(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, nil)
 	m.busy = true
-	for i := 0; i < maxQueuedPrompts; i++ {
+	for i := 0; i < tuiconv.DefaultMaxQueuedPrompts; i++ {
 		m.conversation.Enqueue(fmt.Sprintf("queued-%d", i))
 	}
 	m.panes.bottom.prompt().SetValue("keep this draft")
@@ -979,15 +983,15 @@ func TestQueueFullPreservesDraft(t *testing.T) {
 	if got := m.panes.bottom.prompt().Value(); got != "keep this draft" {
 		t.Fatalf("draft = %q, want preserved input", got)
 	}
-	if got := m.conversation.QueueLen(); got != maxQueuedPrompts {
-		t.Fatalf("queue len = %d, want %d", got, maxQueuedPrompts)
+	if got := m.conversation.QueueLen(); got != tuiconv.DefaultMaxQueuedPrompts {
+		t.Fatalf("queue len = %d, want %d", got, tuiconv.DefaultMaxQueuedPrompts)
 	}
 }
 
 func TestQueueEchoTruncatesLongPrompt(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, nil)
 	m.busy = true
-	long := strings.Repeat("x", maxQueuePreviewRunes+200)
+	long := strings.Repeat("x", tuiconv.DefaultMaxQueuePreviewRunes+200)
 	m.panes.bottom.prompt().SetValue(long)
 	_ = m.submit()
 	plain := plainTranscript(m)
@@ -1074,7 +1078,7 @@ func TestSessionHeaderSitsAtTopWithoutFloatingBox(t *testing.T) {
 	view := testPlain(model.View().Content)
 	plain := sanitizeBubbleText(view)
 	if idx := strings.Index(plain, `/\`); idx < 0 || idx > 8 {
-		t.Fatalf("session header is not at the top of the view: %q", plain[:minInt(80, len(plain))])
+		t.Fatalf("session header is not at the top of the view: %q", plain[:min(80, len(plain))])
 	}
 	if strings.Count(view, "╭") > 1 {
 		t.Fatalf("idle view has extra boxes: %s", view)
@@ -1531,6 +1535,18 @@ func TestPaneKeyboardHelpStaysSingleLine(t *testing.T) {
 	}
 }
 
+func modelRetryStatus(retry sdk.RetryEvent, now time.Time) (string, string, bool) {
+	activity, metaParts, ok := runtimeui.RetryStatus(retry, now)
+	if !ok {
+		return "", "", false
+	}
+	meta := strings.Join(metaParts, " · ")
+	if meta != "" {
+		meta = " · " + meta
+	}
+	return activity, meta, true
+}
+
 func TestModelRetryStatusCountsDownFromRetryDeadline(t *testing.T) {
 	now := time.Now()
 	retry := sdk.RetryEvent{Phase: sdk.RetryPhaseWaiting, Reason: "incomplete_stream", Attempt: 1, MaxRetries: 2, RetryAt: now.Add(2500 * time.Millisecond)}
@@ -1584,5 +1600,37 @@ func TestSessionHeaderOwnsActiveGoalState(t *testing.T) {
 	}
 	if got := ansi.Strip(m.statusView()); got != "" {
 		t.Fatalf("idle status duplicated active goal: %q", got)
+	}
+}
+
+// TestViewRenderingStaysSideEffectFree pins the rendering contract: View and
+// its helpers may only read presentation state. Memoization caches are
+// refreshed exclusively at the Update boundary (primeViewCaches).
+func TestViewRenderingStaysSideEffectFree(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.resize(80, 24)
+
+	_ = m.renderedViewport()
+	_ = m.liveView()
+	_ = m.View()
+
+	if m.viewportViewCache.valid {
+		t.Fatal("renderedViewport mutated its memoization cache; View-path rendering must stay read-only")
+	}
+	if m.liveViewCacheValid {
+		t.Fatal("liveView mutated its memoization cache; View-path rendering must stay read-only")
+	}
+
+	if _, cmd := m.Update(nil); cmd != nil {
+		t.Fatalf("unhandled nil message produced command %v", cmd)
+	}
+	if !m.viewportViewCache.valid {
+		t.Fatal("Update boundary did not prime the viewport view cache")
+	}
+	if !m.liveViewCacheValid {
+		t.Fatal("Update boundary did not prime the live view cache")
+	}
+	if got, want := m.liveView(), m.computeLiveView(); got != want {
+		t.Fatal("primed live view diverged from a fresh computation")
 	}
 }

@@ -1,6 +1,7 @@
 package agentui
 
 import (
+	"log/slog"
 	"strings"
 	"time"
 
@@ -11,7 +12,10 @@ import (
 
 func (t *Tracker) ApplyToolResult(name string, result tool.Result, body string, state *history.HistoryState) bool {
 	publicName := strings.TrimSpace(name)
-	parsed := ParseToolResult(body)
+	parsed, ok := ParseToolResult(body)
+	if !ok {
+		slog.Debug("subagent result envelope malformed", "call_id", result.CallID, "bytes", len(body))
+	}
 	action := strings.ToLower(strings.TrimSpace(parsed.Action))
 	if action == "" {
 		action = strings.ToLower(strings.TrimSpace(t.pendingActions[result.CallID]))
@@ -23,11 +27,11 @@ func (t *Tracker) ApplyToolResult(name string, result tool.Result, body string, 
 	if parsed.AgentID == "" {
 		parsed.AgentID = t.pendingOps[result.CallID]
 	}
-	if action == "list" {
+	if action == tool.ActionList {
 		delete(t.pendingOps, result.CallID)
 		return true
 	}
-	if action == "resume" {
+	if action == tool.ActionResume {
 		fromID := parsed.ResumedFrom
 		if fromID == "" {
 			fromID = t.pendingOps[result.CallID]
@@ -55,7 +59,7 @@ func (t *Tracker) ApplyToolResult(name string, result tool.Result, body string, 
 		return true
 	}
 	delete(t.pendingOps, result.CallID)
-	if action == "spawn" {
+	if action == tool.ActionSpawn {
 		intent := t.pendingRuns[result.CallID]
 		delete(t.pendingRuns, result.CallID)
 		if parsed.AgentID == "" {
@@ -109,10 +113,12 @@ func (t *Tracker) ApplyToolResult(name string, result tool.Result, body string, 
 	if parsed.Reason != "" {
 		cell.Reason = parsed.Reason
 	}
-	if cell.State.Terminal() && cell.FinishedAt.IsZero() {
-		cell.FinishedAt = time.Now()
+	if cell.State.Terminal() {
+		if cell.FinishedAt.IsZero() {
+			cell.FinishedAt = time.Now()
+		}
+		cell.Activity = ""
 	}
-	cell.Activity = ""
 	state.TouchAgentRun(parsed.AgentID)
 	return true
 }
@@ -134,9 +140,9 @@ func (t *Tracker) ApplyToolFailure(name string, result tool.Result, err error, s
 		return true
 	}
 	message := "status check failed"
-	if action == "cancel" {
+	if action == tool.ActionCancel {
 		message = "cancel failed"
-	} else if action == "resume" {
+	} else if action == tool.ActionResume {
 		message = "resume failed"
 	}
 	if result.Failure != nil && strings.TrimSpace(result.Failure.Message) != "" {

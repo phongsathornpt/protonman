@@ -11,6 +11,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/paneutil"
+	panecommon "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane/common"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/slashview"
 	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/style"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/textview"
@@ -48,14 +49,20 @@ func (slashCommandDelegate) Render(w io.Writer, m list.Model, index int, item li
 	}
 	name := entry.Title()
 	description := entry.Description()
-	available := maxInt(1, m.Width()-2)
+	available := max(1, m.Width()-2)
 	nameWidth := len([]rune(name))
 	if description == "" || available-nameWidth < 8 {
 		_, _ = fmt.Fprint(w, prefix+nameStyle.Render(truncateWithEllipsis(name, available)))
 		return
 	}
-	description = truncateWithEllipsis(description, maxInt(1, available-nameWidth-2))
+	description = truncateWithEllipsis(description, max(1, available-nameWidth-2))
 	_, _ = fmt.Fprint(w, prefix+nameStyle.Render(name)+"  "+mutedStyle.Render(description))
+}
+
+// slashPickerWidth returns the list width for the slash completion picker. The
+// picker sits below the composer and uses a 4-cell horizontal inset.
+func slashPickerWidth(width int) int {
+	return max(1, width-4)
 }
 
 type slashPaneView struct {
@@ -75,7 +82,7 @@ func (v *slashPaneView) sync(ctx paneRenderContext) {
 		items = append(items, slashListItem{command: command})
 	}
 	if !v.ready {
-		v.picker = paneutil.NewMinimalList(items, slashCommandDelegate{}, maxInt(1, ctx.width-4), maxSlashRows)
+		v.picker = paneutil.NewMinimalList(items, slashCommandDelegate{}, slashPickerWidth(ctx.width), maxSlashRows)
 		v.picker.SetFilteringEnabled(false)
 		// Slash completion owns navigation through list.Update; help lives in the shared composer footer.
 		v.picker.InfiniteScrolling = true
@@ -83,12 +90,12 @@ func (v *slashPaneView) sync(ctx paneRenderContext) {
 	} else {
 		_ = v.picker.SetItems(items)
 	}
-	visibleRows := minInt(maxSlashRows, len(matches))
-	v.picker.SetSize(maxInt(1, ctx.width-4), maxInt(1, visibleRows))
+	visibleRows := min(maxSlashRows, len(matches))
+	v.picker.SetSize(slashPickerWidth(ctx.width), max(1, visibleRows))
 	if len(matches) == 0 {
 		return
 	}
-	selected := maxInt(0, minInt(v.picker.Index(), len(matches)-1))
+	selected := max(0, min(v.picker.Index(), len(matches)-1))
 	v.picker.Select(selected)
 }
 
@@ -100,9 +107,9 @@ func (v *slashPaneView) Render(ctx paneRenderContext) string {
 	}
 	rows := v.commandRows(ctx)
 	if layoutModeForHeight(ctx.height) != layoutTiny {
-		width := maxInt(1, ctx.width-6)
+		width := panecommon.PaneHelpWidth(ctx.width)
 		statusText := v.selectionStatusText()
-		helpWidth := maxInt(1, width-ansi.StringWidth(statusText)-1)
+		helpWidth := max(1, width-ansi.StringWidth(statusText)-1)
 		rows = append(rows, paneHelpStatusLine(width, slashPickerHelp(helpWidth), statusText))
 	} else if status := v.selectionStatus(ctx.width); status != "" {
 		rows = append(rows, status)
@@ -117,14 +124,14 @@ func (v *slashPaneView) commandRows(ctx paneRenderContext) []string {
 	}
 	start, end := paneWindow(len(items), v.picker.Index(), maxSlashRows, layoutModeForHeight(ctx.height))
 	rows := make([]string, 0, end-start)
-	available := maxInt(1, ctx.width-6)
+	available := panecommon.PaneHelpWidth(ctx.width)
 	nameColumnWidth := 0
 	for i := start; i < end; i++ {
 		entry, ok := items[i].(slashListItem)
 		if !ok {
 			continue
 		}
-		nameColumnWidth = maxInt(nameColumnWidth, len([]rune(entry.Title())))
+		nameColumnWidth = max(nameColumnWidth, len([]rune(entry.Title())))
 	}
 	for i := start; i < end; i++ {
 		entry, ok := items[i].(slashListItem)
@@ -144,9 +151,9 @@ func (v *slashPaneView) commandRows(ctx paneRenderContext) []string {
 			rows = append(rows, prefix+nameStyle.Render(truncateWithEllipsis(name, available)))
 			continue
 		}
-		descriptionWidth := maxInt(1, available-nameColumnWidth-2)
+		descriptionWidth := max(1, available-nameColumnWidth-2)
 		description = truncateWithEllipsis(description, descriptionWidth)
-		gap := strings.Repeat(" ", maxInt(2, nameColumnWidth-nameWidth+2))
+		gap := strings.Repeat(" ", max(2, nameColumnWidth-nameWidth+2))
 		rows = append(rows, prefix+nameStyle.Render(name)+gap+mutedStyle.Render(description))
 	}
 	return rows
@@ -160,7 +167,7 @@ func (v *slashPaneView) selectionStatusText() string {
 	if len(v.matches) == 0 {
 		return ""
 	}
-	index := maxInt(0, minInt(v.picker.GlobalIndex(), len(v.matches)-1))
+	index := max(0, min(v.picker.GlobalIndex(), len(v.matches)-1))
 	total := len(v.matches)
 	indicator := ""
 	if total > maxSlashRows {
@@ -230,7 +237,7 @@ const (
 	slashKindLow     = slashview.ContextLowConcurrency
 )
 
-func (m bubbleModel) parseSlashContext() (slashContext, bool) {
+func (m *bubbleModel) parseSlashContext() (slashContext, bool) {
 	if m.panes.bottom == nil || m.panes.bottom.bashMode() || m.panes.bottom.has(permissionViewID) || m.panes.bottom.has(skillsViewID) {
 		return slashContext{}, false
 	}
@@ -241,7 +248,7 @@ func (m bubbleModel) parseSlashContext() (slashContext, bool) {
 	return slashview.ParseContext(prompt.Value())
 }
 
-func (m bubbleModel) slashMatches() []slashCommand {
+func (m *bubbleModel) slashMatches() []slashCommand {
 	context, ok := m.parseSlashContext()
 	if !ok {
 		return nil
@@ -286,7 +293,7 @@ func (m *bubbleModel) syncSlashView() {
 	view.sync(newPaneRenderContext(m))
 }
 
-func (m bubbleModel) slashOpen() bool {
+func (m *bubbleModel) slashOpen() bool {
 	return len(m.slashMatches()) > 0
 }
 

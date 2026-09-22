@@ -67,7 +67,8 @@ func AnalyzeCommand(command string) BashAnalysis {
 
 // VerificationCommand reports whether a shell command is a conservative empirical
 // verifier for source changes. It intentionally recognizes only well-known test,
-// build, lint, typecheck, and diff-check invocations.
+// build, lint, typecheck, and diff-check invocations. make stays unrecognized:
+// its recipes are arbitrary, so verification gating remains fail-closed.
 func VerificationCommand(command string) (string, bool) {
 	segments, _, ok := splitSimpleShell(strings.TrimSpace(command))
 	if !ok || len(segments) == 0 {
@@ -102,6 +103,10 @@ func verificationWords(words []string) (string, bool) {
 		}
 	case "pytest", "py.test":
 		return "pytest", true
+	case "python", "python3":
+		if len(args) >= 2 && args[0] == "-m" && args[1] == "pytest" {
+			return name + " -m pytest", true
+		}
 	case "npm", "pnpm", "yarn", "bun":
 		if len(args) > 0 {
 			script := args[0]
@@ -111,6 +116,13 @@ func verificationWords(words []string) (string, bool) {
 			if script == "test" || script == "lint" || script == "typecheck" || script == "check" || script == "build" {
 				return name + " " + script, true
 			}
+		}
+	case "eslint", "oxlint", "tsc", "golangci-lint":
+		return name, true
+	case "npx":
+		// Delegation whitelists recursively; unknown npx packages fail closed.
+		if len(args) > 0 {
+			return verificationWords(args)
 		}
 	case "git":
 		if len(args) >= 2 && args[0] == "diff" && args[1] == "--check" {
