@@ -14,6 +14,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/permissionbridge"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/permissionpolicy"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/state/runtimeui"
 	panecommon "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane/common"
 	permissionpane "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane/permission"
 	"github.com/phongsathornpt/protonman/internal/base/diffutil"
@@ -69,7 +70,7 @@ func (v *permissionPaneView) HandlePaneKey(ctx paneRenderContext, message tea.Ke
 		switch {
 		case key.Matches(message, paneutil.Keys.Tab):
 			v.parked = false
-			return paneKeyResult{handled: true, action: paneAction{kind: paneActionPermissionActivity, activity: "waiting for permission"}}
+			return paneKeyResult{handled: true, action: paneAction{kind: paneActionPermissionActivity, activity: runtimeui.ActivityWaitingForPermission}}
 		case key.Matches(message, paneutil.Keys.Page):
 			return paneKeyResult{handled: true, action: paneAction{kind: paneActionScrollPage, key: message}}
 		case key.Matches(message, paneutil.Keys.Up):
@@ -313,8 +314,9 @@ func (v *permissionPaneView) ensureInitialized(workDir string) {
 	}
 }
 
+// card renders the already-initialized permission snapshot. Initialization is
+// owned by openPermission at the Update boundary; Render stays read-only.
 func (v *permissionPaneView) card(ctx paneRenderContext) string {
-	v.ensureInitialized(ctx.workDir)
 	request := v.pending.Request
 	options := permissionpolicy.Options(v.pending.Request, ctx.projectTrusted, ctx.hasWorkDir)
 	labels := make([]string, 0, len(options))
@@ -396,13 +398,17 @@ func (m *bubbleModel) openPermission(request permissionRequest) {
 	if m.panes.bottom == nil {
 		return
 	}
-	m.panes.bottom.push(&permissionPaneView{pending: request})
+	view := &permissionPaneView{pending: request}
+	// Initialize at the Update boundary: derivation may read the workspace
+	// (write-action diff preview), which must never happen during Render.
+	view.ensureInitialized(m.workDir)
+	m.panes.bottom.push(view)
 	m.requestRelayout()
 	m.reconcileLayout()
-	if m.activity != "waiting for permission" {
+	if !runtimeui.IsWaitingForPermission(m.activity) {
 		m.pendingActivity = m.activity
 	}
-	m.activity = "waiting for permission"
+	m.activity = runtimeui.ActivityWaitingForPermission
 }
 
 func (m *bubbleModel) resolvePermission(option permissionOption) tea.Cmd {
@@ -417,7 +423,11 @@ func (m *bubbleModel) resolvePermission(option permissionOption) tea.Cmd {
 
 	if decision.Persist != permissionpolicy.PersistNone {
 		if rule, ok := permission.RuleFromRequest(request); ok {
-			_ = m.service.AddRule(rule)
+			if ruleErr := m.service.AddRule(rule); ruleErr != nil {
+				// Report instead of dropping: the follow-on "saved" notice must
+				// not imply the live policy accepted a rule it rejected.
+				m.appendError(fmt.Sprintf("failed to apply permission rule: %v", ruleErr))
+			}
 			switch decision.Persist {
 			case permissionpolicy.PersistProject:
 				workDir := m.workDir
@@ -438,7 +448,7 @@ func (m *bubbleModel) resolvePermission(option permissionOption) tea.Cmd {
 	m.requestRelayout()
 	m.reconcileLayout()
 	m.activity = m.pendingActivity
-	if m.activity == "" || m.activity == "waiting for permission" {
+	if m.activity == "" || runtimeui.IsWaitingForPermission(m.activity) {
 		m.activity = "running tool"
 	}
 	m.syncSlashView()

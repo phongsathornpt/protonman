@@ -14,6 +14,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	tuiconv "github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/conversation"
 	turnmsg "github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/turn"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/state/runtimeui"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/app"
 	"github.com/phongsathornpt/protonman/internal/feature/agent"
@@ -83,7 +84,7 @@ func (m *bubbleModel) updateImageSubmissionPrepared(message imageSubmissionPrepa
 	}
 	m.imagePreparing = false
 	m.pendingImageInput = nil
-	m.activity = "ready"
+	m.activity = runtimeui.ActivityReady
 	if message.err != nil {
 		m.appendError(message.err.Error())
 		m.restoreSubmissionToComposer(message.input)
@@ -104,7 +105,7 @@ func (m *bubbleModel) cancelImagePreparation() bool {
 	}
 	m.imagePreparationID++
 	m.imagePreparing = false
-	m.activity = "ready"
+	m.activity = runtimeui.ActivityReady
 	var pending *tuiconv.QueuedInput
 	if m.pendingImageInput != nil {
 		clone := m.pendingImageInput.Clone()
@@ -250,7 +251,7 @@ func (m *bubbleModel) cancelActiveTurn() int {
 	if !m.busy || m.turnCancel == nil {
 		return 0
 	}
-	m.activity = "canceling"
+	m.activity = runtimeui.ActivityCanceling
 	stopping := 0
 	if m.agents.Available() && m.activeTurnOwner != "" {
 		stopping = m.agents.CancelTurn(m.activeTurnOwner, agent.CancelTurnAndChildren)
@@ -355,7 +356,7 @@ func (s *turnModelState) bindTurn(cancel context.CancelFunc, events <-chan tea.M
 func (s *turnModelState) finishTurn() {
 	s.busy = false
 	s.busyStarted = time.Time{}
-	s.activity = "ready"
+	s.activity = runtimeui.ActivityReady
 	s.turnCancel = nil
 	s.turnEvents = nil
 	s.activeTurnOwner = ""

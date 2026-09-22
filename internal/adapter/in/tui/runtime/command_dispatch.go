@@ -9,6 +9,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/cmdpolicy"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/transientnotice"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/state/runtimeui"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/textview"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/app"
@@ -279,7 +280,9 @@ func (m *bubbleModel) resumeSession(targetID string) tea.Cmd {
 	}
 	if detail.PermissionMode != "" {
 		if mode, parseErr := permission.ParseMode(detail.PermissionMode); parseErr == nil {
-			_ = m.setPermissionMode(mode)
+			if modeErr := m.setPermissionMode(mode); modeErr != nil {
+				m.appendError(fmt.Sprintf("failed to restore permission mode: %v", modeErr))
+			}
 		}
 	}
 	if m.skills != nil && len(detail.ActiveSkills) > 0 {
@@ -311,7 +314,7 @@ func (m *bubbleModel) resumeSession(targetID string) tea.Cmd {
 		m.agentSnapshot = m.agents.List()
 	}
 	m.agentActivity = make(map[string]AgentActivity)
-	m.activity = "ready"
+	m.activity = runtimeui.ActivityReady
 
 	// Reset history and load messages
 	if m.conversation != nil {

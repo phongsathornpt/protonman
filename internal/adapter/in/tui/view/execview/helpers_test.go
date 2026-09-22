@@ -5,6 +5,27 @@ import (
 	"testing"
 )
 
+func TestPluralCount(t *testing.T) {
+	tests := []struct {
+		n      int
+		sing   string
+		plural string
+		want   string
+	}{
+		{0, "failure", "failures", "0 failures"},
+		{1, "failure", "failures", "1 failure"},
+		{2, "failure", "failures", "2 failures"},
+		{1, "error", "errors", "1 error"},
+		{2, "error", "errors", "2 errors"},
+		{1, "passed", "passed", "1 passed"},
+	}
+	for _, tt := range tests {
+		if got := pluralCount(tt.n, tt.sing, tt.plural); got != tt.want {
+			t.Errorf("pluralCount(%d, %q, %q) = %q, want %q", tt.n, tt.sing, tt.plural, got, tt.want)
+		}
+	}
+}
+
 func TestExecSummaryPrimitives(t *testing.T) {
 	if got := formatTestCounts(testCounts{Passed: 8, Failed: 1, Skipped: 2}); got != "8 passed · 1 failed · 2 skipped" {
 		t.Fatalf("formatTestCounts = %q", got)

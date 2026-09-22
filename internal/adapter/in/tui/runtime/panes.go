@@ -231,14 +231,18 @@ func (m *bubbleModel) openPermissionModePane() {
 
 func (m *bubbleModel) applyPermissionModeChoice(choice permissionModeChoice) {
 	m.setPlanEnabled(false)
+	var modeErr error
 	switch choice {
 	case permissionModePlan:
-		_ = m.setPermissionMode(permission.ModeAsk)
+		modeErr = m.setPermissionMode(permission.ModeAsk)
 		m.setPlanEnabled(true)
 	case permissionModeAlwaysApprove:
-		_ = m.setPermissionMode(permission.ModeAlwaysApprove)
+		modeErr = m.setPermissionMode(permission.ModeAlwaysApprove)
 	default:
-		_ = m.setPermissionMode(permission.ModeAsk)
+		modeErr = m.setPermissionMode(permission.ModeAsk)
+	}
+	if modeErr != nil {
+		m.appendError(fmt.Sprintf("failed to update permission mode: %v", modeErr))
 	}
 	m.syncPermissionModePane()
 	m.requestRelayout()

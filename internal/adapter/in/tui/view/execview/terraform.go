@@ -30,7 +30,11 @@ func summarizeTerraformExec(p *Presentation, output string) {
 		}
 	case "apply":
 		if m := terraformApplyRE.FindStringSubmatch(output); len(m) == 4 {
-			p.Summary = fmt.Sprintf("%d added · %d changed · %d destroyed", atoiExec(m[1]), atoiExec(m[2]), atoiExec(m[3]))
+			p.Summary = strings.Join([]string{
+				pluralCount(atoiExec(m[1]), "added", "added"),
+				pluralCount(atoiExec(m[2]), "changed", "changed"),
+				pluralCount(atoiExec(m[3]), "destroyed", "destroyed"),
+			}, " · ")
 			p.SuppressRaw = true
 		}
 	case "validate":

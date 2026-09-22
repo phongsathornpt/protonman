@@ -1,7 +1,6 @@
 package execview
 
 import (
-	"fmt"
 	"regexp"
 	"strconv"
 	"strings"
@@ -90,10 +89,10 @@ func summarizeBunExec(p *Presentation, output string) {
 		failed := firstRegexpInt(bunFailRE, output)
 		parts := []string{}
 		if passed >= 0 {
-			parts = append(parts, fmt.Sprintf("%d passed", passed))
+			parts = append(parts, pluralCount(passed, "passed", "passed"))
 		}
 		if failed > 0 {
-			parts = append(parts, fmt.Sprintf("%d failed", failed))
+			parts = append(parts, pluralCount(failed, "failed", "failed"))
 		}
 		if len(parts) > 0 {
 			p.Summary = strings.Join(parts, " · ")
@@ -120,13 +119,14 @@ func summarizeNodeExec(p *Presentation, output string) {
 		if passed >= 0 || failed >= 0 {
 			parts := []string{}
 			if passed >= 0 {
-				parts = append(parts, fmt.Sprintf("%d passed", passed))
+				parts = append(parts, pluralCount(passed, "passed", "passed"))
 			}
 			if failed > 0 {
-				parts = append(parts, fmt.Sprintf("%d failed", failed))
+				parts = append(parts, pluralCount(failed, "failed", "failed"))
 			}
 			p.Summary = strings.Join(parts, " · ")
-			p.SuppressRaw = failed <= 0
+			// failed == -1 means the failure count was never parsed; keep raw output visible.
+			p.SuppressRaw = failed == 0
 		}
 	case "check":
 		if strings.TrimSpace(output) == "" {

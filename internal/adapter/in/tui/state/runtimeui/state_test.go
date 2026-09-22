@@ -85,3 +85,32 @@ func TestPhaseStringStable(t *testing.T) {
 		}
 	}
 }
+
+func TestActivitySentinelPredicates(t *testing.T) {
+	cases := []struct {
+		activity string
+		ready    bool
+		cancel   bool
+		waiting  bool
+	}{
+		{activity: "", ready: true},
+		{activity: "ready", ready: true},
+		{activity: "  ready  ", ready: true},
+		{activity: "canceling", cancel: true},
+		{activity: " canceling ", cancel: true},
+		{activity: "waiting for permission", waiting: true},
+		{activity: "running tests"},
+		{activity: "running tool"},
+	}
+	for _, tc := range cases {
+		if got := IsReady(tc.activity); got != tc.ready {
+			t.Errorf("IsReady(%q) = %v, want %v", tc.activity, got, tc.ready)
+		}
+		if got := IsCanceling(tc.activity); got != tc.cancel {
+			t.Errorf("IsCanceling(%q) = %v, want %v", tc.activity, got, tc.cancel)
+		}
+		if got := IsWaitingForPermission(tc.activity); got != tc.waiting {
+			t.Errorf("IsWaitingForPermission(%q) = %v, want %v", tc.activity, got, tc.waiting)
+		}
+	}
+}

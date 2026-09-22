@@ -201,7 +201,7 @@ func (m bubbleModel) runtimeStatusState(now time.Time) runtimeui.State {
 	agentActivity := ""
 	if activeAgents > 0 {
 		agentActivity = dominantAgentActivity(agentSnapshot, m.agentActivity)
-		if strings.TrimSpace(m.activity) == "canceling" {
+		if runtimeui.IsCanceling(m.activity) {
 			agentActivity = agentui.ActivityRetreating.Label()
 		}
 	}
@@ -218,7 +218,7 @@ func (m bubbleModel) runtimeStatusState(now time.Time) runtimeui.State {
 	return runtimeui.Project(runtimeui.Input{
 		Busy:              m.busy,
 		PermissionPending: m.hasPermissionView(),
-		Canceling:         strings.TrimSpace(m.activity) == "canceling",
+		Canceling:         runtimeui.IsCanceling(m.activity),
 		Streaming:         streaming,
 		Retry:             m.turnProgress.Retry,
 		RunningTool:       runningTool,
