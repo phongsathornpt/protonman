@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"strings"
 	"testing"
 )
@@ -35,7 +36,7 @@ func TestParseArgsPositionalPrompt(t *testing.T) {
 
 func TestUsageMentionsHeadless(t *testing.T) {
 	text := usage()
-	for _, expected := range []string{"-p", "--headless", "--output", "--acp", "--sandbox", "--resume", "--new-session", "--session", "--agent", "--version"} {
+	for _, expected := range []string{"-p", "--headless", "--output", "--acp", "--sandbox", "--resume", "--new-session", "--session", "--agent", "--version", "protonman update"} {
 		if !strings.Contains(text, expected) {
 			t.Fatalf("usage missing %q: %s", expected, text)
 		}
@@ -103,5 +104,37 @@ func TestParseArgsVersion(t *testing.T) {
 	}
 	if !options.version {
 		t.Fatal("parseArgs(--version) version = false, want true")
+	}
+}
+
+func TestRunUpdateCommand(t *testing.T) {
+	ctx := context.Background()
+	handled, err := runUpdateCommand(ctx, []string{"session", "list"})
+	if handled {
+		t.Fatal("runUpdateCommand(session list) handled = true, want false")
+	}
+	if err != nil {
+		t.Fatalf("runUpdateCommand(session list) error = %v", err)
+	}
+
+	handled, err = runUpdateCommand(ctx, []string{"update", "bogus"})
+	if !handled {
+		t.Fatal("runUpdateCommand(update bogus) handled = false, want true")
+	}
+	if err == nil || !strings.Contains(err.Error(), "invalid release version") {
+		t.Fatalf("runUpdateCommand(update bogus) error = %v, want invalid release version", err)
+	}
+
+	handled, err = runUpdateCommand(ctx, []string{"update", "v1.2.3", "extra"})
+	if !handled {
+		t.Fatal("runUpdateCommand(update v1.2.3 extra) handled = false, want true")
+	}
+	if err == nil || !strings.Contains(err.Error(), updateUsage) {
+		t.Fatalf("runUpdateCommand(extra args) error = %v, want usage", err)
+	}
+
+	handled, err = runUpdateCommand(ctx, []string{"update", "--help"})
+	if !handled || err != nil {
+		t.Fatalf("runUpdateCommand(update --help) = handled %v, err %v", handled, err)
 	}
 }

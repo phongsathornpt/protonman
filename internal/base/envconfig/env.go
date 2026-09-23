@@ -19,6 +19,10 @@ const (
 	// and the caret blink) with static indicators that carry the same meaning.
 	// Functional signals, including activity text and retry countdowns, stay live.
 	ReducedMotion = "PROTONMAN_REDUCED_MOTION"
+	// InstallDir overrides the directory `protonman update` installs into.
+	InstallDir = "PROTONMAN_INSTALL_DIR"
+	// PinnedVersion pins the release tag `protonman update` installs.
+	PinnedVersion = "PROTONMAN_VERSION"
 )
 
 // Value reads one canonical Protonman environment variable.

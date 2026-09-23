@@ -83,6 +83,7 @@ Usage:
   protonman --resume             resume the previous session
   protonman session list         list sessions for the current workspace
   protonman session resume [id]  resume the latest or a specific session
+  protonman update [version]     install the latest or a pinned release
   protonman -p "<prompt>"        run one headless prompt
   protonman --headless           read the headless prompt from stdin
   protonman --version            print the binary version and exit

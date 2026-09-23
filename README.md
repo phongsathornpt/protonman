@@ -64,6 +64,14 @@ protonman --version
 
 The installer detects OS/architecture, verifies the release SHA-256 checksum, and installs to `~/.local/bin` by default. Use `--version` or `--bin-dir` for an exact release or custom destination. When the repository is private, run `install.sh` from an authenticated checkout and set `GITHUB_TOKEN` or `GH_TOKEN` so private release assets can be fetched. See [`docs/install.md`](docs/install.md).
 
+After installing, update in place with the same checksum and version guarantees:
+
+```sh
+protonman update               # install the latest stable release
+protonman update v1.2.3        # install a pinned release tag
+PROTONMAN_INSTALL_DIR=/tmp/pm-bin protonman update
+```
+
 ### Build from Source
 
 Development requires Go 1.27+ and Git. Linux sandboxing uses native Landlock and network namespaces when supported; `bwrap` is an optional fallback.
