@@ -19,6 +19,7 @@ const (
 	SkillsDir          = "skills"
 	MemoryDir          = "memory"
 	LogsDir            = "logs"
+	DownloadsDir       = "downloads"
 	SkillsLockFileName = "skills-lock.json"
 )
 
@@ -32,6 +33,7 @@ type Dirs struct {
 	Skills      string
 	Memory      string
 	Logs        string
+	Downloads   string
 }
 
 // ProjectScope describes the project-local Protonman namespace after alias checks.
@@ -76,6 +78,7 @@ func dirsForRoot(home, root string) Dirs {
 		Skills:      filepath.Join(root, SkillsDir),
 		Memory:      filepath.Join(root, MemoryDir),
 		Logs:        filepath.Join(root, LogsDir),
+		Downloads:   filepath.Join(root, DownloadsDir),
 	}
 }
 

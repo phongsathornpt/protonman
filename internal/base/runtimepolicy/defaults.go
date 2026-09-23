@@ -29,6 +29,11 @@ const (
 	ModelRequestTimeout                   = 5 * time.Minute
 	ModelDiscoveryTimeout                 = 10 * time.Second
 	WebFetchTimeout                       = 10 * time.Second
+	UpdateHTTPTimeout                     = 2 * time.Minute
+	UpdateProbeTimeout                    = 30 * time.Second
+	UpdateOverallTimeout                  = 10 * time.Minute
+	UpdateMaxDownloadBytes          int64 = 128 * 1024 * 1024
+	UpdateMaxChecksumsBytes         int64 = 1024 * 1024
 	ModelCatalogTTL                       = 2 * time.Minute
 	ReadFileMaxLineScanBytes              = 64 * 1024 * 1024
 	CheckpointMaxRetained                 = 128
