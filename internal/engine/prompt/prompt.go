@@ -277,7 +277,7 @@ func taskSection(spec Spec) string {
 		"# Task Coordination",
 		"- The todo capability is coordination metadata, not repository evidence.",
 		"- Use todo only for meaningful multi-step work where persistent progress helps; do not create a task plan for a trivial single-step request.",
-		"- Keep a known current task revision. Use todo action=get when no current snapshot/revision is known; successful todo action=update returns the next revision and may be used for the next patch.",
+		"- Keep a known current task revision. Use todo action=get when no current snapshot/revision is known; for an update, use todo action=update with the latest revision and operations array. A successful todo action=update returns the next revision.",
 		"- On a revision conflict, call todo action=get again and reconsider the patch; never retry stale operations blindly.",
 		"- Preserve tasks that the requested change does not affect.",
 		"- Task metadata changes do not count as implementation, repository, or verification progress.",

@@ -30,6 +30,7 @@ type clientConfig struct {
 	tokenLimits    *domain.TokenLimits
 	profile        *modelprofile.Resolved
 	lowConcurrency LowConcurrencySetting
+	responsesAPI   bool
 }
 
 // ClientOption configures provider model construction.
@@ -65,6 +66,10 @@ func WithContextWindow(tokens int) ClientOption {
 
 func WithLowConcurrencyMode(setting LowConcurrencySetting) ClientOption {
 	return func(c *clientConfig) { c.lowConcurrency = setting }
+}
+
+func withResponsesAPI() ClientOption {
+	return func(c *clientConfig) { c.responsesAPI = true }
 }
 
 func WithRequestTimeout(timeout time.Duration) ClientOption {
@@ -107,8 +112,28 @@ func NewProviderLanguageModel(
 		}
 	}
 	baseURL = ResolveProviderBaseURLForProtocol(providerName, string(protocol), baseURL)
+	if protocol == "" {
+		protocol = ProviderProtocolOpenAI
+	}
+	transport := openCodeTransportChat
+	if protocol == ProviderProtocolOpenAI {
+		transport = resolveOpenCodeTransport(providerName, baseURL, modelID)
+		switch transport {
+		case openCodeTransportMessages:
+			protocol = ProviderProtocolAnthropic
+		case openCodeTransportUnsupported:
+			return &unsupportedOpenCodeModel{
+				provider: strings.ToLower(strings.TrimSpace(providerName)),
+				modelID:  strings.TrimSpace(modelID),
+				endpoint: baseURL,
+			}
+		}
+	}
 	builtinProfile := modelprofile.ResolveBuiltin(providerName, modelID, modelprofile.CatalogMetadata{})
 	opts = append([]ClientOption{withResolvedModelProfile(builtinProfile)}, opts...)
+	if transport == openCodeTransportResponses {
+		opts = append(opts, withResponsesAPI())
+	}
 	switch protocol {
 	case ProviderProtocolAnthropic:
 		return newSDKAnthropicLanguageModel(providerName, baseURL, apiKey, modelID, opts...)

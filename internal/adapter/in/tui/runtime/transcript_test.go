@@ -328,6 +328,22 @@ func TestErrorCellToolFailureKeepsTargetAndDiscoveryCompact(t *testing.T) {
 	}
 }
 
+func TestErrorCellToolFailureShowsDiagnosticAlongsideTarget(t *testing.T) {
+	cell := &ErrorCell{
+		ErrorKind: ErrorKindToolFailed,
+		Title:     "Read",
+		Target:    "internal/core/tool/tool.go",
+		Badge:     "invalid_arguments",
+		Text:      "read endLine must be greater than or equal to startLine",
+	}
+	rendered := ansi.Strip(strings.Join(cell.RenderWidth(80), "\n"))
+	for _, want := range []string{"invalid arguments", "internal/core/tool/tool.go", "endLine must be greater than or equal to startLine"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("tool failure missing %q:\n%s", want, rendered)
+		}
+	}
+}
+
 func TestErrorCellFallbackRendering(t *testing.T) {
 	cell := &ErrorCell{Title: "read", Text: "file not found"}
 	rendered := strings.Join(cell.RenderWidth(80), "\n")

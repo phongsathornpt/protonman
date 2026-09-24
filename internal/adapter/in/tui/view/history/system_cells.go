@@ -84,10 +84,11 @@ func (c ErrorCell) renderCompactToolFailure(width int) []string {
 		header += tuistyle.MutedStyle.Render(tuistyle.GlyphSep + badge)
 	}
 	lines := wrapStyledLines(header, width)
+	if text := strings.TrimSpace(c.Text); text != "" {
+		lines = append(lines, indentedMutedLines(text, width, "  ", "  ")...)
+	}
 	if target := strings.TrimSpace(c.Target); target != "" {
 		lines = append(lines, indentedMutedLines(target, width, "  ", "  ")...)
-	} else if text := strings.TrimSpace(c.Text); text != "" {
-		lines = append(lines, indentedMutedLines(text, width, "  ", "  ")...)
 	}
 	for _, suggestion := range c.Suggestions {
 		lines = append(lines, indentedMutedLines(suggestion, width, "  ↳ ", "    ")...)

@@ -110,7 +110,7 @@ func newSDKOpenAILanguageModel(providerName, baseURL, apiKey, modelID string, op
 		}
 	}
 	headers := agentHeaders(cfg)
-	isOpenCode := IsProvider(DefaultOpenCodeName, providerName, cfg.baseURL)
+	isOpenCode := IsOpenCodeRoute(providerName, cfg.baseURL)
 	freeStreamRecovery := isOpenCode && IsFreeModel(cfg.modelID)
 	lowConcurrencyEnabled := cfg.lowConcurrency.Enabled(isOpenCode && IsFreeModel(cfg.modelID))
 	retryPolicy := modelRetryPolicy()
@@ -144,7 +144,7 @@ func newSDKOpenAILanguageModel(providerName, baseURL, apiKey, modelID string, op
 		RetryDelays: retryPolicy.RetryDelays,
 	})
 	modelOptions := make([]sdkopenai.ModelOption, 0, 1)
-	if usesResponsesAPI(cfg.modelID, cfg.baseURL) {
+	if cfg.responsesAPI || usesResponsesAPI(cfg.modelID, cfg.baseURL) {
 		modelOptions = append(modelOptions, sdkopenai.WithResponsesAPI())
 	}
 	var model port.LanguageModel = provider.Model(cfg.modelID, modelOptions...)
@@ -184,8 +184,19 @@ func newSDKAnthropicLanguageModel(providerName, baseURL, apiKey, modelID string,
 	}
 	sessionID := strings.TrimSpace(cfg.sessionID)
 	retryPolicy := modelRetryPolicy()
+	headers := agentHeaders(cfg)
+	if isOpenCodeZenRoute(providerName, cfg.baseURL) {
+		if sessionID != "" {
+			headers.Set("x-opencode-session", sessionID)
+		}
+		clientName := cfg.clientName
+		if clientName == "" {
+			clientName = "proton"
+		}
+		headers.Set("x-opencode-client", clientName)
+	}
 	provider := sdkanthropic.NewProvider(sdkanthropic.ProviderOptions{
-		BaseURL: cfg.baseURL, APIKey: cfg.apiKey, HTTPClient: cfg.httpClient, Headers: agentHeaders(cfg),
+		BaseURL: cfg.baseURL, APIKey: cfg.apiKey, HTTPClient: cfg.httpClient, Headers: headers,
 		UserAgent: cfg.userAgent, MaxRetries: runtimepolicy.ModelRetryMaxRetries,
 		RetryBackoff: retryPolicy.BaseBackoff, RetryPostFirstGap: retryPolicy.PostFirstRetryGap,
 		MaxRetryBackoff: retryPolicy.MaxBackoff, MaxRetryAfter: retryPolicy.MaxRetryAfter,
@@ -213,7 +224,7 @@ func newSDKAnthropicLanguageModel(providerName, baseURL, apiKey, modelID string,
 }
 
 func usesResponsesAPI(modelID, baseURL string) bool {
-	id := strings.ToLower(strings.TrimSpace(modelID))
+	id := modelIDLeafForTransport(modelID)
 	return strings.HasPrefix(id, "muse-spark") || strings.Contains(id, "responses") || strings.HasSuffix(strings.TrimSpace(baseURL), "/responses")
 }
 

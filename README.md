@@ -251,11 +251,15 @@ Protonman routes agent model calls through `proton-sdk`, with native OpenAI-comp
 
 | Provider | Base URL | Auth Required | Description |
 | :--- | :--- | :--- | :--- |
-| **OpenCode** | `https://opencode.ai/zen/v1` | No (Free) | Free-tier models with zero API key required; free-model streams use bounded recovery when the provider returns no visible output |
+| **OpenCode Inference** | `https://opencode.ai/inference/openai/v1` | No (Free) | Keyless chat models; its catalog is seeded locally because the endpoint has no public `/models` route |
+| **OpenCode Zen** | `https://opencode.ai/zen/v1` | Yes | Authenticated catalog with model-specific Chat Completions, Responses, and Messages transports |
+| **OpenCode Go** | `https://opencode.ai/zen/go/v1` | Yes | Authenticated OpenCode Go catalog |
 | **Protonman** | `https://protonman.dev/api/v1` | Yes (`plk_...`) | High-speed AI model gateway |
 | **Ollama** | `http://localhost:11434/v1` | No | Local LLM inference |
 | **OpenAI** | `https://api.openai.com/v1` | Yes (`sk-...`) | OpenAI-compatible API through `proton-sdk` |
 | **Anthropic** | `https://api.anthropic.com` | Yes | Anthropic Messages API through `proton-sdk` |
+
+OpenCode Inference and Zen are separate routes despite sharing the `opencode.ai` host. Zen/Go requests select the documented endpoint for each model family; Gemini and System One models are not exposed until dedicated adapters are available. A 9router instance can be configured as a normal custom OpenAI provider at `http://127.0.0.1:20128/v1`; its namespaced model IDs such as `oc/<model-id>` are preserved.
 
 ### Available Models (Protonman Gateway)
 
@@ -423,7 +427,7 @@ Protonman loads `~/.protonman/config.json`. When `PROTONMAN_TRUST_PROJECT=1` is 
     "opencode": {
       "name": "opencode",
       "type": "openai",
-      "base_url": "https://opencode.ai/zen/v1",
+      "base_url": "https://opencode.ai/inference/openai/v1",
       "api_key": ""
     },
     "ollama": {
