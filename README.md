@@ -1,537 +1,314 @@
-# Protonman
+<div align="center">
 
-Protonman is an autonomous, high-performance Go-based AI coding agent designed with clean architecture, strict security boundaries, fail-closed permission policies, and extensible agent skills.
+# protonMAN
 
-Protonman operates across multiple execution environments:
-- **Interactive TUI**: A terminal interface built with Bubble Tea, featuring live streaming, markdown formatting, collapsible task panes, and modal approval controls.
-- **Headless CLI**: A scriptable runner supporting one-shot prompts, piped input via stdin, and structured text or JSON output.
-- **ACP Server**: An Agent Client Protocol server serving line-delimited JSON-RPC over stdio for IDE and editor integrations.
+**Open-source AI coding agent for the terminal, automation, and editor workflows.**
 
----
+Built in Go with a security-first runtime, multi-agent orchestration, provider-neutral model support, durable sessions, and a fast TUI.
 
-## Architecture Overview
+[![CI](https://github.com/phongsathornpt/protonman/actions/workflows/ci.yml/badge.svg)](https://github.com/phongsathornpt/protonman/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/phongsathornpt/protonman/actions/workflows/codeql.yml/badge.svg)](https://github.com/phongsathornpt/protonman/actions/workflows/codeql.yml)
+[![Release](https://img.shields.io/github/v/release/phongsathornpt/protonman?display_name=tag)](https://github.com/phongsathornpt/protonman/releases)
+[![License](https://img.shields.io/github/license/phongsathornpt/protonman)](LICENSE)
+[![Go](https://img.shields.io/badge/Go-1.27%2B-00ADD8?logo=go&logoColor=white)](go.mod)
 
-Protonman isolates external effects behind strict application boundaries. External commands and file modifications must pass policy checks and pre-edit checkpointing before execution.
+[Website](https://protonman.dev/) ·
+[Documentation](docs/) ·
+[Releases](https://github.com/phongsathornpt/protonman/releases) ·
+[Contributing](CONTRIBUTING.md) ·
+[Security](SECURITY.md)
 
-```text
-┌────────────────────────────────────────────────────────────────────────┐
-│                        User Interfaces / Adapters                      │
-│      Bubble Tea TUI    │    Headless Runner    │       ACP Server      │
-└───────────────┬────────────────────────┬───────────────────────┬───────┘
-                │                        │                       │
-                ▼                        ▼                       ▼
-┌────────────────────────────────────────────────────────────────────────┐
-│                         Application Turn Loop                          │
-│     - Multi-round autonomous turn management & deadline propagation    │
-│     - Model client integration (OpenCode, Protonman, Ollama, OpenAI)   │
-│     - Subagent coordination & task delegation                          │
-│     - Agent Skills progressive disclosure                              │
-└───────────────────────────────────┬────────────────────────────────────┘
-                                    │
-                                    ▼
-┌────────────────────────────────────────────────────────────────────────┐
-│                       Tool-Call Service & Policy                       │
-│     - Mode evaluation: ask | plan | always-approve                     │
-│     - 3-tier precedence: deny > ask > allow                            │
-│     - Session-scoped temporary grants                                  │
-│     - Privacy-preserving redacted telemetry                            │
-└───────────────────────────────────┬────────────────────────────────────┘
-                                    │
-                                    ▼
-┌────────────────────────────────────────────────────────────────────────┐
-│                      Tool Registry & Capabilities                      │
-│     - Workspace boundary confinement & symlink escape prevention       │
-│     - Automatic pre-edit checkpoints & rollback store                  │
-│     - OS sandbox confinement (macOS Seatbelt / Linux native Landlock) │
-│     - Builtin tools: read, write, patch, grep, list, bash, fetch, etc. │
-└────────────────────────────────────────────────────────────────────────┘
-```
+</div>
 
-See [`docs/architecture.md`](docs/architecture.md) for the package responsibility map and refactoring boundaries.
+<p align="center">
+  <img src="docs/assets/protonman-readme.webp" alt="protonMAN terminal interface" width="100%">
+</p>
 
----
+## What is protonMAN?
 
-## Quick Start
+protonMAN is an autonomous coding agent designed to work directly inside real software repositories.
 
-### Install the CLI
+It combines an interactive terminal UI, headless automation, Agent Client Protocol support, multiple model providers, persistent sessions, agent skills, and isolated subagents behind a single Go runtime.
 
-For public releases on Linux or macOS:
+The project is intentionally opinionated about two things: **agents should be useful enough to finish real work, and powerful tools should still have explicit safety boundaries**.
+
+## Highlights
+
+- **Terminal-first workflow** with a compact Bubble Tea TUI and streaming responses.
+- **Autonomous agent loop** with progress-aware safety limits instead of a tiny fixed tool-call budget.
+- **Multi-agent orchestration** using Universal, Strength, Agility, and Intelligence roles.
+- **Provider-neutral models** through the bundled `proton-sdk`, including OpenAI-compatible and Anthropic protocols.
+- **Free-model support** through OpenCode, including low-concurrency scheduling and replay-safe stream recovery.
+- **Workspace-safe tools** for reading, editing, searching, Git, shell execution, web access, tasks, skills, and subagents.
+- **Permission engine** with `ask`, `plan`, and `always-approve` modes.
+- **OS sandboxing** with macOS Seatbelt and native Linux Landlock support.
+- **Durable sessions and memory** under `~/.protonman`.
+- **Agent Skills** support using the open [Agent Skills specification](https://agentskills.io).
+- **Headless and ACP modes** for CI, scripts, IDEs, and editor integrations.
+
+## Install
+
+### Linux and macOS
 
 ```sh
 curl -fsSL https://github.com/phongsathornpt/protonman/releases/latest/download/install.sh | sh
+```
+
+Verify the installation:
+
+```sh
 protonman --version
 ```
 
-The installer detects OS/architecture, verifies the release SHA-256 checksum, and installs to `~/.local/bin` by default. Use `--version` or `--bin-dir` for an exact release or custom destination. When the repository is private, run `install.sh` from an authenticated checkout and set `GITHUB_TOKEN` or `GH_TOKEN` so private release assets can be fetched. See [`docs/install.md`](docs/install.md).
-
-After installing, update in place with the same checksum and version guarantees:
+Update later without reinstalling manually:
 
 ```sh
-protonman update               # install the latest stable release
-protonman update v1.2.3        # install a pinned release tag
-PROTONMAN_INSTALL_DIR=/tmp/pm-bin protonman update
+protonman update
 ```
 
-### Build from Source
-
-Development requires Go 1.27+ and Git. Linux sandboxing uses native Landlock and network namespaces when supported; `bwrap` is an optional fallback.
+To install a specific release:
 
 ```sh
-# Start the interactive fullscreen TUI (default)
-make tui
+protonman update v1.2.3
+```
 
-# Or run directly with Go
-go run ./cmd/protonman
+> Supported release targets currently include Linux amd64 and macOS arm64.
 
-# Build the standalone binary
+For installer details, checksums, custom install paths, and private-release authentication, see [docs/install.md](docs/install.md).
+
+## Quick start
+
+Launch the interactive TUI from any repository:
+
+```sh
+cd your-project
+protonman
+```
+
+Run a one-shot task:
+
+```sh
+protonman -p "Explain the architecture and identify the riskiest coupling"
+```
+
+Run non-interactively with approval enabled:
+
+```sh
+protonman -y -p "Run the tests and fix the failures"
+```
+
+Read a prompt from stdin and emit JSON:
+
+```sh
+cat prompt.txt | protonman --headless --output json
+```
+
+Serve Agent Client Protocol over stdio:
+
+```sh
+protonman --acp
+```
+
+Run with a strict sandbox:
+
+```sh
+protonman --sandbox strict -p "Audit this repository"
+```
+
+## Agent model
+
+protonMAN uses one primary agent and three specialized subagent profiles.
+
+| Agent | TUI | Purpose |
+| --- | :---: | --- |
+| **Universal** | `UNI` | Owns the task end-to-end, integrates work, and verifies the result |
+| **Strength** | `STR` | Implementation, refactors, migrations, and substantial code changes |
+| **Agility** | `AGI` | Fast read-only exploration, tracing, and focused repository investigation |
+| **Intelligence** | `INT` | Architecture, difficult debugging, concurrency, performance, and deep reasoning |
+
+Subagents run asynchronously and return evidence-backed results to the parent agent. The Universal agent remains responsible for the final integration and verification.
+
+## Built-in tools
+
+| Tool | Purpose |
+| --- | --- |
+| `read` | Read source files, structured data, metadata, and supported images |
+| `edit` | Write, replace, patch, and restore files with checkpoint protection |
+| `grep` | Regex search with bounded pagination |
+| `find` | Recursive path discovery with glob and depth filters |
+| `ls` | Directory inspection with protected-path filtering |
+| `git` | Repository status and version-control inspection |
+| `bash` | Bounded shell execution with effect analysis |
+| `web` | Search the web or fetch known URLs under network policy |
+| `todo` | Durable session task planning with revision control |
+| `skill` | Load Agent Skills into the active context |
+| `subagent` | Spawn, inspect, wait for, or cancel specialized agents |
+
+Tool calls pass through policy evaluation before execution. Mutating file operations create checkpoints that can be restored later.
+
+## Model providers
+
+protonMAN supports both hosted and local providers.
+
+| Provider | Type | Notes |
+| --- | --- | --- |
+| **OpenCode** | OpenAI-compatible | Free models available without an API key |
+| **Protonman** | OpenAI-compatible | Hosted gateway at `protonman.dev` |
+| **Ollama** | OpenAI-compatible | Local model inference |
+| **OpenAI** | OpenAI-compatible | Native support through `proton-sdk` |
+| **Anthropic** | Anthropic Messages | Native Messages protocol support |
+
+Provider configuration lives in `~/.protonman/config.json` and can also be managed from the TUI with `/provider`.
+
+OpenCode free models can use protonMAN's adaptive low-concurrency scheduler. The scheduler starts conservatively, reacts to provider congestion, respects `Retry-After`, and uses replay-safe retry behavior for streams that fail before visible output is committed.
+
+See [docs/proton-sdk.md](docs/proton-sdk.md) for the provider abstraction and SDK contract.
+
+## Permission and sandbox model
+
+protonMAN does not treat tool execution as an unbounded side effect buffet, because apparently files are worth keeping.
+
+### Permission modes
+
+| Mode | Behavior |
+| --- | --- |
+| `ask` | Prompt when a tool call is not already allowed by policy |
+| `plan` | Read-only workflow; mutating actions are blocked |
+| `always-approve` | Automatically approves promptable actions while explicit deny rules still win |
+
+Rule precedence is:
+
+```text
+deny > ask > allow
+```
+
+### Sandbox profiles
+
+| Profile | Workspace | Host filesystem | Network |
+| --- | --- | --- | --- |
+| `off` | unrestricted | unrestricted | allowed |
+| `workspace` | read/write | blocked except temp | allowed |
+| `read-only` | read-only | blocked except temp | blocked |
+| `strict` | read/write | blocked | blocked |
+
+The runtime additionally enforces workspace path confinement, protected paths, symlink-escape prevention, execution deadlines, and automatic pre-edit checkpoints.
+
+See [SECURITY.md](SECURITY.md) and [docs/architecture.md](docs/architecture.md) for the full model.
+
+## TUI essentials
+
+Common shortcuts:
+
+| Key | Action |
+| --- | --- |
+| `Enter` | Send |
+| `?` | Open shortcut help |
+| `Shift+Tab` | Cycle permission mode |
+| `Ctrl+P` | Model setup |
+| `Ctrl+S` | Skills |
+| `Ctrl+O` | Tasks |
+| `Ctrl+T` | Transcript |
+| `Ctrl+C` | Cancel or exit |
+
+Useful slash commands include:
+
+```text
+/model
+/provider
+/permission
+/low
+/goal
+/todo
+/agents
+/skills
+/resume
+/transcript
+/help
+```
+
+## Architecture
+
+The runtime keeps UI, orchestration, policy, tools, and external integrations separated behind explicit boundaries.
+
+```text
+TUI / Headless / ACP
+        │
+        ▼
+Application turn loop
+        │
+        ├── Model providers / proton-sdk
+        ├── Session + memory
+        └── Subagent orchestration
+        │
+        ▼
+Tool-call service + permission policy
+        │
+        ▼
+Workspace-safe tools + OS sandbox
+```
+
+For package boundaries, execution flow, and design constraints, read [docs/architecture.md](docs/architecture.md).
+
+## Build from source
+
+Development requires Go 1.27+ and Git.
+
+```sh
+git clone https://github.com/phongsathornpt/protonman.git
+cd protonman
+
 make build
-make install   # build HEAD and install to ~/.local/bin/protonman
 ./bin/protonman --version
 ```
 
-### Headless & Scripting
+Useful development commands:
 
 ```sh
-# Run a single prompt and exit
-protonman -p "Explain the project architecture"
-
-# Run non-interactively with auto-approval (always-approve mode)
-protonman -y -p "Run the test suite and fix any failing tests"
-
-# Read prompt from stdin and output JSON
-cat prompt.txt | protonman --headless --output json
-
-# Serve Agent Client Protocol (ACP) over stdio
-protonman --acp
-
-# Run within a strict OS sandbox profile
-protonman --sandbox strict -p "Analyze dependencies"
-```
-
----
-
-## Terminal User Interface (TUI)
-
-The fullscreen TUI is built on [Bubble Tea](https://github.com/charmbracelet/bubbletea), [Bubbles](https://github.com/charmbracelet/bubbles), and [Lip Gloss](https://github.com/charmbracelet/lipgloss).
-
-### Live Interface Layout
-
-```text
-┌────────────────────────────────────────────────────────────────────────┐
-│  Protonman ── Go Coding Agent                               [mode: ask]  │
-├────────────────────────────────────────────────────────────────────────┤
-│                                                                        │
-│  > Analyze repository structure and test coverage                      │
-│                                                                        │
-│  ● Assistant response streaming with sanitized ANSI formatting...      │
-│                                                                        │
-│  ⚙ Tool Call: read (internal/config/config.go)          [SUCCESS] │
-│                                                                        │
-│  ┌─ [Ctrl+O] Tasks Checklist ───────────────────────────────────────┐  │
-│  │ [x] 1. Inspect configuration package                             │  │
-│  │ [ ] 2. Verify subagent coordination                              │  │
-│  └──────────────────────────────────────────────────────────────────┘  │
-│                                                                        │
-├────────────────────────────────────────────────────────────────────────┤
-│ ⚠️  Permission Request: bash "go test ./..."                           │
-│    [1] (y) Allow Once                                                  │
-│    [2] (s) Allow for Session                                           │
-│    [3] (n) Deny                                                        │
-├────────────────────────────────────────────────────────────────────────┤
-│ > Type a message or '/' for commands...                                │
-├────────────────────────────────────────────────────────────────────────┤
-│ [Enter] send  [Shift+Tab] permission  [^P] setup  [^S] skills  [^C] quit   │
-└────────────────────────────────────────────────────────────────────────┘
-```
-
-### Keybindings
-
-| Key | Action |
-| :--- | :--- |
-| `Enter` | Submit current prompt / execute command |
-| `?` | Open the compact shortcut reference when the composer is empty |
-| `Shift+Tab` | Cycle permission mode (`ask` → `plan` → `always-approve`) |
-| `Ctrl+P` | Toggle unified Model Setup (provider, model, thinking) |
-| `Ctrl+S` | Toggle Agent Skills browser pane |
-| `Ctrl+O` | Toggle Tasks / TODO checklist pane |
-| `Ctrl+T` | Open transcript overlay (toggle raw view with `r`) |
-| `PgUp` / `PgDn` | Scroll transcript viewport up/down |
-| `Esc` | Park active permission modal or dismiss overlays |
-| `Ctrl+C` | Cancel active operation or exit |
-
-### In-TUI Slash Commands
-
-Type `/` at the prompt to trigger autocomplete, or prefix a canonical command with a colon (for example `:help`):
-
-| Command | Description | Example |
-| :--- | :--- | :--- |
-| `/help` | Display available commands | `/help` |
-| `/permission` | Select permission mode | `/permission` |
-| `/low [auto|on|off]` | Inspect or control low-concurrency scheduling for this session | `/low on` |
-| `/model [name]` | Open unified Model Setup or switch active model | `/model glm-5.3-flash` |
-| `/provider [cmd]` | Manage and configure AI model providers | `/provider list`, `/provider opencode` |
-| `/skills [name|active|toggle]` | Browse, activate, or toggle Agent Skills | `/skills pdf-processing` |
-| `/agents` | Inspect live and retained subagents | `/agents` |
-| `/goal [detail|clear]` | Show, set, and execute the persistent session goal | `/goal finish retry recovery` |
-| `/todo [show|hide]` | Show or hide the task-plan pane | `/todo` |
-| `/resume [id|latest]` | Resume previous session or open session picker | `/resume latest` |
-| `/transcript [clear]` | Open or clear the transcript | `/transcript clear` |
-| `/call <tool> <json>` | Directly execute a tool with JSON arguments | `/call read {"path":"README.md"}` |
-| `/quit` | Exit Protonman cleanly | `/quit` |
-| `!<command>` | Execute a shell command directly through the `bash` tool | `!git status` |
-
-Model Setup combines provider, model, and thinking selection in one interaction. Use `↑/↓` to move through models, `←/→` to adjust thinking, `tab` to switch provider, and `enter` to apply the selection. Model catalogs stay scoped per provider; stale or missing catalogs refresh automatically and stale async results are ignored. Press `/` inside Model Setup to filter by model ID, name, vendor, or feature; `r` forces a refresh. Provider credentials remain managed through `/provider`. Direct `/model <id>` still permits custom or unlisted IDs and marks them as unverified instead of rejecting them.
-
-Live subagent activity uses a compact Dota-style vocabulary in the status row and `/agents` view. These labels are presentation only; runtime lifecycle state remains `queued`, `running`, `completed`, and related domain states. Current mappings include `W8` for queued work, `Roaming` for AGI exploration, `Farming` for evidence gathering, `Skilling` for INT reasoning, `Ganking` for focused search, `Pushing` for implementation, `Defending` for verification, `Sticking` when a result becomes available for integration, and `Integrated` after that versioned result is delivered into the parent runtime context. `Care` marks failed/interrupted work and `B` marks cancellation/retreat.
-
----
-
-## Security & Policy Engine
-
-Protonman enforces security policy boundaries before any tool executes.
-
-### Permission Modes
-
-- **`ask` (Default)**: Prompts interactively whenever a tool action is not explicitly pre-approved by configuration rules.
-- **`plan`**: Read-only mode. Mutating `edit` actions and non-whitelisted shell commands are blocked.
-- **`always-approve`**: Automatically approves tool calls that would otherwise prompt. Explicit `deny` rules remain strictly enforced.
-
-### Policy Evaluation
-
-Permission rules follow strict precedence:
-$$\text{deny} > \text{ask} > \text{allow}$$
-
-An omitted rule action defaults to `deny` (fail-closed).
-
-When prompted in `ask` mode:
-- **Allow Once (`y` / `1`)**: Authorizes only this single tool call.
-- **Allow for Session (`s` / `2`)**: Grants authorization for matching calls for the remainder of the session.
-- **Deny (`n` / `3`)**: Rejects execution, returning a permission-denied error to the agent turn loop.
-
-### Workspace Confinement & Checkpoints
-
-- **Path Traversal Protection**: File operations are confined to the workspace root directory. Relative escapes (`../`) and symlink traversal outside the workspace boundary are rejected.
-- **Protected Paths**: Configured protected paths (e.g. `.env`, `secrets/`, `*.pem`) are shielded from model reads, listings, and modifications.
-- **Automatic Checkpoints**: Mutating file operations create pre-edit snapshots stored under `~/.protonman/checkpoints/`. File state can be restored via `edit` with `action=restore`.
-
-### OS Sandbox Profiles
-
-Protonman can confine sub-processes via OS-level sandboxing:
-- **macOS**: Evaluates seatbelt confinement profiles via `sandbox-exec`.
-- **Linux**: Uses native Landlock for filesystem confinement and a user/network namespace for blocked-network profiles when supported. Bubblewrap (`bwrap`) is retained only as a fallback for hosts missing native prerequisites. The CLI probes Landlock and user-namespace capabilities before backend selection.
-
-| Profile | Workspace Files | Host Filesystem | Network Access |
-| :--- | :--- | :--- | :--- |
-| `off` | Unrestricted | Unrestricted | Allowed |
-| `workspace` | Read-Write | Blocked / Temp only | Allowed |
-| `read-only` | Read-Only | Blocked / Temp only | Blocked |
-| `strict` | Read-Write | Blocked | Blocked |
-
-Configure the sandbox globally via config or per-run:
-```sh
-protonman --sandbox strict -p "Analyze local files"
-```
-
-### Tool Deadlines
-
-Permission resolution and approved tool execution have separate two-minute
-deadlines by default. A shorter parent turn or tool context still wins. Bash
-commands receive context cancellation, preserve partial output, and terminate
-their process tree where the platform supports it. Set `PROTONMAN_DEBUG_LOG` to
-`stderr` or a file path to inspect timeout cause, error type, and process
-termination diagnostics without logging command contents.
-
----
-
-## Model Providers & Catalog
-
-Protonman routes agent model calls through `proton-sdk`, with native OpenAI-compatible and Anthropic Messages protocol support. Custom gateways and local inference remain supported through provider configuration:
-
-### Built-in Provider Presets
-
-| Provider | Base URL | Auth Required | Description |
-| :--- | :--- | :--- | :--- |
-| **OpenCode** | `https://opencode.ai/zen/v1` | No (Free) | Free-tier models with zero API key required; free-model streams use bounded recovery when the provider returns no visible output |
-| **Protonman** | `https://protonman.dev/api/v1` | Yes (`plk_...`) | High-speed AI model gateway |
-| **Ollama** | `http://localhost:11434/v1` | No | Local LLM inference |
-| **OpenAI** | `https://api.openai.com/v1` | Yes (`sk-...`) | OpenAI-compatible API through `proton-sdk` |
-| **Anthropic** | `https://api.anthropic.com` | Yes | Anthropic Messages API through `proton-sdk` |
-
-### Available Models (Protonman Gateway)
-
-- `deepseek-v4-flash-vision-exp` (Default, 1M context, tool-calling & vision)
-- `glm-5.3-flash` (1M context, tool-calling & vision)
-- `Qwen3.8-Flash` (1M context, text & vision)
-- `muse-spark-1.3-contributor` (1M context, tool-calling)
-- `MiniMax-M3` (1M context)
-
-Configure providers directly inside the TUI with `/provider` or via `~/.protonman/config.json`.
-
-`proton-sdk` owns provider-neutral agent messages, tools, streaming events, usage/finish metadata, model registry, middleware, and provider wire adapters. The Protonman CLI keeps permission policy, tool execution, sessions, and turn orchestration outside the SDK. See [`docs/proton-sdk.md`](docs/proton-sdk.md) for the agent-first SDK contract and provider extension boundaries.
-
-Low-concurrency scheduling is `auto` by default. Use `/low` to open the low-concurrency picker and inspect the effective state, or `/low auto|on|off` to change the persisted session override directly. `auto` currently recommends the scheduler for OpenCode free models, `on` forces the provider-neutral scheduler for any active model/provider, and `off` bypasses it. The compact footer shows `LOW` only when the scheduler is actually effective, including on narrow terminals.
-
-When effective, Low Concurrency uses a process-wide scheduler keyed by provider, endpoint, and model. It starts at one concurrent generation, uses bounded admission and paced starts, may promote to two concurrent generations only after sustained healthy traffic with queue pressure, and immediately demotes/backoffs on provider congestion. Provider `Retry-After` is shared across the route as a hard cooldown, separate from the adaptive pacing interval.
-
-OpenCode free models additionally use replay-safe stream recovery with stream timeouts. Protonman retries a stream only when no visible text has been emitted yet (tool-only prefixes are buffered and replayed without duplicating the call). Free-model recovery is bounded to four retries with waits of 5s, 15s, 30s, and 60s, plus a 30-second no-output watchdog per attempt; once visible output has started, an incomplete stream is surfaced instead of replayed to avoid duplicate output or tool calls. All other providers use a bounded two-attempt replay-safe retry for pre-commit incomplete streams and empty finishes; provider transport keeps its own open retry budget, so open failures are not double-retried. During provider or replay-safe stream backoff, the TUI shows user-facing state such as `retrying in 5s · retry 1/4 · provider slow` and `cooling down 60s · retry 4/4 · provider slow`, driven by the retry deadline used by the request itself. Internal retry diagnostics stay out of the interactive transcript unless debug logging is explicitly enabled. Exhausted empty-response recovery is exposed as `EMPTY_RESPONSE`, while an abruptly terminated provider stream is `STREAM_INCOMPLETE`; both are presented as retryable provider failures.
-
----
-
-## Agent Capabilities & Tools
-
-Protonman uses Dota-style engineering attributes as a single agent vocabulary:
-
-| Attribute | TUI | Role |
-| :--- | :---: | :--- |
-| `universal` | `UNI` | Primary software engineering agent and orchestrator; owns integration and verification |
-| `strength` | `STR` | Substantial implementation, fixes, refactors, migrations, and concrete execution |
-| `agility` | `AGI` | Fast read-only exploration, tracing, and focused investigation |
-| `intelligence` | `INT` | Deep reasoning, architecture, difficult debugging, concurrency, performance, and high-risk engineering |
-
-`Universal` is the root identity even when subagents are disabled. `subagent action=spawn` accepts only `strength`, `agility`, or `intelligence`; legacy CLI/config/session profile names (`pow`, `int`, `dex`, `worker`, `explorer`, `reviewer`) are normalized for compatibility but are not published in the new tool schema.
-
-Protonman registers a suite of workspace-safe tools:
-
-| Tool | Category | Description |
-| :--- | :--- | :--- |
-| `read` | File System | Read UTF-8 workspace files with bounded byte/line pagination, or inspect image, structured-data, and metadata views; image analysis supports PNG, JPEG, GIF first-frame, and WebP with bounded decode/sample budgets |
-| `edit` | File System | Workspace edits via `write`, `replace`, `patch`, and `restore` actions with existing checkpoint safeguards |
-| `grep` | Search | Regex search with include globs plus snapshot-bound cursor pagination that resumes from the prior match location |
-| `find` | Search | Recursive workspace path discovery by glob with type/depth filters and snapshot-bound pagination |
-| `ls` | Search | List visible directory entries with protected-path filtering and snapshot-bound pagination |
-| `git` | Version Control | Git capability; `action=status` inspects working tree state |
-| `bash` | Execution | Run bounded shell commands with workspace-relative `cwd`, optional `timeout_seconds`, effect analysis, and structured stdout/stderr |
-| `web` | Network | Search the web with `action=search` or fetch a known URL with `action=fetch` under sandbox network policy |
-| `skill` | Skills | Dynamically load an Agent Skill's full context into the session |
-| `todo action=get` | Tasks | Read the current session-owned task snapshot, durable revision, and session identity |
-| `todo action=update` | Tasks | Atomically patch session-owned task state using `expected_revision` from `todo action=get`; stale cross-process updates are rejected |
-| `subagent action=spawn` | Multi-Agent | Spawn a persistent background subagent and return its `agent_id` immediately |
-| `subagent action=wait` | Multi-Agent | Diagnostic lifecycle wait; normal child results are delivered automatically |
-| `subagent action=get` | Multi-Agent | Diagnose one retained subagent and inspect its terminal result |
-| `subagent action=list` | Multi-Agent | Inspect queued, running, and retained terminal subagents |
-| `subagent action=cancel` | Multi-Agent | Explicitly cancel a queued or running subagent |
-
-Session state and task plans are private user data, not workspace files. Each session owns an aggregate under `~/.protonman/sessions/<session-id>/`. When `PROTONMAN_HOME` overrides the effective home directory, the same `.protonman/sessions/<session-id>/` layout is created beneath that home:
-
-```text
-.protonman/sessions/<session-id>/
-  state.json
-  todo.md
-```
-
-`state.json` and `todo.md` both use durable revisions. Session saves and task patches reject stale writers instead of silently accepting last-writer-wins updates. The managed TODO document also stores a goal fingerprint: a legacy unbound plan is adopted by the current goal once, while changing to a different non-empty goal atomically supersedes the prior plan so stale tasks cannot silently leak across objectives. Clearing a goal preserves the current plan until another goal supersedes it. Workspace `TODO.md` files are never used as Protonman's internal task store. Legacy flat session JSON files remain readable and migrate to the aggregate layout on the next successful save.
-
----
-
-## Agent Skills
-
-Protonman implements the open [Agent Skills Specification](https://agentskills.io). Skills are self-contained directory packages containing a `SKILL.md` (YAML frontmatter + Markdown instructions) and optional helper scripts and references.
-
-### Discovery Locations
-- **User-level**: `~/.protonman/skills/` and `~/.agents/skills/`
-- **Project-level**: `<workspace>/.protonman/skills/` and `<workspace>/.agents/skills/`
-
-> [!NOTE]
-> Project-local skills and configuration are only loaded when `PROTONMAN_TRUST_PROJECT=1` is enabled. Untrusted project skills are safely skipped with a diagnostic warning.
-
-User-global state lives under `~/.protonman/` and project-local state under `<workspace>/.protonman/`. New and existing runtime data use this namespace exclusively.
-
-### Progressive Disclosure
-1. **Catalog (Tier 1)**: Available skills are summarized as `<available_skills>` in the system prompt (~50-100 tokens per skill).
-2. **Activation (Tier 2)**: When a task matches a skill, the model invokes `skill`, loading full instructions, scripts, and asset references into context on demand.
-3. **Manual Control**: Use `/skills` in the TUI to browse skills, or `/skills <name>` to view and activate a skill manually.
-
----
-
-## Configuration Reference
-
-Protonman loads `~/.protonman/config.json`. When `PROTONMAN_TRUST_PROJECT=1` is set, a project-local `.protonman/config.json` is merged, with project rules overriding user defaults.
-
-```json
-{
-  "ui": {
-    "permission_mode": "ask"
-  },
-  "permission": {
-    "default": "ask",
-    "rules": [
-      {
-        "action": "deny",
-        "tool": "bash",
-        "pattern": "rm -rf *"
-      },
-      {
-        "action": "allow",
-        "tool": "read",
-        "pattern": "*.go"
-      }
-    ]
-  },
-  "workspace": {
-    "protected_paths": [".env", "secrets/**", "**/*.pem", "**/*.key"]
-  },
-  "sandbox": {
-    "profile": "off"
-  },
-  "agent": {
-    "subagents_enabled": true,
-    "max_tool_calls": 0,
-    "max_live_subagents": 16,
-    "max_retained_subagents": 64,
-    "subagent_queue_timeout": "2m",
-    "subagent_wait_timeout": "30s",
-    "subagent_max_runtime": "30m",
-    "completed_result_ttl": "24h",
-    "subagents": {
-      "strength": {
-        "provider": "protonman",
-        "model": "coding-model-id",
-        "reasoning_effort": "medium"
-      },
-      "agility": {
-        "provider": "opencode",
-        "model": "fast-model-id",
-        "reasoning_effort": "low"
-      },
-      "intelligence": {
-        "provider": "anthropic",
-        "model": "reasoning-model-id",
-        "reasoning_effort": "high"
-      }
-    }
-  },
-  "runtime": {
-    "round_timeout": "5m",
-    "tool_permission_timeout": "2m",
-    "tool_execution_timeout": "2m",
-    "model_request_timeout": "5m",
-    "model_discovery_timeout": "10s",
-    "webFetchTimeout": "10s",
-    "model_catalog_ttl": "2m"
-  },
-  "model": {
-    "default": "deepseek-v4-flash-vision-exp",
-    "provider": "protonman"
-  },
-  "providers": {
-    "protonman": {
-      "name": "protonman",
-      "type": "openai",
-      "base_url": "https://protonman.dev/api/v1",
-      "api_key": "plk_your_api_key_here"
-    },
-    "opencode": {
-      "name": "opencode",
-      "type": "openai",
-      "base_url": "https://opencode.ai/zen/v1",
-      "api_key": ""
-    },
-    "ollama": {
-      "name": "ollama",
-      "type": "openai",
-      "base_url": "http://localhost:11434/v1",
-      "api_key": ""
-    },
-    "anthropic": {
-      "name": "anthropic",
-      "type": "anthropic",
-      "base_url": "https://api.anthropic.com",
-      "api_key": "your_anthropic_api_key"
-    }
-  }
-}
-```
-
-
-Execution safety notes:
-
-- `max_tool_calls = 0` is the default and uses the progress-aware safety budget: successful meaningful work resets the stagnant-call window, 24 stagnant calls force text-only synthesis, and a separate 512-call emergency ceiling bounds pathological unique-call loops. Set `max_tool_calls > 0` only to impose a stricter cumulative hard ceiling.
-- `bash` accepts `command`, optional workspace-relative `cwd`, and optional `timeout_seconds` (1-120). A per-call timeout can shorten but never extend the caller/tool-service deadline.
-- Bash effect analysis is conservative: proven read-only shell commands may run in plan mode, while mutating or unknown commands remain blocked. Simple redirections/composition and common filesystem/git commands publish proven `affected_paths`; unknown scripts remain fail-closed.
-- Bash results preserve compatibility `output` while also exposing bounded `stdout`, `stderr`, per-stream byte counts/truncation flags, exit code, and stable failure codes. Cancellation terminates the command process tree through the sandbox launcher.
-- `subagents_enabled = false` disables new delegation by default. The model cannot use `subagent action=spawn`; existing children remain inspectable/waitable/cancelable through `subagent` lifecycle actions until their retained lifecycle records expire.
-- `subagents_enabled` is configured through user or trusted-project TOML; changing that policy is intentionally outside the TUI slash-command surface.
-- Per-profile `[agent.subagents.strength|agility|intelligence]` tables may route children to a different configured provider/model. `provider` and `model` must either both be present or both be omitted.
-- A profile without an explicit provider/model inherits the **current** Universal language model when the child is admitted. Changing `/model` affects future inherited children only; already queued/running children keep their bound model.
-- `reasoning_effort` may be configured with or without a model override. Precedence is profile override -> current global `agent.reasoning_effort`/runtime reasoning -> profile default; `auto`/`default` means inherit.
-- User and trusted-project subagent tables merge field-wise by canonical profile. Project reasoning-only overrides do not erase a user-level model route, and project model-only overrides do not erase user-level reasoning.
-- Configured subagent providers are validated during runtime bootstrap. Missing providers or required credentials fail before delegation starts.
-- `subagent action=spawn` starts work asynchronously. Completed child results are delivered automatically to the owning parent turn through event-driven runtime context; normal delegation does not require `wait`, `get`, or `list` polling. The returned `agent_id` remains available for explicit inspection, cancellation, and recovery.
-- Child final responses may carry a `<proton-subagent-result>` envelope with `conclusion`, `findings`, and `blockers`. Finding evidence is retained only when it matches successful runtime-observed tool evidence; malformed structured output falls back to plain text, while changed targets and verification remain runtime-derived.
-- Spawned work blocks parent completion by default. Set `optional=true` only for speculative work whose result is not required for correctness. An optional result is integrated if it becomes ready in time; otherwise it does not delay the parent and a still-live optional child is canceled when the parent commits its final response. If the parent turn terminates by failure or cancellation, any remaining turn-owned children are canceled because no runtime-context consumer remains.
-- `depends_on` accepts already-spawned agent IDs from the same session/parent turn. A dependent child remains queued without consuming a concurrency slot or queue-timeout budget until every dependency completes successfully; a failed/canceled/interrupted dependency fails the downstream child without executing it.
-- `subagent_queue_timeout` bounds only admission to concurrency/workspace capacity; queueing never consumes the child runtime budget.
-- `subagent_wait_timeout` bounds explicit diagnostic `subagent action=wait` calls. Reaching it returns current lifecycle state and does **not** cancel the child or affect automatic result delivery.
-- `subagent_max_runtime` is the hard child-lifetime safety ceiling after execution starts. `subagent action=spawn` `timeout_seconds` may request a shorter ceiling but cannot extend the configured maximum.
-- `max_live_subagents` prevents unbounded queued/running work; `max_retained_subagents` caps terminal records even inside the TTL window, while `completed_result_ttl` bounds how long results remain queryable.
-- Legacy `subagent_timeout` is accepted as an alias for `subagent_max_runtime` with a deprecation warning.
-- `[runtime]` centralizes model, tool, discovery, web-fetch, and catalog-cache time bounds. Turn safety remains bounded even when `turn_timeout` and the cumulative override are zero because the progress-aware stagnant-call and emergency ceilings remain active.
-- Repeating the same deterministic tool call with identical semantic arguments and result twice suppresses only that exact call fingerprint. Tools stay available so the model can change arguments or strategy; a non-tool round or newly productive evidence resets the strategy-level stall counter, and after three consecutive fully stalled rounds the runtime escalates to text-only no-progress synthesis. Identical retryable failures remain capped at three executed attempts.
-- Truncated `read`, `grep`, `find`, and `ls` results include `next_offset` plus a snapshot-bound `continuation`; send both on the next page to detect stale file, query, or directory state. `grep` continuations also carry a validated cursor so deep pages resume near the prior match instead of rescanning earlier files. Plain `offset` remains supported for compatibility. `read` also supports bounded 1-based `start_line`/`end_line` selection with optional `line_numbers`, plus `image`, `structured`, and `metadata` artifact views. Image inspection uses bounded encoded-size, pixel, and sample budgets; GIF analysis is explicitly first-frame only.
-
-### Environment Variables
-
-| Variable | Description |
-| :--- | :--- |
-| `PROTONMAN_HOME` | Override the effective user home beneath which `.protonman/` stores configuration, sessions, checkpoints, skills, and logs |
-| `PROTONMAN_TRUST_PROJECT` | Set to `1`, `true`, or `on` to trust and load project-local `.protonman/` configs and skills |
-| `PROTONMAN_SESSION_ID` | Explicit session identifier to resume or create |
-| `PROTONMAN_SANDBOX` | Override sandbox profile (`off`, `workspace`, `read-only`, `strict`) |
-| `PROTONMAN_TELEMETRY` | Set to `stderr` for redacted JSON tool lifecycle and loop-protection telemetry, including suppression, retry-budget, safety-budget exhaustion, stale-continuation, turn-deadline, and event-driven subagent synthesis byte/batch counters |
-| `PROTONMAN_DEBUG_LOG` | Set to a file path or `stderr` for opt-in JSON development diagnostics; disabled by default |
-| `PROTONMAN_FORCE_TTY` | Test/development override for terminal detection; normal CLI use should leave it unset |
-
-Legacy `PROTON_TRUST_PROJECT`, `PROTON_SESSION_ID`, `PROTON_SANDBOX`, `PROTON_TELEMETRY`, `PROTON_DEBUG_LOG`, and `PROTON_FORCE_TTY` are accepted only as fallbacks. `PROTONMAN_HOME` is the only supported home override.
-
----
-
-## Versioning & Releases
-
-Git tags are the source of truth for release versions. `make build` and `make dev`
-inject `git describe --tags --always --dirty --match 'v[0-9]*'` into the binary; `VERSION=v1.2.3`
-may be supplied explicitly. `protonman --version` reports the version embedded in
-the binary.
-
-Pushing a tag such as `v1.2.3` triggers `.github/workflows/release.yml`, which
-runs the full test suite, builds Linux amd64 and macOS arm64 archives, generates SHA-256
-checksums, and publishes a GitHub Release. Prerelease tags such as `v1.2.3-rc.1`
-are published as GitHub prereleases.
-
-See [`docs/releasing.md`](docs/releasing.md) for the release procedure and version
-resolution rules.
-
----
-
-## Development & Testing
-
-```sh
-# Run unit and package tests
+make tui
 make test
-
-# Run tests with the Go race detector
 make test-race
-
-# Run end-to-end test suite
 make test-e2e
-
-# Run benchmarks with memory profiling
 make bench
-
-# Format all source files
 make fmt
-
-# Run Go vet linter
 make vet
 ```
 
----
+## Project documentation
+
+| Document | Description |
+| --- | --- |
+| [Architecture](docs/architecture.md) | Runtime boundaries and package responsibilities |
+| [Install](docs/install.md) | Installation and release binaries |
+| [Settings](docs/settings.md) | User and project configuration |
+| [Memory](docs/memory.md) | Durable memory design |
+| [System prompt](docs/system-prompt.md) | Agent behavioral contract |
+| [proton-sdk](docs/proton-sdk.md) | Model/provider SDK architecture |
+| [Desktop](docs/desktop.md) | Desktop application architecture |
+| [ACP conformance](docs/acp-conformance.md) | Agent Client Protocol behavior |
+| [Releasing](docs/releasing.md) | Versioning and release process |
 
 ## Contributing
 
-Contributions are welcome through pull requests targeting `main`. See [`CONTRIBUTING.md`](CONTRIBUTING.md) for branch naming, verification, and review expectations. Report suspected vulnerabilities privately as described in [`SECURITY.md`](SECURITY.md).
+Contributions are welcome.
 
----
+Before opening a pull request:
+
+```sh
+make fmt
+make vet
+make test
+```
+
+For repository conventions, branch naming, and review expectations, read [CONTRIBUTING.md](CONTRIBUTING.md).
+
+Please report security vulnerabilities privately according to [SECURITY.md](SECURITY.md), rather than filing a public issue and creating an exciting day for everyone.
+
+## Community
+
+- Use [GitHub Issues](https://github.com/phongsathornpt/protonman/issues) for bugs and feature requests.
+- Use [SUPPORT.md](SUPPORT.md) for support guidance.
+- Follow [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) when participating in the project.
 
 ## License
 
-Apache License 2.0. See `LICENSE` for details.
+protonMAN is licensed under the [Apache License 2.0](LICENSE).
