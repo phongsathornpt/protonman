@@ -21,7 +21,7 @@ Built in Go with a security-first runtime, multi-agent orchestration, provider-n
 </div>
 
 <p align="center">
-  <img src="docs/assets/protonman-readme.webp" alt="protonMAN terminal interface" width="100%">
+  <img src="docs/assets/protonman-readme.svg" alt="protonMAN terminal interface" width="100%">
 </p>
 
 ## What is protonMAN?
