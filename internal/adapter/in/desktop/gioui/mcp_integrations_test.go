@@ -5,6 +5,8 @@ package gioui
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -132,6 +134,74 @@ func TestMCPSessionParamsIncludeAdditionalDirectoriesAndServers(t *testing.T) {
 	servers, ok := params["mcpServers"].([]map[string]any)
 	if !ok || len(servers) != 1 || servers[0]["env"].([]string)[0] != "PROTONMAN_MCP_TEST_TOKEN=secret" {
 		t.Fatalf("mcp servers = %#v", params["mcpServers"])
+	}
+}
+
+func TestMCPNewSessionParamsIncludeAdditionalDirectories(t *testing.T) {
+	primary := t.TempDir()
+	extra := t.TempDir()
+	second := t.TempDir()
+	controller := newMCPTestController(nil)
+
+	params := controller.mcpNewSessionParams(primary, []string{extra, second})
+	if params["cwd"] != primary {
+		t.Fatalf("cwd = %v, want the primary folder", params["cwd"])
+	}
+	if !reflect.DeepEqual(params["additionalDirectories"], []string{extra, second}) {
+		t.Fatalf("additional directories = %#v", params["additionalDirectories"])
+	}
+}
+
+func TestMCPNewSessionParamsOmitEmptyAdditionalDirectories(t *testing.T) {
+	controller := newMCPTestController(nil)
+
+	params := controller.mcpNewSessionParams(t.TempDir(), nil)
+	if _, present := params["additionalDirectories"]; present {
+		t.Fatalf("params = %#v, want no additionalDirectories key", params)
+	}
+}
+
+func TestProjectAdditionalDirectoriesExcludesPrimaryAndStaleFolders(t *testing.T) {
+	primary := t.TempDir()
+	extra := t.TempDir()
+	aliasParent := t.TempDir()
+	alias := filepath.Join(aliasParent, "alias")
+	if err := os.Symlink(extra, alias); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+
+	controller := newMCPTestController(nil)
+	controller.state.Projects = []desktopstate.ProjectState{{
+		ID: "project-1",
+		Folders: []desktopstate.ProjectFolder{
+			{Path: primary, Primary: true},
+			{Path: extra},
+			{Path: alias}, // resolves to extra: duplicate
+			{Path: filepath.Join(extra, "does-not-exist")}, // stale
+		},
+	}}
+
+	// Comparison uses the canonical form: t.TempDir() is under /var, which is a
+	// symlink to /private/var on macOS.
+	want := canonicalWorkspacePath(extra)
+	got := controller.projectAdditionalDirectoriesLocked("project-1", primary)
+	if !reflect.DeepEqual(got, []string{want}) {
+		t.Fatalf("additional directories = %#v, want only %q", got, want)
+	}
+}
+
+func TestProjectAdditionalDirectoriesIgnoresOtherProjects(t *testing.T) {
+	extra := t.TempDir()
+	controller := newMCPTestController(nil)
+	controller.state.Projects = []desktopstate.ProjectState{
+		{ID: "other", Folders: []desktopstate.ProjectFolder{{Path: extra}}},
+		{ID: "project-1", Folders: []desktopstate.ProjectFolder{{Path: extra}}},
+	}
+
+	want := canonicalWorkspacePath(extra)
+	got := controller.projectAdditionalDirectoriesLocked("project-1", t.TempDir())
+	if len(got) != 1 || got[0] != want {
+		t.Fatalf("additional directories = %#v, want only %q", got, want)
 	}
 }
 

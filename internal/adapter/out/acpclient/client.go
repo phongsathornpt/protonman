@@ -12,8 +12,10 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 )
 
 var ErrClosed = errors.New("ACP client is closed")
@@ -64,14 +66,65 @@ type Client struct {
 	stdin  io.WriteCloser
 	cancel context.CancelFunc
 
-	writeMu sync.Mutex
-	mu      sync.Mutex
-	pending map[uint64]chan response
-	handler RequestHandler
-	nextID  atomic.Uint64
-	onEvent func(Event)
-	closed  chan struct{}
-	once    sync.Once
+	writeMu  sync.Mutex
+	mu       sync.Mutex
+	pending  map[uint64]chan response
+	handler  RequestHandler
+	nextID   atomic.Uint64
+	onEvent  func(Event)
+	closed   chan struct{}
+	once     sync.Once
+	stderrMu sync.Mutex
+	stderr   []byte
+	// stderrDone is non-nil only for clients started by StartCommand. shutdown
+	// uses it to avoid reporting a partial stderr tail while the drain is still
+	// reading the last bytes of a dead process.
+	stderrDone chan struct{}
+}
+
+// stderrTailLimit bounds the retained child stderr. Startup and crash diagnostics
+// are short; keeping the tail preserves the error while bounding memory for a
+// chatty external agent.
+const stderrTailLimit = 8 * 1024
+
+// drainStderr consumes the child's stderr and retains a bounded tail. Discarding it
+// entirely would make every pre-handshake failure indistinguishable from a timeout.
+func (c *Client) drainStderr(r io.Reader) {
+	buf := make([]byte, 4096)
+	for {
+		n, err := r.Read(buf)
+		if n > 0 {
+			c.appendStderr(buf[:n])
+		}
+		if err != nil {
+			return
+		}
+	}
+}
+
+func (c *Client) appendStderr(chunk []byte) {
+	c.stderrMu.Lock()
+	defer c.stderrMu.Unlock()
+	c.stderr = append(c.stderr, chunk...)
+	if len(c.stderr) > stderrTailLimit {
+		c.stderr = append([]byte(nil), c.stderr[len(c.stderr)-stderrTailLimit:]...)
+	}
+}
+
+func (c *Client) stderrTail() string {
+	c.stderrMu.Lock()
+	defer c.stderrMu.Unlock()
+	return strings.TrimSpace(string(c.stderr))
+}
+
+// withStderr annotates a transport failure with the child's last diagnostics so a
+// broken ACP agent reports its real cause instead of a bare context deadline.
+func (c *Client) withStderr(cause error) error {
+	tail := c.stderrTail()
+	if tail == "" {
+		return cause
+	}
+	return fmt.Errorf("%w: %s", cause, tail)
 }
 
 type response struct {
@@ -127,11 +180,21 @@ func StartCommand(ctx context.Context, spec CommandSpec, onEvent func(Event)) (*
 	client := &Client{
 		ctx: procCtx, cmd: cmd, stdin: stdin, cancel: cancel, onEvent: onEvent,
 		pending: make(map[uint64]chan response), closed: make(chan struct{}),
+		stderrDone: make(chan struct{}),
 	}
 	go client.readLoop(stdout)
-	go io.Copy(io.Discard, stderr)
+	go func() {
+		defer close(client.stderrDone)
+		client.drainStderr(stderr)
+	}()
 	go func() {
 		err := cmd.Wait()
+		// Wait() closes the stderr pipe, but the drain may not have consumed the
+		// final chunk yet. Block briefly so the reported tail is complete.
+		select {
+		case <-client.stderrDone:
+		case <-time.After(500 * time.Millisecond):
+		}
 		client.shutdown(err)
 	}()
 	return client, nil
@@ -308,16 +371,22 @@ func (c *Client) shutdown(cause error) {
 	c.once.Do(func() {
 		c.cancel()
 		_ = c.stdin.Close()
-		close(c.closed)
 		if cause == nil {
 			cause = ErrClosed
+		}
+		if !errors.Is(cause, ErrClosed) {
+			cause = c.withStderr(cause)
 		}
 		c.mu.Lock()
 		pending := c.pending
 		c.pending = make(map[uint64]chan response)
 		c.mu.Unlock()
+		// Resolve every in-flight call with the real cause *before* closing
+		// `closed`. Callers select on both, so closing first would let a
+		// generic ErrClosed win the race and mask the child's diagnostics.
 		for _, ch := range pending {
 			ch <- response{err: cause}
 		}
+		close(c.closed)
 	})
 }

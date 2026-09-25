@@ -246,9 +246,10 @@ func (c *controller) newSession() {
 	c.creatingSession = true
 	c.statuses[agentID] = "Creating session…"
 	c.revision++
+	additionalDirectories := c.projectAdditionalDirectoriesLocked(c.state.ActiveProjectID, workspace)
 	c.mu.Unlock()
 	c.notify()
-	params := c.mcpNewSessionParams(workspace)
+	params := c.mcpNewSessionParams(workspace, additionalDirectories)
 
 	go func() {
 		defer func() {
@@ -677,11 +678,51 @@ func newSessionWorkspace(state desktopstate.State) (string, error) {
 	return "", errors.New("choose an existing workspace directory")
 }
 
+// projectAdditionalDirectoriesLocked returns the active project's remaining
+// folders, excluding the primary workspace and anything that no longer exists or
+// resolves to the same directory. Callers must hold c.mu.
+func (c *controller) projectAdditionalDirectoriesLocked(projectID, primary string) []string {
+	primary = canonicalWorkspacePath(primary)
+	directories := make([]string, 0, 2)
+	for _, project := range c.state.Projects {
+		if project.ID != projectID {
+			continue
+		}
+		for _, folder := range project.Folders {
+			candidate := strings.TrimSpace(folder.Path)
+			if candidate == "" {
+				continue
+			}
+			// Only directories that still exist are worth authorizing; a stale
+			// folder would make the child fail the whole session registration.
+			resolved, err := existingWorkspaceDirectory(candidate)
+			if err != nil {
+				continue
+			}
+			if resolved == primary || slices.Contains(directories, resolved) {
+				continue
+			}
+			directories = append(directories, resolved)
+		}
+		break
+	}
+	return directories
+}
+
 func existingWorkspaceDirectory(candidate string) (string, error) {
 	absolute, err := filepath.Abs(strings.TrimSpace(candidate))
 	if err != nil {
 		return "", err
 	}
+	// Match workspace.New: the child's session registry canonicalizes through
+	// EvalSymlinks, so the desktop must key on the resolved form too. Otherwise
+	// macOS /var -> /private/var aliases hash differently on each side and the
+	// child rejects resume with "belongs to another workspace".
+	resolved, err := filepath.EvalSymlinks(absolute)
+	if err != nil {
+		return "", err
+	}
+	absolute = filepath.Clean(resolved)
 	info, err := os.Stat(absolute)
 	if err != nil {
 		return "", err
@@ -692,9 +733,20 @@ func existingWorkspaceDirectory(candidate string) (string, error) {
 	return absolute, nil
 }
 
+func canonicalWorkspacePath(path string) string {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return ""
+	}
+	if resolved, err := filepath.EvalSymlinks(path); err == nil {
+		return filepath.Clean(resolved)
+	}
+	return filepath.Clean(path)
+}
+
 func workspaceKey(workspace, sessionID string) string {
 	if workspace = strings.TrimSpace(workspace); workspace != "" {
-		return "workspace:" + filepath.Clean(workspace)
+		return "workspace:" + canonicalWorkspacePath(workspace)
 	}
 	return "session:" + sessionID
 }

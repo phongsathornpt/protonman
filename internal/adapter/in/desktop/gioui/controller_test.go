@@ -3,6 +3,7 @@
 package gioui
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -87,12 +88,15 @@ func TestNewSessionWorkspaceUsesAuthoritativeOverride(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want, err := filepath.Abs(workspace)
+	// The desktop must return the canonical path: on macOS t.TempDir() lives
+	// under /var, which is a symlink to /private/var, and the child keys its
+	// session registry on the resolved form.
+	want, err := existingWorkspaceDirectory(workspace)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if got != want {
-		t.Fatalf("workspace = %q, want %q", got, want)
+		t.Fatalf("workspace = %q, want the canonical %q", got, want)
 	}
 }
 
@@ -133,6 +137,67 @@ func TestShortIDPreservesUTF8(t *testing.T) {
 	got := shortID(strings.Repeat("ก", 10))
 	if got != strings.Repeat("ก", 8) {
 		t.Fatalf("short ID = %q", got)
+	}
+}
+
+func TestWorkspaceKeyCanonicalizesSymlinkedPaths(t *testing.T) {
+	// macOS exposes /var as a symlink to /private/var. The child canonicalizes
+	// through EvalSymlinks before hashing, so the desktop must agree or the
+	// same directory produces two workspace keys and resume is rejected.
+	real := t.TempDir()
+	aliasParent := t.TempDir()
+	alias := filepath.Join(aliasParent, "alias")
+	if err := os.Symlink(real, alias); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+
+	fromAlias := workspaceKey(alias, "session-1")
+	fromReal := workspaceKey(real, "session-1")
+	if fromAlias != fromReal {
+		t.Fatalf("workspace key mismatch:\n via alias = %q\n via real  = %q", fromAlias, fromReal)
+	}
+}
+
+func TestExistingWorkspaceDirectoryReturnsResolvedPath(t *testing.T) {
+	real := t.TempDir()
+	aliasParent := t.TempDir()
+	alias := filepath.Join(aliasParent, "alias")
+	if err := os.Symlink(real, alias); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+
+	got, err := existingWorkspaceDirectory(alias)
+	if err != nil {
+		t.Fatalf("existingWorkspaceDirectory: %v", err)
+	}
+	resolvedReal, err := filepath.EvalSymlinks(real)
+	if err != nil {
+		t.Fatalf("resolve real: %v", err)
+	}
+	if got != filepath.Clean(resolvedReal) {
+		t.Fatalf("workspace = %q, want the canonical %q", got, filepath.Clean(resolvedReal))
+	}
+}
+
+func TestExistingWorkspaceDirectoryRejectsMissingPath(t *testing.T) {
+	if _, err := existingWorkspaceDirectory(filepath.Join(t.TempDir(), "absent")); err == nil {
+		t.Fatal("expected an error for a missing workspace directory")
+	}
+}
+
+func TestExistingWorkspaceDirectoryRejectsFile(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "file.txt")
+	if err := os.WriteFile(file, []byte("x"), 0o600); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+	if _, err := existingWorkspaceDirectory(file); err == nil {
+		t.Fatal("expected an error for a non-directory workspace path")
+	}
+}
+
+func TestWorkspaceKeyFallsBackToSessionID(t *testing.T) {
+	if got := workspaceKey("  ", "session-9"); got != "session:session-9" {
+		t.Fatalf("workspace key = %q", got)
 	}
 }
 

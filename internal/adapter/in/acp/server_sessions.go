@@ -150,6 +150,14 @@ func (s *Server) newSession(ctx context.Context, sessionID string, cwd string, a
 	}
 	sess := NewSession(sessionID, cwd, service, registry, runner, s.sessionService, s.agents.ForSession(sessionID))
 	bindSessionRuntime(s, sess)
+	// Without a prompt, ask/auto mode denies every non-statically-allowed call
+	// with "no permission prompt is configured". Install the ACP reverse request
+	// for this session and its subagents so delegated work asks the same client.
+	if s.permissions != nil {
+		prompt := s.permissions.prompt(sessionID)
+		service.SetPrompt(prompt)
+		sess.agents.SetPrompt(prompt)
+	}
 	sess.mcpServers = cloneMCPServerConfigs(mcpServers)
 	sess.resource = mcpResource
 	return sess, nil

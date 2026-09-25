@@ -206,8 +206,14 @@ func (c *controller) mcpSessionParamsWithServers(sessionID, workspace string, ad
 	return params
 }
 
-func (c *controller) mcpNewSessionParams(workspace string) map[string]any {
+func (c *controller) mcpNewSessionParams(workspace string, additionalDirectories []string) map[string]any {
 	params := map[string]any{"cwd": workspace}
+	// docs/desktop.md promises the primary folder as cwd and the remaining
+	// project folders as additionalDirectories for new sessions too. Dropping
+	// them here silently narrows what the session is authorized to touch.
+	if len(additionalDirectories) > 0 {
+		params["additionalDirectories"] = append([]string(nil), additionalDirectories...)
+	}
 	if servers := c.mcpServersPayload(); len(servers) > 0 {
 		params["mcpServers"] = servers
 	}
