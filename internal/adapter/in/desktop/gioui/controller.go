@@ -174,7 +174,7 @@ func (c *controller) snapshot() controllerSnapshot {
 		return c.snapshotCache.value
 	}
 	snapshot := controllerSnapshot{
-		State:                 desktopstate.CloneState(c.state),
+		State:                 desktopstate.ClonePresentationState(c.state),
 		Connection:            c.connections[c.activeAgentID],
 		Status:                c.statuses[c.activeAgentID],
 		ActiveAgentID:         c.activeAgentID,

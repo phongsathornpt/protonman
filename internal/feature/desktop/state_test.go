@@ -144,6 +144,62 @@ func TestCloneStateDoesNotAliasNestedData(t *testing.T) {
 	}
 }
 
+func TestClonePresentationStateDetachesRenderedAndNavigationData(t *testing.T) {
+	original := State{
+		ActiveSessionID: "active",
+		Projects: []ProjectState{{
+			ID:       "project",
+			Folders:  []ProjectFolder{{Path: "/workspace"}},
+			AgentIDs: []string{"agent"},
+		}},
+		Sessions: []SessionState{
+			{
+				ID:                    "active",
+				AdditionalDirectories: []string{"/shared"},
+				Timeline:              []TimelineItem{{ID: "item"}},
+				Subagents:             []SubagentState{{ID: "child"}},
+				Context: SessionContextState{
+					Todo:   TodoState{Items: []TodoItemState{{ID: "todo"}}},
+					Memory: MemoryState{Workspace: []MemoryEntryState{{ID: "memory"}}},
+				},
+			},
+			{
+				ID:                    "inactive",
+				AdditionalDirectories: []string{"/inactive-shared"},
+			},
+		},
+		PermissionInbox: []PermissionRequest{{RequestID: "permission", Options: []PermissionOption{{ID: "allow"}}}},
+		Integrations:    []MCPIntegrationState{{Name: "mcp", Args: []string{"arg"}, Env: []string{"KEY=value"}}},
+	}
+
+	clone := ClonePresentationState(original)
+	clone.Projects[0].Folders[0].Path = "/changed"
+	clone.Projects[0].AgentIDs[0] = "changed-agent"
+	clone.Sessions[0].AdditionalDirectories[0] = "/changed-shared"
+	clone.Sessions[0].Timeline[0].ID = "changed-item"
+	clone.Sessions[0].Subagents[0].ID = "changed-child"
+	clone.Sessions[0].Context.Todo.Items[0].ID = "changed-todo"
+	clone.Sessions[0].Context.Memory.Workspace[0].ID = "changed-memory"
+	clone.Sessions[1].AdditionalDirectories[0] = "/changed-inactive"
+	clone.PermissionInbox[0].Options[0].ID = "changed-permission"
+	clone.Integrations[0].Args[0] = "changed-arg"
+	clone.Integrations[0].Env[0] = "CHANGED=value"
+
+	if original.Projects[0].Folders[0].Path != "/workspace" ||
+		original.Projects[0].AgentIDs[0] != "agent" ||
+		original.Sessions[0].AdditionalDirectories[0] != "/shared" ||
+		original.Sessions[0].Timeline[0].ID != "item" ||
+		original.Sessions[0].Subagents[0].ID != "child" ||
+		original.Sessions[0].Context.Todo.Items[0].ID != "todo" ||
+		original.Sessions[0].Context.Memory.Workspace[0].ID != "memory" ||
+		original.Sessions[1].AdditionalDirectories[0] != "/inactive-shared" ||
+		original.PermissionInbox[0].Options[0].ID != "allow" ||
+		original.Integrations[0].Args[0] != "arg" ||
+		original.Integrations[0].Env[0] != "KEY=value" {
+		t.Fatal("ClonePresentationState aliased detached state")
+	}
+}
+
 func TestApplyCopiesEventOwnedSlices(t *testing.T) {
 	state := State{Sessions: []SessionState{{ID: "s1"}}}
 	todo := TodoState{Items: []TodoItemState{{ID: "todo", Text: "ship"}}}

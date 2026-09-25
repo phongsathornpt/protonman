@@ -266,6 +266,19 @@ func CloneState(state State) State {
 	return cloneState(state)
 }
 
+// ClonePresentationState returns an immutable-enough view for the desktop
+// renderer. The active session is fully detached because its timeline and
+// context are rendered; inactive sessions retain only the metadata needed by
+// navigation, avoiding a full-state copy on every streamed update.
+func ClonePresentationState(state State) State {
+	next := state
+	next.Projects = cloneProjects(state.Projects)
+	next.Sessions = cloneSessionMetadata(state.Sessions, state.ActiveSessionID)
+	next.PermissionInbox = clonePermissions(state.PermissionInbox)
+	next.Integrations = cloneIntegrations(state.Integrations)
+	return next
+}
+
 type ProjectFolder struct {
 	Path    string
 	Primary bool
@@ -291,10 +304,26 @@ func cloneProjects(projects []ProjectState) []ProjectState {
 func cloneSessions(sessions []SessionState) []SessionState {
 	out := slices.Clone(sessions)
 	for i := range out {
-		out[i].Timeline = slices.Clone(out[i].Timeline)
-		out[i].Subagents = slices.Clone(out[i].Subagents)
-		out[i].AdditionalDirectories = slices.Clone(out[i].AdditionalDirectories)
-		out[i].Context = cloneSessionContext(out[i].Context)
+		out[i] = cloneSession(out[i])
+	}
+	return out
+}
+
+func cloneSession(session SessionState) SessionState {
+	session.Timeline = slices.Clone(session.Timeline)
+	session.Subagents = slices.Clone(session.Subagents)
+	session.AdditionalDirectories = slices.Clone(session.AdditionalDirectories)
+	session.Context = cloneSessionContext(session.Context)
+	return session
+}
+
+func cloneSessionMetadata(sessions []SessionState, activeSessionID string) []SessionState {
+	out := slices.Clone(sessions)
+	for index := range out {
+		out[index].AdditionalDirectories = slices.Clone(out[index].AdditionalDirectories)
+		if out[index].ID == activeSessionID {
+			out[index] = cloneSession(out[index])
+		}
 	}
 	return out
 }
