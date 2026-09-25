@@ -1,40 +1,33 @@
 package architecture_test
 
-import (
-	"strings"
-	"testing"
-)
+import "testing"
 
-// desktopPackages are the tag-gated packages that make up the Fyne desktop
-// frontend. They are absent from the default package graph, so the guards in
-// this file load a desktop-tagged graph instead of listPackages.
-var desktopPackages = []string{
-	modulePath + "/cmd/protonman-desktop",
-	modulePath + "/internal/adapter/in/desktop",
-	modulePath + "/internal/feature/desktop",
+var desktopGioPackages = []string{
+	modulePath + "/cmd/protonman-desktop-gio",
+	modulePath + "/internal/adapter/in/desktop/gioui",
 }
 
-// TestDesktopPackagesStayVisibleToGuards fails if the desktop build tag stops
-// exposing a desktop package, which would silently drop the subsystem out of
-// package-graph coverage.
-func TestDesktopPackagesStayVisibleToGuards(t *testing.T) {
-	packages := listDesktopPackages(t)
-	for _, pkg := range desktopPackages {
+// TestDesktopGioPackagesStayVisibleToGuards fails if the desktop build tag
+// stops exposing a desktop package, which would silently drop the subsystem out
+// of package-graph coverage.
+func TestDesktopGioPackagesStayVisibleToGuards(t *testing.T) {
+	packages := listDesktopGioPackages(t)
+	for _, pkg := range desktopGioPackages {
 		if _, ok := packages[pkg]; !ok {
-			t.Fatalf("desktop package %s missing from the desktop-tagged package graph", pkg)
+			t.Fatalf("Gio desktop package %s missing from the desktop package graph", pkg)
 		}
 	}
 }
 
-// The desktop frontend is a fourth inbound adapter and must keep the same
+// The Gio desktop frontend is a fourth inbound adapter and must keep the same
 // boundary discipline as the TUI, ACP, and headless adapters: no direct turn
 // engine, session persistence, or project manipulation.
-func TestDesktopInboundAdapterUsesApplicationBoundary(t *testing.T) {
-	packages := listDesktopPackages(t)
+func TestDesktopGioInboundAdapterUsesApplicationBoundary(t *testing.T) {
+	packages := listDesktopGioPackages(t)
 	assertPackageNoImportPrefixes(
 		t,
 		packages,
-		modulePath+"/internal/adapter/in/desktop",
+		modulePath+"/internal/adapter/in/desktop/gioui",
 		[]string{
 			modulePath + "/internal/engine/turn",
 			modulePath + "/internal/core/session",
@@ -44,25 +37,25 @@ func TestDesktopInboundAdapterUsesApplicationBoundary(t *testing.T) {
 	)
 }
 
-// The desktop frontend drives the CLI runtime over ACP instead of embedding a
-// second agent loop, so the outbound ACP client is its only permitted driven
+// The Gio desktop frontend drives the CLI runtime over ACP instead of embedding
+// a second agent loop, so the outbound ACP client is its only permitted driven
 // adapter. A new outbound adapter dependency is an architecture decision that
 // must be recorded deliberately rather than added silently.
-func TestDesktopInboundAdapterOnlyDependsOnACPClient(t *testing.T) {
-	packages := listDesktopPackages(t)
-	pkg, ok := packages[modulePath+"/internal/adapter/in/desktop"]
+func TestDesktopGioInboundAdapterOnlyDependsOnACPClient(t *testing.T) {
+	packages := listDesktopGioPackages(t)
+	pkg, ok := packages[modulePath+"/internal/adapter/in/desktop/gioui"]
 	if !ok {
-		t.Fatalf("package %s not found in the desktop package graph", modulePath+"/internal/adapter/in/desktop")
+		t.Fatalf("package %s not found in the Gio desktop package graph", modulePath+"/internal/adapter/in/desktop/gioui")
 	}
 	allowed := map[string]bool{
 		modulePath + "/internal/adapter/out/acpclient": true,
 	}
 	for _, imported := range pkg.Imports {
-		if !strings.HasPrefix(imported, modulePath+"/internal/adapter/out/") {
+		if !packageWithin(imported, modulePath+"/internal/adapter/out/") {
 			continue
 		}
 		if !allowed[imported] {
-			t.Errorf("desktop inbound adapter imports unexpected driven adapter %s", imported)
+			t.Errorf("Gio desktop inbound adapter imports unexpected driven adapter %s", imported)
 		}
 	}
 }

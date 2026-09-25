@@ -1,11 +1,11 @@
 # Protonman Desktop
 
-Protonman Desktop is a native Fyne frontend for the existing Protonman runtime. It does not embed a second agent loop. The Desktop starts or connects to `protonman --acp` and drives sessions through Agent Client Protocol (ACP) JSON-RPC over stdio.
+Protonman Desktop is a native Gio frontend for the existing Protonman runtime. It does not embed a second agent loop. The Desktop starts or connects to `protonman --acp` and drives sessions through Agent Client Protocol (ACP) JSON-RPC over stdio.
 
 ## Architecture
 
 ```text
-protonman-desktop (Fyne)
+protonman-desktop-gio (Gio)
   UI + reducer-owned presentation state
             |
             | ACP JSON-RPC / stdio
@@ -27,7 +27,7 @@ official ACP server, install the platform archive and launch Desktop with:
 ```sh
 PROTONMAN_AGENT=antigravity \
 ANTIGRAVITY_ACP_COMMAND=/path/to/agy_acp_server.par \
-protonman-desktop
+protonman-desktop-gio
 ```
 
 The command is executed directly with an argument vector. Optional launcher
@@ -52,7 +52,7 @@ agent process.
 PROTONMAN_ACP_AGENTS_JSON='[
   {"id":"protonman","displayName":"Protonman","command":"protonman","args":["--acp"]},
   {"id":"antigravity","displayName":"Google Antigravity","command":"/path/to/agy_acp_server.par"}
-]' protonman-desktop
+]' protonman-desktop-gio
 ```
 
 ## Session behavior
@@ -122,35 +122,36 @@ Desktop can persist client-owned stdio MCP definitions containing:
 - name
 - command
 - argument list
-- environment list
+- environment variable names
 
-The definitions are sent using standard ACP `mcpServers` fields on `session/new` and `session/resume`. Updating MCP configuration for existing sessions requires an explicit ACP reconnect. Desktop refuses that reconnect while any session is active so a running tool call is not interrupted just to apply configuration.
+Environment values are never persisted; they are resolved from the Protonman process environment when ACP payloads are built. The definitions are sent using standard ACP `mcpServers` fields on `session/new`, `session/load`, and `session/resume`. Updating MCP configuration for existing sessions requires an explicit ACP reconnect. Desktop refuses that reconnect while any session is active so a running tool call is not interrupted just to apply configuration.
 
 ## Native notifications
 
-Desktop sends native Fyne notifications when:
-
-- a session requires permission;
-- a background task completes; or
-- a task fails.
-
-Successful completion notifications are suppressed for the currently active session to avoid duplicating foreground UI feedback. Failure notifications are always emitted and long error text is compacted before delivery.
+Native desktop notifications are not yet implemented by the Gio client. Permission,
+completion, and failure events remain visible in the session timeline and permission
+inbox; notification parity is tracked separately.
 
 ## UI glyphs
 
-Desktop uses portable Unicode and Fyne theme rendering for presentation-only glyphs in the native chrome. No external font asset is downloaded or bundled.
+Desktop uses portable Unicode and Gio theme rendering for presentation-only glyphs in the native chrome. No external font asset is downloaded or bundled.
 
 ## Build
 
-Desktop is guarded by the `desktop` build tag so normal CLI builds do not acquire Fyne/CGO requirements.
+Desktop is guarded by the `desktop` build tag so normal CLI builds do not acquire GUI dependencies.
+The package remains importable without the tag for tooling compatibility, but
+`gioui.Run` returns an explicit build-tag error until the desktop binary is
+built with `-tags desktop`.
 
 ```sh
-go test -tags desktop ./internal/adapter/in/desktop ./cmd/protonman-desktop
+go test -tags desktop ./internal/feature/desktop ./internal/adapter/in/desktop/gioui ./cmd/protonman-desktop-gio
 make desktop
 make desktop-run
+make desktop-gio
+make desktop-gio-run
 ```
 
-Linux Fyne builds require the normal OpenGL, X11, and Wayland development packages. Release packaging builds the CLI and Desktop from the same Git tag/version so the bundled ACP runtime and UI stay aligned.
+Release packaging builds the CLI and Desktop from the same Git tag/version so the bundled ACP runtime and UI stay aligned.
 
 Agents that do not implement `session/list` are supported through Desktop's
 local session index. Newly created sessions appear immediately and are resumed
@@ -159,6 +160,6 @@ retain the local transcript and can still use `session/resume`.
 
 ## Scope
 
-The current Desktop milestone covers durable task/session UX, permissions, structured activity, workspace grouping, Goal/TODO/Memory inspection, runtime controls, MCP integrations, reconnect behavior, native notifications, and portable desktop chrome.
+The current Desktop milestone covers durable task/session UX, permissions, structured activity, workspace grouping, Goal/TODO/Memory inspection, runtime controls, MCP integrations, reconnect behavior, and portable desktop chrome. Native notifications remain a follow-up item.
 
 Scheduled routines, remote runtime/SSH/sandbox targets, and a richer workspace runtime inspector remain follow-up work.

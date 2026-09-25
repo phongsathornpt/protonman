@@ -108,6 +108,71 @@ func TestReduceDoesNotAliasPermissionOptions(t *testing.T) {
 	}
 }
 
+func TestCloneStateDoesNotAliasNestedData(t *testing.T) {
+	original := State{
+		Projects: []ProjectState{{ID: "project", Folders: []ProjectFolder{{Path: "/workspace"}}}},
+		Sessions: []SessionState{{
+			ID:        "session",
+			Timeline:  []TimelineItem{{ID: "item"}},
+			Subagents: []SubagentState{{ID: "agent"}},
+			Context: SessionContextState{
+				Todo:   TodoState{Items: []TodoItemState{{ID: "todo"}}},
+				Memory: MemoryState{Workspace: []MemoryEntryState{{ID: "memory"}}},
+			},
+		}},
+		PermissionInbox: []PermissionRequest{{RequestID: "permission", Options: []PermissionOption{{ID: "allow"}}}},
+		Integrations:    []MCPIntegrationState{{Name: "mcp", Args: []string{"arg"}}},
+	}
+
+	clone := CloneState(original)
+	clone.Projects[0].Folders[0].Path = "/changed"
+	clone.Sessions[0].Timeline[0].ID = "changed"
+	clone.Sessions[0].Subagents[0].ID = "changed"
+	clone.Sessions[0].Context.Todo.Items[0].ID = "changed"
+	clone.Sessions[0].Context.Memory.Workspace[0].ID = "changed"
+	clone.PermissionInbox[0].Options[0].ID = "changed"
+	clone.Integrations[0].Args[0] = "changed"
+
+	if original.Projects[0].Folders[0].Path != "/workspace" ||
+		original.Sessions[0].Timeline[0].ID != "item" ||
+		original.Sessions[0].Subagents[0].ID != "agent" ||
+		original.Sessions[0].Context.Todo.Items[0].ID != "todo" ||
+		original.Sessions[0].Context.Memory.Workspace[0].ID != "memory" ||
+		original.PermissionInbox[0].Options[0].ID != "allow" ||
+		original.Integrations[0].Args[0] != "arg" {
+		t.Fatal("CloneState aliased nested state")
+	}
+}
+
+func TestApplyCopiesEventOwnedSlices(t *testing.T) {
+	state := State{Sessions: []SessionState{{ID: "s1"}}}
+	todo := TodoState{Items: []TodoItemState{{ID: "todo", Text: "ship"}}}
+	memory := MemoryState{Workspace: []MemoryEntryState{{ID: "memory", Value: "keep"}}}
+	integrations := []MCPIntegrationState{{Name: "docs", Args: []string{"--stdio"}}}
+	permission := PermissionRequest{
+		RequestID: "permission",
+		Options:   []PermissionOption{{ID: "allow", Name: "Allow"}},
+	}
+
+	Apply(&state, Event{Kind: EventSessionContextUpdated, SessionID: "s1", Context: SessionContextState{Todo: todo}})
+	Apply(&state, Event{Kind: EventSessionMemoryUpdated, SessionID: "s1", Memory: memory})
+	Apply(&state, Event{Kind: EventIntegrationsReplaced, Integrations: integrations})
+	Apply(&state, Event{Kind: EventPermissionRequested, SessionID: "s1", Permission: permission})
+
+	todo.Items[0].Text = "changed"
+	memory.Workspace[0].Value = "changed"
+	integrations[0].Args[0] = "changed"
+	permission.Options[0].Name = "changed"
+
+	session := state.Sessions[0]
+	if session.Context.Todo.Items[0].Text != "ship" ||
+		session.Context.Memory.Workspace[0].Value != "keep" ||
+		state.Integrations[0].Args[0] != "--stdio" ||
+		state.PermissionInbox[0].Options[0].Name != "Allow" {
+		t.Fatalf("Apply retained event-owned slices: %#v", state)
+	}
+}
+
 func assertStatus(t *testing.T, state State, id string, want TaskStatus) {
 	t.Helper()
 	for _, session := range state.Sessions {

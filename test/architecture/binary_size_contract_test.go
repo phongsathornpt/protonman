@@ -84,7 +84,7 @@ func TestCLIBinarySizeBudget(t *testing.T) {
 }
 
 // TestDesktopBinarySizeBudget guards against unintended binary bloat in the
-// Fyne desktop application binary.
+// Gio desktop application binary.
 func TestDesktopBinarySizeBudget(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping desktop binary size budget compilation in short test mode")
@@ -94,14 +94,12 @@ func TestDesktopBinarySizeBudget(t *testing.T) {
 	tempDir := t.TempDir()
 	binPath := filepath.Join(tempDir, "protonman_desktop_budget_test")
 
-	cmd := exec.Command("go", "build", "-tags", "desktop", "-trimpath", "-ldflags=-s -w", "-o", binPath, "./cmd/protonman-desktop")
+	cmd := exec.Command("go", "build", "-tags", "desktop", "-trimpath", "-ldflags=-s -w", "-o", binPath, "./cmd/protonman-desktop-gio")
 	cmd.Dir = repoRoot
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
-		// Desktop build requires platform Cgo/OpenGL dependencies (X11 on Linux, etc.).
-		// Skip if toolchain lacks required Cgo headers in current environment.
-		t.Skipf("skipping desktop build size test: %v, stderr: %s", err, stderr.String())
+		t.Skipf("skipping Gio desktop build size test: %v, stderr: %s", err, stderr.String())
 	}
 
 	info, err := os.Stat(binPath)
@@ -109,7 +107,7 @@ func TestDesktopBinarySizeBudget(t *testing.T) {
 		t.Fatalf("failed to stat built desktop binary: %v", err)
 	}
 
-	// The stripped desktop binary currently sits around 23-24 MB on macOS.
+	// The stripped Gio desktop binary currently sits around 23-24 MB on macOS.
 	// Budget at 28 MB to prevent runaway static asset or dependency bloat.
 	const maxDesktopBinaryBytes = 28 * 1024 * 1024
 	if info.Size() > maxDesktopBinaryBytes {

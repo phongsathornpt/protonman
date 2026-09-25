@@ -104,7 +104,7 @@ func (r overlayCompiledRegistry) CompiledValidators(name string) (*sdk.ToolSchem
 	return nil, nil, ok
 }
 
-func TestOverlayRegistryPreservesCompiledValidatorsExceptOverrides(t *testing.T) {
+func TestOverlayRegistryPreservesAndRecompilesOverrideValidators(t *testing.T) {
 	base := overlayCompiledRegistry{overlayTestRegistry{handlers: []Handler{
 		overlayTestHandler{"a", "base a"},
 		overlayTestHandler{"b", "base b"},
@@ -122,7 +122,39 @@ func TestOverlayRegistryPreservesCompiledValidatorsExceptOverrides(t *testing.T)
 	if _, _, found := compiled.CompiledValidators("a"); !found {
 		t.Fatal("base validator cache was not forwarded")
 	}
-	if _, _, found := compiled.CompiledValidators("b"); found {
-		t.Fatal("overlay reused stale base validators for overridden schema")
+	if input, _, found := compiled.CompiledValidators("b"); !found || input == nil {
+		t.Fatal("overlay did not compile validators for the overridden schema")
+	}
+}
+
+type overlaySnapshotRegistry struct{ overlayTestRegistry }
+
+func (r overlaySnapshotRegistry) LookupSnapshot(name string) (HandlerSnapshot, bool) {
+	handler, ok := r.Lookup(name)
+	if !ok {
+		return HandlerSnapshot{}, false
+	}
+	return HandlerSnapshot{Handler: handler, Definition: handler.Definition(), ValidatorsCompiled: true}, true
+}
+
+func TestOverlayRegistryPreservesAtomicSnapshotsExceptOverrides(t *testing.T) {
+	base := overlaySnapshotRegistry{overlayTestRegistry{handlers: []Handler{
+		overlayTestHandler{"a", "base a"},
+		overlayTestHandler{"b", "base b"},
+	}}}
+	reg, err := NewOverlayRegistry(base, overlayTestHandler{"b", "session b"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	baseSnapshot, ok := reg.(SnapshotRegistry).LookupSnapshot("a")
+	if !ok || baseSnapshot.Handler == nil || baseSnapshot.Definition.Description != "base a" || !baseSnapshot.ValidatorsCompiled {
+		t.Fatalf("base snapshot = %#v, %v", baseSnapshot, ok)
+	}
+	overrideSnapshot, ok := reg.(SnapshotRegistry).LookupSnapshot("b")
+	if !ok || overrideSnapshot.Handler == nil || overrideSnapshot.Definition.Description != "session b" {
+		t.Fatalf("override snapshot = %#v, %v", overrideSnapshot, ok)
+	}
+	if !overrideSnapshot.ValidatorsCompiled || overrideSnapshot.InputValidator == nil {
+		t.Fatal("override snapshot did not retain its compiled validators")
 	}
 }

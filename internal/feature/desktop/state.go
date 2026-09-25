@@ -30,11 +30,12 @@ const (
 
 // TimelineItem is presentation-neutral desktop timeline state.
 type TimelineItem struct {
-	Kind   TimelineKind
-	ID     string
-	Title  string
-	Text   string
-	Status string
+	Kind      TimelineKind
+	ID        string
+	Title     string
+	Text      string
+	Status    string
+	Streaming bool
 }
 
 // SubagentState is the desktop projection of a delegated agent participant.
@@ -133,7 +134,7 @@ type SessionState struct {
 	Runtime               RuntimeSettingsState
 }
 
-// State owns desktop project and session state independently from Fyne widgets.
+// State owns desktop project and session state independently from UI widgets.
 type State struct {
 	ActiveSessionID string
 	ActiveProjectID string
@@ -182,64 +183,75 @@ type Event struct {
 // Reduce applies one event and returns a new state without aliasing caller-owned slices.
 func Reduce(current State, event Event) State {
 	next := cloneState(current)
+	applyEvent(&next, event)
+	return next
+}
 
+// Apply applies one event to state owned by the caller. It avoids cloning the
+// complete desktop snapshot on hot streaming paths while still copying slices
+// supplied by the event before retaining them.
+func Apply(state *State, event Event) {
+	if state == nil {
+		return
+	}
+	applyEvent(state, event)
+}
+
+func applyEvent(state *State, event Event) {
 	switch event.Kind {
 	case EventSessionsReplaced:
-		next.Sessions = cloneSessions(event.Sessions)
-		if next.ActiveSessionID != "" && !hasSession(next.Sessions, next.ActiveSessionID) {
-			next.ActiveSessionID = ""
+		state.Sessions = cloneSessions(event.Sessions)
+		if state.ActiveSessionID != "" && !hasSession(state.Sessions, state.ActiveSessionID) {
+			state.ActiveSessionID = ""
 		}
 	case EventSessionSelected:
-		if hasSession(next.Sessions, event.SessionID) {
-			next.ActiveSessionID = event.SessionID
+		if hasSession(state.Sessions, event.SessionID) {
+			state.ActiveSessionID = event.SessionID
 		}
 	case EventPromptQueued:
-		setStatus(&next, event.SessionID, TaskQueued)
+		setStatus(state, event.SessionID, TaskQueued)
 	case EventPromptStarted:
-		setStatus(&next, event.SessionID, TaskRunning)
+		setStatus(state, event.SessionID, TaskRunning)
 	case EventPromptCompleted:
-		setStatus(&next, event.SessionID, TaskCompleted)
+		setStatus(state, event.SessionID, TaskCompleted)
 	case EventPromptFailed:
-		setStatus(&next, event.SessionID, TaskFailed)
+		setStatus(state, event.SessionID, TaskFailed)
 	case EventPermissionRequested:
-		setStatus(&next, event.SessionID, TaskWaitingPermission)
-		if event.Permission.RequestID != "" && !hasPermission(next.PermissionInbox, event.Permission.RequestID) {
-			next.PermissionInbox = append(next.PermissionInbox, clonePermission(event.Permission))
+		setStatus(state, event.SessionID, TaskWaitingPermission)
+		if event.Permission.RequestID != "" && !hasPermission(state.PermissionInbox, event.Permission.RequestID) {
+			state.PermissionInbox = append(state.PermissionInbox, clonePermission(event.Permission))
 		}
 	case EventPermissionResolved:
-		setStatus(&next, event.SessionID, TaskRunning)
-		next.PermissionInbox = removePermission(next.PermissionInbox, event.RequestID)
+		setStatus(state, event.SessionID, TaskRunning)
+		state.PermissionInbox = removePermission(state.PermissionInbox, event.RequestID)
 	case EventTimelineAppended:
-		if session := sessionByID(&next, event.SessionID); session != nil {
+		if session := sessionByID(state, event.SessionID); session != nil {
 			session.Timeline = append(session.Timeline, event.Item)
 		}
 	case EventTimelineUpserted:
-		if session := sessionByID(&next, event.SessionID); session != nil {
+		if session := sessionByID(state, event.SessionID); session != nil {
 			upsertTimeline(session, event.Item)
 		}
 	case EventSubagentUpserted:
-		if session := sessionByID(&next, event.SessionID); session != nil {
+		if session := sessionByID(state, event.SessionID); session != nil {
 			upsertSubagent(session, event.Subagent)
 		}
 	case EventSessionContextUpdated:
-		if session := sessionByID(&next, event.SessionID); session != nil {
-			memory := cloneMemoryState(session.Context.Memory)
-			session.Context = cloneSessionContext(event.Context)
-			session.Context.Memory = memory
+		if session := sessionByID(state, event.SessionID); session != nil {
+			session.Context.Goal = event.Context.Goal
+			session.Context.Todo = cloneTodoState(event.Context.Todo)
 		}
 	case EventSessionMemoryUpdated:
-		if session := sessionByID(&next, event.SessionID); session != nil {
+		if session := sessionByID(state, event.SessionID); session != nil {
 			session.Context.Memory = cloneMemoryState(event.Memory)
 		}
 	case EventSessionRuntimeUpdated:
-		if session := sessionByID(&next, event.SessionID); session != nil {
+		if session := sessionByID(state, event.SessionID); session != nil {
 			session.Runtime = event.Runtime
 		}
 	case EventIntegrationsReplaced:
-		next.Integrations = cloneIntegrations(event.Integrations)
+		state.Integrations = cloneIntegrations(event.Integrations)
 	}
-
-	return next
 }
 
 func cloneState(state State) State {
@@ -248,6 +260,10 @@ func cloneState(state State) State {
 	state.PermissionInbox = clonePermissions(state.PermissionInbox)
 	state.Integrations = cloneIntegrations(state.Integrations)
 	return state
+}
+
+func CloneState(state State) State {
+	return cloneState(state)
 }
 
 type ProjectFolder struct {
@@ -284,9 +300,14 @@ func cloneSessions(sessions []SessionState) []SessionState {
 }
 
 func cloneSessionContext(context SessionContextState) SessionContextState {
-	context.Todo.Items = slices.Clone(context.Todo.Items)
+	context.Todo = cloneTodoState(context.Todo)
 	context.Memory = cloneMemoryState(context.Memory)
 	return context
+}
+
+func cloneTodoState(todo TodoState) TodoState {
+	todo.Items = slices.Clone(todo.Items)
+	return todo
 }
 
 func cloneMemoryState(memory MemoryState) MemoryState {
@@ -338,7 +359,9 @@ func hasPermission(items []PermissionRequest, id string) bool {
 func removePermission(items []PermissionRequest, id string) []PermissionRequest {
 	for i := range items {
 		if items[i].RequestID == id {
-			return append(items[:i:i], items[i+1:]...)
+			copy(items[i:], items[i+1:])
+			items[len(items)-1] = PermissionRequest{}
+			return items[:len(items)-1]
 		}
 	}
 	return items

@@ -72,11 +72,11 @@ func TestAppInternalImportsStayRatcheted(t *testing.T) {
 // with the desktop build tag enabled, so tag-gated code paths cannot introduce
 // an application-to-adapter edge invisible to the default package graph.
 func TestAppImportsDoNotReachAdaptersEvenWithDesktopTag(t *testing.T) {
-	packages := listDesktopPackages(t)
+	packages := listDesktopGioPackages(t)
 	source := modulePath + "/internal/app"
 	pkg, ok := packages[source]
 	if !ok {
-		t.Fatalf("package %s not found in the desktop package graph", source)
+		t.Fatalf("package %s not found in the Gio desktop package graph", source)
 	}
 	for _, imported := range pkg.Imports {
 		if strings.Contains(imported, "/internal/adapter/") {
