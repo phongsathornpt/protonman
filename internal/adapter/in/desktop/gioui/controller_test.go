@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 	"unicode/utf8"
 
 	desktopstate "github.com/phongsathornpt/protonman/internal/feature/desktop"
@@ -26,7 +27,7 @@ func TestProjectSessionsBuildsLiveWorkspaceIndex(t *testing.T) {
 		},
 	}
 	next := projectSessions(current, controllerAgentID, []acpSession{
-		{ID: "session-one", Cwd: "/workspace/alpha"},
+		{ID: "session-one", Cwd: "/workspace/alpha", UpdatedAt: "2026-09-26T08:30:00Z"},
 		{ID: "session-two", Cwd: "/workspace/beta", Title: "Beta work"},
 	})
 
@@ -51,6 +52,9 @@ func TestProjectSessionsBuildsLiveWorkspaceIndex(t *testing.T) {
 	}
 	if first.AgentID != controllerAgentID {
 		t.Fatalf("agent ID = %q, want %q", first.AgentID, controllerAgentID)
+	}
+	if want := time.Date(2026, 9, 26, 8, 30, 0, 0, time.UTC); !first.LastActivityAt.Equal(want) {
+		t.Fatalf("last activity = %v, want %v", first.LastActivityAt, want)
 	}
 }
 

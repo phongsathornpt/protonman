@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 
 	"github.com/phongsathornpt/protonman/internal/app"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
@@ -166,6 +167,7 @@ func (s *Server) newSession(ctx context.Context, sessionID string, cwd string, a
 func (s *Server) listSessions(ctx context.Context, cwd string) ([]SessionInfo, error) {
 	s.mu.Lock()
 	seen := make(map[string]bool)
+	activeIndexes := make(map[string]int, len(s.sessions))
 	list := make([]SessionInfo, 0, len(s.sessions))
 	for id, sess := range s.sessions {
 		if cwd != "" && sess.cwd != "" && sess.cwd != cwd {
@@ -173,6 +175,7 @@ func (s *Server) listSessions(ctx context.Context, cwd string) ([]SessionInfo, e
 		}
 		seen[id] = true
 		preview := session.Preview(session.FromModelMessages(sess.Messages()))
+		activeIndexes[id] = len(list)
 		list = append(list, SessionInfo{
 			SessionID:             id,
 			Cwd:                   sess.cwd,
@@ -194,6 +197,9 @@ func (s *Server) listSessions(ctx context.Context, cwd string) ([]SessionInfo, e
 		}
 		for _, summary := range summaries {
 			if seen[summary.ID] {
+				if index, ok := activeIndexes[summary.ID]; ok && !summary.UpdatedAt.IsZero() {
+					list[index].UpdatedAt = summary.UpdatedAt.Format(time.RFC3339Nano)
+				}
 				continue
 			}
 			list = append(list, SessionInfo{
@@ -202,7 +208,7 @@ func (s *Server) listSessions(ctx context.Context, cwd string) ([]SessionInfo, e
 				Title:         sessionListTitle(summary.ID, summary.WorkspaceName, summary.Preview),
 				WorkspaceKey:  summary.WorkspaceKey,
 				WorkspaceName: summary.WorkspaceName,
-				UpdatedAt:     summary.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
+				UpdatedAt:     summary.UpdatedAt.Format(time.RFC3339Nano),
 			})
 		}
 	}

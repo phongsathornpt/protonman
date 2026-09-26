@@ -105,7 +105,7 @@ func (s *shell) layoutMCPIntegrationsPanel(gtx layout.Context, snapshot controll
 
 	if len(items) == 0 {
 		children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return layout.UniformInset(4).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+			return desktopUniformInset(4).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 				return s.layoutLabel(gtx, "Add a stdio server definition to make its tools available to new sessions.", textBodyMedium, font.Normal, s.theme.onSurfaceVariant, 4)
 			})
 		}))
@@ -125,7 +125,7 @@ func (s *shell) layoutMCPIntegrationsPanel(gtx layout.Context, snapshot controll
 		} else if s.mcpFormVisible {
 			label = "Hide configuration"
 		}
-		return layout.UniformInset(4).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+		return desktopUniformInset(4).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 			return s.layoutButton(gtx, &s.mcpFormToggleButton, label, enabled, func() {
 				if !s.mcpFormVisible {
 					s.mcpFormVisible = true
@@ -239,7 +239,7 @@ func (s *shell) layoutMCPIntegrationRow(gtx layout.Context, item desktopstate.MC
 		semantic.EnabledOp(gtx.Enabled()).Add(gtx.Ops)
 		semantic.DescriptionOp("Edit MCP integration " + item.Name).Add(gtx.Ops)
 		return s.roundedSurface(gtx, shapeSmall, background, func(gtx layout.Context) layout.Dimensions {
-			return layout.Inset{Top: 8, Bottom: 8, Left: 10, Right: 10}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+			return desktopInset{Top: 8, Bottom: 8, Left: 10, Right: 10}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 				return s.layoutLabel(gtx, item.Name, textBodyMedium, font.Medium, foreground, 1)
 			})
 		})

@@ -1,6 +1,9 @@
 package desktop
 
-import "slices"
+import (
+	"slices"
+	"time"
+)
 
 // TaskStatus is the durable UI-facing lifecycle of a desktop session turn.
 type TaskStatus string
@@ -127,6 +130,7 @@ type SessionState struct {
 	AdditionalDirectories []string
 	WorkspaceKey          string
 	WorkspaceName         string
+	LastActivityAt        time.Time
 	Status                TaskStatus
 	Timeline              []TimelineItem
 	HistoryTruncated      bool

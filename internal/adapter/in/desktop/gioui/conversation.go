@@ -794,6 +794,9 @@ func (c *controller) sendPrompt(text string) {
 		return
 	}
 	c.clearMessageStreamsLocked(sessionID)
+	if current := desktopstateSessionPointer(&c.state, sessionID); current != nil {
+		current.LastActivityAt = time.Now().UTC()
+	}
 	desktopstate.Apply(&c.state, desktopstate.Event{Kind: desktopstate.EventPromptStarted, SessionID: sessionID})
 	c.applyTimelineEventLocked(desktopstate.Event{
 		Kind:      desktopstate.EventTimelineAppended,

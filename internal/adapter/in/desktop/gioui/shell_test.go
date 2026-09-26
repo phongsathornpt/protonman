@@ -383,6 +383,45 @@ func TestBuildSidebarRowsGroupsSessionsWithoutChangingOrder(t *testing.T) {
 	}
 }
 
+func TestBuildSidebarRowsPutsRecentSessionsFirstAndHidesIdleBadges(t *testing.T) {
+	activity := time.Date(2026, 9, 26, 8, 0, 0, 0, time.UTC)
+	state := desktopstate.State{
+		Projects: []desktopstate.ProjectState{{ID: "project", Name: "Project"}},
+		Sessions: []desktopstate.SessionState{
+			{ID: "older", ProjectID: "project", AgentID: controllerAgentID, Title: "hi", Status: desktopstate.TaskIdle, LastActivityAt: activity},
+			{ID: "newer", ProjectID: "project", AgentID: controllerAgentID, Title: "hi", Status: desktopstate.TaskIdle, LastActivityAt: activity.Add(time.Hour)},
+			{ID: "unknown", ProjectID: "project", AgentID: controllerAgentID, Title: "proton", Status: desktopstate.TaskIdle},
+		},
+	}
+	rows, _ := buildSidebarRows(state, []app.ACPAgentProfile{defaultACPAgentProfile()})
+	if len(rows) != 4 || rows[0].SessionCount != 3 {
+		t.Fatalf("rows = %#v, want project count 3 and three sessions", rows)
+	}
+	if rows[1].SessionID != "newer" || rows[2].SessionID != "older" || rows[3].SessionID != "unknown" {
+		t.Fatalf("session order = %q, %q, %q", rows[1].SessionID, rows[2].SessionID, rows[3].SessionID)
+	}
+	if got := sidebarStatusLabel("idle"); got != "" {
+		t.Fatalf("idle status label = %q, want hidden", got)
+	}
+	if got := sidebarStatusLabel("waiting_permission"); got != "Approval" {
+		t.Fatalf("permission status label = %q, want Approval", got)
+	}
+	now := activity.Add(3 * time.Minute)
+	if got := sidebarSessionSubtitle(rows[2], now); got != "3m ago" {
+		t.Fatalf("activity subtitle = %q, want 3m ago", got)
+	}
+	if got := sidebarSessionSubtitle(rows[3], now); got != "" {
+		t.Fatalf("default-agent fallback subtitle = %q, want empty", got)
+	}
+	state.Sessions[0].LastActivityAt = activity.Add(2 * time.Hour)
+	cache := sidebarRowsCache{valid: true}
+	_, cache = buildSidebarRows(state, []app.ACPAgentProfile{defaultACPAgentProfile()})
+	state.Sessions[0].LastActivityAt = activity.Add(4 * time.Hour)
+	if cache.matches(state, []app.ACPAgentProfile{defaultACPAgentProfile()}) {
+		t.Fatal("sidebar cache matched after a session activity timestamp changed")
+	}
+}
+
 func TestMarkdownCacheStaysWithinByteBudget(t *testing.T) {
 	view := newShell(newTheme("light"))
 	key := conversationCacheKey{sessionID: "session", itemID: "new", kind: desktopstate.TimelineAssistant}

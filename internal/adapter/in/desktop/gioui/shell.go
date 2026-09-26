@@ -3,9 +3,12 @@
 package gioui
 
 import (
+	"fmt"
 	"image"
 	"image/color"
+	"sort"
 	"strings"
+	"time"
 
 	"gioui.org/font"
 	"gioui.org/io/semantic"
@@ -29,12 +32,15 @@ const (
 )
 
 type sidebarRow struct {
-	Kind      sidebarRowKind
-	ProjectID string
-	SessionID string
-	Title     string
-	Subtitle  string
-	Status    string
+	Kind           sidebarRowKind
+	ProjectID      string
+	SessionID      string
+	AgentID        string
+	Title          string
+	Subtitle       string
+	Status         string
+	SessionCount   int
+	LastActivityAt time.Time
 }
 
 type sidebarProjectCache struct {
@@ -43,11 +49,13 @@ type sidebarProjectCache struct {
 }
 
 type sidebarSessionCache struct {
-	id        string
-	projectID string
-	title     string
-	subtitle  string
-	status    string
+	id             string
+	projectID      string
+	agentID        string
+	title          string
+	subtitle       string
+	status         string
+	lastActivityAt time.Time
 }
 
 type sidebarRowsCache struct {
@@ -84,6 +92,8 @@ type shell struct {
 	inspectorOverride            bool
 	inspectorToggle              widget.Clickable
 	composer                     widget.Editor
+	composerDrafts               map[string]string
+	composerDraftOrder           []string
 	sendButton                   widget.Clickable
 	stopButton                   widget.Clickable
 	permissionButtons            map[string]map[string]*widget.Clickable
@@ -164,6 +174,7 @@ func newShell(theme *theme) *shell {
 		conversationList:             layout.List{Axis: layout.Vertical, ScrollToEnd: true},
 		inspectorList:                layout.List{Axis: layout.Vertical},
 		composer:                     widget.Editor{Submit: true, MaxLen: 1 << 20},
+		composerDrafts:               make(map[string]string),
 		runtimeProviderEditor:        widget.Editor{SingleLine: true, MaxLen: 512},
 		runtimeModelEditor:           widget.Editor{SingleLine: true, MaxLen: 512},
 		mcpNameEditor:                widget.Editor{SingleLine: true, MaxLen: 256},
@@ -220,7 +231,7 @@ func (s *shell) layout(gtx layout.Context, snapshot controllerSnapshot) layout.D
 	paint.Fill(gtx.Ops, s.theme.surface)
 	return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return layout.Inset{Top: 8, Left: 8, Right: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+			return desktopInset{Top: 8, Left: 8, Right: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 				return s.layoutTopBar(gtx, snapshot)
 			})
 		}),
@@ -228,19 +239,19 @@ func (s *shell) layout(gtx layout.Context, snapshot controllerSnapshot) layout.D
 			if !s.agentSelectorVisible {
 				return layout.Dimensions{}
 			}
-			return layout.Inset{Top: 4, Left: 8, Right: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+			return desktopInset{Top: 4, Left: 8, Right: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 				return s.layoutAgentSelectorBar(gtx, snapshot)
 			})
 		}),
 		layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
 			return layout.Flex{Axis: layout.Horizontal}.Layout(gtx,
 				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-					return layout.Inset{Top: 8, Bottom: 8, Left: 8, Right: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+					return desktopInset{Top: 8, Bottom: 8, Left: 8, Right: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 						return s.layoutSidebar(gtx, snapshot)
 					})
 				}),
 				layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-					return layout.Inset{Top: 8, Bottom: 8, Left: 6, Right: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+					return desktopInset{Top: 8, Bottom: 8, Left: 6, Right: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 						return s.layoutMain(gtx, snapshot)
 					})
 				}),
@@ -253,7 +264,7 @@ func (s *shell) layoutTopBar(gtx layout.Context, snapshot controllerSnapshot) la
 	gtx.Constraints.Min.Y = gtx.Dp(64)
 	return s.roundedBorderSurface(gtx, shapeLarge, s.theme.surfaceContainer, s.theme.outlineVariant, 1, func(gtx layout.Context) layout.Dimensions {
 		gtx.Constraints.Min.X = gtx.Constraints.Max.X
-		return layout.Inset{Top: 10, Bottom: 10, Left: 20, Right: 20}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+		return desktopInset{Top: 10, Bottom: 10, Left: 20, Right: 20}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 			return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
 				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 					return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
@@ -262,19 +273,10 @@ func (s *shell) layoutTopBar(gtx layout.Context, snapshot controllerSnapshot) la
 								layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 									return s.layoutLabel(gtx, "Protonman", textHeadlineSmall, font.Bold, s.theme.onSurface, 1)
 								}),
-								layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-									return layout.Inset{Left: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-										return s.roundedSurface(gtx, shapeSmall, s.theme.primaryContainer, func(gtx layout.Context) layout.Dimensions {
-											return layout.Inset{Top: 2, Bottom: 2, Left: 6, Right: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-												return s.layoutLabel(gtx, "AI Studio", textLabelSmall, font.SemiBold, s.theme.onPrimaryContainer, 1)
-											})
-										})
-									})
-								}),
 							)
 						}),
 						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-							return s.layoutLabel(gtx, "Autonomous coding workbench · Material 3", textLabelMedium, font.Normal, s.theme.onSurfaceVariant, 1)
+							return s.layoutLabel(gtx, "Autonomous coding workbench", textLabelMedium, font.Normal, s.theme.onSurfaceVariant, 1)
 						}),
 					)
 				}),
@@ -286,7 +288,7 @@ func (s *shell) layoutTopBar(gtx layout.Context, snapshot controllerSnapshot) la
 					if s.agentSelectorVisible {
 						label = "Agents: " + compactInspectorText(activeAgentDisplayName(snapshot), 28)
 					}
-					return layout.UniformInset(4).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+					return desktopUniformInset(4).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 						return s.layoutButton(gtx, &s.agentSelectorButton, label, true, func() {
 							s.agentSelectorVisible = !s.agentSelectorVisible
 						})
@@ -318,7 +320,7 @@ func (s *shell) layoutConnectionPill(gtx layout.Context, snapshot controllerSnap
 	}
 	gtx.Constraints.Min.Y = gtx.Dp(32)
 	return s.roundedSurface(gtx, shapeLarge, background, func(gtx layout.Context) layout.Dimensions {
-		return layout.Inset{Top: 6, Bottom: 6, Left: 12, Right: 12}.Layout(gtx,
+		return desktopInset{Top: 6, Bottom: 6, Left: 12, Right: 12}.Layout(gtx,
 			func(gtx layout.Context) layout.Dimensions {
 				semantic.DescriptionOp(strings.TrimSpace(snapshot.Status)).Add(gtx.Ops)
 				return s.layoutLabel(gtx, connectionStatusLabel(snapshot.Status), textLabelMedium, font.SemiBold, foreground, 1)
@@ -372,7 +374,7 @@ func (s *shell) layoutSidebar(gtx layout.Context, snapshot controllerSnapshot) l
 			layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
 				rows := s.sidebarRows(snapshot.State, snapshot.AgentProfiles)
 				if len(rows) == 0 {
-					return layout.Inset{Top: 24, Bottom: 24, Left: 20, Right: 20}.Layout(gtx,
+					return desktopInset{Top: 24, Bottom: 24, Left: 20, Right: 20}.Layout(gtx,
 						func(gtx layout.Context) layout.Dimensions {
 							return s.layoutLabel(gtx, "No conversations yet. Start one from an existing workspace.", textBodyMedium, font.Normal, s.theme.onSurfaceVariant, 3)
 						},
@@ -391,7 +393,7 @@ func (s *shell) layoutSidebar(gtx layout.Context, snapshot controllerSnapshot) l
 
 func (s *shell) layoutSidebarHeader(gtx layout.Context, snapshot controllerSnapshot) layout.Dimensions {
 	gtx.Constraints.Min.Y = gtx.Dp(64)
-	return layout.Inset{Top: 10, Bottom: 10, Left: 14, Right: 14}.Layout(gtx,
+	return desktopInset{Top: 10, Bottom: 10, Left: 14, Right: 14}.Layout(gtx,
 		func(gtx layout.Context) layout.Dimensions {
 			return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
 				layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
@@ -426,29 +428,45 @@ func buildSidebarRows(state desktopstate.State, profiles []app.ACPAgentProfile) 
 	for _, session := range state.Sessions {
 		subtitle := agentDisplayName(profiles, session.AgentID)
 		sessions = append(sessions, sidebarSessionCache{
-			id:        session.ID,
-			projectID: session.ProjectID,
-			title:     session.Title,
-			subtitle:  subtitle,
-			status:    string(session.Status),
+			id:             session.ID,
+			projectID:      session.ProjectID,
+			agentID:        session.AgentID,
+			title:          session.Title,
+			subtitle:       subtitle,
+			status:         string(session.Status),
+			lastActivityAt: session.LastActivityAt,
 		})
 		sessionsByProject[session.ProjectID] = append(sessionsByProject[session.ProjectID], sidebarRow{
-			Kind:      sidebarSessionRow,
-			ProjectID: session.ProjectID,
-			SessionID: session.ID,
-			Title:     session.Title,
-			Subtitle:  subtitle,
-			Status:    displayStatus(session.Status),
+			Kind:           sidebarSessionRow,
+			ProjectID:      session.ProjectID,
+			SessionID:      session.ID,
+			AgentID:        session.AgentID,
+			Title:          session.Title,
+			Subtitle:       subtitle,
+			Status:         displayStatus(session.Status),
+			LastActivityAt: session.LastActivityAt,
 		})
 	}
 	for _, project := range state.Projects {
 		projects = append(projects, sidebarProjectCache{id: project.ID, name: project.Name})
-		rows = append(rows, sidebarRow{
-			Kind:      sidebarProjectRow,
-			ProjectID: project.ID,
-			Title:     project.Name,
+		projectSessions := sessionsByProject[project.ID]
+		sort.SliceStable(projectSessions, func(i, j int) bool {
+			left, right := projectSessions[i].LastActivityAt, projectSessions[j].LastActivityAt
+			if left.IsZero() {
+				return false
+			}
+			if right.IsZero() {
+				return true
+			}
+			return left.After(right)
 		})
-		rows = append(rows, sessionsByProject[project.ID]...)
+		rows = append(rows, sidebarRow{
+			Kind:         sidebarProjectRow,
+			ProjectID:    project.ID,
+			Title:        project.Name,
+			SessionCount: len(projectSessions),
+		})
+		rows = append(rows, projectSessions...)
 	}
 	return rows, sidebarRowsCache{valid: true, rows: rows, projects: projects, sessions: sessions}
 }
@@ -475,9 +493,11 @@ func (cache sidebarRowsCache) matches(state desktopstate.State, profiles []app.A
 		cachedSession := cache.sessions[sessionIndex]
 		if cachedSession.id != session.ID ||
 			cachedSession.projectID != session.ProjectID ||
+			cachedSession.agentID != session.AgentID ||
 			cachedSession.title != session.Title ||
 			cachedSession.subtitle != agentDisplayName(profiles, session.AgentID) ||
-			cachedSession.status != string(session.Status) {
+			cachedSession.status != string(session.Status) ||
+			!cachedSession.lastActivityAt.Equal(session.LastActivityAt) {
 			return false
 		}
 	}
@@ -496,7 +516,7 @@ func (s *shell) layoutSidebarRow(gtx layout.Context, row sidebarRow, state deskt
 			gtx.Constraints.Min.Y = gtx.Dp(44)
 			semantic.Button.Add(gtx.Ops)
 			semantic.SelectedOp(selected).Add(gtx.Ops)
-			semantic.DescriptionOp("Select workspace " + row.Title).Add(gtx.Ops)
+			semantic.DescriptionOp(fmt.Sprintf("Select workspace %s, %d conversations", row.Title, row.SessionCount)).Add(gtx.Ops)
 			background := s.theme.surfaceContainer
 			foreground := s.theme.onSurface
 			if selected {
@@ -506,8 +526,18 @@ func (s *shell) layoutSidebarRow(gtx layout.Context, row sidebarRow, state deskt
 				background = s.theme.surfaceContainerHigh
 			}
 			return s.roundedSurface(gtx, shapeSmall, background, func(gtx layout.Context) layout.Dimensions {
-				return layout.Inset{Top: 8, Bottom: 8, Left: 12, Right: 12}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-					return s.layoutLabel(gtx, row.Title, textLabelLarge, font.SemiBold, foreground, 1)
+				return desktopInset{Top: 8, Bottom: 8, Left: 12, Right: 12}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+					children := []layout.FlexChild{
+						layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+							return s.layoutLabel(gtx, row.Title, textLabelLarge, font.SemiBold, foreground, 1)
+						}),
+					}
+					if row.SessionCount > 0 {
+						children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+							return s.layoutLabel(gtx, fmt.Sprintf("%d", row.SessionCount), textLabelSmall, font.Medium, s.theme.onSurfaceVariant, 1)
+						}))
+					}
+					return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx, children...)
 				})
 			})
 		})
@@ -516,66 +546,87 @@ func (s *shell) layoutSidebarRow(gtx layout.Context, row sidebarRow, state deskt
 				return layout.Dimensions{Size: dims.Size}
 			})
 		}
-		return layout.Inset{Top: 8, Bottom: 4, Left: 8, Right: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+		return desktopInset{Top: 8, Bottom: 4, Left: 8, Right: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 			return layout.Dimensions{Size: dims.Size}
 		})
 	}
 
-	button := s.sessionButtons[row.SessionID]
-	selected := state.ActiveSessionID == row.SessionID
-	if button.Clicked(gtx) {
-		s.onSelectSession(row.SessionID)
-	}
-	gtx.Constraints.Min.Y = gtx.Dp(56)
-	dims := button.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-		gtx.Constraints.Min.Y = gtx.Dp(56)
-		semantic.Button.Add(gtx.Ops)
-		semantic.SelectedOp(selected).Add(gtx.Ops)
-		semantic.DescriptionOp(row.Title + ", " + row.Subtitle + ", " + row.Status).Add(gtx.Ops)
-		background := s.theme.surfaceContainerLowest
-		foreground := s.theme.onSurface
-		borderColor := s.theme.outlineVariant
-		if selected {
-			background = s.theme.primaryContainer
-			foreground = s.theme.onPrimaryContainer
-			borderColor = s.theme.primary
-		} else if button.Hovered() {
-			background = s.theme.surfaceContainerHigh
+	return desktopInset{Left: 12, Right: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+		button := s.sessionButtons[row.SessionID]
+		selected := state.ActiveSessionID == row.SessionID
+		if button.Clicked(gtx) {
+			s.onSelectSession(row.SessionID)
 		}
-		return s.roundedBorderSurface(gtx, shapeMedium, background, borderColor, 1, func(gtx layout.Context) layout.Dimensions {
-			return layout.Inset{Top: 8, Bottom: 8, Left: 12, Right: 12}.Layout(gtx,
-				func(gtx layout.Context) layout.Dimensions {
-					return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
-						layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-							subColor := s.theme.onSurfaceVariant
-							if selected {
-								subColor = s.theme.onPrimaryContainer
-							}
-							return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
-								layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-									return s.layoutLabel(gtx, row.Title, textBodyMedium, font.Medium, foreground, 1)
-								}),
-								layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-									return s.layoutLabel(gtx, row.Subtitle, textLabelSmall, font.Normal, subColor, 1)
-								}),
-							)
-						}),
-						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-							return layout.Inset{Left: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-								return s.layoutTaskStatus(gtx, row.Status, taskStatusFromLabel(row.Status))
-							})
-						}),
-					)
-				},
-			)
+		gtx.Constraints.Min.Y = gtx.Dp(56)
+		subtitle := sidebarSessionSubtitle(row, gtx.Now)
+		statusLabel := sidebarStatusLabel(row.Status)
+		dims := button.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+			gtx.Constraints.Min.Y = gtx.Dp(56)
+			semantic.Button.Add(gtx.Ops)
+			semantic.SelectedOp(selected).Add(gtx.Ops)
+			description := row.Title
+			if subtitle != "" {
+				description += ", " + subtitle
+			}
+			if statusLabel != "" {
+				description += ", " + statusLabel
+			}
+			semantic.DescriptionOp(description).Add(gtx.Ops)
+			background := s.theme.surfaceContainerLowest
+			foreground := s.theme.onSurface
+			borderColor := s.theme.outlineVariant
+			if selected {
+				background = s.theme.primaryContainer
+				foreground = s.theme.onPrimaryContainer
+				borderColor = s.theme.primary
+			} else if button.Hovered() {
+				background = s.theme.surfaceContainerHigh
+			}
+			return s.roundedBorderSurface(gtx, shapeMedium, background, borderColor, 1, func(gtx layout.Context) layout.Dimensions {
+				return desktopInset{Top: 8, Bottom: 8, Left: 12, Right: 12}.Layout(gtx,
+					func(gtx layout.Context) layout.Dimensions {
+						return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
+							layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+								subColor := s.theme.onSurfaceVariant
+								if selected {
+									subColor = s.theme.onPrimaryContainer
+								}
+								if subtitle == "" {
+									return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
+										layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+											return s.layoutLabel(gtx, row.Title, textBodyMedium, font.Medium, foreground, 1)
+										}),
+									)
+								}
+								return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
+									layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+										return s.layoutLabel(gtx, row.Title, textBodyMedium, font.Medium, foreground, 1)
+									}),
+									layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+										return s.layoutLabel(gtx, subtitle, textLabelSmall, font.Normal, subColor, 1)
+									}),
+								)
+							}),
+							layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+								if statusLabel == "" {
+									return layout.Dimensions{}
+								}
+								return desktopInset{Left: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+									return s.layoutTaskStatus(gtx, statusLabel, taskStatusFromLabel(row.Status))
+								})
+							}),
+						)
+					},
+				)
+			})
 		})
+		if gtx.Focused(button) {
+			widget.Border{Color: s.theme.primary, CornerRadius: shapeMedium, Width: 2}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+				return layout.Dimensions{Size: dims.Size}
+			})
+		}
+		return dims
 	})
-	if gtx.Focused(button) {
-		widget.Border{Color: s.theme.primary, CornerRadius: shapeMedium, Width: 2}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-			return layout.Dimensions{Size: dims.Size}
-		})
-	}
-	return dims
 }
 
 func (s *shell) layoutMain(gtx layout.Context, snapshot controllerSnapshot) layout.Dimensions {
@@ -639,7 +690,7 @@ func (s *shell) layoutSessionHeader(gtx layout.Context, session desktopstate.Ses
 	gtx.Constraints.Min.Y = gtx.Dp(76)
 	return s.roundedBorderSurface(gtx, shapeLarge, s.theme.surfaceContainer, s.theme.outlineVariant, 1, func(gtx layout.Context) layout.Dimensions {
 		gtx.Constraints.Min.X = gtx.Constraints.Max.X
-		return layout.Inset{Top: 12, Bottom: 12, Left: 20, Right: 20}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+		return desktopInset{Top: 12, Bottom: 12, Left: 20, Right: 20}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 			if gtx.Constraints.Max.X < gtx.Dp(640) {
 				return s.layoutCompactSessionHeader(gtx, session, snapshot, showInspector)
 			}
@@ -698,7 +749,7 @@ func (s *shell) layoutSessionHeaderActions(gtx layout.Context, session desktopst
 			return s.layoutTaskStatus(gtx, displayStatus(session.Status), session.Status)
 		}),
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return layout.UniformInset(4).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+			return desktopUniformInset(4).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 				return s.layoutButton(gtx, &s.inspectorToggle, label, true, func() {
 					s.inspectorOverride = true
 					s.inspectorVisible = !showInspector
@@ -711,7 +762,7 @@ func (s *shell) layoutSessionHeaderActions(gtx layout.Context, session desktopst
 func (s *shell) layoutTaskStatus(gtx layout.Context, label string, status desktopstate.TaskStatus) layout.Dimensions {
 	background, foreground := s.taskStatusColors(status)
 	return s.roundedSurface(gtx, shapeSmall, background, func(gtx layout.Context) layout.Dimensions {
-		return layout.Inset{Top: 5, Bottom: 5, Left: 8, Right: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+		return desktopInset{Top: 5, Bottom: 5, Left: 8, Right: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 			return s.layoutLabel(gtx, label, textLabelMedium, font.Medium, foreground, 1)
 		})
 	})
@@ -749,7 +800,7 @@ func (s *shell) layoutMainEmptyState(gtx layout.Context, snapshot controllerSnap
 				return s.layoutLabel(gtx, title, textDisplaySmall, font.SemiBold, s.theme.onSurface, 2)
 			}),
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				return layout.UniformInset(10).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+				return desktopUniformInset(10).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 					return s.layoutLabel(gtx, body, textBodyLarge, font.Normal, s.theme.onSurfaceVariant, 4)
 				})
 			}),
@@ -761,7 +812,7 @@ func (s *shell) layoutMainEmptyState(gtx layout.Context, snapshot controllerSnap
 				if snapshot.CreatingSession {
 					label = "Creating…"
 				}
-				return layout.UniformInset(10).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+				return desktopUniformInset(10).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 					return s.layoutPrimaryButton(gtx, &s.emptyNewSessionButton, label, snapshot.Connection == connectionConnected && !snapshot.CreatingSession, s.onNewSession)
 				})
 			}),
@@ -776,7 +827,7 @@ func (s *shell) layoutSessionDetails(gtx layout.Context, session desktopstate.Se
 				return s.layoutLabel(gtx, "Session overview", textTitleMedium, font.SemiBold, s.theme.onSurface, 1)
 			}),
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				return layout.UniformInset(8).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+				return desktopUniformInset(8).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 					return s.layoutLabel(gtx, "Your conversation, permissions, and session controls appear here.", textBodyMedium, font.Normal, s.theme.onSurfaceVariant, 4)
 				})
 			}),
@@ -827,7 +878,7 @@ func (s *shell) layoutCenteredCard(gtx layout.Context, content layout.Widget) la
 	return layout.Stack{Alignment: layout.Center}.Layout(gtx, layout.Stacked(func(gtx layout.Context) layout.Dimensions {
 		gtx.Constraints.Max.X = min(gtx.Constraints.Max.X, gtx.Dp(680))
 		return s.roundedSurface(gtx, shapeExtraLarge, s.theme.surfaceContainer, func(gtx layout.Context) layout.Dimensions {
-			return layout.Inset{Top: 24, Bottom: 24, Left: 28, Right: 28}.Layout(gtx, content)
+			return desktopInset{Top: 24, Bottom: 24, Left: 28, Right: 28}.Layout(gtx, content)
 		})
 	}))
 }
@@ -874,7 +925,7 @@ func (s *shell) layoutButtonStyle(gtx layout.Context, button *widget.Clickable, 
 			foreground = s.theme.onPrimaryContainer
 		}
 		return s.roundedSurface(gtx, shapeMedium, background, func(gtx layout.Context) layout.Dimensions {
-			return layout.Inset{Top: 10, Bottom: 10, Left: 16, Right: 16}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+			return desktopInset{Top: 10, Bottom: 10, Left: 16, Right: 16}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 				return s.layoutLabel(gtx, label, textLabelLarge, font.SemiBold, foreground, 1)
 			})
 		})
@@ -907,7 +958,7 @@ func (s *shell) roundedSurface(gtx layout.Context, radius unit.Dp, background co
 	material := op.Record(gtx.Ops)
 	dims := content(gtx)
 	call := material.Stop()
-	cornerRadius := gtx.Dp(radius)
+	cornerRadius := min(gtx.Dp(radius), dims.Size.X/2, dims.Size.Y/2)
 	stack := clip.RRect{
 		Rect: image.Rectangle{Max: dims.Size},
 		SE:   cornerRadius,
@@ -980,4 +1031,45 @@ func displayStatus(status desktopstate.TaskStatus) string {
 		return "idle"
 	}
 	return strings.ToUpper(value[:1]) + value[1:]
+}
+
+func sidebarStatusLabel(status string) string {
+	status = strings.ReplaceAll(strings.ToLower(strings.TrimSpace(status)), "_", " ")
+	switch status {
+	case "", "idle":
+		return ""
+	case "waiting permission":
+		return "Approval"
+	case "waiting user":
+		return "Your input"
+	default:
+		return strings.ToUpper(status[:1]) + status[1:]
+	}
+}
+
+func sidebarSessionSubtitle(row sidebarRow, now time.Time) string {
+	if !row.LastActivityAt.IsZero() {
+		return sidebarActivityLabel(row.LastActivityAt, now)
+	}
+	if row.AgentID != "" && row.AgentID != controllerAgentID {
+		return row.Subtitle
+	}
+	return ""
+}
+
+func sidebarActivityLabel(activity, now time.Time) string {
+	ago := now.Sub(activity)
+	if ago < time.Minute {
+		return "Just now"
+	}
+	if ago < time.Hour {
+		return fmt.Sprintf("%dm ago", max(1, int(ago.Minutes())))
+	}
+	if ago < 24*time.Hour {
+		return fmt.Sprintf("%dh ago", max(1, int(ago.Hours())))
+	}
+	if ago < 7*24*time.Hour {
+		return fmt.Sprintf("%dd ago", max(1, int(ago.Hours()/24)))
+	}
+	return activity.Local().Format("Jan 2")
 }

@@ -40,6 +40,7 @@ type acpSession struct {
 	ID                    string   `json:"sessionId"`
 	AgentID               string   `json:"agentId"`
 	Title                 string   `json:"title"`
+	UpdatedAt             string   `json:"updatedAt"`
 	Cwd                   string   `json:"cwd"`
 	WorkspaceKey          string   `json:"workspaceKey"`
 	WorkspaceName         string   `json:"workspaceName"`
@@ -563,6 +564,9 @@ func projectSessions(current desktopstate.State, agentID string, remoteSessions 
 		session := previous[remote.ID]
 		session.ID = remote.ID
 		session.AgentID = agentID
+		if updatedAt, err := time.Parse(time.RFC3339Nano, strings.TrimSpace(remote.UpdatedAt)); err == nil && updatedAt.After(session.LastActivityAt) {
+			session.LastActivityAt = updatedAt
+		}
 		previousTitle := session.Title
 		session.Title = strings.TrimSpace(remote.Title)
 		if session.Title == "" {
@@ -688,14 +692,15 @@ func addLocalSession(state desktopstate.State, sessionID, workspace, agentID str
 	}
 	workspace = strings.TrimSpace(workspace)
 	next.Sessions = append(next.Sessions, desktopstate.SessionState{
-		ID:            sessionID,
-		AgentID:       agentID,
-		ProjectID:     workspaceKey(workspace, sessionID),
-		Title:         "Session " + shortID(sessionID),
-		Workspace:     workspace,
-		WorkspaceKey:  workspaceKey(workspace, sessionID),
-		WorkspaceName: workspaceName(workspace, sessionID),
-		Status:        desktopstate.TaskIdle,
+		ID:             sessionID,
+		AgentID:        agentID,
+		ProjectID:      workspaceKey(workspace, sessionID),
+		Title:          "Session " + shortID(sessionID),
+		Workspace:      workspace,
+		WorkspaceKey:   workspaceKey(workspace, sessionID),
+		WorkspaceName:  workspaceName(workspace, sessionID),
+		LastActivityAt: time.Now().UTC(),
+		Status:         desktopstate.TaskIdle,
 	})
 	next.Projects = deriveProjectsPreserving(next.Projects, next.Sessions)
 	return next

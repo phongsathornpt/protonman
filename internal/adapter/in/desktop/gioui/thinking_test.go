@@ -85,34 +85,6 @@ func TestParseAssistantThinking(t *testing.T) {
 	}
 }
 
-func TestToolIconForTitle(t *testing.T) {
-	cases := map[string]string{
-		"bash":           "⚡",
-		"sh: run script": "⚡",
-		"cmd: exec":      "⚡",
-		"edit":           "✎",
-		"write file":     "✎",
-		"replace text":   "✎",
-		"read file":      "📖",
-		"cat main.go":    "📖",
-		"grep pattern":   "🔍",
-		"find path":      "📁",
-		"ls directory":   "📁",
-		"git status":     "⎇",
-		"web fetch":      "🌐",
-		"http request":   "🌐",
-		"todo update":    "📋",
-		"goal set":       "🎯",
-		"unknown_custom": "⚙",
-	}
-
-	for title, want := range cases {
-		if got := toolIconForTitle(title); got != want {
-			t.Errorf("toolIconForTitle(%q) = %q, want %q", title, got, want)
-		}
-	}
-}
-
 func TestShellLaysOutAIFeaturesAndThinking(t *testing.T) {
 	view := newShell(newTheme("dark"))
 	snapshot := controllerSnapshot{

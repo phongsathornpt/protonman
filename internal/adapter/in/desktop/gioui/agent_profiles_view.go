@@ -108,7 +108,7 @@ func (s *shell) layoutAgentSelectorBar(gtx layout.Context, snapshot controllerSn
 			gtx.Constraints.Min.X = gtx.Dp(320)
 			gtx.Constraints.Max.X = min(gtx.Constraints.Max.X, gtx.Dp(460))
 			return s.roundedSurface(gtx, shapeMedium, s.theme.surfaceContainerHigh, func(gtx layout.Context) layout.Dimensions {
-				return layout.Inset{Top: 6, Bottom: 6, Left: 16, Right: 16}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+				return desktopInset{Top: 6, Bottom: 6, Left: 16, Right: 16}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 					return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
 						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 							return s.layoutLabel(gtx, "Choose agent", textBodyMedium, font.Medium, s.theme.onSurfaceVariant, 1)
@@ -119,7 +119,7 @@ func (s *shell) layoutAgentSelectorBar(gtx layout.Context, snapshot controllerSn
 						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 							return s.agentSelectorList.Layout(gtx, len(snapshot.AgentProfiles), func(gtx layout.Context, index int) layout.Dimensions {
 								profile := snapshot.AgentProfiles[index]
-								return layout.UniformInset(3).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+								return desktopUniformInset(3).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 									return s.layoutAgentChoiceButton(gtx, profile, profile.ID == snapshot.ActiveAgentID, snapshot.AgentConnections[profile.ID])
 								})
 							})
@@ -154,7 +154,7 @@ func (s *shell) layoutAgentChoiceButton(gtx layout.Context, profile app.ACPAgent
 		semantic.SelectedOp(selected).Add(gtx.Ops)
 		semantic.DescriptionOp("Select agent " + profile.DisplayName + ", " + connectionLabel(phase)).Add(gtx.Ops)
 		return s.roundedSurface(gtx, shapeSmall, background, func(gtx layout.Context) layout.Dimensions {
-			return layout.Inset{Top: 8, Bottom: 8, Left: 12, Right: 12}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+			return desktopInset{Top: 8, Bottom: 8, Left: 12, Right: 12}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 				return s.layoutLabel(gtx, profile.DisplayName+" · "+connectionChipLabel(phase), textLabelMedium, font.SemiBold, foreground, 1)
 			})
 		})
@@ -236,7 +236,7 @@ func (s *shell) layoutAgentProfilesPanel(gtx layout.Context, snapshot controller
 		toggleLabel = "Hide editor"
 	}
 	children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-		return layout.UniformInset(4).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+		return desktopUniformInset(4).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 			return s.layoutButton(gtx, &s.agentFormToggleButton, toggleLabel, enabled, func() {
 				if s.agentEditorVisible {
 					s.agentEditorVisible = false
@@ -326,7 +326,7 @@ func (s *shell) layoutAgentProfileRow(gtx layout.Context, profile app.ACPAgentPr
 		semantic.EnabledOp(gtx.Enabled()).Add(gtx.Ops)
 		semantic.DescriptionOp("Edit ACP agent " + profile.DisplayName).Add(gtx.Ops)
 		return s.roundedSurface(gtx, shapeSmall, background, func(gtx layout.Context) layout.Dimensions {
-			return layout.Inset{Top: 8, Bottom: 8, Left: 10, Right: 10}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+			return desktopInset{Top: 8, Bottom: 8, Left: 10, Right: 10}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 				return s.layoutLabel(gtx, profile.DisplayName+" · "+profile.ID, textBodyMedium, font.Medium, foreground, 1)
 			})
 		})
