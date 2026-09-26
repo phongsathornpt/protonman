@@ -729,3 +729,51 @@ func TestPermissionDetailIsBounded(t *testing.T) {
 		t.Fatalf("permission detail is not valid UTF-8: %q", detail)
 	}
 }
+
+func TestIsDiffTextAndExtractFilename(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		input    string
+		wantDiff bool
+		wantFile string
+	}{
+		{
+			name:     "empty text",
+			input:    "",
+			wantDiff: false,
+		},
+		{
+			name:     "plain text",
+			input:    "Hello world\nThis is normal command output",
+			wantDiff: false,
+		},
+		{
+			name:     "git diff header",
+			input:    "diff --git a/foo/bar.go b/foo/bar.go\nindex 1234567..89abcdef 100644\n--- a/foo/bar.go\n+++ b/foo/bar.go\n@@ -1,3 +1,4 @@\n+package foo\n",
+			wantDiff: true,
+			wantFile: "foo/bar.go",
+		},
+		{
+			name:     "patch hunk with additions and deletions",
+			input:    "@@ -10,5 +10,6 @@\n-old line\n+new line",
+			wantDiff: true,
+			wantFile: "",
+		},
+		{
+			name:     "go test output with plus",
+			input:    "=== RUN   TestSomething\n--- PASS: TestSomething (0.01s)\nPASS\nok  \tpkg/test\t0.02s",
+			wantDiff: false,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := isDiffText(tc.input); got != tc.wantDiff {
+				t.Errorf("isDiffText() = %v, want %v", got, tc.wantDiff)
+			}
+			if tc.wantFile != "" {
+				if got := extractDiffFilename(tc.input); got != tc.wantFile {
+					t.Errorf("extractDiffFilename() = %q, want %q", got, tc.wantFile)
+				}
+			}
+		})
+	}
+}

@@ -3,6 +3,8 @@
 package gioui
 
 import (
+	"fmt"
+	"image"
 	"image/color"
 	"strconv"
 	"strings"
@@ -12,11 +14,13 @@ import (
 	"gioui.org/io/semantic"
 	"gioui.org/layout"
 	"gioui.org/op"
+	"gioui.org/op/clip"
 	"gioui.org/op/paint"
 	"gioui.org/unit"
 	"gioui.org/widget"
 	"gioui.org/x/richtext"
 
+	"github.com/phongsathornpt/protonman/internal/base/diffutil"
 	desktopstate "github.com/phongsathornpt/protonman/internal/feature/desktop"
 )
 
@@ -549,6 +553,51 @@ func streamingText(source string) string {
 	return "…\n" + source[start:]
 }
 
+func isDiffText(text string) bool {
+	trimmed := strings.TrimSpace(text)
+	if trimmed == "" {
+		return false
+	}
+	if strings.HasPrefix(trimmed, "diff --git ") {
+		return true
+	}
+	lines := strings.Split(text, "\n")
+	hasHunk := false
+	hasAddDel := false
+	for _, l := range lines {
+		tl := strings.TrimSpace(l)
+		if strings.HasPrefix(tl, "diff --git ") {
+			return true
+		}
+		if strings.HasPrefix(tl, "@@") && strings.Contains(tl[2:], "@@") {
+			hasHunk = true
+		}
+		if strings.HasPrefix(l, "+") && !strings.HasPrefix(l, "+++") {
+			hasAddDel = true
+		}
+		if strings.HasPrefix(l, "-") && !strings.HasPrefix(l, "---") {
+			hasAddDel = true
+		}
+	}
+	return hasHunk && hasAddDel
+}
+
+func extractDiffFilename(text string) string {
+	for _, line := range strings.Split(text, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "diff --git ") {
+			parts := strings.Fields(trimmed)
+			if len(parts) >= 4 {
+				return strings.TrimPrefix(parts[3], "b/")
+			}
+		}
+		if strings.HasPrefix(trimmed, "+++ b/") {
+			return strings.TrimPrefix(trimmed, "+++ b/")
+		}
+	}
+	return ""
+}
+
 func (s *shell) layoutToolItem(gtx layout.Context, item desktopstate.TimelineItem, foreground color.NRGBA) layout.Dimensions {
 	status := strings.TrimSpace(item.Status)
 	statusBg := s.theme.secondaryContainer
@@ -569,10 +618,14 @@ func (s *shell) layoutToolItem(gtx layout.Context, item desktopstate.TimelineIte
 		}
 	}
 
+	if isDiffText(item.Text) {
+		return s.layoutDiffToolItem(gtx, item, statusLabel, statusBg, statusFg)
+	}
+
 	return desktopUniformInset(6).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 		return s.roundedBorderSurface(gtx, shapeMedium, s.theme.surfaceContainerHigh, s.theme.outlineVariant, 1, func(gtx layout.Context) layout.Dimensions {
 			semantic.DescriptionOp(conversationItemDescription(item)).Add(gtx.Ops)
-			return desktopInset{Top: 10, Bottom: 10, Left: 14, Right: 14}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+			return desktopInset{Top: 8, Bottom: 8, Left: 12, Right: 12}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 				children := []layout.FlexChild{
 					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 						return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
@@ -591,9 +644,9 @@ func (s *shell) layoutToolItem(gtx layout.Context, item desktopstate.TimelineIte
 				}
 				if strings.TrimSpace(item.Text) != "" {
 					children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-						return desktopInset{Top: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+						return desktopInset{Top: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 							return s.roundedSurface(gtx, shapeSmall, s.theme.surfaceContainerLowest, func(gtx layout.Context) layout.Dimensions {
-								return desktopInset{Top: 8, Bottom: 8, Left: 10, Right: 10}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+								return desktopInset{Top: 6, Bottom: 6, Left: 8, Right: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 									return s.layoutLabel(gtx, item.Text, textBodySmall, font.Normal, s.theme.onSurfaceVariant, 6)
 								})
 							})
@@ -606,25 +659,138 @@ func (s *shell) layoutToolItem(gtx layout.Context, item desktopstate.TimelineIte
 	})
 }
 
+func (s *shell) layoutDiffToolItem(gtx layout.Context, item desktopstate.TimelineItem, statusLabel string, statusBg, statusFg color.NRGBA) layout.Dimensions {
+	adds, dels := diffutil.DiffStats(item.Text)
+	displayTitle := item.Title
+	if fn := extractDiffFilename(item.Text); fn != "" {
+		displayTitle = fn
+	}
+
+	previewLines, omitted := diffutil.ExtractPreview(item.Text, 24)
+
+	return desktopUniformInset(6).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+		return s.roundedBorderSurface(gtx, shapeMedium, s.theme.surfaceContainerHigh, s.theme.outlineVariant, 1, func(gtx layout.Context) layout.Dimensions {
+			semantic.DescriptionOp(conversationItemDescription(item)).Add(gtx.Ops)
+			return desktopInset{Top: 10, Bottom: 10, Left: 14, Right: 14}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+				children := []layout.FlexChild{
+					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+						return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
+							layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+								return s.layoutLabel(gtx, displayTitle, textBodyMedium, font.SemiBold, s.theme.onSurface, 1)
+							}),
+							layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+								if adds == 0 {
+									return layout.Dimensions{}
+								}
+								return desktopInset{Right: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+									return s.roundedSurface(gtx, shapeSmall, s.theme.diffAddedContainer, func(gtx layout.Context) layout.Dimensions {
+										return desktopInset{Top: 2, Bottom: 2, Left: 6, Right: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+											return s.layoutLabel(gtx, fmt.Sprintf("+%d", adds), textLabelSmall, font.Bold, s.theme.diffAdded, 1)
+										})
+									})
+								})
+							}),
+							layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+								if dels == 0 {
+									return layout.Dimensions{}
+								}
+								return desktopInset{Right: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+									return s.roundedSurface(gtx, shapeSmall, s.theme.diffDeletedContainer, func(gtx layout.Context) layout.Dimensions {
+										return desktopInset{Top: 2, Bottom: 2, Left: 6, Right: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+											return s.layoutLabel(gtx, fmt.Sprintf("-%d", dels), textLabelSmall, font.Bold, s.theme.diffDeleted, 1)
+										})
+									})
+								})
+							}),
+							layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+								return s.roundedSurface(gtx, shapeSmall, statusBg, func(gtx layout.Context) layout.Dimensions {
+									return desktopInset{Top: 2, Bottom: 2, Left: 8, Right: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+										return s.layoutLabel(gtx, statusLabel, textLabelSmall, font.Bold, statusFg, 1)
+									})
+								})
+							}),
+						)
+					}),
+					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+						return desktopInset{Top: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+							return s.roundedSurface(gtx, shapeSmall, s.theme.surfaceContainerLowest, func(gtx layout.Context) layout.Dimensions {
+								return desktopInset{Top: 8, Bottom: 8, Left: 10, Right: 10}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+									lineChildren := make([]layout.FlexChild, 0, len(previewLines)+1)
+									for _, line := range previewLines {
+										lineStr := line
+										lineChildren = append(lineChildren, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+											return s.layoutDiffLine(gtx, lineStr)
+										}))
+									}
+									if omitted > 0 {
+										lineChildren = append(lineChildren, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+											return desktopInset{Top: 4}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+												return s.layoutLabel(gtx, fmt.Sprintf("… %d more lines omitted", omitted), textLabelSmall, font.Normal, s.theme.onSurfaceVariant, 1)
+											})
+										}))
+									}
+									return layout.Flex{Axis: layout.Vertical}.Layout(gtx, lineChildren...)
+								})
+							})
+						})
+					}),
+				}
+				return layout.Flex{Axis: layout.Vertical}.Layout(gtx, children...)
+			})
+		})
+	})
+}
+
+func (s *shell) layoutDiffLine(gtx layout.Context, line string) layout.Dimensions {
+	lineColor := s.theme.onSurfaceVariant
+	lineBg := color.NRGBA{}
+	trimmed := strings.TrimSpace(line)
+
+	if strings.HasPrefix(line, "+") && !strings.HasPrefix(line, "+++") {
+		lineColor = s.theme.diffAdded
+		lineBg = s.theme.diffAddedContainer
+	} else if strings.HasPrefix(line, "-") && !strings.HasPrefix(line, "---") {
+		lineColor = s.theme.diffDeleted
+		lineBg = s.theme.diffDeletedContainer
+	} else if strings.HasPrefix(trimmed, "@@") {
+		lineColor = s.theme.tertiary
+	}
+
+	content := func(gtx layout.Context) layout.Dimensions {
+		return desktopInset{Top: 1, Bottom: 1, Left: 4, Right: 4}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+			return s.layoutLabel(gtx, line, textBodySmall, font.Normal, lineColor, 1)
+		})
+	}
+
+	if lineBg.A > 0 {
+		return s.roundedSurface(gtx, shapeSmall, lineBg, content)
+	}
+	return content(gtx)
+}
+
 func (s *shell) layoutSubagentItem(gtx layout.Context, subagent desktopstate.SubagentState) layout.Dimensions {
 	profile := strings.ToLower(strings.TrimSpace(subagent.Profile))
 	badgeText := "SUBAGENT"
 	badgeBg := s.theme.secondaryContainer
 	badgeFg := s.theme.onSecondaryContainer
+	accentColor := s.theme.secondary
 
 	switch profile {
 	case "strength", "str":
 		badgeText = "STR · STRENGTH"
 		badgeBg = s.theme.strengthContainer
 		badgeFg = s.theme.onStrengthContainer
+		accentColor = s.theme.strength
 	case "agility", "agi":
 		badgeText = "AGI · AGILITY"
 		badgeBg = s.theme.agilityContainer
 		badgeFg = s.theme.onAgilityContainer
+		accentColor = s.theme.agility
 	case "intelligence", "int":
 		badgeText = "INT · INTELLIGENCE"
 		badgeBg = s.theme.intelligenceContainer
 		badgeFg = s.theme.onIntelligenceContainer
+		accentColor = s.theme.intelligence
 	default:
 		if profile != "" {
 			badgeText = "" + strings.ToUpper(profile)
@@ -652,51 +818,67 @@ func (s *shell) layoutSubagentItem(gtx layout.Context, subagent desktopstate.Sub
 	return desktopUniformInset(6).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 		return s.roundedBorderSurface(gtx, shapeLarge, s.theme.surfaceContainerHigh, s.theme.outlineVariant, 1, func(gtx layout.Context) layout.Dimensions {
 			semantic.DescriptionOp("Delegated agent " + subagent.Profile + ", " + subagent.Status + ", " + subagent.Task).Add(gtx.Ops)
-			return desktopInset{Top: 12, Bottom: 12, Left: 16, Right: 16}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-				return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
-					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-						return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
+			return layout.Stack{Alignment: layout.W}.Layout(gtx,
+				layout.Stacked(func(gtx layout.Context) layout.Dimensions {
+					return desktopInset{Top: 12, Bottom: 12, Left: 18, Right: 16}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+						return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
 							layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-								return s.roundedSurface(gtx, shapeSmall, badgeBg, func(gtx layout.Context) layout.Dimensions {
-									return desktopInset{Top: 3, Bottom: 3, Left: 8, Right: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-										return s.layoutLabel(gtx, badgeText, textLabelMedium, font.Bold, badgeFg, 1)
-									})
+								return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
+									layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+										return s.roundedSurface(gtx, shapeSmall, badgeBg, func(gtx layout.Context) layout.Dimensions {
+											return desktopInset{Top: 3, Bottom: 3, Left: 8, Right: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+												return s.layoutLabel(gtx, badgeText, textLabelMedium, font.Bold, badgeFg, 1)
+											})
+										})
+									}),
+									layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+										return layout.Spacer{}.Layout(gtx)
+									}),
+									layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+										return s.roundedSurface(gtx, shapeSmall, statusBg, func(gtx layout.Context) layout.Dimensions {
+											return desktopInset{Top: 2, Bottom: 2, Left: 8, Right: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+												return s.layoutLabel(gtx, status, textLabelSmall, font.SemiBold, statusFg, 1)
+											})
+										})
+									}),
+								)
+							}),
+							layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+								if strings.TrimSpace(subagent.Task) == "" {
+									return layout.Dimensions{}
+								}
+								return desktopInset{Top: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+									return s.layoutLabel(gtx, subagent.Task, textBodyMedium, font.Medium, s.theme.onSurface, 3)
 								})
 							}),
-							layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-								return layout.Spacer{}.Layout(gtx)
-							}),
 							layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-								return s.roundedSurface(gtx, shapeSmall, statusBg, func(gtx layout.Context) layout.Dimensions {
-									return desktopInset{Top: 2, Bottom: 2, Left: 8, Right: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-										return s.layoutLabel(gtx, status, textLabelSmall, font.SemiBold, statusFg, 1)
+								if strings.TrimSpace(subagent.Summary) == "" {
+									return layout.Dimensions{}
+								}
+								return desktopInset{Top: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+									return s.roundedSurface(gtx, shapeSmall, s.theme.surfaceContainerLowest, func(gtx layout.Context) layout.Dimensions {
+										return desktopInset{Top: 8, Bottom: 8, Left: 10, Right: 10}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+											return s.layoutLabel(gtx, subagent.Summary, textBodySmall, font.Normal, s.theme.onSurfaceVariant, 6)
+										})
 									})
 								})
 							}),
 						)
-					}),
-					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-						if strings.TrimSpace(subagent.Task) == "" {
-							return layout.Dimensions{}
-						}
-						return desktopInset{Top: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-							return s.layoutLabel(gtx, subagent.Task, textBodyMedium, font.Medium, s.theme.onSurface, 3)
-						})
-					}),
-					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-						if strings.TrimSpace(subagent.Summary) == "" {
-							return layout.Dimensions{}
-						}
-						return desktopInset{Top: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-							return s.roundedSurface(gtx, shapeSmall, s.theme.surfaceContainerLowest, func(gtx layout.Context) layout.Dimensions {
-								return desktopInset{Top: 8, Bottom: 8, Left: 10, Right: 10}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-									return s.layoutLabel(gtx, subagent.Summary, textBodySmall, font.Normal, s.theme.onSurfaceVariant, 6)
-								})
-							})
-						})
-					}),
-				)
-			})
+					})
+				}),
+				layout.Expanded(func(gtx layout.Context) layout.Dimensions {
+					stripeWidth := gtx.Dp(4)
+					cornerRadius := gtx.Dp(shapeLarge)
+					stack := clip.RRect{
+						Rect: image.Rectangle{Max: image.Point{X: stripeWidth, Y: gtx.Constraints.Max.Y}},
+						NW:   cornerRadius,
+						SW:   cornerRadius,
+					}.Push(gtx.Ops)
+					paint.Fill(gtx.Ops, accentColor)
+					stack.Pop()
+					return layout.Dimensions{Size: image.Point{X: stripeWidth, Y: gtx.Constraints.Max.Y}}
+				}),
+			)
 		})
 	})
 }
@@ -851,50 +1033,51 @@ func (s *shell) layoutComposer(gtx layout.Context, session desktopstate.SessionS
 		}
 	}
 
-	return s.roundedBorderSurface(gtx, shapeLarge, s.theme.surfaceContainer, s.theme.outlineVariant, 1, func(gtx layout.Context) layout.Dimensions {
-		inset := desktopInset{Top: 8, Bottom: 8, Left: 14, Right: 14}
-		if compact {
-			inset = desktopInset{Top: 6, Bottom: 6, Left: 12, Right: 12}
-		}
-		return inset.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-			children := []layout.FlexChild{
-				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-					return s.layoutComposerContextChips(gtx, session)
-				}),
-				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-					return desktopInset{Top: 4}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-						return layout.Flex{Axis: layout.Horizontal, Alignment: layout.End}.Layout(gtx,
-							layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-								editorChildren := []layout.FlexChild{
-									layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-										return desktopUniformInset(4).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-											return s.layoutComposerEditor(gtx, canSend, compact)
-										})
-									}),
-								}
-								if helper != "" {
-									editorChildren = append(editorChildren, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+	outerInset := desktopInset{Top: 6, Bottom: 12, Left: 16, Right: 16}
+	if compact {
+		outerInset = desktopInset{Top: 4, Bottom: 6, Left: 8, Right: 8}
+	}
+
+	return outerInset.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+		return s.roundedBorderSurface(gtx, shapeLarge, s.theme.surfaceContainer, s.theme.outlineVariant, 1, func(gtx layout.Context) layout.Dimensions {
+			innerInset := desktopInset{Top: 8, Bottom: 8, Left: 12, Right: 12}
+			if compact {
+				innerInset = desktopInset{Top: 6, Bottom: 6, Left: 10, Right: 10}
+			}
+			return innerInset.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+				children := []layout.FlexChild{
+					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+						return s.layoutComposerEditor(gtx, canSend, compact)
+					}),
+					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+						return desktopInset{Top: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+							return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
+								layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+									return s.layoutComposerContextChips(gtx, session)
+								}),
+								layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+									if helper == "" {
+										return layout.Spacer{}.Layout(gtx)
+									}
+									return desktopInset{Left: 8, Right: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 										return s.layoutLabel(gtx, helper, textLabelSmall, font.Normal, s.theme.onSurfaceVariant, 1)
-									}))
-								}
-								return layout.Flex{Axis: layout.Vertical}.Layout(gtx, editorChildren...)
-							}),
-							layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-								gtx.Constraints.Min.X = minimumSendButtonWidth
-								return desktopInset{Left: 8, Bottom: 16}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+									})
+								}),
+								layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+									gtx.Constraints.Min.X = minimumSendButtonWidth
 									if busy {
 										return s.layoutDangerButton(gtx, &s.stopButton, "Stop", connected, s.onCancelPrompt)
 									}
 									return s.layoutPrimaryButton(gtx, &s.sendButton, "Send", canSend && strings.TrimSpace(s.composer.Text()) != "", func() {
 										s.submitComposer(s.composer.Text())
 									})
-								})
-							}),
-						)
-					})
-				}),
-			}
-			return layout.Flex{Axis: layout.Vertical}.Layout(gtx, children...)
+								}),
+							)
+						})
+					}),
+				}
+				return layout.Flex{Axis: layout.Vertical}.Layout(gtx, children...)
+			})
 		})
 	})
 }

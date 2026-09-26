@@ -61,14 +61,25 @@ func (s *shell) layoutInspector(gtx layout.Context, session desktopstate.Session
 		gtx.Constraints.Min.X = gtx.Dp(inspectorPanelWidth)
 		gtx.Constraints.Max.X = gtx.Dp(inspectorPanelWidth)
 	}
-	panelCount := 6
-	if !protonmanSession(session) {
-		panelCount = 3
+
+	if s.mcpFormVisible {
+		if protonmanSession(session) {
+			s.activeInspectorTab = 2
+		} else {
+			s.activeInspectorTab = 1
+		}
+	} else if s.agentEditorVisible {
+		s.activeInspectorTab = 2
 	}
-	return s.roundedSurface(gtx, shapeLarge, s.theme.surfaceContainer, func(gtx layout.Context) layout.Dimensions {
+
+	panelCount := s.inspectorPanelCount(session)
+	return s.roundedSurface(gtx, shapeNone, s.theme.surfaceContainerLow, func(gtx layout.Context) layout.Dimensions {
 		return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 				return s.layoutInspectorHeader(gtx, session, snapshot)
+			}),
+			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+				return s.layoutHorizontalDivider(gtx)
 			}),
 			layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
 				return s.inspectorList.Layout(gtx, panelCount, func(gtx layout.Context, index int) layout.Dimensions {
@@ -79,28 +90,95 @@ func (s *shell) layoutInspector(gtx layout.Context, session desktopstate.Session
 	})
 }
 
+func (s *shell) inspectorPanelCount(session desktopstate.SessionState) int {
+	if !protonmanSession(session) {
+		return 1
+	}
+	switch s.activeInspectorTab {
+	case 0:
+		return 2
+	case 1:
+		return 1
+	case 2:
+		return 3
+	default:
+		return 2
+	}
+}
+
 func (s *shell) layoutInspectorHeader(gtx layout.Context, session desktopstate.SessionState, snapshot controllerSnapshot) layout.Dimensions {
-	gtx.Constraints.Min.Y = gtx.Dp(64)
-	return desktopInset{Top: 12, Bottom: 12, Left: 20, Right: 20}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+	return desktopInset{Top: 8, Bottom: 8, Left: 14, Right: 14}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 		return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
-			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				return s.layoutLabel(gtx, "SESSION CONTEXT", textLabelMedium, font.SemiBold, s.theme.onSurfaceVariant, 1)
-			}),
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 				status := "Agent connected"
 				if sessionConnection(snapshot, session.AgentID) != connectionConnected {
 					status = "Waiting for agent"
 				}
-				return s.layoutLabel(gtx, status, textBodyMedium, font.Normal, s.theme.onSurface, 1)
+				return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
+					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+						return s.layoutLabel(gtx, "INSPECTOR", textLabelMedium, font.SemiBold, s.theme.onSurfaceVariant, 1)
+					}),
+					layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+						return layout.Spacer{}.Layout(gtx)
+					}),
+					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+						return s.layoutLabel(gtx, status, textLabelSmall, font.Normal, s.theme.onSurfaceVariant, 1)
+					}),
+				)
+			}),
+			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+				return desktopInset{Top: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+					return s.layoutInspectorTabBar(gtx, session)
+				})
 			}),
 		)
 	})
 }
 
+func (s *shell) layoutInspectorTabBar(gtx layout.Context, session desktopstate.SessionState) layout.Dimensions {
+	tabs := []string{"Plan", "Memory", "Settings"}
+	if !protonmanSession(session) {
+		tabs = []string{"Agent", "MCP", "Profiles"}
+	}
+	children := make([]layout.FlexChild, 0, len(tabs))
+	for i, tab := range tabs {
+		tabIdx := i
+		tabLabel := tab
+		active := s.activeInspectorTab == tabIdx
+		children = append(children, layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+			btn := &s.inspectorTabButtons[tabIdx]
+			if btn.Clicked(gtx) {
+				s.activeInspectorTab = tabIdx
+			}
+			bg := s.theme.surfaceContainerLow
+			fg := s.theme.onSurfaceVariant
+			if active {
+				bg = s.theme.primaryContainer
+				fg = s.theme.onPrimaryContainer
+			} else if btn.Hovered() {
+				bg = s.theme.surfaceContainer
+			}
+			gtx.Constraints.Min.Y = gtx.Dp(28)
+			return desktopUniformInset(2).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+				return btn.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+					return s.roundedSurface(gtx, shapeSmall, bg, func(gtx layout.Context) layout.Dimensions {
+						return desktopInset{Top: 4, Bottom: 4, Left: 6, Right: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+							return layout.Stack{Alignment: layout.Center}.Layout(gtx, layout.Stacked(func(gtx layout.Context) layout.Dimensions {
+								return s.layoutLabel(gtx, tabLabel, textLabelSmall, font.SemiBold, fg, 1)
+							}))
+						})
+					})
+				})
+			})
+		}))
+	}
+	return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx, children...)
+}
+
 func (s *shell) layoutInspectorPanel(gtx layout.Context, session desktopstate.SessionState, snapshot controllerSnapshot, index int) layout.Dimensions {
 	var content layout.Widget
 	if !protonmanSession(session) {
-		switch index {
+		switch s.activeInspectorTab {
 		case 0:
 			content = func(gtx layout.Context) layout.Dimensions {
 				return s.layoutExternalAgentPanel(gtx, session, snapshot)
@@ -116,30 +194,36 @@ func (s *shell) layoutInspectorPanel(gtx layout.Context, session desktopstate.Se
 		}
 		return s.layoutInspectorPanelSurface(gtx, content)
 	}
-	switch index {
+
+	switch s.activeInspectorTab {
 	case 0:
-		content = func(gtx layout.Context) layout.Dimensions {
-			return s.layoutGoalPanel(gtx, session)
+		if index == 0 {
+			content = func(gtx layout.Context) layout.Dimensions {
+				return s.layoutGoalPanel(gtx, session)
+			}
+		} else {
+			content = func(gtx layout.Context) layout.Dimensions {
+				return s.layoutTodoPanel(gtx, session)
+			}
 		}
 	case 1:
 		content = func(gtx layout.Context) layout.Dimensions {
-			return s.layoutTodoPanel(gtx, session)
-		}
-	case 2:
-		content = func(gtx layout.Context) layout.Dimensions {
 			return s.layoutMemoryPanel(gtx, session)
 		}
-	case 3:
-		content = func(gtx layout.Context) layout.Dimensions {
-			return s.layoutRuntimePanel(gtx, session, snapshot)
-		}
-	case 4:
-		content = func(gtx layout.Context) layout.Dimensions {
-			return s.layoutMCPIntegrationsPanel(gtx, snapshot)
-		}
 	default:
-		content = func(gtx layout.Context) layout.Dimensions {
-			return s.layoutAgentProfilesPanel(gtx, snapshot)
+		switch index {
+		case 0:
+			content = func(gtx layout.Context) layout.Dimensions {
+				return s.layoutRuntimePanel(gtx, session, snapshot)
+			}
+		case 1:
+			content = func(gtx layout.Context) layout.Dimensions {
+				return s.layoutMCPIntegrationsPanel(gtx, snapshot)
+			}
+		default:
+			content = func(gtx layout.Context) layout.Dimensions {
+				return s.layoutAgentProfilesPanel(gtx, snapshot)
+			}
 		}
 	}
 	return s.layoutInspectorPanelSurface(gtx, content)

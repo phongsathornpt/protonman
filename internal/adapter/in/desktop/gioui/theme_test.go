@@ -30,6 +30,8 @@ func TestThemeTextContrast(t *testing.T) {
 				{name: "strength container", foreground: theme.onStrengthContainer, background: theme.strengthContainer},
 				{name: "agility container", foreground: theme.onAgilityContainer, background: theme.agilityContainer},
 				{name: "intelligence container", foreground: theme.onIntelligenceContainer, background: theme.intelligenceContainer},
+				{name: "diff added container", foreground: theme.onDiffAddedContainer, background: theme.diffAddedContainer},
+				{name: "diff deleted container", foreground: theme.onDiffDeletedContainer, background: theme.diffDeletedContainer},
 			}
 			for _, pair := range pairs {
 				t.Run(pair.name, func(t *testing.T) {

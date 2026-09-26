@@ -29,55 +29,64 @@ notifications remain a follow-up capability.
 
 ## Product direction
 
-Protonman Desktop is a focused coding workbench. It uses a Material 3 inspired
-structure with neutral graphite surfaces, one cobalt interaction color, and
-distinct semantic feedback for connection, success, warning, and failure.
-Panels use quiet separation instead of lavender blocks; selected and focused
-states carry the visual emphasis.
+Protonman Desktop is a focused developer workbench. It uses a modern integrated
+IDE-style layout with docked edge-to-edge panels and 1px hairline dividers
+(`outlineVariant`), replacing isolated floating card islands. The theme follows
+the "Refined Developer Slate" palette with deep charcoal surfaces, GitHub/VSCode-inspired
+syntax and diff highlighting, and Dota-style attribute accents for delegated subagents.
 
 The following patterns are intentionally rejected:
 
 - landing-page heroes, marketing CTAs, and analytics dashboards;
+- bulky floating card islands that waste horizontal and vertical screen space;
 - glassmorphism, neon gradients, ornamental blobs, and ambient motion;
 - emoji used as interface icons;
 - hidden focus indicators or pointer-only interactions;
-- controls smaller than 44dp; and
+- controls smaller than 44dp touch targets; and
 - layouts that introduce horizontal page scrolling.
 
-## Material tokens
+## Developer Slate Tokens
 
-The palette keeps the cobalt native window chrome in view while removing the
-lavender cast from the application surface. Light and dark modes share the
-same roles and contrast intent.
+The palette uses dark and light charcoal/slate tones optimized for contrast and readability. Light and dark modes share the same semantic roles and guarantee > 4.5:1 contrast for all text pairs.
 
 | Role | Light | Dark |
 | --- | --- | --- |
-| Surface | `#F6F7F9` | `#10141A` |
-| Surface container | `#FFFFFF` | `#171D25` |
-| Surface container high | `#E9EDF2` | `#222A35` |
-| On surface | `#17202B` | `#E8EEF6` |
-| On surface variant | `#536171` | `#B2BECC` |
-| Primary | `#315BE8` | `#9DB7FF` |
-| On primary | `#FFFFFF` | `#182F68` |
-| Primary container | `#E2E9FF` | `#233B78` |
-| On primary container | `#183A9C` | `#DCE6FF` |
-| Secondary container | `#E7EBF1` | `#242E3A` |
-| On secondary container | `#2D3A4A` | `#D2DCE8` |
-| Outline variant | `#C7CFD9` | `#3A4655` |
-| Success container | `#E4F5EB` | `#20392A` |
-| On success container | `#1B6538` | `#B8F0CA` |
-| Warning container | `#FFF1CC` | `#403316` |
-| On warning container | `#604600` | `#FFE3A3` |
-| Error container | `#FDE9E9` | `#472B30` |
-| On error container | `#8C2725` | `#FFDADD` |
-| Tertiary container (thinking) | `#F3E8FF` | `#3B1C56` |
-| On tertiary container | `#4C1D95` | `#F3E8FF` |
+| Surface | `#F6F8FA` | `#0D1117` |
+| Surface dim | `#EAEEF2` | `#080B0F` |
+| Surface bright | `#FFFFFF` | `#1C2128` |
+| Surface container lowest | `#FFFFFF` | `#080B0F` |
+| Surface container low | `#F3F5F8` | `#13171F` |
+| Surface container | `#FFFFFF` | `#161B22` |
+| Surface container high | `#EBEFF4` | `#21262D` |
+| Surface container highest | `#E1E6EB` | `#30363D` |
+| On surface | `#1F2328` | `#F0F4F9` |
+| On surface variant | `#57606A` | `#9CA3AF` |
+| Outline | `#8C959F` | `#484F58` |
+| Outline variant (dividers) | `#D0D7DE` | `#21262D` |
+| Primary | `#0969DA` | `#58A6FF` |
+| On primary | `#FFFFFF` | `#0A1628` |
+| Primary container | `#DDF4FF` | `#172B4D` |
+| On primary container | `#0969DA` | `#BFDBFE` |
+| Secondary container | `#EBF0F4` | `#21262D` |
+| On secondary container | `#24292F` | `#E2E8F0` |
+| Success container | `#DAFBE1` | `#133820` |
+| On success container | `#1A7F37` | `#7EE787` |
+| Warning container | `#FFF8C5` | `#3D2E05` |
+| On warning container | `#7D4E00` | `#F6E05E` |
+| Error container | `#FFEBE9` | `#441B1D` |
+| On error container | `#CF222E` | `#FFA198` |
+| Tertiary container (thinking) | `#FBEFFF` | `#381E54` |
+| On tertiary container | `#6639BA` | `#F3E8FF` |
 | Strength container (STR) | `#FFEDD5` | `#431B06` |
 | On strength container | `#7C2D12` | `#FDBA74` |
 | Agility container (AGI) | `#CCFBF1` | `#0A332C` |
 | On agility container | `#115E59` | `#5EEAD4` |
 | Intelligence container (INT) | `#EDE9FE` | `#2E1065` |
 | On intelligence container | `#4C1D95` | `#DDD6FE` |
+| Diff added container | `#DAFBE1` | `#133820` |
+| On diff added container | `#1A7F37` | `#7EE787` |
+| Diff deleted container | `#FFEBE9` | `#441B1D` |
+| On diff deleted container | `#CF222E` | `#FFA198` |
 
 Components use theme roles rather than component-local hex values. Text pairs
 must retain at least 4.5:1 contrast in both themes.
@@ -85,49 +94,73 @@ must retain at least 4.5:1 contrast in both themes.
 ## Typography
 
 The client requests `Roboto, Arial, sans-serif` through Gio's system-font
-shaper and uses Material type emphasis:
+shaper and uses developer-oriented typographic hierarchy:
 
-- display small: 30sp semibold for a single empty-state title;
-- headline small: 22sp semibold for window and session titles;
-- title medium: 16sp semibold for card and section titles;
-- body large: 16sp regular for primary explanatory text;
-- body medium: 14sp regular for metadata and supporting content;
+- display small: 30sp semibold for empty-state titles;
+- headline small: 20sp semibold for pane and section titles;
+- title medium: 15sp semibold for cards, headers, and tabs;
+- body large: 15sp regular for primary conversation text;
+- body medium: 13sp regular for metadata and supporting content;
+- body small: 12sp regular for diff content, code snippets, and logs;
 - label large: 14sp semibold for buttons; and
-- label medium: 12sp regular or semibold for metadata and status.
+- label small: 11sp semibold for status pills and diff badges.
 
 Long workspace paths and titles use deterministic truncation rather than
 forcing horizontal overflow.
 
-## Layout
+## Workbench Structure & Layout
 
-- Top workspace bar: 64dp minimum height with an 8dp window inset.
-- Project/session sidebar: 288dp at wide sizes and 248dp below 900dp.
-- Sidebar and main pane: 8dp outer inset with a 12dp separation.
-- Interactive controls and session rows: at least 44dp; session rows use 56dp.
-- Main content: flexible width with a 680dp maximum empty-state card width.
-- Window minimum: 760 by 600dp.
-- Default window size: 1180 by 760dp.
-- Detail rows collapse from two columns to one column below 480dp available
-  width.
+The desktop application is structured as a 3-column docked edge-to-edge workbench:
+
+1. **Unified Top Bar (44dp)**: Single cohesive title bar combining branding ("Protonman"), left sidebar toggle button, project/session breadcrumbs, active agent selector, connection status pill, and inspector toggle.
+2. **Left Sidebar (260dp, collapsible)**:
+   - Top action row with "New Session" (`Ctrl/Cmd+N`) and search filter input.
+   - Collapsible project directory groups with toggle chevrons (`▾`/`▸`).
+   - Compact 40dp session rows with colored status dots (green = running, grey = idle, red = error) and relative timestamps.
+3. **Center Conversation Pane (Flexible width, max 840dp text constraint)**:
+   - Edge-to-edge conversation stream with natural flow.
+   - Collapsible thinking blocks with 1-click expand/collapse.
+   - Color-coded unified git diff cards with `+adds` / `-dels` badges and syntax-colored lines.
+   - Non-diff tool executions rendered as compact step pills.
+   - Dota-style attribute cards for delegated subagents (STR, AGI, INT) with 3dp left accent stripes.
+   - Floating composer card docked at the bottom with full-width multiline input and a bottom utility bar (model pill, keyboard hints, Send/Stop action).
+4. **Right Inspector Drawer (320dp, collapsible)**:
+   - 3 docked tabs: `[Plan]`, `[Memory]`, `[Settings]`.
+   - `[Plan]` tab: Active goal, session tasks (TODO checklist with status markers and linear progress bar).
+   - `[Memory]` tab: Workspace-local facts and global preferences with confidence ratings.
+   - `[Settings]` tab: Session runtime controls (model, reasoning effort), MCP server integrations, and ACP agent profile configurations.
+   - Automatically switches to `[Settings]` when an MCP or Agent Profile editor is opened.
+5. **Hairline Dividers**: 1px solid dividers (`outlineVariant`) separate columns edge-to-edge.
+
+## Global Keyboard Shortcuts
+
+| Shortcut | Action |
+| --- | --- |
+| `Ctrl/Cmd+B` | Toggle left sidebar visibility |
+| `Ctrl/Cmd+I` | Toggle right inspector drawer visibility |
+| `Ctrl/Cmd+N` | Create a new session in the active workspace |
+| `Enter` | Send prompt in composer |
+| `Shift+Enter` | Insert new line in composer |
 
 ## Shapes
 
-Use the shared corner-radius scale from `theme.go` adhering to Material 3:
+Corner radii adhere to tight developer tooling standards:
 
-- small: 8dp for compact inputs and row controls;
-- medium: 12dp for buttons, cards, and interactive rows;
-- large: 16dp for panels, message bubbles, and workspace surfaces; and
-- extra large: 24dp for prominent empty-state cards.
+- small: 3dp for diff badges, status pills, and code line containers;
+- medium: 6dp for buttons, tool cards, and search inputs;
+- large: 8dp for panels, composer card, and inspector drawer; and
+- extra large: 12dp for modal dialogs and prominent empty-state cards.
 
 ## AI Chat and Workbench Features
 
 Protonman Desktop integrates native AI features into the conversation and inspector:
 
-- **Thinking Blocks**: Assistant messages parse `<think>...</think>` into collapsible Material 3 cards with live status while streaming and one-click disclosure.
+- **Thinking Blocks**: Assistant messages parse `<think>...</think>` into collapsible cards with live streaming indicator and one-click disclosure.
+- **Unified Diff Cards**: File edit and patch outputs are detected and styled with file headers, `+add` / `-del` count badges, and green/red line coloring.
+- **Subagent Delegations**: Dota-style attribute cards for STRENGTH, AGILITY, and INTELLIGENCE participants with left accent stripes.
 - **Active Goal**: Highlighted goal surface in the inspector and composer context chips to orient multi-turn autonomy.
 - **Task Plan (TODO)**: Checklist with completion markers (`✓`, `◐`, `○`) and visual linear progress indicator.
 - **Durable Memory**: Segmented cards for workspace-local facts and global preferences with confidence ratings.
-- **Subagent Delegations**: Dota-style attribute cards for STRENGTH, AGILITY, and INTELLIGENCE participants.
 
 Focus rings use the same radius as their control. Inner surfaces that continue
 into adjacent content may stay square so the whole pane reads as one surface.

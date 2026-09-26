@@ -68,8 +68,10 @@ func IsOpenCodeRoute(providerName, baseURL string) bool {
 	if IsOpenCodeInferenceEndpoint(baseURL) || IsOpenCodeZenEndpoint(baseURL) || IsOpenCodeGoEndpoint(baseURL) {
 		return true
 	}
-	return strings.EqualFold(strings.TrimSpace(providerName), DefaultOpenCodeName) &&
-		strings.Contains(strings.ToLower(strings.TrimSpace(baseURL)), "opencode.ai/")
+	// The configured provider identity remains authoritative for custom
+	// endpoints and local reverse proxies. Route-specific transport selection
+	// (Zen/Go versus inference) is still determined from the endpoint above.
+	return strings.EqualFold(strings.TrimSpace(providerName), DefaultOpenCodeName)
 }
 
 func modelIDLeafForTransport(modelID string) string {

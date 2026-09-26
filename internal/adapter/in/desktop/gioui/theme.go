@@ -48,12 +48,23 @@ type theme struct {
 	onWarningContainer      color.NRGBA
 
 	// Subagent profile accents (Dota-style STR, AGI, INT)
+	strength                color.NRGBA
 	strengthContainer       color.NRGBA
 	onStrengthContainer     color.NRGBA
+	agility                 color.NRGBA
 	agilityContainer        color.NRGBA
 	onAgilityContainer      color.NRGBA
+	intelligence            color.NRGBA
 	intelligenceContainer   color.NRGBA
 	onIntelligenceContainer color.NRGBA
+
+	// Diffs
+	diffAdded              color.NRGBA
+	diffAddedContainer     color.NRGBA
+	onDiffAddedContainer   color.NRGBA
+	diffDeleted            color.NRGBA
+	diffDeletedContainer   color.NRGBA
+	onDiffDeletedContainer color.NRGBA
 }
 
 func newTheme(mode string) *theme {
@@ -66,85 +77,107 @@ func newTheme(mode string) *theme {
 
 	instance := &theme{material: baseline}
 	if dark {
-		instance.surface = rgba(0x10141a)
-		instance.surfaceDim = rgba(0x0a0d10)
-		instance.surfaceBright = rgba(0x2a323e)
-		instance.surfaceContainerLowest = rgba(0x0a0d10)
-		instance.surfaceContainerLow = rgba(0x14181e)
-		instance.surfaceContainer = rgba(0x171d25)
-		instance.surfaceContainerHigh = rgba(0x222a35)
-		instance.surfaceContainerHighest = rgba(0x2c3542)
-		instance.onSurface = rgba(0xe8eef6)
-		instance.onSurfaceVariant = rgba(0xb2becc)
-		instance.outline = rgba(0x64748b)
-		instance.outlineVariant = rgba(0x3a4655)
-		instance.primary = rgba(0x9db7ff)
-		instance.onPrimary = rgba(0x182f68)
-		instance.primaryContainer = rgba(0x233b78)
-		instance.onPrimaryContainer = rgba(0xdce6ff)
-		instance.inversePrimary = rgba(0x315be8)
+		instance.surface = rgba(0x0d1117)
+		instance.surfaceDim = rgba(0x080b0f)
+		instance.surfaceBright = rgba(0x1c2128)
+		instance.surfaceContainerLowest = rgba(0x080b0f)
+		instance.surfaceContainerLow = rgba(0x13171f)
+		instance.surfaceContainer = rgba(0x161b22)
+		instance.surfaceContainerHigh = rgba(0x21262d)
+		instance.surfaceContainerHighest = rgba(0x30363d)
+		instance.onSurface = rgba(0xf0f4f9)
+		instance.onSurfaceVariant = rgba(0x9ca3af)
+		instance.outline = rgba(0x484f58)
+		instance.outlineVariant = rgba(0x21262d)
+		instance.primary = rgba(0x58a6ff)
+		instance.onPrimary = rgba(0x0a1628)
+		instance.primaryContainer = rgba(0x172b4d)
+		instance.onPrimaryContainer = rgba(0xbfdbfe)
+		instance.inversePrimary = rgba(0x2563eb)
 		instance.secondary = rgba(0x94a3b8)
 		instance.onSecondary = rgba(0x0f172a)
-		instance.secondaryContainer = rgba(0x242e3a)
-		instance.onSecondaryContainer = rgba(0xd2dce8)
+		instance.secondaryContainer = rgba(0x21262d)
+		instance.onSecondaryContainer = rgba(0xe2e8f0)
 		instance.tertiary = rgba(0xd8b4fe)
 		instance.onTertiary = rgba(0x3b0764)
-		instance.tertiaryContainer = rgba(0x3b1c56)
+		instance.tertiaryContainer = rgba(0x381e54)
 		instance.onTertiaryContainer = rgba(0xf3e8ff)
-		instance.errorContainer = rgba(0x472b30)
-		instance.onErrorContainer = rgba(0xffdadd)
-		instance.successContainer = rgba(0x20392a)
-		instance.onSuccessContainer = rgba(0xb8f0ca)
-		instance.warningContainer = rgba(0x403316)
-		instance.onWarningContainer = rgba(0xffe3a3)
+		instance.errorContainer = rgba(0x441b1d)
+		instance.onErrorContainer = rgba(0xffa198)
+		instance.successContainer = rgba(0x133820)
+		instance.onSuccessContainer = rgba(0x7ee787)
+		instance.warningContainer = rgba(0x3d2e05)
+		instance.onWarningContainer = rgba(0xf6e05e)
 
 		// Subagents
+		instance.strength = rgba(0xf97316)
 		instance.strengthContainer = rgba(0x431b06)
 		instance.onStrengthContainer = rgba(0xfdba74)
+		instance.agility = rgba(0x14b8a6)
 		instance.agilityContainer = rgba(0x0a332c)
 		instance.onAgilityContainer = rgba(0x5eead4)
+		instance.intelligence = rgba(0xa855f7)
 		instance.intelligenceContainer = rgba(0x2e1065)
 		instance.onIntelligenceContainer = rgba(0xddd6fe)
+
+		// Diffs
+		instance.diffAdded = rgba(0x3fb950)
+		instance.diffAddedContainer = rgba(0x133820)
+		instance.onDiffAddedContainer = rgba(0x7ee787)
+		instance.diffDeleted = rgba(0xf85149)
+		instance.diffDeletedContainer = rgba(0x441b1d)
+		instance.onDiffDeletedContainer = rgba(0xffa198)
 	} else {
-		instance.surface = rgba(0xf6f7f9)
-		instance.surfaceDim = rgba(0xdce1e8)
+		instance.surface = rgba(0xf6f8fa)
+		instance.surfaceDim = rgba(0xeaeef2)
 		instance.surfaceBright = rgba(0xffffff)
 		instance.surfaceContainerLowest = rgba(0xffffff)
-		instance.surfaceContainerLow = rgba(0xf0f3f6)
+		instance.surfaceContainerLow = rgba(0xf3f5f8)
 		instance.surfaceContainer = rgba(0xffffff)
-		instance.surfaceContainerHigh = rgba(0xe9edf2)
-		instance.surfaceContainerHighest = rgba(0xe0e5eb)
-		instance.onSurface = rgba(0x17202b)
-		instance.onSurfaceVariant = rgba(0x536171)
-		instance.outline = rgba(0x72787e)
-		instance.outlineVariant = rgba(0xc7cfd9)
-		instance.primary = rgba(0x315be8)
+		instance.surfaceContainerHigh = rgba(0xebeff4)
+		instance.surfaceContainerHighest = rgba(0xe1e6eb)
+		instance.onSurface = rgba(0x1f2328)
+		instance.onSurfaceVariant = rgba(0x57606a)
+		instance.outline = rgba(0x8c959f)
+		instance.outlineVariant = rgba(0xd0d7de)
+		instance.primary = rgba(0x0969da)
 		instance.onPrimary = rgba(0xffffff)
-		instance.primaryContainer = rgba(0xe2e9ff)
-		instance.onPrimaryContainer = rgba(0x183a9c)
-		instance.inversePrimary = rgba(0x9db7ff)
-		instance.secondary = rgba(0x4b5e78)
+		instance.primaryContainer = rgba(0xddf4ff)
+		instance.onPrimaryContainer = rgba(0x0969da)
+		instance.inversePrimary = rgba(0x58a6ff)
+		instance.secondary = rgba(0x57606a)
 		instance.onSecondary = rgba(0xffffff)
-		instance.secondaryContainer = rgba(0xe7ebf1)
-		instance.onSecondaryContainer = rgba(0x2d3a4a)
-		instance.tertiary = rgba(0x6b4f82)
+		instance.secondaryContainer = rgba(0xebf0f4)
+		instance.onSecondaryContainer = rgba(0x24292f)
+		instance.tertiary = rgba(0x8250df)
 		instance.onTertiary = rgba(0xffffff)
-		instance.tertiaryContainer = rgba(0xf3e8ff)
-		instance.onTertiaryContainer = rgba(0x4c1d95)
-		instance.errorContainer = rgba(0xfde9e9)
-		instance.onErrorContainer = rgba(0x8c2725)
-		instance.successContainer = rgba(0xe4f5eb)
-		instance.onSuccessContainer = rgba(0x1b6538)
-		instance.warningContainer = rgba(0xfff1cc)
-		instance.onWarningContainer = rgba(0x604600)
+		instance.tertiaryContainer = rgba(0xfbefff)
+		instance.onTertiaryContainer = rgba(0x6639ba)
+		instance.errorContainer = rgba(0xffebe9)
+		instance.onErrorContainer = rgba(0xcf222e)
+		instance.successContainer = rgba(0xdafbe1)
+		instance.onSuccessContainer = rgba(0x1a7f37)
+		instance.warningContainer = rgba(0xfff8c5)
+		instance.onWarningContainer = rgba(0x7d4e00)
 
 		// Subagents
+		instance.strength = rgba(0xc2410c)
 		instance.strengthContainer = rgba(0xffedd5)
 		instance.onStrengthContainer = rgba(0x7c2d12)
+		instance.agility = rgba(0x0f766e)
 		instance.agilityContainer = rgba(0xccfbf1)
 		instance.onAgilityContainer = rgba(0x115e59)
+		instance.intelligence = rgba(0x7e22ce)
 		instance.intelligenceContainer = rgba(0xede9fe)
 		instance.onIntelligenceContainer = rgba(0x4c1d95)
+
+		// Diffs
+		instance.diffAdded = rgba(0x1a7f37)
+		instance.diffAddedContainer = rgba(0xdafbe1)
+		instance.onDiffAddedContainer = rgba(0x1a7f37)
+		instance.diffDeleted = rgba(0xcf222e)
+		instance.diffDeletedContainer = rgba(0xffebe9)
+		instance.onDiffDeletedContainer = rgba(0xcf222e)
 	}
 	baseline.Palette = material.Palette{
 		Bg:         instance.surface,
@@ -170,11 +203,11 @@ func rgba(value uint32) color.NRGBA {
 
 const (
 	shapeNone       unit.Dp = 0
-	shapeExtraSmall unit.Dp = 4
-	shapeSmall      unit.Dp = 8
-	shapeMedium     unit.Dp = 12
-	shapeLarge      unit.Dp = 16
-	shapeExtraLarge unit.Dp = 24
+	shapeExtraSmall unit.Dp = 3
+	shapeSmall      unit.Dp = 6
+	shapeMedium     unit.Dp = 8
+	shapeLarge      unit.Dp = 12
+	shapeExtraLarge unit.Dp = 16
 	shapeFull       unit.Dp = 9999
 
 	textDisplaySmall   unit.Sp = 30
