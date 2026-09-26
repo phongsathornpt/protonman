@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="600" viewBox="0 0 1200 600" role="img" aria-labelledby="title desc">
+  <title id="title">protonMAN terminal interface</title>
+  <desc id="desc">A dark macOS-style protonMAN terminal window on a transparent background.</desc>
+  <defs>
+    <linearGradient id="titlebar" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0" stop-color="#24272b"/>
+      <stop offset="1" stop-color="#1d2024"/>
+    </linearGradient>
+    <filter id="shadow" x="-12%" y="-12%" width="124%" height="136%">
+      <feDropShadow dx="0" dy="12" stdDeviation="14" flood-color="#000" flood-opacity=".34"/>
+    </filter>
+  </defs>
+
+  <g filter="url(#shadow)">
+    <rect x="28" y="28" width="1144" height="544" rx="20" fill="#14161b" stroke="#3a3e45" stroke-width="1.5"/>
+    <path d="M48 28h1104a20 20 0 0 1 20 20v42H28V48a20 20 0 0 1 20-20z" fill="url(#titlebar)"/>
+  </g>
+
+  <circle cx="60" cy="58" r="10" fill="#ff5f57"/>
+  <circle cx="92" cy="58" r="10" fill="#febc2e"/>
+  <circle cx="124" cy="58" r="10" fill="#28c840"/>
+
+  <g font-family="ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,'Liberation Mono',monospace">
+    <text x="166" y="65" font-size="18" font-weight="600" fill="#b8bdc7">gg — protonman — protonman — protonman — 115×42</text>
+
+    <!-- Deterministic ASCII logo: drawn as vector lines so GitHub/font rendering cannot distort it -->
+    <g fill="none" stroke="#ff9d2e" stroke-width="3" stroke-linecap="square" stroke-linejoin="miter">
+      <!-- /\ -->
+      <path d="M80 136 L92 112 L104 136"/>
+      <!-- /__\ -->
+      <path d="M72 168 L84 144 M84 144 H100 M100 144 L112 168"/>
+      <!-- <____> -->
+      <path d="M66 188 L78 180 M66 188 L78 196 M78 188 H106 M106 180 L118 188 M118 188 L106 196"/>
+      <!-- /|__|\ -->
+      <path d="M72 224 L82 202 M82 202 V224 M82 214 H104 M104 202 V224 M104 202 L114 224"/>
+    </g>
+
+    <text x="172" y="136" font-size="23" font-weight="700" fill="#ff9d2e">protonMAN</text>
+    <text x="172" y="168" font-size="20" fill="#c8ccd5">proton/muse-spark-1.3-contributor</text>
+    <text x="548" y="168" font-size="20" fill="#8f96a3">·</text>
+    <circle cx="574" cy="161" r="6" fill="#98a2b3"/>
+    <text x="592" y="168" font-size="20" fill="#98a2b3">vision</text>
+    <text x="172" y="206" font-size="19" fill="#9aa1ad">~</text>
+
+    <line x1="52" y1="238" x2="1148" y2="238" stroke="#737b87" stroke-width="1.5"/>
+
+    <line x1="52" y1="494" x2="1148" y2="494" stroke="#737b87" stroke-width="1.5"/>
+    <text x="52" y="529" font-size="23" font-weight="700" fill="#ff9d2e">&gt;</text>
+
+    <line x1="52" y1="549" x2="200" y2="549" stroke="#ff9d2e" stroke-width="2"/>
+    <line x1="200" y1="549" x2="1148" y2="549" stroke="#2b2f36" stroke-width="2"/>
+
+    <text x="68" y="571" font-size="17" font-weight="700" fill="#ff9d2e">enter send · ctrl+j new line</text>
+    <text x="351" y="571" font-size="17" fill="#d9dde4">· ? for shortcuts</text>
+    <text x="1024" y="571" font-size="17" fill="#969daa">auto · ask</text>
+  </g>
+</svg>
