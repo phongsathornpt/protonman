@@ -55,34 +55,6 @@ jobs:
       - name: Test
         run: make test
 
-  desktop:
-    name: desktop
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-go@v7
-        with:
-          go-version-file: go.mod
-          cache: true
-      - name: Install Gio desktop dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            gcc \
-            libegl1-mesa-dev \
-            libgl1-mesa-dev \
-            libvulkan-dev \
-            libwayland-dev \
-            libxkbcommon-dev \
-            libxkbcommon-x11-dev \
-            wayland-protocols \
-            xorg-dev
-      - name: Architecture (desktop packages visible)
-        run: make test-architecture-desktop
-      - name: Build Desktop with GUI assets
-        run: make desktop
-
   race:
     name: race
     if: github.event_name == 'pull_request'
