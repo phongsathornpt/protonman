@@ -32,7 +32,7 @@ Execution Contract
 Tool Use
 Workspace
 Task Coordination          (when task tools are visible)
-Delegation Protocol        (when agent tools are visible)
+Delegation Protocol        (when spawn-capable agent tools are visible)
 External MCP Tools         (when MCP tools are visible)
 Editing And Verification   (when workspace mutation is possible)
 

@@ -237,6 +237,41 @@ func TestACPSessionListAndDelete(t *testing.T) {
 	}
 }
 
+func TestACPSessionListMergesPersistedActivityIntoActiveSession(t *testing.T) {
+	ctx := context.Background()
+	store, err := sessionfs.NewFileStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewFileStore() error = %v", err)
+	}
+	const sessionID = "active-session"
+	if err := store.Save(ctx, sessionID, session.State{
+		SessionID:      sessionID,
+		PermissionMode: "ask",
+	}); err != nil {
+		t.Fatalf("Save() error = %v", err)
+	}
+	persisted, found, err := store.Load(ctx, sessionID)
+	if err != nil || !found {
+		t.Fatalf("Load() = (%v, %v), want persisted session", err, found)
+	}
+
+	server := newTestServer(t, permission.ModeAlwaysApprove)
+	server.sessionService = app.NewSessions(store)
+	server.sessions[sessionID] = &Session{id: sessionID, cwd: "/workspace"}
+
+	sessions, err := server.listSessions(ctx, "")
+	if err != nil {
+		t.Fatalf("listSessions() error = %v", err)
+	}
+	if len(sessions) != 1 {
+		t.Fatalf("listSessions() returned %d sessions, want 1: %#v", len(sessions), sessions)
+	}
+	wantUpdatedAt := persisted.UpdatedAt.Format(time.RFC3339Nano)
+	if sessions[0].UpdatedAt != wantUpdatedAt {
+		t.Fatalf("UpdatedAt = %q, want %q", sessions[0].UpdatedAt, wantUpdatedAt)
+	}
+}
+
 func TestACPSessionListRejectsMalformedParams(t *testing.T) {
 	server := newTestServer(t, permission.ModeAsk)
 

@@ -75,3 +75,23 @@ func TestMergeTimelineItemPreservesSparseFields(t *testing.T) {
 		t.Fatalf("status = %q, want failed", got.Status)
 	}
 }
+
+func TestMergeTimelineItemConcatenatesMessageChunks(t *testing.T) {
+	previous := TimelineItem{Kind: TimelineAssistant, ID: "message-1", Text: "Hello", Streaming: true}
+	next := TimelineItem{Kind: TimelineAssistant, ID: "message-1", Text: " world", Streaming: true}
+	got := MergeTimelineItem(previous, next)
+	if got.Text != "Hello world" {
+		t.Fatalf("merged text = %q", got.Text)
+	}
+	if !got.Streaming {
+		t.Fatal("merged message stream was marked complete")
+	}
+}
+
+func TestMergeTimelineItemDoesNotDuplicateEmptyMessageChunk(t *testing.T) {
+	previous := TimelineItem{Kind: TimelineUser, ID: "message-1", Text: "Keep this text"}
+	got := MergeTimelineItem(previous, TimelineItem{Kind: TimelineUser, ID: "message-1"})
+	if got.Text != previous.Text {
+		t.Fatalf("merged text = %q, want %q", got.Text, previous.Text)
+	}
+}

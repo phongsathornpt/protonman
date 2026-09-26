@@ -18,6 +18,22 @@ func TestNormalizeArgumentsCanonicalizesQuotedRevision(t *testing.T) {
 	}
 }
 
+func TestNormalizeArgumentsCanonicalizesLegacyRevision(t *testing.T) {
+	normalized := (taskArgumentNormalizer{}).NormalizeArguments(
+		json.RawMessage(`{"action":"update","expected_revision":"7","operations":[{"op":"remove","id":"a"}]}`),
+	)
+	var payload map[string]json.RawMessage
+	if err := json.Unmarshal(normalized, &payload); err != nil {
+		t.Fatalf("normalized payload is not JSON: %v (%s)", err, normalized)
+	}
+	if got := string(payload["expectedRevision"]); got != "7" {
+		t.Fatalf("expectedRevision = %s, want 7", got)
+	}
+	if _, exists := payload["expected_revision"]; exists {
+		t.Fatal("legacy expected_revision remains after normalization")
+	}
+}
+
 func TestNormalizeArgumentsLeavesCanonicalPayloadAlone(t *testing.T) {
 	original := `{"action":"update","expectedRevision":3,"operations":[{"op":"remove","id":"a"}]}`
 	if normalized := (taskArgumentNormalizer{}).NormalizeArguments(json.RawMessage(original)); normalized != nil {

@@ -1,12 +1,12 @@
 .DEFAULT_GOAL := tui
 
-.PHONY: all tui desktop desktop-run run dev build size install run-bin clean test test-architecture test-architecture-desktop test-desktop test-race test-e2e test-install bench bench-cpu bench-mem fmt vet lint tag tag-push help
+.PHONY: all tui desktop desktop-run desktop-gio desktop-gio-run run dev build size install run-bin clean test test-architecture test-architecture-desktop test-desktop test-desktop-gio test-race test-e2e test-install bench bench-cpu bench-mem fmt vet lint tag tag-push help
 
 # Binary configuration
 BIN_DIR := bin
 BIN_NAME := protonman
 BINARY := $(BIN_DIR)/$(BIN_NAME)
-DESKTOP_BINARY := $(BIN_DIR)/protonman-desktop
+DESKTOP_GIO_BINARY := $(BIN_DIR)/protonman-desktop-gio
 INSTALL_DIR ?= $(HOME)/.local/bin
 INSTALL_BINARY := $(INSTALL_DIR)/$(BIN_NAME)
 GO_SOURCES := $(shell find cmd internal proton-sdk -type f -name '*.go' ! -name '*_test.go')
@@ -22,13 +22,18 @@ GO_ENV := GOTMPDIR="$(GO_TMPDIR)"
 ## tui: Run Protonman TUI from the cached binary (default)
 tui: run
 
-## desktop: Build the Fyne desktop client and prepare bundled GUI assets
-# Linux requires the normal Fyne desktop development packages (OpenGL/X11).
-desktop: $(DESKTOP_BINARY)
+## desktop: Build the Gio desktop client
+desktop: $(DESKTOP_GIO_BINARY)
 
-## desktop-run: Build and run the Fyne desktop client against the local CLI
-desktop-run: $(BINARY) $(DESKTOP_BINARY)
-	PROTONMAN_BINARY="$(abspath $(BINARY))" ./$(DESKTOP_BINARY)
+## desktop-run: Build and run the Gio desktop client against the local CLI
+desktop-run: $(BINARY) $(DESKTOP_GIO_BINARY)
+	PROTONMAN_BINARY="$(abspath $(BINARY))" ./$(DESKTOP_GIO_BINARY)
+
+## desktop-gio: Alias for the Gio desktop client
+desktop-gio: desktop
+
+## desktop-gio-run: Alias for the Gio desktop run target
+desktop-gio-run: desktop-run
 
 ## run: Build Protonman only when sources changed, then run it
 run: $(BINARY)
@@ -55,9 +60,9 @@ $(BINARY): $(GO_SOURCES) go.mod go.sum Makefile $(VERSION_STAMP)
 	@mkdir -p $(BIN_DIR) "$(GO_TMPDIR)"
 	$(GO_ENV) go build -trimpath -ldflags "$(BUILD_LDFLAGS)" -o $(BINARY) ./cmd/protonman
 
-$(DESKTOP_BINARY): $(GO_SOURCES) go.mod go.sum Makefile $(VERSION_STAMP)
+$(DESKTOP_GIO_BINARY): $(GO_SOURCES) go.mod go.sum Makefile $(VERSION_STAMP)
 	@mkdir -p $(BIN_DIR) "$(GO_TMPDIR)"
-	$(GO_ENV) go build -tags desktop -trimpath -ldflags "$(BUILD_LDFLAGS)" -o $(DESKTOP_BINARY) ./cmd/protonman-desktop
+	$(GO_ENV) go build -tags desktop -trimpath -ldflags "$(BUILD_LDFLAGS)" -o $(DESKTOP_GIO_BINARY) ./cmd/protonman-desktop-gio
 
 ## install: Build from the current source tree and install into ~/.local/bin by default
 install: build
@@ -77,15 +82,16 @@ test-architecture:
 	go test ./test/architecture/...
 	go test ./proton-sdk/... -run 'Ownership|Architecture|Contract'
 
-## test-architecture-desktop: Run architecture guards with desktop packages visible
-# The Fyne desktop frontend is build-tag gated, so it is absent from the default
-# package graph. GOFLAGS makes both the guard subprocess and this run see it.
+## test-architecture-desktop: Run architecture guards with the Gio desktop client visible
 test-architecture-desktop:
-	GOFLAGS=-tags=desktop go test ./test/architecture/...
+	go test -tags desktop ./test/architecture/...
 
-## test-desktop: Run desktop frontend tests (build-tag gated)
+## test-desktop: Run the Gio desktop frontend tests (build-tag gated)
 test-desktop:
-	go test -tags desktop ./internal/feature/desktop ./internal/adapter/in/desktop ./cmd/protonman-desktop
+	go test -tags desktop ./internal/feature/desktop ./internal/adapter/in/desktop/gioui ./cmd/protonman-desktop-gio
+
+## test-desktop-gio: Alias for the Gio desktop tests
+test-desktop-gio: test-desktop
 
 ## test-race: Run all tests with race detector
 test-race:

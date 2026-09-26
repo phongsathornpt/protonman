@@ -82,6 +82,23 @@ func TestRegistryCachesCompiledSchemaValidators(t *testing.T) {
 	if _, _, ok := registry.CompiledValidators("missing"); ok {
 		t.Fatal("CompiledValidators(missing) ok = true, want false")
 	}
+	snapshot, ok := registry.LookupSnapshot("cached_schema")
+	if !ok || snapshot.Handler == nil || snapshot.Definition.Name != "cached_schema" {
+		t.Fatalf("LookupSnapshot() = %#v, %v", snapshot, ok)
+	}
+	if !snapshot.ValidatorsCompiled || snapshot.InputValidator != input1 || snapshot.OutputValidator != output1 {
+		t.Fatal("LookupSnapshot() did not bind the cached validators to the handler")
+	}
+	if err := registry.ReplaceNamespace("cached_", []tool.Handler{cachedSchemaHandler{}}); err != nil {
+		t.Fatal(err)
+	}
+	replaced, ok := registry.LookupSnapshot("cached_schema")
+	if !ok || !replaced.ValidatorsCompiled {
+		t.Fatalf("replacement LookupSnapshot() = %#v, %v", replaced, ok)
+	}
+	if replaced.InputValidator == snapshot.InputValidator || replaced.OutputValidator == snapshot.OutputValidator {
+		t.Fatal("replacement snapshot reused validators from the previous registry generation")
+	}
 }
 
 type namedSchemaHandler struct{ name string }

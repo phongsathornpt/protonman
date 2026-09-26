@@ -12,8 +12,10 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 )
 
 var ErrClosed = errors.New("ACP client is closed")
@@ -64,14 +66,82 @@ type Client struct {
 	stdin  io.WriteCloser
 	cancel context.CancelFunc
 
-	writeMu sync.Mutex
-	mu      sync.Mutex
-	pending map[uint64]chan response
-	handler RequestHandler
-	nextID  atomic.Uint64
-	onEvent func(Event)
-	closed  chan struct{}
-	once    sync.Once
+	writeMu  sync.Mutex
+	mu       sync.Mutex
+	pending  map[uint64]chan response
+	handler  RequestHandler
+	requests chan incomingRequest
+	nextID   atomic.Uint64
+	onEvent  func(Event)
+	closed   chan struct{}
+	once     sync.Once
+	stderrMu sync.Mutex
+	stderr   []byte
+	// stderrDone is non-nil only for clients started by StartCommand. shutdown
+	// uses it to avoid reporting a partial stderr tail while the drain is still
+	// reading the last bytes of a dead process.
+	stderrDone chan struct{}
+}
+
+const (
+	incomingRequestWorkers       = 4
+	incomingRequestQueueCapacity = 16
+	maxIncomingRequestParams     = 256 << 10
+	maxIncomingRequestID         = 4 << 10
+	maxIncomingRequestMethod     = 512
+)
+
+var errIncomingRequestQueueFull = errors.New("ACP reverse request queue is full")
+
+type incomingRequest struct {
+	request   Request
+	errorCode int
+	errorText string
+}
+
+// stderrTailLimit bounds the retained child stderr. Startup and crash diagnostics
+// are short; keeping the tail preserves the error while bounding memory for a
+// chatty external agent.
+const stderrTailLimit = 8 * 1024
+
+// drainStderr consumes the child's stderr and retains a bounded tail. Discarding it
+// entirely would make every pre-handshake failure indistinguishable from a timeout.
+func (c *Client) drainStderr(r io.Reader) {
+	buf := make([]byte, 4096)
+	for {
+		n, err := r.Read(buf)
+		if n > 0 {
+			c.appendStderr(buf[:n])
+		}
+		if err != nil {
+			return
+		}
+	}
+}
+
+func (c *Client) appendStderr(chunk []byte) {
+	c.stderrMu.Lock()
+	defer c.stderrMu.Unlock()
+	c.stderr = append(c.stderr, chunk...)
+	if len(c.stderr) > stderrTailLimit {
+		c.stderr = append([]byte(nil), c.stderr[len(c.stderr)-stderrTailLimit:]...)
+	}
+}
+
+func (c *Client) stderrTail() string {
+	c.stderrMu.Lock()
+	defer c.stderrMu.Unlock()
+	return strings.TrimSpace(string(c.stderr))
+}
+
+// withStderr annotates a transport failure with the child's last diagnostics so a
+// broken ACP agent reports its real cause instead of a bare context deadline.
+func (c *Client) withStderr(cause error) error {
+	tail := c.stderrTail()
+	if tail == "" {
+		return cause
+	}
+	return fmt.Errorf("%w: %s", cause, tail)
 }
 
 type response struct {
@@ -126,12 +196,26 @@ func StartCommand(ctx context.Context, spec CommandSpec, onEvent func(Event)) (*
 
 	client := &Client{
 		ctx: procCtx, cmd: cmd, stdin: stdin, cancel: cancel, onEvent: onEvent,
-		pending: make(map[uint64]chan response), closed: make(chan struct{}),
+		pending: make(map[uint64]chan response), requests: make(chan incomingRequest, incomingRequestQueueCapacity),
+		closed:     make(chan struct{}),
+		stderrDone: make(chan struct{}),
+	}
+	for range incomingRequestWorkers {
+		go client.requestLoop()
 	}
 	go client.readLoop(stdout)
-	go io.Copy(io.Discard, stderr)
+	go func() {
+		defer close(client.stderrDone)
+		client.drainStderr(stderr)
+	}()
 	go func() {
 		err := cmd.Wait()
+		// Wait() closes the stderr pipe, but the drain may not have consumed the
+		// final chunk yet. Block briefly so the reported tail is complete.
+		select {
+		case <-client.stderrDone:
+		case <-time.After(500 * time.Millisecond):
+		}
 		client.shutdown(err)
 	}()
 	return client, nil
@@ -228,9 +312,33 @@ func (c *Client) readLoop(r io.Reader) {
 			continue
 		}
 		if msg.Method != "" {
-			if len(msg.ID) > 0 && string(msg.ID) != "null" {
-				request := Request{ID: append(json.RawMessage(nil), msg.ID...), Method: msg.Method, Params: append(json.RawMessage(nil), msg.Params...)}
-				go c.handleRequest(request)
+			if len(msg.ID) > 0 && !(len(msg.ID) == len("null") && string(msg.ID) == "null") {
+				request := incomingRequest{}
+				if len(msg.ID) > maxIncomingRequestID {
+					request.request.ID = json.RawMessage("null")
+					request.errorCode = -32600
+					request.errorText = "ACP request ID exceeds the supported size"
+				} else {
+					request.request.ID = append(json.RawMessage(nil), msg.ID...)
+					if len(msg.Method) > maxIncomingRequestMethod {
+						request.errorCode = -32600
+						request.errorText = "ACP request method exceeds the supported size"
+					} else {
+						request.request.Method = strings.Clone(msg.Method)
+					}
+				}
+				if request.errorCode == 0 && len(msg.Params) > maxIncomingRequestParams {
+					request.errorCode = -32600
+					request.errorText = "ACP request parameters exceed the supported size"
+				} else if request.errorCode == 0 {
+					request.request.Params = append(json.RawMessage(nil), msg.Params...)
+				}
+				select {
+				case c.requests <- request:
+				default:
+					c.shutdown(errIncomingRequestQueueFull)
+					return
+				}
 				continue
 			}
 			if c.onEvent != nil {
@@ -259,6 +367,31 @@ func (c *Client) readLoop(r io.Reader) {
 		c.shutdown(fmt.Errorf("read ACP stream: %w", err))
 	} else {
 		c.shutdown(io.EOF)
+	}
+}
+
+func (c *Client) requestLoop() {
+	for {
+		if c.ctx.Err() != nil {
+			return
+		}
+		select {
+		case <-c.closed:
+			return
+		case incoming := <-c.requests:
+			if c.ctx.Err() != nil {
+				return
+			}
+			if incoming.errorCode != 0 {
+				_ = c.write(envelope{
+					JSONRPC: "2.0",
+					ID:      incoming.request.ID,
+					Error:   &RPCError{Code: incoming.errorCode, Message: incoming.errorText},
+				})
+				continue
+			}
+			c.handleRequest(incoming.request)
+		}
 	}
 }
 
@@ -308,16 +441,22 @@ func (c *Client) shutdown(cause error) {
 	c.once.Do(func() {
 		c.cancel()
 		_ = c.stdin.Close()
-		close(c.closed)
 		if cause == nil {
 			cause = ErrClosed
+		}
+		if !errors.Is(cause, ErrClosed) {
+			cause = c.withStderr(cause)
 		}
 		c.mu.Lock()
 		pending := c.pending
 		c.pending = make(map[uint64]chan response)
 		c.mu.Unlock()
+		// Resolve every in-flight call with the real cause *before* closing
+		// `closed`. Callers select on both, so closing first would let a
+		// generic ErrClosed win the race and mask the child's diagnostics.
 		for _, ch := range pending {
 			ch <- response{err: cause}
 		}
+		close(c.closed)
 	})
 }

@@ -35,6 +35,8 @@ type Registry struct {
 	order      []string
 }
 
+var _ tool.SnapshotRegistry = (*Registry)(nil)
+
 // NewRegistry creates an empty registry and optionally registers handlers.
 func NewRegistry(handlers ...tool.Handler) (*Registry, error) {
 	registry := &Registry{
@@ -287,6 +289,25 @@ func (r *Registry) Lookup(name string) (tool.Handler, bool) {
 	defer r.mu.RUnlock()
 	handler, ok := r.handlers[name]
 	return handler, ok
+}
+
+// LookupSnapshot returns the handler, definition, and validators from one registry generation.
+func (r *Registry) LookupSnapshot(name string) (tool.HandlerSnapshot, bool) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	handler, ok := r.handlers[name]
+	if !ok {
+		return tool.HandlerSnapshot{}, false
+	}
+	validators, ok := r.validators[name]
+	if !ok {
+		return tool.HandlerSnapshot{Handler: handler, Definition: handler.Definition()}, true
+	}
+	return tool.HandlerSnapshot{
+		Handler: handler, Definition: handler.Definition(),
+		InputValidator: validators.input, OutputValidator: validators.output,
+		ValidatorsCompiled: true,
+	}, true
 }
 
 // CompiledValidators returns the immutable validators compiled when the tool was registered.

@@ -3,6 +3,8 @@ package tool
 import (
 	"context"
 	"encoding/json"
+
+	"github.com/phongsathornpt/protonman/proton-sdk/usecase"
 )
 
 // Handler executes one registered tool call.
@@ -38,6 +40,23 @@ type Registry interface {
 	Lookup(name string) (Handler, bool)
 	// Definitions returns a stable snapshot of registered tool manifests.
 	Definitions() []Definition
+}
+
+// HandlerSnapshot binds a handler and its compiled validators to one registry generation.
+// ValidatorsCompiled distinguishes an intentionally absent schema validator from a
+// registry that cannot provide compiled validators.
+type HandlerSnapshot struct {
+	Handler            Handler
+	Definition         Definition
+	InputValidator     *usecase.ToolSchemaValidator
+	OutputValidator    *usecase.ToolSchemaValidator
+	ValidatorsCompiled bool
+}
+
+// SnapshotRegistry exposes an atomically resolved handler contract.
+type SnapshotRegistry interface {
+	Registry
+	LookupSnapshot(name string) (HandlerSnapshot, bool)
 }
 
 // Registrar extends a registry with safe handler registration for discovery adapters.

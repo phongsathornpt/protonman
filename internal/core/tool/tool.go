@@ -4,7 +4,7 @@ package tool
 import (
 	"encoding/json"
 	"fmt"
-	"math"
+	"math/big"
 	"strconv"
 	"strings"
 )
@@ -223,14 +223,20 @@ func canonicalIntegralNumber(raw json.RawMessage) (json.RawMessage, bool) {
 	if trimmed == "" || !strings.ContainsAny(trimmed, ".eE") {
 		return nil, false
 	}
-	value, err := strconv.ParseFloat(trimmed, 64)
-	if err != nil || value != math.Trunc(value) {
+	if !json.Valid(json.RawMessage(trimmed)) {
 		return nil, false
 	}
-	if value < math.MinInt64 || value > math.MaxInt64 {
+	if strings.ContainsAny(trimmed, "123456789") {
+		approximation, err := strconv.ParseFloat(trimmed, 64)
+		if err != nil || approximation == 0 {
+			return nil, false
+		}
+	}
+	value, ok := new(big.Rat).SetString(trimmed)
+	if !ok || !value.IsInt() || !value.Num().IsInt64() {
 		return nil, false
 	}
-	encoded, err := json.Marshal(int64(value))
+	encoded, err := json.Marshal(value.Num().Int64())
 	if err != nil || string(encoded) == trimmed {
 		return nil, false
 	}

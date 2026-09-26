@@ -18,15 +18,15 @@ import (
 
 func TestProviderSelectViewLaunchViaSlashCommand(t *testing.T) {
 	bModel := newTestSkillsModel(t, 1)
-	bModel.providers = map[string]config.ProviderConfig{"opencode": {Name: "opencode", BaseURL: "https://opencode.ai/zen/v1", Type: "openai"}, "protonman": {Name: "protonman", BaseURL: "https://api.protonman.dev/v1", APIKey: "pm-test-key", Type: "openai"}}
+	bModel.providers = map[string]config.ProviderConfig{"opencode": {Name: "opencode", BaseURL: model.DefaultOpenCodeEndpoint, Type: "openai"}, "protonman": {Name: "protonman", BaseURL: "https://api.protonman.dev/v1", APIKey: "pm-test-key", Type: "openai"}}
 	bModel.activeProvider = "protonman"
 	bModel.executeCommand("/provider")
 	if !bModel.panes.bottom.has(providerSelectViewID) {
 		t.Fatal("expected provider select modal open after /provider")
 	}
 	view := bModel.panes.bottom.find(providerSelectViewID).(*providerSelectPaneView)
-	if len(view.items) != 6 {
-		t.Fatalf("expected 6 items in hub, got %d", len(view.items))
+	if len(view.items) != 8 {
+		t.Fatalf("expected 8 items in hub, got %d", len(view.items))
 	}
 	if view.items[view.picker.Index()].name != "protonman" {
 		t.Fatalf("expected active provider 'protonman' focused, got %s", view.items[view.picker.Index()].name)
@@ -65,7 +65,7 @@ func TestProviderSelectViewNavigationAndConfirm(t *testing.T) {
 	tempHome := t.TempDir()
 	t.Setenv("PROTONMAN_HOME", tempHome)
 	bModel := newTestSkillsModel(t, 1)
-	bModel.providers = map[string]config.ProviderConfig{"opencode": {Name: "opencode", BaseURL: "https://opencode.ai/zen/v1", Type: "openai"}, "protonman": {Name: "protonman", BaseURL: "https://api.protonman.dev/v1", APIKey: "pm-test-key", Type: "openai"}}
+	bModel.providers = map[string]config.ProviderConfig{"opencode": {Name: "opencode", BaseURL: model.DefaultOpenCodeEndpoint, Type: "openai"}, "protonman": {Name: "protonman", BaseURL: "https://api.protonman.dev/v1", APIKey: "pm-test-key", Type: "openai"}}
 	bModel.activeProvider = "protonman"
 	bModel.executeCommand("/provider")
 	view := bModel.panes.bottom.find(providerSelectViewID).(*providerSelectPaneView)
@@ -159,7 +159,7 @@ func TestProviderSelectViewEditDetails(t *testing.T) {
 
 func TestProviderSelectViewSetupPreset(t *testing.T) {
 	bModel := newTestSkillsModel(t, 1)
-	bModel.providers = map[string]config.ProviderConfig{"opencode": {Name: "opencode", BaseURL: "https://opencode.ai/zen/v1", Type: "openai"}}
+	bModel.providers = map[string]config.ProviderConfig{"opencode": {Name: "opencode", BaseURL: model.DefaultOpenCodeEndpoint, Type: "openai"}}
 	bModel.executeCommand("/provider")
 	view := bModel.panes.bottom.find(providerSelectViewID).(*providerSelectPaneView)
 	ollamaIdx := -1
@@ -191,7 +191,7 @@ func TestProviderSelectViewDelete(t *testing.T) {
 	tempHome := t.TempDir()
 	t.Setenv("PROTONMAN_HOME", tempHome)
 	bModel := newTestSkillsModel(t, 1)
-	bModel.providers = map[string]config.ProviderConfig{"opencode": {Name: "opencode", BaseURL: "https://opencode.ai/zen/v1", Type: "openai"}, "protonman": {Name: "protonman", BaseURL: "https://api.protonman.dev/v1", APIKey: "pm-key", Type: "openai"}}
+	bModel.providers = map[string]config.ProviderConfig{"opencode": {Name: "opencode", BaseURL: model.DefaultOpenCodeEndpoint, Type: "openai"}, "protonman": {Name: "protonman", BaseURL: "https://api.protonman.dev/v1", APIKey: "pm-key", Type: "openai"}}
 	bModel.activeProvider = "protonman"
 	bModel.executeCommand("/provider")
 	updated, cmd := bModel.Update(testText("d"))
@@ -237,7 +237,7 @@ func TestProviderSelectDirectSlashCommand(t *testing.T) {
 	tempHome := t.TempDir()
 	t.Setenv("PROTONMAN_HOME", tempHome)
 	bModel := newTestSkillsModel(t, 1)
-	bModel.providers = map[string]config.ProviderConfig{"opencode": {Name: "opencode", BaseURL: "https://opencode.ai/zen/v1", Type: "openai"}, "protonman": {Name: "protonman", BaseURL: "https://api.protonman.dev/v1", APIKey: "pm-test-key", Type: "openai"}}
+	bModel.providers = map[string]config.ProviderConfig{"opencode": {Name: "opencode", BaseURL: model.DefaultOpenCodeEndpoint, Type: "openai"}, "protonman": {Name: "protonman", BaseURL: "https://api.protonman.dev/v1", APIKey: "pm-test-key", Type: "openai"}}
 	bModel.activeProvider = "protonman"
 	cmd := bModel.executeCommand("/provider opencode")
 	if cmd == nil {
@@ -274,7 +274,7 @@ func TestProviderSelectDirectSlashCommand(t *testing.T) {
 
 func TestProviderSelectSwitchToModels(t *testing.T) {
 	bModel := newTestSkillsModel(t, 1)
-	bModel.providers = map[string]config.ProviderConfig{"opencode": {Name: "opencode", BaseURL: "https://opencode.ai/zen/v1", Type: "openai"}, "protonman": {Name: "protonman", BaseURL: "https://api.protonman.dev/v1", APIKey: "pm-test-key", Type: "openai"}}
+	bModel.providers = map[string]config.ProviderConfig{"opencode": {Name: "opencode", BaseURL: model.DefaultOpenCodeEndpoint, Type: "openai"}, "protonman": {Name: "protonman", BaseURL: "https://api.protonman.dev/v1", APIKey: "pm-test-key", Type: "openai"}}
 	bModel.activeProvider = "opencode"
 	bModel.executeCommand("/provider")
 	updated, _ := bModel.Update(testText("m"))
@@ -289,7 +289,7 @@ func TestProviderSelectSwitchToModels(t *testing.T) {
 
 func TestModelSetupSwitchToProviders(t *testing.T) {
 	bModel := newTestSkillsModel(t, 1)
-	bModel.providers = map[string]config.ProviderConfig{"opencode": {Name: "opencode", BaseURL: "https://opencode.ai/zen/v1", Type: "openai"}, "protonman": {Name: "protonman", BaseURL: "https://api.protonman.dev/v1", APIKey: "pm-test-key", Type: "openai"}}
+	bModel.providers = map[string]config.ProviderConfig{"opencode": {Name: "opencode", BaseURL: model.DefaultOpenCodeEndpoint, Type: "openai"}, "protonman": {Name: "protonman", BaseURL: "https://api.protonman.dev/v1", APIKey: "pm-test-key", Type: "openai"}}
 	bModel.executeCommand("/model")
 	if !bModel.panes.bottom.has(modelSetupViewID) {
 		t.Fatal("expected model setup view open")
@@ -583,14 +583,14 @@ func TestProviderViewFetchAndModelSelectionFlow(t *testing.T) {
 func TestProviderViewInactiveEditKeepsActiveProvider(t *testing.T) {
 	homeDir := t.TempDir()
 	t.Setenv("PROTONMAN_HOME", homeDir)
-	if err := config.SaveUserProviderConfig(homeDir, config.ProviderConfig{Name: "opencode", Type: "openai", BaseURL: "https://opencode.ai/zen/v1"}, "free-model"); err != nil {
+	if err := config.SaveUserProviderConfig(homeDir, config.ProviderConfig{Name: "opencode", Type: "openai", BaseURL: model.DefaultOpenCodeEndpoint}, "free-model"); err != nil {
 		t.Fatalf("save active provider fixture: %v", err)
 	}
 	if err := config.SaveUserProviderConfigWithOptions(homeDir, config.ProviderConfig{Name: "protonman", Type: "openai", BaseURL: "https://protonman.dev/api/v1", APIKey: "old-key"}, config.ProviderSaveOptions{}); err != nil {
 		t.Fatalf("save inactive provider fixture: %v", err)
 	}
 	bModel := newTestSkillsModel(t, 1)
-	bModel.providers = map[string]config.ProviderConfig{"opencode": {Name: "opencode", BaseURL: "https://opencode.ai/zen/v1"}, "protonman": {Name: "protonman", BaseURL: "https://protonman.dev/api/v1", APIKey: "old-key"}}
+	bModel.providers = map[string]config.ProviderConfig{"opencode": {Name: "opencode", BaseURL: model.DefaultOpenCodeEndpoint}, "protonman": {Name: "protonman", BaseURL: "https://protonman.dev/api/v1", APIKey: "old-key"}}
 	bModel.activeProvider = "opencode"
 	bModel.activeModel = "free-model"
 	bModel.executeCommand("/provider")
@@ -742,14 +742,14 @@ func TestProviderViewOpenCodePresetLaunch(t *testing.T) {
 	if view.nameInput.Value() != "opencode" {
 		t.Fatalf("expected prefilled provider 'opencode', got: %s", view.nameInput.Value())
 	}
-	if view.endpointInput.Value() != "https://opencode.ai/zen/v1" {
-		t.Fatalf("expected prefilled endpoint 'https://opencode.ai/zen/v1', got: %s", view.endpointInput.Value())
+	if view.endpointInput.Value() != model.DefaultOpenCodeEndpoint {
+		t.Fatalf("expected prefilled endpoint %q, got: %s", model.DefaultOpenCodeEndpoint, view.endpointInput.Value())
 	}
 	if !strings.Contains(strings.ToLower(view.apiKeyInput.Placeholder), "optional") {
 		t.Fatalf("expected placeholder with 'Optional', got: %s", view.apiKeyInput.Placeholder)
 	}
 	rendered := bModel.View().Content
-	if !strings.Contains(rendered, "opencode") || !strings.Contains(rendered, "https://opencode.ai/zen/v1") {
+	if !strings.Contains(rendered, "opencode") || !strings.Contains(rendered, model.DefaultOpenCodeEndpoint) {
 		t.Fatalf("expected opencode in rendered view, got:\n%s", rendered)
 	}
 }
@@ -774,7 +774,7 @@ func TestProviderViewFreeBadgeAndFiltering(t *testing.T) {
 	bModel := newTestSkillsModel(t, 1)
 	bModel.executeCommand("/provider add opencode")
 	sampleModels := []model.RemoteModel{{ID: "nemotron-3.5-lightning-free", Name: "Nemotron 3.5 Lightning (Free)"}, {ID: "big-pickle", Name: "Big Pickle (Free)"}, {ID: "claude-sonnet-5", Name: "Claude Sonnet 5"}, {ID: "gpt-5.5", Name: "GPT 5.5"}}
-	updated, _ := bModel.Update(modelsFetchedMsg{providerName: "opencode", baseURL: "https://opencode.ai/zen/v1", apiKey: "", models: sampleModels})
+	updated, _ := bModel.Update(modelsFetchedMsg{providerName: "opencode", baseURL: model.DefaultOpenCodeEndpoint, apiKey: "", models: sampleModels})
 	bModel = updated.(*bubbleModel)
 	view := bModel.panes.bottom.find(providerViewID).(*providerPaneView)
 	if view.state != providerStateSelectModel {
@@ -907,7 +907,7 @@ func TestProviderSwitchReconcilesIncompatibleModel(t *testing.T) {
 	t.Setenv("PROTONMAN_HOME", tempHome)
 	bModel := newTestSkillsModel(t, 1)
 	bModel.providers = map[string]config.ProviderConfig{
-		"opencode":  {Name: "opencode", BaseURL: "https://opencode.ai/zen/v1", Type: "openai"},
+		"opencode":  {Name: "opencode", BaseURL: model.DefaultOpenCodeEndpoint, Type: "openai"},
 		"protonman": {Name: "protonman", BaseURL: "https://api.protonman.dev/v1", APIKey: "pm-test-key", Type: "openai"},
 	}
 	bModel.activeProvider = "protonman"
