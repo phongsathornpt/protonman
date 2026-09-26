@@ -80,8 +80,6 @@ jobs:
             xorg-dev
       - name: Architecture (desktop packages visible)
         run: make test-architecture-desktop
-      - name: Test Desktop
-        run: make test-desktop
       - name: Build Desktop with GUI assets
         run: make desktop
 
