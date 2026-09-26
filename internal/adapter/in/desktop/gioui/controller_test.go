@@ -239,6 +239,56 @@ func TestSnapshotCachesUntilRevisionChanges(t *testing.T) {
 	}
 }
 
+func TestSnapshotCacheAdvancesForTimelineRevisionWithoutMutatingPriorSnapshot(t *testing.T) {
+	controller := newTestController()
+	controller.state.ActiveSessionID = "session-1"
+	controller.state.Sessions[0].Timeline = []desktopstate.TimelineItem{{Kind: desktopstate.TimelineAssistant, ID: "item", Text: "before"}}
+	controller.revision = 1
+	prior := controller.snapshot()
+
+	controller.mu.Lock()
+	controller.state.Sessions[0].Timeline[0].Text = "after"
+	controller.state.Sessions[0].HistoryTruncated = true
+	controller.revision++
+	if !controller.advanceSnapshotCacheForTimelineLocked("session-1") {
+		controller.mu.Unlock()
+		t.Fatal("timeline-only revision did not advance the current snapshot cache")
+	}
+	controller.mu.Unlock()
+
+	current := controller.snapshot()
+	if got := current.State.Sessions[0].Timeline[0].Text; got != "after" {
+		t.Fatalf("current cached timeline text = %q, want after", got)
+	}
+	if !current.State.Sessions[0].HistoryTruncated {
+		t.Fatal("current cached snapshot lost the history truncation state")
+	}
+	if got := prior.State.Sessions[0].Timeline[0].Text; got != "before" {
+		t.Fatalf("prior snapshot was mutated by cache advance: %q", got)
+	}
+	if prior.State.Sessions[0].HistoryTruncated {
+		t.Fatal("prior snapshot inherited the new history truncation state")
+	}
+	if current.Revision != controller.revision {
+		t.Fatalf("snapshot revision = %d, controller revision = %d", current.Revision, controller.revision)
+	}
+}
+
+func TestSnapshotCacheTimelineAdvanceRejectsUnrelatedRevision(t *testing.T) {
+	controller := newTestController()
+	controller.state.ActiveSessionID = "session-1"
+	controller.revision = 1
+	controller.snapshot()
+
+	controller.mu.Lock()
+	controller.revision += 2
+	advanced := controller.advanceSnapshotCacheForTimelineLocked("session-1")
+	controller.mu.Unlock()
+	if advanced {
+		t.Fatal("timeline cache advanced across unrelated controller revisions")
+	}
+}
+
 type errorString string
 
 func (err errorString) Error() string {

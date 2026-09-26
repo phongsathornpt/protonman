@@ -72,11 +72,73 @@ func commandSpecForACPAgent(profile app.ACPAgentProfile) acpclient.CommandSpec {
 	return spec
 }
 
+type agentSessionLock struct {
+	token chan struct{}
+	refs  int
+}
+
+type agentSessionLockRegistry struct {
+	mu    sync.Mutex
+	locks map[string]*agentSessionLock
+}
+
+func (r *agentSessionLockRegistry) lock(agentID string) func() {
+	unlock, ok := r.lockContext(context.Background(), agentID)
+	if !ok {
+		panic("background agent session lock acquisition was cancelled")
+	}
+	return unlock
+}
+
+func (r *agentSessionLockRegistry) lockContext(ctx context.Context, agentID string) (func(), bool) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	r.mu.Lock()
+	if r.locks == nil {
+		r.locks = make(map[string]*agentSessionLock)
+	}
+	lock := r.locks[agentID]
+	if lock == nil {
+		lock = &agentSessionLock{token: make(chan struct{}, 1)}
+		lock.token <- struct{}{}
+		r.locks[agentID] = lock
+	}
+	lock.refs++
+	r.mu.Unlock()
+
+	select {
+	case <-ctx.Done():
+		r.release(agentID, lock)
+		return nil, false
+	case <-lock.token:
+	}
+	if ctx.Err() != nil {
+		lock.token <- struct{}{}
+		r.release(agentID, lock)
+		return nil, false
+	}
+	return func() {
+		lock.token <- struct{}{}
+		r.release(agentID, lock)
+	}, true
+}
+
+func (r *agentSessionLockRegistry) release(agentID string, lock *agentSessionLock) {
+	r.mu.Lock()
+	lock.refs--
+	if lock.refs == 0 && r.locks[agentID] == lock {
+		delete(r.locks, agentID)
+	}
+	r.mu.Unlock()
+}
+
 func (c *controller) lockAgentSession(agentID string) func() {
-	value, _ := c.sessionLocks.LoadOrStore(agentID, &sync.Mutex{})
-	lock := value.(*sync.Mutex)
-	lock.Lock()
-	return lock.Unlock
+	return c.sessionLocks.lock(agentID)
+}
+
+func (c *controller) lockAgentSessionContext(ctx context.Context, agentID string) (func(), bool) {
+	return c.sessionLocks.lockContext(ctx, agentID)
 }
 
 func (c *controller) sortedProfiles() []app.ACPAgentProfile {
@@ -318,6 +380,42 @@ func (c *controller) applyAgentProfilesLocked(next map[string]app.ACPAgentProfil
 		active = changed.ID
 	}
 	c.statuses[active] = successStatus
+	c.pruneAgentRuntimeLocked()
+}
+
+// pruneAgentRuntimeLocked drops connection and status bookkeeping for profiles
+// that no longer have a configuration, live client, or session owner. Removed
+// agents with existing sessions remain inspectable until their last session
+// is gone. The keyed lock registry separately retains each agent lock until its
+// last holder and waiter releases it, then removes the key.
+func (c *controller) pruneAgentRuntimeLocked() {
+	retained := make(map[string]struct{}, len(c.profiles)+len(c.clients)+len(c.state.Sessions)+1)
+	for agentID := range c.profiles {
+		retained[agentID] = struct{}{}
+	}
+	for agentID := range c.clients {
+		retained[agentID] = struct{}{}
+	}
+	if c.activeAgentID != "" {
+		retained[c.activeAgentID] = struct{}{}
+	}
+	for _, session := range c.state.Sessions {
+		agentID := strings.TrimSpace(session.AgentID)
+		if agentID == "" {
+			agentID = controllerAgentID
+		}
+		retained[agentID] = struct{}{}
+	}
+	for agentID := range c.connections {
+		if _, ok := retained[agentID]; !ok {
+			delete(c.connections, agentID)
+		}
+	}
+	for agentID := range c.statuses {
+		if _, ok := retained[agentID]; !ok {
+			delete(c.statuses, agentID)
+		}
+	}
 }
 
 func acpaentProfileFromEditor(id, displayName, command, argsJSON, envJSON string) (app.ACPAgentProfile, error) {

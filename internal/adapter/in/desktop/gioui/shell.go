@@ -60,87 +60,93 @@ type sidebarRowsCache struct {
 type shell struct {
 	theme *theme
 
-	sidebarList                 layout.List
-	sessionButtons              map[string]*widget.Clickable
-	projectButtons              map[string]*widget.Clickable
-	sessionButtonLive           map[string]struct{}
-	projectButtonLive           map[string]struct{}
-	buttonRevision              uint64
-	buttonRevisionSet           bool
-	sidebarRowsCache            sidebarRowsCache
-	sidebarNewSessionButton     widget.Clickable
-	emptyNewSessionButton       widget.Clickable
-	conversationList            layout.List
-	conversationMarkdown        *markdown.Renderer
-	conversationCache           map[conversationCacheKey]conversationMarkdownCache
-	inspectorList               layout.List
-	inspectorVisible            bool
-	inspectorOverride           bool
-	inspectorToggle             widget.Clickable
-	composer                    widget.Editor
-	sendButton                  widget.Clickable
-	stopButton                  widget.Clickable
-	permissionButtons           map[string]map[string]*widget.Clickable
-	permissionButtonLive        map[string]struct{}
-	permissionButtonRevision    uint64
-	permissionButtonRevisionSet bool
-	runtimeProviderEditor       widget.Editor
-	runtimeModelEditor          widget.Editor
-	runtimeApplyButton          widget.Clickable
-	reasoningButtons            map[string]*widget.Clickable
-	lowConcurrencyButtons       map[string]*widget.Clickable
-	runtimeEditorKey            string
-	mcpNameEditor               widget.Editor
-	mcpCommandEditor            widget.Editor
-	mcpArgsEditor               widget.Editor
-	mcpEnvEditor                widget.Editor
-	mcpSelectedName             string
-	mcpEditorKey                string
-	mcpFormVisible              bool
-	mcpIntegrationButtons       map[string]*widget.Clickable
-	mcpIntegrationLive          map[string]struct{}
-	mcpSyncRevision             uint64
-	mcpSyncRevisionSet          bool
-	mcpFormToggleButton         widget.Clickable
-	mcpSaveButton               widget.Clickable
-	mcpRemoveButton             widget.Clickable
-	mcpReconnectButton          widget.Clickable
-	agentSelectorButton         widget.Clickable
-	agentSelectorList           layout.List
-	agentSelectorVisible        bool
-	agentChoiceButtons          map[string]*widget.Clickable
-	agentIDEditor               widget.Editor
-	agentNameEditor             widget.Editor
-	agentCommandEditor          widget.Editor
-	agentArgsEditor             widget.Editor
-	agentEnvEditor              widget.Editor
-	agentProfileButtons         map[string]*widget.Clickable
-	agentProfileLive            map[string]struct{}
-	agentSyncRevision           uint64
-	agentSyncRevisionSet        bool
-	agentEditorVisible          bool
-	agentEditorOriginalID       string
-	agentEditorKey              string
-	agentFormToggleButton       widget.Clickable
-	agentSaveButton             widget.Clickable
-	agentRemoveButton           widget.Clickable
-	activeSessionID             string
-	syncRevision                uint64
-	onSelectSession             func(string)
-	onSelectProject             func(string)
-	onNewSession                func()
-	onSendPrompt                func(string)
-	onCancelPrompt              func()
-	onResolvePermission         func(string, string)
-	onSetRuntimeModel           func(string, string)
-	onSetRuntimeReasoning       func(string)
-	onSetRuntimeLow             func(string)
-	onSaveMCPIntegration        func(string, string, string, string)
-	onRemoveMCPIntegration      func(string)
-	onReconnectMCP              func()
-	onSelectAgent               func(string)
-	onSaveAgentProfile          func(string, string, string, string, string, string)
-	onRemoveAgentProfile        func(string)
+	sidebarList                  layout.List
+	sessionButtons               map[string]*widget.Clickable
+	projectButtons               map[string]*widget.Clickable
+	sessionButtonLive            map[string]struct{}
+	projectButtonLive            map[string]struct{}
+	buttonRevision               uint64
+	buttonRevisionSet            bool
+	sidebarRowsCache             sidebarRowsCache
+	sidebarNewSessionButton      widget.Clickable
+	emptyNewSessionButton        widget.Clickable
+	conversationList             layout.List
+	conversationMarkdown         *markdown.Renderer
+	conversationCache            map[conversationCacheKey]conversationMarkdownCache
+	conversationCacheBytes       int
+	conversationExpanded         map[conversationCacheKey]bool
+	conversationPage             map[conversationCacheKey]int
+	conversationExpandButtons    map[conversationCacheKey]*conversationDisclosureButtons
+	conversationThinkingExpanded map[conversationCacheKey]bool
+	conversationThinkingButtons  map[conversationCacheKey]*widget.Clickable
+	inspectorList                layout.List
+	inspectorVisible             bool
+	inspectorOverride            bool
+	inspectorToggle              widget.Clickable
+	composer                     widget.Editor
+	sendButton                   widget.Clickable
+	stopButton                   widget.Clickable
+	permissionButtons            map[string]map[string]*widget.Clickable
+	permissionButtonLive         map[string]struct{}
+	permissionButtonRevision     uint64
+	permissionButtonRevisionSet  bool
+	runtimeProviderEditor        widget.Editor
+	runtimeModelEditor           widget.Editor
+	runtimeApplyButton           widget.Clickable
+	reasoningButtons             map[string]*widget.Clickable
+	lowConcurrencyButtons        map[string]*widget.Clickable
+	runtimeEditorKey             string
+	mcpNameEditor                widget.Editor
+	mcpCommandEditor             widget.Editor
+	mcpArgsEditor                widget.Editor
+	mcpEnvEditor                 widget.Editor
+	mcpSelectedName              string
+	mcpEditorKey                 string
+	mcpFormVisible               bool
+	mcpIntegrationButtons        map[string]*widget.Clickable
+	mcpIntegrationLive           map[string]struct{}
+	mcpSyncRevision              uint64
+	mcpSyncRevisionSet           bool
+	mcpFormToggleButton          widget.Clickable
+	mcpSaveButton                widget.Clickable
+	mcpRemoveButton              widget.Clickable
+	mcpReconnectButton           widget.Clickable
+	agentSelectorButton          widget.Clickable
+	agentSelectorList            layout.List
+	agentSelectorVisible         bool
+	agentChoiceButtons           map[string]*widget.Clickable
+	agentIDEditor                widget.Editor
+	agentNameEditor              widget.Editor
+	agentCommandEditor           widget.Editor
+	agentArgsEditor              widget.Editor
+	agentEnvEditor               widget.Editor
+	agentProfileButtons          map[string]*widget.Clickable
+	agentProfileLive             map[string]struct{}
+	agentSyncRevision            uint64
+	agentSyncRevisionSet         bool
+	agentEditorVisible           bool
+	agentEditorOriginalID        string
+	agentEditorKey               string
+	agentFormToggleButton        widget.Clickable
+	agentSaveButton              widget.Clickable
+	agentRemoveButton            widget.Clickable
+	activeSessionID              string
+	syncRevision                 uint64
+	onSelectSession              func(string)
+	onSelectProject              func(string)
+	onNewSession                 func()
+	onSendPrompt                 func(string)
+	onCancelPrompt               func()
+	onResolvePermission          func(string, string)
+	onSetRuntimeModel            func(string, string)
+	onSetRuntimeReasoning        func(string)
+	onSetRuntimeLow              func(string)
+	onSaveMCPIntegration         func(string, string, string, string)
+	onRemoveMCPIntegration       func(string)
+	onReconnectMCP               func()
+	onSelectAgent                func(string)
+	onSaveAgentProfile           func(string, string, string, string, string, string)
+	onRemoveAgentProfile         func(string)
 }
 
 func newShell(theme *theme) *shell {
@@ -149,53 +155,58 @@ func newShell(theme *theme) *shell {
 	markdownRenderer.Config.DefaultColor = theme.onSurface
 	markdownRenderer.Config.InteractiveColor = theme.primary
 	return &shell{
-		theme:                  theme,
-		sessionButtons:         make(map[string]*widget.Clickable),
-		projectButtons:         make(map[string]*widget.Clickable),
-		sessionButtonLive:      make(map[string]struct{}),
-		projectButtonLive:      make(map[string]struct{}),
-		sidebarList:            layout.List{Axis: layout.Vertical},
-		conversationList:       layout.List{Axis: layout.Vertical, ScrollToEnd: true},
-		inspectorList:          layout.List{Axis: layout.Vertical},
-		composer:               widget.Editor{Submit: true, MaxLen: 1 << 20},
-		runtimeProviderEditor:  widget.Editor{SingleLine: true, MaxLen: 512},
-		runtimeModelEditor:     widget.Editor{SingleLine: true, MaxLen: 512},
-		mcpNameEditor:          widget.Editor{SingleLine: true, MaxLen: 256},
-		mcpCommandEditor:       widget.Editor{SingleLine: true, MaxLen: 1024},
-		mcpArgsEditor:          widget.Editor{SingleLine: true, MaxLen: 4096},
-		mcpEnvEditor:           widget.Editor{SingleLine: true, MaxLen: 4096},
-		agentSelectorList:      layout.List{Axis: layout.Horizontal},
-		agentChoiceButtons:     make(map[string]*widget.Clickable),
-		agentIDEditor:          widget.Editor{SingleLine: true, MaxLen: 128},
-		agentNameEditor:        widget.Editor{SingleLine: true, MaxLen: 256},
-		agentCommandEditor:     widget.Editor{SingleLine: true, MaxLen: 1024},
-		agentArgsEditor:        widget.Editor{SingleLine: true, MaxLen: 4096},
-		agentEnvEditor:         widget.Editor{SingleLine: true, MaxLen: 4096},
-		agentProfileButtons:    make(map[string]*widget.Clickable),
-		agentProfileLive:       make(map[string]struct{}),
-		conversationMarkdown:   markdownRenderer,
-		conversationCache:      make(map[conversationCacheKey]conversationMarkdownCache),
-		permissionButtons:      make(map[string]map[string]*widget.Clickable),
-		permissionButtonLive:   make(map[string]struct{}),
-		reasoningButtons:       make(map[string]*widget.Clickable),
-		lowConcurrencyButtons:  make(map[string]*widget.Clickable),
-		mcpIntegrationButtons:  make(map[string]*widget.Clickable),
-		mcpIntegrationLive:     make(map[string]struct{}),
-		onSelectSession:        func(string) {},
-		onNewSession:           func() {},
-		onSendPrompt:           func(string) {},
-		onCancelPrompt:         func() {},
-		onResolvePermission:    func(string, string) {},
-		onSetRuntimeModel:      func(string, string) {},
-		onSetRuntimeReasoning:  func(string) {},
-		onSetRuntimeLow:        func(string) {},
-		onSaveMCPIntegration:   func(string, string, string, string) {},
-		onRemoveMCPIntegration: func(string) {},
-		onReconnectMCP:         func() {},
-		onSelectProject:        func(string) {},
-		onSelectAgent:          func(string) {},
-		onSaveAgentProfile:     func(string, string, string, string, string, string) {},
-		onRemoveAgentProfile:   func(string) {},
+		theme:                        theme,
+		sessionButtons:               make(map[string]*widget.Clickable),
+		projectButtons:               make(map[string]*widget.Clickable),
+		sessionButtonLive:            make(map[string]struct{}),
+		projectButtonLive:            make(map[string]struct{}),
+		sidebarList:                  layout.List{Axis: layout.Vertical},
+		conversationList:             layout.List{Axis: layout.Vertical, ScrollToEnd: true},
+		inspectorList:                layout.List{Axis: layout.Vertical},
+		composer:                     widget.Editor{Submit: true, MaxLen: 1 << 20},
+		runtimeProviderEditor:        widget.Editor{SingleLine: true, MaxLen: 512},
+		runtimeModelEditor:           widget.Editor{SingleLine: true, MaxLen: 512},
+		mcpNameEditor:                widget.Editor{SingleLine: true, MaxLen: 256},
+		mcpCommandEditor:             widget.Editor{SingleLine: true, MaxLen: 1024},
+		mcpArgsEditor:                widget.Editor{SingleLine: true, MaxLen: 4096},
+		mcpEnvEditor:                 widget.Editor{SingleLine: true, MaxLen: 4096},
+		agentSelectorList:            layout.List{Axis: layout.Horizontal},
+		agentChoiceButtons:           make(map[string]*widget.Clickable),
+		agentIDEditor:                widget.Editor{SingleLine: true, MaxLen: 128},
+		agentNameEditor:              widget.Editor{SingleLine: true, MaxLen: 256},
+		agentCommandEditor:           widget.Editor{SingleLine: true, MaxLen: 1024},
+		agentArgsEditor:              widget.Editor{SingleLine: true, MaxLen: 4096},
+		agentEnvEditor:               widget.Editor{SingleLine: true, MaxLen: 4096},
+		agentProfileButtons:          make(map[string]*widget.Clickable),
+		agentProfileLive:             make(map[string]struct{}),
+		conversationMarkdown:         markdownRenderer,
+		conversationCache:            make(map[conversationCacheKey]conversationMarkdownCache),
+		conversationExpanded:         make(map[conversationCacheKey]bool),
+		conversationPage:             make(map[conversationCacheKey]int),
+		conversationExpandButtons:    make(map[conversationCacheKey]*conversationDisclosureButtons),
+		conversationThinkingExpanded: make(map[conversationCacheKey]bool),
+		conversationThinkingButtons:  make(map[conversationCacheKey]*widget.Clickable),
+		permissionButtons:            make(map[string]map[string]*widget.Clickable),
+		permissionButtonLive:         make(map[string]struct{}),
+		reasoningButtons:             make(map[string]*widget.Clickable),
+		lowConcurrencyButtons:        make(map[string]*widget.Clickable),
+		mcpIntegrationButtons:        make(map[string]*widget.Clickable),
+		mcpIntegrationLive:           make(map[string]struct{}),
+		onSelectSession:              func(string) {},
+		onNewSession:                 func() {},
+		onSendPrompt:                 func(string) {},
+		onCancelPrompt:               func() {},
+		onResolvePermission:          func(string, string) {},
+		onSetRuntimeModel:            func(string, string) {},
+		onSetRuntimeReasoning:        func(string) {},
+		onSetRuntimeLow:              func(string) {},
+		onSaveMCPIntegration:         func(string, string, string, string) {},
+		onRemoveMCPIntegration:       func(string) {},
+		onReconnectMCP:               func() {},
+		onSelectProject:              func(string) {},
+		onSelectAgent:                func(string) {},
+		onSaveAgentProfile:           func(string, string, string, string, string, string) {},
+		onRemoveAgentProfile:         func(string) {},
 	}
 }
 
@@ -209,21 +220,29 @@ func (s *shell) layout(gtx layout.Context, snapshot controllerSnapshot) layout.D
 	paint.Fill(gtx.Ops, s.theme.surface)
 	return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return s.layoutTopBar(gtx, snapshot)
+			return layout.Inset{Top: 8, Left: 8, Right: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+				return s.layoutTopBar(gtx, snapshot)
+			})
 		}),
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 			if !s.agentSelectorVisible {
 				return layout.Dimensions{}
 			}
-			return s.layoutAgentSelectorBar(gtx, snapshot)
+			return layout.Inset{Top: 4, Left: 8, Right: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+				return s.layoutAgentSelectorBar(gtx, snapshot)
+			})
 		}),
 		layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
 			return layout.Flex{Axis: layout.Horizontal}.Layout(gtx,
 				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-					return s.layoutSidebar(gtx, snapshot)
+					return layout.Inset{Top: 8, Bottom: 8, Left: 8, Right: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+						return s.layoutSidebar(gtx, snapshot)
+					})
 				}),
 				layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-					return s.layoutMain(gtx, snapshot)
+					return layout.Inset{Top: 8, Bottom: 8, Left: 6, Right: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+						return s.layoutMain(gtx, snapshot)
+					})
 				}),
 			)
 		}),
@@ -232,17 +251,30 @@ func (s *shell) layout(gtx layout.Context, snapshot controllerSnapshot) layout.D
 
 func (s *shell) layoutTopBar(gtx layout.Context, snapshot controllerSnapshot) layout.Dimensions {
 	gtx.Constraints.Min.Y = gtx.Dp(64)
-	return s.roundedSurface(gtx, 0, s.theme.surface, func(gtx layout.Context) layout.Dimensions {
+	return s.roundedBorderSurface(gtx, shapeLarge, s.theme.surfaceContainer, s.theme.outlineVariant, 1, func(gtx layout.Context) layout.Dimensions {
 		gtx.Constraints.Min.X = gtx.Constraints.Max.X
-		return layout.Inset{Top: 10, Bottom: 10, Left: 24, Right: 24}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+		return layout.Inset{Top: 10, Bottom: 10, Left: 20, Right: 20}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 			return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
 				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 					return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
 						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-							return s.layoutLabel(gtx, "Protonman", textHeadlineSmall, font.SemiBold, s.theme.onSurface, 1)
+							return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
+								layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+									return s.layoutLabel(gtx, "Protonman", textHeadlineSmall, font.Bold, s.theme.onSurface, 1)
+								}),
+								layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+									return layout.Inset{Left: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+										return s.roundedSurface(gtx, shapeSmall, s.theme.primaryContainer, func(gtx layout.Context) layout.Dimensions {
+											return layout.Inset{Top: 2, Bottom: 2, Left: 6, Right: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+												return s.layoutLabel(gtx, "AI Studio", textLabelSmall, font.SemiBold, s.theme.onPrimaryContainer, 1)
+											})
+										})
+									})
+								}),
+							)
 						}),
 						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-							return s.layoutLabel(gtx, "ACP workspace preview", textLabelMedium, font.Normal, s.theme.onSurfaceVariant, 1)
+							return s.layoutLabel(gtx, "Autonomous coding workbench · Material 3", textLabelMedium, font.Normal, s.theme.onSurfaceVariant, 1)
 						}),
 					)
 				}),
@@ -269,23 +301,60 @@ func (s *shell) layoutTopBar(gtx layout.Context, snapshot controllerSnapshot) la
 }
 
 func (s *shell) layoutConnectionPill(gtx layout.Context, snapshot controllerSnapshot) layout.Dimensions {
-	background := s.theme.primaryContainer
-	foreground := s.theme.onPrimaryContainer
-	if snapshot.Connection == connectionConnecting {
-		background = s.theme.secondaryContainer
-		foreground = s.theme.onSecondaryContainer
-	} else if snapshot.Connection == connectionReconnecting {
+	background := s.theme.successContainer
+	foreground := s.theme.onSuccessContainer
+	if snapshot.Connection != connectionConnected {
+		background = s.theme.warningContainer
+		foreground = s.theme.onWarningContainer
+	}
+	status := strings.ToLower(snapshot.Status)
+	if strings.Contains(status, "permission") {
+		background = s.theme.warningContainer
+		foreground = s.theme.onWarningContainer
+	}
+	if strings.Contains(status, "failed") || strings.Contains(status, "unavailable") || strings.Contains(status, "disconnected") {
 		background = s.theme.errorContainer
 		foreground = s.theme.onErrorContainer
 	}
 	gtx.Constraints.Min.Y = gtx.Dp(32)
-	return s.roundedSurface(gtx, 16, background, func(gtx layout.Context) layout.Dimensions {
+	return s.roundedSurface(gtx, shapeLarge, background, func(gtx layout.Context) layout.Dimensions {
 		return layout.Inset{Top: 6, Bottom: 6, Left: 12, Right: 12}.Layout(gtx,
 			func(gtx layout.Context) layout.Dimensions {
-				return s.layoutLabel(gtx, snapshot.Status, textLabelMedium, font.SemiBold, foreground, 1)
+				semantic.DescriptionOp(strings.TrimSpace(snapshot.Status)).Add(gtx.Ops)
+				return s.layoutLabel(gtx, connectionStatusLabel(snapshot.Status), textLabelMedium, font.SemiBold, foreground, 1)
 			},
 		)
 	})
+}
+
+func connectionStatusLabel(status string) string {
+	status = strings.TrimSpace(status)
+	const projectSelectedPrefix = "Project selected · "
+	if strings.HasPrefix(status, projectSelectedPrefix) {
+		return compactInspectorText("Project · "+strings.TrimPrefix(status, projectSelectedPrefix), 30)
+	}
+	lower := strings.ToLower(status)
+	switch {
+	case strings.Contains(lower, "mcp settings unavailable"):
+		return "MCP unavailable"
+	case strings.Contains(lower, "history failed"):
+		return "History failed"
+	case strings.Contains(lower, "permission"):
+		return "Permission required"
+	case strings.Contains(lower, "unavailable"):
+		return "Unavailable"
+	case strings.Contains(lower, "failed"):
+		return "Connection failed"
+	case strings.Contains(lower, "disconnected"):
+		return "Disconnected"
+	case strings.Contains(lower, "reconnecting"):
+		return "Reconnecting"
+	case strings.Contains(lower, "connecting"):
+		return "Connecting"
+	case strings.Contains(lower, "connected"):
+		return "Connected"
+	}
+	return compactInspectorText(status, 26)
 }
 
 func (s *shell) layoutSidebar(gtx layout.Context, snapshot controllerSnapshot) layout.Dimensions {
@@ -295,7 +364,7 @@ func (s *shell) layoutSidebar(gtx layout.Context, snapshot controllerSnapshot) l
 	}
 	gtx.Constraints.Min.X = gtx.Dp(width)
 	gtx.Constraints.Max.X = gtx.Dp(width)
-	dims := s.roundedSurface(gtx, 0, s.theme.surfaceContainer, func(gtx layout.Context) layout.Dimensions {
+	dims := s.roundedBorderSurface(gtx, shapeLarge, s.theme.surfaceContainerLow, s.theme.outlineVariant, 1, func(gtx layout.Context) layout.Dimensions {
 		return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 				return s.layoutSidebarHeader(gtx, snapshot)
@@ -305,7 +374,7 @@ func (s *shell) layoutSidebar(gtx layout.Context, snapshot controllerSnapshot) l
 				if len(rows) == 0 {
 					return layout.Inset{Top: 24, Bottom: 24, Left: 20, Right: 20}.Layout(gtx,
 						func(gtx layout.Context) layout.Dimensions {
-							return s.layoutLabel(gtx, "No sessions yet. Create one from an existing workspace directory.", textBodyMedium, font.Normal, s.theme.onSurfaceVariant, 3)
+							return s.layoutLabel(gtx, "No conversations yet. Start one from an existing workspace.", textBodyMedium, font.Normal, s.theme.onSurfaceVariant, 3)
 						},
 					)
 				}
@@ -315,25 +384,25 @@ func (s *shell) layoutSidebar(gtx layout.Context, snapshot controllerSnapshot) l
 			}),
 		)
 	})
-	return widget.Border{Color: s.theme.outlineVariant, Width: 1}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+	return widget.Border{Color: s.theme.outlineVariant, CornerRadius: shapeLarge, Width: 1}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 		return dims
 	})
 }
 
 func (s *shell) layoutSidebarHeader(gtx layout.Context, snapshot controllerSnapshot) layout.Dimensions {
 	gtx.Constraints.Min.Y = gtx.Dp(64)
-	return layout.Inset{Top: 10, Bottom: 10, Left: 16, Right: 16}.Layout(gtx,
+	return layout.Inset{Top: 10, Bottom: 10, Left: 14, Right: 14}.Layout(gtx,
 		func(gtx layout.Context) layout.Dimensions {
 			return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
 				layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-					return s.layoutLabel(gtx, "WORKSPACES", textLabelMedium, font.SemiBold, s.theme.onSurfaceVariant, 1)
+					return s.layoutLabel(gtx, "Conversations", textLabelLarge, font.SemiBold, s.theme.onSurfaceVariant, 1)
 				}),
 				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-					label := "New session"
+					label := "+ New"
 					if snapshot.CreatingSession {
 						label = "Creating…"
 					}
-					return s.layoutButton(gtx, &s.sidebarNewSessionButton, label, snapshot.Connection == connectionConnected && !snapshot.CreatingSession, s.onNewSession)
+					return s.layoutPrimaryButton(gtx, &s.sidebarNewSessionButton, label, snapshot.Connection == connectionConnected && !snapshot.CreatingSession, s.onNewSession)
 				}),
 			)
 		},
@@ -353,6 +422,25 @@ func buildSidebarRows(state desktopstate.State, profiles []app.ACPAgentProfile) 
 	rows := make([]sidebarRow, 0, len(state.Sessions)+len(state.Projects))
 	projects := make([]sidebarProjectCache, 0, len(state.Projects))
 	sessions := make([]sidebarSessionCache, 0, len(state.Sessions))
+	sessionsByProject := make(map[string][]sidebarRow, len(state.Sessions))
+	for _, session := range state.Sessions {
+		subtitle := agentDisplayName(profiles, session.AgentID)
+		sessions = append(sessions, sidebarSessionCache{
+			id:        session.ID,
+			projectID: session.ProjectID,
+			title:     session.Title,
+			subtitle:  subtitle,
+			status:    string(session.Status),
+		})
+		sessionsByProject[session.ProjectID] = append(sessionsByProject[session.ProjectID], sidebarRow{
+			Kind:      sidebarSessionRow,
+			ProjectID: session.ProjectID,
+			SessionID: session.ID,
+			Title:     session.Title,
+			Subtitle:  subtitle,
+			Status:    displayStatus(session.Status),
+		})
+	}
 	for _, project := range state.Projects {
 		projects = append(projects, sidebarProjectCache{id: project.ID, name: project.Name})
 		rows = append(rows, sidebarRow{
@@ -360,27 +448,7 @@ func buildSidebarRows(state desktopstate.State, profiles []app.ACPAgentProfile) 
 			ProjectID: project.ID,
 			Title:     project.Name,
 		})
-		for _, session := range state.Sessions {
-			if session.ProjectID != project.ID {
-				continue
-			}
-			subtitle := agentDisplayName(profiles, session.AgentID)
-			sessions = append(sessions, sidebarSessionCache{
-				id:        session.ID,
-				projectID: session.ProjectID,
-				title:     session.Title,
-				subtitle:  subtitle,
-				status:    string(session.Status),
-			})
-			rows = append(rows, sidebarRow{
-				Kind:      sidebarSessionRow,
-				ProjectID: project.ID,
-				SessionID: session.ID,
-				Title:     session.Title,
-				Subtitle:  subtitle,
-				Status:    displayStatus(session.Status),
-			})
-		}
+		rows = append(rows, sessionsByProject[project.ID]...)
 	}
 	return rows, sidebarRowsCache{valid: true, rows: rows, projects: projects, sessions: sessions}
 }
@@ -390,7 +458,6 @@ func (cache sidebarRowsCache) matches(state desktopstate.State, profiles []app.A
 		return false
 	}
 	projectIndex := 0
-	sessionIndex := 0
 	for _, project := range state.Projects {
 		if projectIndex >= len(cache.projects) {
 			return false
@@ -400,25 +467,21 @@ func (cache sidebarRowsCache) matches(state desktopstate.State, profiles []app.A
 			return false
 		}
 		projectIndex++
-		for _, session := range state.Sessions {
-			if session.ProjectID != project.ID {
-				continue
-			}
-			if sessionIndex >= len(cache.sessions) {
-				return false
-			}
-			cachedSession := cache.sessions[sessionIndex]
-			if cachedSession.id != session.ID ||
-				cachedSession.projectID != session.ProjectID ||
-				cachedSession.title != session.Title ||
-				cachedSession.subtitle != agentDisplayName(profiles, session.AgentID) ||
-				cachedSession.status != string(session.Status) {
-				return false
-			}
-			sessionIndex++
+	}
+	if projectIndex != len(cache.projects) || len(state.Sessions) != len(cache.sessions) {
+		return false
+	}
+	for sessionIndex, session := range state.Sessions {
+		cachedSession := cache.sessions[sessionIndex]
+		if cachedSession.id != session.ID ||
+			cachedSession.projectID != session.ProjectID ||
+			cachedSession.title != session.Title ||
+			cachedSession.subtitle != agentDisplayName(profiles, session.AgentID) ||
+			cachedSession.status != string(session.Status) {
+			return false
 		}
 	}
-	return projectIndex == len(cache.projects) && sessionIndex == len(cache.sessions)
+	return true
 }
 
 func (s *shell) layoutSidebarRow(gtx layout.Context, row sidebarRow, state desktopstate.State) layout.Dimensions {
@@ -437,19 +500,19 @@ func (s *shell) layoutSidebarRow(gtx layout.Context, row sidebarRow, state deskt
 			background := s.theme.surfaceContainer
 			foreground := s.theme.onSurface
 			if selected {
-				background = s.theme.secondaryContainer
-				foreground = s.theme.onSecondaryContainer
+				background = s.theme.primaryContainer
+				foreground = s.theme.onPrimaryContainer
 			} else if button.Hovered() {
 				background = s.theme.surfaceContainerHigh
 			}
-			return s.roundedSurface(gtx, 12, background, func(gtx layout.Context) layout.Dimensions {
+			return s.roundedSurface(gtx, shapeSmall, background, func(gtx layout.Context) layout.Dimensions {
 				return layout.Inset{Top: 8, Bottom: 8, Left: 12, Right: 12}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 					return s.layoutLabel(gtx, row.Title, textLabelLarge, font.SemiBold, foreground, 1)
 				})
 			})
 		})
 		if gtx.Focused(button) {
-			widget.Border{Color: s.theme.primary, CornerRadius: 12, Width: 2}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+			widget.Border{Color: s.theme.primary, CornerRadius: shapeSmall, Width: 2}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 				return layout.Dimensions{Size: dims.Size}
 			})
 		}
@@ -469,30 +532,38 @@ func (s *shell) layoutSidebarRow(gtx layout.Context, row sidebarRow, state deskt
 		semantic.Button.Add(gtx.Ops)
 		semantic.SelectedOp(selected).Add(gtx.Ops)
 		semantic.DescriptionOp(row.Title + ", " + row.Subtitle + ", " + row.Status).Add(gtx.Ops)
-		background := s.theme.surfaceContainer
+		background := s.theme.surfaceContainerLowest
 		foreground := s.theme.onSurface
+		borderColor := s.theme.outlineVariant
 		if selected {
-			background = s.theme.secondaryContainer
-			foreground = s.theme.onSecondaryContainer
+			background = s.theme.primaryContainer
+			foreground = s.theme.onPrimaryContainer
+			borderColor = s.theme.primary
 		} else if button.Hovered() {
 			background = s.theme.surfaceContainerHigh
 		}
-		return s.roundedSurface(gtx, 14, background, func(gtx layout.Context) layout.Dimensions {
+		return s.roundedBorderSurface(gtx, shapeMedium, background, borderColor, 1, func(gtx layout.Context) layout.Dimensions {
 			return layout.Inset{Top: 8, Bottom: 8, Left: 12, Right: 12}.Layout(gtx,
 				func(gtx layout.Context) layout.Dimensions {
 					return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
 						layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+							subColor := s.theme.onSurfaceVariant
+							if selected {
+								subColor = s.theme.onPrimaryContainer
+							}
 							return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
 								layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 									return s.layoutLabel(gtx, row.Title, textBodyMedium, font.Medium, foreground, 1)
 								}),
 								layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-									return s.layoutLabel(gtx, row.Subtitle, textLabelMedium, font.Normal, s.theme.onSurfaceVariant, 1)
+									return s.layoutLabel(gtx, row.Subtitle, textLabelSmall, font.Normal, subColor, 1)
 								}),
 							)
 						}),
 						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-							return s.layoutLabel(gtx, row.Status, textLabelMedium, font.Medium, foreground, 1)
+							return layout.Inset{Left: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+								return s.layoutTaskStatus(gtx, row.Status, taskStatusFromLabel(row.Status))
+							})
 						}),
 					)
 				},
@@ -500,7 +571,7 @@ func (s *shell) layoutSidebarRow(gtx layout.Context, row sidebarRow, state deskt
 		})
 	})
 	if gtx.Focused(button) {
-		widget.Border{Color: s.theme.primary, CornerRadius: 14, Width: 2}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+		widget.Border{Color: s.theme.primary, CornerRadius: shapeMedium, Width: 2}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 			return layout.Dimensions{Size: dims.Size}
 		})
 	}
@@ -510,7 +581,7 @@ func (s *shell) layoutSidebarRow(gtx layout.Context, row sidebarRow, state deskt
 func (s *shell) layoutMain(gtx layout.Context, snapshot controllerSnapshot) layout.Dimensions {
 	session, ok := selectedSession(snapshot.State)
 	if !ok {
-		return s.roundedSurface(gtx, 0, s.theme.surface, func(gtx layout.Context) layout.Dimensions {
+		return s.roundedSurface(gtx, shapeLarge, s.theme.surface, func(gtx layout.Context) layout.Dimensions {
 			return s.layoutMainEmptyState(gtx, snapshot)
 		})
 	}
@@ -541,7 +612,7 @@ func (s *shell) layoutMain(gtx layout.Context, snapshot controllerSnapshot) layo
 			return s.layoutConversationPane(gtx, session, snapshot)
 		}))
 	}
-	return s.roundedSurface(gtx, 0, s.theme.surface, func(gtx layout.Context) layout.Dimensions {
+	return s.roundedSurface(gtx, shapeLarge, s.theme.surface, func(gtx layout.Context) layout.Dimensions {
 		return layout.Flex{Axis: layout.Vertical}.Layout(gtx, children...)
 	})
 }
@@ -565,10 +636,10 @@ func (s *shell) layoutConversationPane(gtx layout.Context, session desktopstate.
 }
 
 func (s *shell) layoutSessionHeader(gtx layout.Context, session desktopstate.SessionState, snapshot controllerSnapshot, wideInspector, showInspector bool) layout.Dimensions {
-	gtx.Constraints.Min.Y = gtx.Dp(92)
-	return s.roundedSurface(gtx, 0, s.theme.surface, func(gtx layout.Context) layout.Dimensions {
+	gtx.Constraints.Min.Y = gtx.Dp(76)
+	return s.roundedBorderSurface(gtx, shapeLarge, s.theme.surfaceContainer, s.theme.outlineVariant, 1, func(gtx layout.Context) layout.Dimensions {
 		gtx.Constraints.Min.X = gtx.Constraints.Max.X
-		return layout.Inset{Top: 16, Bottom: 16, Left: 28, Right: 28}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+		return layout.Inset{Top: 12, Bottom: 12, Left: 20, Right: 20}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 			if gtx.Constraints.Max.X < gtx.Dp(640) {
 				return s.layoutCompactSessionHeader(gtx, session, snapshot, showInspector)
 			}
@@ -624,11 +695,7 @@ func (s *shell) layoutSessionHeaderActions(gtx layout.Context, session desktopst
 	return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 			gtx.Constraints.Min.Y = gtx.Dp(36)
-			return s.roundedSurface(gtx, 18, s.theme.primaryContainer, func(gtx layout.Context) layout.Dimensions {
-				return layout.Inset{Top: 7, Bottom: 7, Left: 14, Right: 14}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-					return s.layoutLabel(gtx, displayStatus(session.Status), textLabelMedium, font.SemiBold, s.theme.onPrimaryContainer, 1)
-				})
-			})
+			return s.layoutTaskStatus(gtx, displayStatus(session.Status), session.Status)
 		}),
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 			return layout.UniformInset(4).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
@@ -641,12 +708,40 @@ func (s *shell) layoutSessionHeaderActions(gtx layout.Context, session desktopst
 	)
 }
 
+func (s *shell) layoutTaskStatus(gtx layout.Context, label string, status desktopstate.TaskStatus) layout.Dimensions {
+	background, foreground := s.taskStatusColors(status)
+	return s.roundedSurface(gtx, shapeSmall, background, func(gtx layout.Context) layout.Dimensions {
+		return layout.Inset{Top: 5, Bottom: 5, Left: 8, Right: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+			return s.layoutLabel(gtx, label, textLabelMedium, font.Medium, foreground, 1)
+		})
+	})
+}
+
+func (s *shell) taskStatusColors(status desktopstate.TaskStatus) (color.NRGBA, color.NRGBA) {
+	switch status {
+	case desktopstate.TaskRunning:
+		return s.theme.primaryContainer, s.theme.onPrimaryContainer
+	case desktopstate.TaskWaitingPermission:
+		return s.theme.warningContainer, s.theme.onWarningContainer
+	case desktopstate.TaskCompleted:
+		return s.theme.successContainer, s.theme.onSuccessContainer
+	case desktopstate.TaskFailed:
+		return s.theme.errorContainer, s.theme.onErrorContainer
+	default:
+		return s.theme.secondaryContainer, s.theme.onSecondaryContainer
+	}
+}
+
+func taskStatusFromLabel(label string) desktopstate.TaskStatus {
+	return desktopstate.TaskStatus(strings.ReplaceAll(strings.ToLower(strings.TrimSpace(label)), " ", "_"))
+}
+
 func (s *shell) layoutMainEmptyState(gtx layout.Context, snapshot controllerSnapshot) layout.Dimensions {
-	title := "Select a session"
-	body := "Choose a session from the workspace sidebar to inspect its live ACP metadata."
+	title := "Select a conversation"
+	body := "Choose a conversation from the workspace list to view its messages and controls."
 	if len(snapshot.State.Sessions) == 0 {
-		title = "Start an ACP session"
-		body = "Choose a configured agent, then create a session from an existing workspace directory. Each conversation remains routed through its owning ACP process."
+		title = "Start a conversation"
+		body = "Choose an agent, then start a conversation in an existing workspace. Your conversations stay with the agent that started them."
 	}
 	return s.layoutCenteredCard(gtx, func(gtx layout.Context) layout.Dimensions {
 		return layout.Flex{Axis: layout.Vertical, Alignment: layout.Middle}.Layout(gtx,
@@ -662,12 +757,12 @@ func (s *shell) layoutMainEmptyState(gtx layout.Context, snapshot controllerSnap
 				if len(snapshot.State.Sessions) != 0 {
 					return layout.Dimensions{}
 				}
-				label := "New session"
+				label := "New conversation"
 				if snapshot.CreatingSession {
 					label = "Creating…"
 				}
 				return layout.UniformInset(10).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-					return s.layoutButton(gtx, &s.emptyNewSessionButton, label, snapshot.Connection == connectionConnected && !snapshot.CreatingSession, s.onNewSession)
+					return s.layoutPrimaryButton(gtx, &s.emptyNewSessionButton, label, snapshot.Connection == connectionConnected && !snapshot.CreatingSession, s.onNewSession)
 				})
 			}),
 		)
@@ -682,7 +777,7 @@ func (s *shell) layoutSessionDetails(gtx layout.Context, session desktopstate.Se
 			}),
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 				return layout.UniformInset(8).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-					return s.layoutLabel(gtx, "This migration preview is connected to the live ACP session index. Conversation, composer, permissions, and session inspector controls are projected from the same runtime boundary.", textBodyMedium, font.Normal, s.theme.onSurfaceVariant, 4)
+					return s.layoutLabel(gtx, "Your conversation, permissions, and session controls appear here.", textBodyMedium, font.Normal, s.theme.onSurfaceVariant, 4)
 				})
 			}),
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
@@ -727,17 +822,29 @@ func (s *shell) layoutDetailRow(gtx layout.Context, label, value string) layout.
 }
 
 func (s *shell) layoutCenteredCard(gtx layout.Context, content layout.Widget) layout.Dimensions {
-	gtx.Constraints.Max.X = min(gtx.Constraints.Max.X, gtx.Dp(760))
+	gtx.Constraints.Max.X = min(gtx.Constraints.Max.X, gtx.Dp(680))
 	gtx.Constraints.Min.X = 0
 	return layout.Stack{Alignment: layout.Center}.Layout(gtx, layout.Stacked(func(gtx layout.Context) layout.Dimensions {
-		gtx.Constraints.Max.X = min(gtx.Constraints.Max.X, gtx.Dp(760))
-		return s.roundedSurface(gtx, 24, s.theme.surfaceContainer, func(gtx layout.Context) layout.Dimensions {
-			return layout.Inset{Top: 28, Bottom: 28, Left: 32, Right: 32}.Layout(gtx, content)
+		gtx.Constraints.Max.X = min(gtx.Constraints.Max.X, gtx.Dp(680))
+		return s.roundedSurface(gtx, shapeExtraLarge, s.theme.surfaceContainer, func(gtx layout.Context) layout.Dimensions {
+			return layout.Inset{Top: 24, Bottom: 24, Left: 28, Right: 28}.Layout(gtx, content)
 		})
 	}))
 }
 
 func (s *shell) layoutButton(gtx layout.Context, button *widget.Clickable, label string, enabled bool, action func()) layout.Dimensions {
+	return s.layoutButtonStyle(gtx, button, label, enabled, action, false, false)
+}
+
+func (s *shell) layoutPrimaryButton(gtx layout.Context, button *widget.Clickable, label string, enabled bool, action func()) layout.Dimensions {
+	return s.layoutButtonStyle(gtx, button, label, enabled, action, true, false)
+}
+
+func (s *shell) layoutDangerButton(gtx layout.Context, button *widget.Clickable, label string, enabled bool, action func()) layout.Dimensions {
+	return s.layoutButtonStyle(gtx, button, label, enabled, action, false, true)
+}
+
+func (s *shell) layoutButtonStyle(gtx layout.Context, button *widget.Clickable, label string, enabled bool, action func(), primary, danger bool) layout.Dimensions {
 	if enabled && button.Clicked(gtx) && action != nil {
 		action()
 	}
@@ -750,23 +857,30 @@ func (s *shell) layoutButton(gtx layout.Context, button *widget.Clickable, label
 		semantic.Button.Add(gtx.Ops)
 		semantic.EnabledOp(gtx.Enabled()).Add(gtx.Ops)
 		semantic.DescriptionOp(label).Add(gtx.Ops)
-		background := s.theme.primaryContainer
-		foreground := s.theme.onPrimaryContainer
+		background := s.theme.secondaryContainer
+		foreground := s.theme.onSecondaryContainer
+		if primary {
+			background = s.theme.primary
+			foreground = s.theme.onPrimary
+		} else if danger {
+			background = s.theme.errorContainer
+			foreground = s.theme.onErrorContainer
+		}
 		if !gtx.Enabled() {
 			background = s.theme.surfaceContainerHigh
 			foreground = s.theme.onSurfaceVariant
-		} else if button.Hovered() {
-			background = s.theme.primary
-			foreground = s.theme.onPrimary
+		} else if button.Hovered() && !primary && !danger {
+			background = s.theme.primaryContainer
+			foreground = s.theme.onPrimaryContainer
 		}
-		return s.roundedSurface(gtx, 14, background, func(gtx layout.Context) layout.Dimensions {
+		return s.roundedSurface(gtx, shapeMedium, background, func(gtx layout.Context) layout.Dimensions {
 			return layout.Inset{Top: 10, Bottom: 10, Left: 16, Right: 16}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 				return s.layoutLabel(gtx, label, textLabelLarge, font.SemiBold, foreground, 1)
 			})
 		})
 	})
 	if enabled && gtx.Focused(button) {
-		widget.Border{Color: s.theme.primary, CornerRadius: 14, Width: 2}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+		widget.Border{Color: s.theme.primary, CornerRadius: shapeMedium, Width: 2}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 			return layout.Dimensions{Size: dims.Size}
 		})
 	}
@@ -777,6 +891,16 @@ func (s *shell) layoutLabel(gtx layout.Context, value string, size unit.Sp, weig
 	material := op.Record(gtx.Ops)
 	paint.ColorOp{Color: color}.Add(gtx.Ops)
 	return widget.Label{MaxLines: maxLines}.Layout(gtx, s.theme.material.Shaper, s.theme.textFont(weight), size, value, material.Stop())
+}
+
+func (s *shell) roundedBorderSurface(gtx layout.Context, radius unit.Dp, background color.NRGBA, borderColor color.NRGBA, borderWidth int, content layout.Widget) layout.Dimensions {
+	dims := s.roundedSurface(gtx, radius, background, content)
+	if borderWidth > 0 {
+		widget.Border{Color: borderColor, CornerRadius: radius, Width: unit.Dp(borderWidth)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+			return layout.Dimensions{Size: dims.Size}
+		})
+	}
+	return dims
 }
 
 func (s *shell) roundedSurface(gtx layout.Context, radius unit.Dp, background color.NRGBA, content layout.Widget) layout.Dimensions {

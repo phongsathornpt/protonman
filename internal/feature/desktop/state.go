@@ -129,6 +129,7 @@ type SessionState struct {
 	WorkspaceName         string
 	Status                TaskStatus
 	Timeline              []TimelineItem
+	HistoryTruncated      bool
 	Subagents             []SubagentState
 	Context               SessionContextState
 	Runtime               RuntimeSettingsState
@@ -320,9 +321,21 @@ func cloneSession(session SessionState) SessionState {
 func cloneSessionMetadata(sessions []SessionState, activeSessionID string) []SessionState {
 	out := slices.Clone(sessions)
 	for index := range out {
-		out[index].AdditionalDirectories = slices.Clone(out[index].AdditionalDirectories)
-		if out[index].ID == activeSessionID {
-			out[index] = cloneSession(out[index])
+		session := out[index]
+		if session.ID == activeSessionID {
+			out[index] = cloneSession(session)
+			continue
+		}
+		out[index] = SessionState{
+			ID:               session.ID,
+			AgentID:          session.AgentID,
+			ProjectID:        session.ProjectID,
+			Title:            session.Title,
+			Workspace:        session.Workspace,
+			WorkspaceKey:     session.WorkspaceKey,
+			WorkspaceName:    session.WorkspaceName,
+			Status:           session.Status,
+			HistoryTruncated: session.HistoryTruncated,
 		}
 	}
 	return out

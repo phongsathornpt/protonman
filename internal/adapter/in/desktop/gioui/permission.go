@@ -92,7 +92,12 @@ func (c *controller) handlePermissionRequestFromAgent(agentID string, source *ac
 		}
 		agentID = currentAgentID
 	}
-	if session, ok := desktopSessionByID(c.state, params.SessionID); ok && agentID != "" && session.AgentID != agentID {
+	session, sessionExists := desktopSessionByID(c.state, params.SessionID)
+	if !sessionExists {
+		c.mu.Unlock()
+		return nil, errors.New("permission request references an unknown session")
+	}
+	if agentID != "" && session.AgentID != agentID {
 		c.mu.Unlock()
 		return nil, errors.New("permission request agent does not own the session")
 	}
@@ -124,6 +129,9 @@ func (c *controller) handlePermissionRequestFromAgent(agentID string, source *ac
 		return map[string]any{"outcome": map[string]any{"outcome": "cancelled"}}, nil
 	case optionID := <-waiter:
 		c.finishPermission(item.RequestID, params.SessionID, waiter)
+		if optionID == "" {
+			return map[string]any{"outcome": map[string]any{"outcome": "cancelled"}}, nil
+		}
 		return map[string]any{"outcome": map[string]any{"outcome": "selected", "optionId": optionID}}, nil
 	}
 }

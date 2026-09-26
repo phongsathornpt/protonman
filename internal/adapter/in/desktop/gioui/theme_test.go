@@ -22,8 +22,14 @@ func TestThemeTextContrast(t *testing.T) {
 				{name: "primary", foreground: theme.onPrimary, background: theme.primary},
 				{name: "primary container", foreground: theme.onPrimaryContainer, background: theme.primaryContainer},
 				{name: "secondary container", foreground: theme.onSecondaryContainer, background: theme.secondaryContainer},
+				{name: "tertiary container", foreground: theme.onTertiaryContainer, background: theme.tertiaryContainer},
 				{name: "disabled", foreground: theme.onSurfaceVariant, background: theme.surfaceContainerHigh},
 				{name: "error container", foreground: theme.onErrorContainer, background: theme.errorContainer},
+				{name: "success container", foreground: theme.onSuccessContainer, background: theme.successContainer},
+				{name: "warning container", foreground: theme.onWarningContainer, background: theme.warningContainer},
+				{name: "strength container", foreground: theme.onStrengthContainer, background: theme.strengthContainer},
+				{name: "agility container", foreground: theme.onAgilityContainer, background: theme.agilityContainer},
+				{name: "intelligence container", foreground: theme.onIntelligenceContainer, background: theme.intelligenceContainer},
 			}
 			for _, pair := range pairs {
 				t.Run(pair.name, func(t *testing.T) {

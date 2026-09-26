@@ -5,6 +5,7 @@ package gioui
 import (
 	"fmt"
 	"strings"
+	"unicode/utf8"
 
 	"gioui.org/font"
 	"gioui.org/io/semantic"
@@ -64,7 +65,7 @@ func (s *shell) layoutInspector(gtx layout.Context, session desktopstate.Session
 	if !protonmanSession(session) {
 		panelCount = 3
 	}
-	return s.roundedSurface(gtx, 0, s.theme.surfaceContainer, func(gtx layout.Context) layout.Dimensions {
+	return s.roundedSurface(gtx, shapeLarge, s.theme.surfaceContainer, func(gtx layout.Context) layout.Dimensions {
 		return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 				return s.layoutInspectorHeader(gtx, session, snapshot)
@@ -83,12 +84,12 @@ func (s *shell) layoutInspectorHeader(gtx layout.Context, session desktopstate.S
 	return layout.Inset{Top: 12, Bottom: 12, Left: 20, Right: 20}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 		return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				return s.layoutLabel(gtx, "SESSION INSPECTOR", textLabelMedium, font.SemiBold, s.theme.onSurfaceVariant, 1)
+				return s.layoutLabel(gtx, "SESSION CONTEXT", textLabelMedium, font.SemiBold, s.theme.onSurfaceVariant, 1)
 			}),
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				status := "Live ACP projection"
+				status := "Agent connected"
 				if sessionConnection(snapshot, session.AgentID) != connectionConnected {
-					status = "Waiting for ACP"
+					status = "Waiting for agent"
 				}
 				return s.layoutLabel(gtx, status, textBodyMedium, font.Normal, s.theme.onSurface, 1)
 			}),
@@ -146,7 +147,7 @@ func (s *shell) layoutInspectorPanel(gtx layout.Context, session desktopstate.Se
 
 func (s *shell) layoutInspectorPanelSurface(gtx layout.Context, content layout.Widget) layout.Dimensions {
 	return layout.UniformInset(6).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-		return s.roundedSurface(gtx, 18, s.theme.surfaceContainerHigh, func(gtx layout.Context) layout.Dimensions {
+		return s.roundedBorderSurface(gtx, shapeLarge, s.theme.surfaceContainerHigh, s.theme.outlineVariant, 1, func(gtx layout.Context) layout.Dimensions {
 			semantic.DescriptionOp("Session inspector panel").Add(gtx.Ops)
 			return layout.Inset{Top: 16, Bottom: 16, Left: 16, Right: 16}.Layout(gtx, content)
 		})
@@ -173,47 +174,158 @@ func protonmanSession(session desktopstate.SessionState) bool {
 
 func (s *shell) layoutGoalPanel(gtx layout.Context, session desktopstate.SessionState) layout.Dimensions {
 	goal := strings.TrimSpace(session.Context.Goal)
-	if goal == "" {
-		goal = "No active goal"
+	hasGoal := goal != ""
+	if !hasGoal {
+		goal = "No active goal set"
 	}
 	goal = compactInspectorText(goal, 1200)
-	return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
+	children := []layout.FlexChild{
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return s.layoutPanelTitle(gtx, "Goal")
+			return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
+				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+					return s.layoutPanelTitle(gtx, "🎯 Active Goal")
+				}),
+				layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+					return layout.Spacer{}.Layout(gtx)
+				}),
+				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+					if !hasGoal {
+						return layout.Dimensions{}
+					}
+					return s.roundedSurface(gtx, shapeSmall, s.theme.primaryContainer, func(gtx layout.Context) layout.Dimensions {
+						return layout.Inset{Top: 2, Bottom: 2, Left: 8, Right: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+							return s.layoutLabel(gtx, "ACTIVE", textLabelSmall, font.Bold, s.theme.onPrimaryContainer, 1)
+						})
+					})
+				}),
+			)
 		}),
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return layout.UniformInset(6).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-				return s.layoutLabel(gtx, goal, textBodyMedium, font.Normal, s.theme.onSurface, 8)
+			bg := s.theme.surfaceContainerLowest
+			borderColor := s.theme.outlineVariant
+			textColor := s.theme.onSurface
+			if hasGoal {
+				borderColor = s.theme.primary
+			} else {
+				textColor = s.theme.onSurfaceVariant
+			}
+			return layout.Inset{Top: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+				return s.roundedBorderSurface(gtx, shapeMedium, bg, borderColor, 1, func(gtx layout.Context) layout.Dimensions {
+					return layout.Inset{Top: 10, Bottom: 10, Left: 12, Right: 12}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+						return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
+							layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+								return s.layoutLabel(gtx, goal, textBodyMedium, font.Normal, textColor, 8)
+							}),
+							layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+								tip := "Set or update with /goal <objective> in chat."
+								if hasGoal {
+									tip = "Directs autonomous planning, subagents, and task plans."
+								}
+								return layout.Inset{Top: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+									return s.layoutLabel(gtx, tip, textLabelSmall, font.Normal, s.theme.onSurfaceVariant, 2)
+								})
+							}),
+						)
+					})
+				})
 			})
 		}),
-	)
+	}
+	return layout.Flex{Axis: layout.Vertical}.Layout(gtx, children...)
 }
 
 func (s *shell) layoutTodoPanel(gtx layout.Context, session desktopstate.SessionState) layout.Dimensions {
 	todo := session.Context.Todo
-	title := "TODO"
+	title := "📋 Task Plan"
+	revisionText := ""
 	if todo.Revision > 0 {
-		title = fmt.Sprintf("TODO · revision %d", todo.Revision)
+		revisionText = fmt.Sprintf("rev %d", todo.Revision)
 	}
+
+	completedCount := 0
+	for _, item := range todo.Items {
+		if strings.TrimSpace(item.Status) == "completed" {
+			completedCount++
+		}
+	}
+	totalCount := len(todo.Items)
+
 	children := []layout.FlexChild{
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return s.layoutPanelTitle(gtx, title)
+			return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
+				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+					return s.layoutPanelTitle(gtx, title)
+				}),
+				layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+					return layout.Spacer{}.Layout(gtx)
+				}),
+				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+					if revisionText == "" {
+						return layout.Dimensions{}
+					}
+					return s.roundedSurface(gtx, shapeSmall, s.theme.surfaceContainerLow, func(gtx layout.Context) layout.Dimensions {
+						return layout.Inset{Top: 2, Bottom: 2, Left: 8, Right: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+							return s.layoutLabel(gtx, revisionText, textLabelSmall, font.Normal, s.theme.onSurfaceVariant, 1)
+						})
+					})
+				}),
+			)
 		}),
 	}
-	if len(todo.Items) == 0 {
-		children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return layout.UniformInset(6).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-				return s.layoutLabel(gtx, "No TODO items", textBodyMedium, font.Normal, s.theme.onSurfaceVariant, 2)
-			})
-		}))
-	} else {
+
+	if totalCount > 0 {
+		percent := (completedCount * 100) / totalCount
+		progressText := fmt.Sprintf("%d of %d completed (%d%%)", completedCount, totalCount, percent)
+		children = append(children,
+			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+				return layout.Inset{Top: 6, Bottom: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+					return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
+						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+							return s.layoutLabel(gtx, progressText, textLabelSmall, font.Medium, s.theme.onSurfaceVariant, 1)
+						}),
+						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+							return layout.Inset{Top: 4}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+								gtx.Constraints.Min.Y = gtx.Dp(6)
+								gtx.Constraints.Max.Y = gtx.Dp(6)
+								return s.roundedSurface(gtx, shapeSmall, s.theme.surfaceContainerLowest, func(gtx layout.Context) layout.Dimensions {
+									fillWidth := (gtx.Constraints.Max.X * percent) / 100
+									if fillWidth < gtx.Dp(6) && completedCount > 0 {
+										fillWidth = gtx.Dp(6)
+									}
+									return layout.Flex{Axis: layout.Horizontal}.Layout(gtx,
+										layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+											gtx.Constraints.Min.X = fillWidth
+											gtx.Constraints.Max.X = fillWidth
+											return s.roundedSurface(gtx, shapeSmall, s.theme.primary, func(gtx layout.Context) layout.Dimensions {
+												return layout.Dimensions{Size: gtx.Constraints.Min}
+											})
+										}),
+									)
+								})
+							})
+						}),
+					)
+				})
+			}),
+		)
 		for _, item := range todo.Items {
 			item := item
 			children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 				return s.layoutTodoItem(gtx, item)
 			}))
 		}
+	} else {
+		children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			return layout.Inset{Top: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+				return s.roundedBorderSurface(gtx, shapeMedium, s.theme.surfaceContainerLowest, s.theme.outlineVariant, 1, func(gtx layout.Context) layout.Dimensions {
+					return layout.Inset{Top: 10, Bottom: 10, Left: 12, Right: 12}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+						return s.layoutLabel(gtx, "No task plan active. Protonman coordinates tasks automatically using session TODOs.", textBodyMedium, font.Normal, s.theme.onSurfaceVariant, 3)
+					})
+				})
+			})
+		}))
 	}
+
 	return layout.Flex{Axis: layout.Vertical}.Layout(gtx, children...)
 }
 
@@ -230,41 +342,83 @@ func (s *shell) layoutTodoItem(gtx layout.Context, item desktopstate.TodoItemSta
 		description += ", " + status
 	}
 	semantic.DescriptionOp(description).Add(gtx.Ops)
-	return layout.Inset{Top: 5, Bottom: 5, Left: 4, Right: 4}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-		return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Start}.Layout(gtx,
-			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				gtx.Constraints.Min.X = gtx.Dp(24)
-				return s.layoutLabel(gtx, marker, textTitleMedium, font.Bold, s.theme.primary, 1)
-			}),
-			layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-				return s.layoutLabel(gtx, text, textBodyMedium, font.Normal, s.theme.onSurface, 3)
-			}),
-		)
+
+	markerColor := s.theme.outlineVariant
+	textColor := s.theme.onSurface
+	rowBg := s.theme.surfaceContainerLowest
+	borderColor := s.theme.outlineVariant
+	borderWidth := 1
+
+	switch status {
+	case "completed":
+		markerColor = s.theme.onSuccessContainer
+		textColor = s.theme.onSurfaceVariant
+	case "in_progress":
+		markerColor = s.theme.primary
+		textColor = s.theme.onSurface
+		borderColor = s.theme.primary
+	}
+
+	return layout.Inset{Top: 3, Bottom: 3}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+		return s.roundedBorderSurface(gtx, shapeSmall, rowBg, borderColor, borderWidth, func(gtx layout.Context) layout.Dimensions {
+			return layout.Inset{Top: 6, Bottom: 6, Left: 8, Right: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+				return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Start}.Layout(gtx,
+					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+						gtx.Constraints.Min.X = gtx.Dp(24)
+						return s.layoutLabel(gtx, marker, textTitleMedium, font.Bold, markerColor, 1)
+					}),
+					layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+						return s.layoutLabel(gtx, text, textBodyMedium, font.Normal, textColor, 3)
+					}),
+				)
+			})
+		})
 	})
 }
 
 func (s *shell) layoutMemoryPanel(gtx layout.Context, session desktopstate.SessionState) layout.Dimensions {
 	memory := session.Context.Memory
+	totalCount := len(memory.Workspace) + len(memory.Global)
+	countLabel := fmt.Sprintf("%d stored", totalCount)
+
 	children := []layout.FlexChild{
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return s.layoutPanelTitle(gtx, "Memory")
+			return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
+				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+					return s.layoutPanelTitle(gtx, "🧠 Durable Memory")
+				}),
+				layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+					return layout.Spacer{}.Layout(gtx)
+				}),
+				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+					return s.roundedSurface(gtx, shapeSmall, s.theme.surfaceContainerLow, func(gtx layout.Context) layout.Dimensions {
+						return layout.Inset{Top: 2, Bottom: 2, Left: 8, Right: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+							return s.layoutLabel(gtx, countLabel, textLabelSmall, font.Normal, s.theme.onSurfaceVariant, 1)
+						})
+					})
+				}),
+			)
 		}),
 	}
-	if len(memory.Workspace) == 0 && len(memory.Global) == 0 {
+	if totalCount == 0 {
 		children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return layout.UniformInset(6).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-				return s.layoutLabel(gtx, "No workspace or global memory", textBodyMedium, font.Normal, s.theme.onSurfaceVariant, 2)
+			return layout.Inset{Top: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+				return s.roundedBorderSurface(gtx, shapeMedium, s.theme.surfaceContainerLowest, s.theme.outlineVariant, 1, func(gtx layout.Context) layout.Dimensions {
+					return layout.Inset{Top: 10, Bottom: 10, Left: 12, Right: 12}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+						return s.layoutLabel(gtx, "No workspace or global memory. Protonman captures durable facts and user preferences as you work.", textBodyMedium, font.Normal, s.theme.onSurfaceVariant, 3)
+					})
+				})
 			})
 		}))
 	} else {
 		if len(memory.Workspace) > 0 {
 			children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				return s.layoutMemorySection(gtx, "Workspace", memory.Workspace)
+				return s.layoutMemorySection(gtx, "🏠 Workspace Facts", memory.Workspace)
 			}))
 		}
 		if len(memory.Global) > 0 {
 			children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				return s.layoutMemorySection(gtx, "Global", memory.Global)
+				return s.layoutMemorySection(gtx, "🌐 Global Preferences", memory.Global)
 			}))
 		}
 	}
@@ -308,27 +462,49 @@ func (s *shell) layoutMemoryEntry(gtx layout.Context, entry desktopstate.MemoryE
 		description += ": " + value
 	}
 	semantic.DescriptionOp(description).Add(gtx.Ops)
-	children := []layout.FlexChild{
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			label := key
-			if entry.Kind != "" {
-				label = entry.Kind + " · " + label
-			}
-			return s.layoutLabel(gtx, label, textBodyMedium, font.SemiBold, s.theme.onSurface, 2)
-		}),
-	}
-	if value != "" {
-		children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return s.layoutLabel(gtx, value, textBodyMedium, font.Normal, s.theme.onSurfaceVariant, 5)
-		}))
-	}
-	if metadata := memoryMetadata(entry); metadata != "" {
-		children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return s.layoutLabel(gtx, metadata, textLabelMedium, font.Normal, s.theme.onSurfaceVariant, 1)
-		}))
-	}
-	return layout.Inset{Top: 5, Bottom: 5, Left: 4, Right: 4}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-		return layout.Flex{Axis: layout.Vertical}.Layout(gtx, children...)
+
+	return layout.Inset{Top: 3, Bottom: 3}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+		return s.roundedBorderSurface(gtx, shapeSmall, s.theme.surfaceContainerLowest, s.theme.outlineVariant, 1, func(gtx layout.Context) layout.Dimensions {
+			return layout.Inset{Top: 8, Bottom: 8, Left: 10, Right: 10}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+				children := []layout.FlexChild{
+					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+						kindLabel := strings.ToUpper(entry.Kind)
+						if kindLabel == "" {
+							kindLabel = "FACT"
+						}
+						return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
+							layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+								return s.roundedSurface(gtx, shapeSmall, s.theme.secondaryContainer, func(gtx layout.Context) layout.Dimensions {
+									return layout.Inset{Top: 1, Bottom: 1, Left: 6, Right: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+										return s.layoutLabel(gtx, kindLabel, textLabelSmall, font.Bold, s.theme.onSecondaryContainer, 1)
+									})
+								})
+							}),
+							layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+								return layout.Inset{Left: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+									return s.layoutLabel(gtx, key, textBodyMedium, font.SemiBold, s.theme.onSurface, 1)
+								})
+							}),
+						)
+					}),
+				}
+				if value != "" {
+					children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+						return layout.Inset{Top: 4}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+							return s.layoutLabel(gtx, value, textBodySmall, font.Normal, s.theme.onSurfaceVariant, 5)
+						})
+					}))
+				}
+				if metadata := memoryMetadata(entry); metadata != "" {
+					children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+						return layout.Inset{Top: 4}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+							return s.layoutLabel(gtx, "● "+metadata, textLabelSmall, font.Normal, s.theme.outline, 1)
+						})
+					}))
+				}
+				return layout.Flex{Axis: layout.Vertical}.Layout(gtx, children...)
+			})
+		})
 	})
 }
 
@@ -368,7 +544,7 @@ func (s *shell) layoutRuntimePanel(gtx layout.Context, session desktopstate.Sess
 	model := strings.TrimSpace(s.runtimeModelEditor.Text())
 	children := []layout.FlexChild{
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return s.layoutPanelTitle(gtx, "Runtime")
+			return s.layoutPanelTitle(gtx, "⚡ Model & Reasoning")
 		}),
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 			return s.layoutInspectorEditor(gtx, "Provider", &s.runtimeProviderEditor, enabled)
@@ -378,7 +554,7 @@ func (s *shell) layoutRuntimePanel(gtx layout.Context, session desktopstate.Sess
 		}),
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 			return layout.UniformInset(4).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-				return s.layoutButton(gtx, &s.runtimeApplyButton, "Apply model", enabled && provider != "" && model != "", func() {
+				return s.layoutPrimaryButton(gtx, &s.runtimeApplyButton, "Apply model", enabled && provider != "" && model != "", func() {
 					s.onSetRuntimeModel(provider, model)
 				})
 			})
@@ -425,14 +601,18 @@ func (s *shell) layoutInspectorEditor(gtx layout.Context, label string, editor *
 			gtx.Constraints.Min.Y = gtx.Dp(44)
 			semantic.EnabledOp(enabled).Add(gtx.Ops)
 			semantic.DescriptionOp(label).Add(gtx.Ops)
-			dims := s.roundedSurface(gtx, 10, s.theme.surface, func(gtx layout.Context) layout.Dimensions {
+			dims := s.roundedSurface(gtx, shapeSmall, s.theme.surface, func(gtx layout.Context) layout.Dimensions {
 				gtx.Constraints.Min.Y = gtx.Dp(44)
 				return layout.UniformInset(10).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 					return editor.Layout(gtx, s.theme.material.Shaper, s.theme.textFont(font.Normal), textBodyMedium, textCall, selectionCall)
 				})
 			})
 			if enabled && gtx.Focused(editor) {
-				widget.Border{Color: s.theme.primary, CornerRadius: 10, Width: 2}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+				widget.Border{Color: s.theme.primary, CornerRadius: shapeSmall, Width: 2}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+					return layout.Dimensions{Size: dims.Size}
+				})
+			} else {
+				widget.Border{Color: s.theme.outlineVariant, CornerRadius: shapeSmall, Width: 1}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 					return layout.Dimensions{Size: dims.Size}
 				})
 			}
@@ -490,20 +670,20 @@ func (s *shell) layoutChoiceButton(gtx layout.Context, value string, selected bo
 		background := s.theme.surface
 		foreground := s.theme.onSurface
 		if selected {
-			background = s.theme.secondaryContainer
-			foreground = s.theme.onSecondaryContainer
+			background = s.theme.primaryContainer
+			foreground = s.theme.onPrimaryContainer
 		} else if button.Hovered() && gtx.Enabled() {
 			background = s.theme.primaryContainer
 			foreground = s.theme.onPrimaryContainer
 		}
-		return s.roundedSurface(gtx, 10, background, func(gtx layout.Context) layout.Dimensions {
+		return s.roundedSurface(gtx, shapeSmall, background, func(gtx layout.Context) layout.Dimensions {
 			return layout.Inset{Top: 8, Bottom: 8, Left: 8, Right: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 				return s.layoutLabel(gtx, value, textLabelMedium, font.SemiBold, foreground, 1)
 			})
 		})
 	})
 	if enabled && gtx.Focused(button) {
-		widget.Border{Color: s.theme.primary, CornerRadius: 10, Width: 2}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+		widget.Border{Color: s.theme.primary, CornerRadius: shapeSmall, Width: 2}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 			return layout.Dimensions{Size: dims.Size}
 		})
 	}
@@ -523,12 +703,24 @@ func todoMarkerForStatus(status string) string {
 
 func compactInspectorText(value string, maxRunes int) string {
 	value = strings.TrimSpace(value)
-	if maxRunes <= 0 || len([]rune(value)) <= maxRunes {
+	if maxRunes <= 0 {
 		return value
 	}
-	runes := []rune(value)
-	if maxRunes == 1 {
-		return "…"
+	runeCount := 0
+	prefixEnd := 0
+	for index := 0; index < len(value); {
+		if runeCount == maxRunes {
+			if maxRunes == 1 {
+				return "…"
+			}
+			return strings.TrimSpace(value[:prefixEnd]) + "…"
+		}
+		_, width := utf8.DecodeRuneInString(value[index:])
+		index += width
+		runeCount++
+		if runeCount == maxRunes-1 {
+			prefixEnd = index
+		}
 	}
-	return strings.TrimSpace(string(runes[:maxRunes-1])) + "…"
+	return value
 }

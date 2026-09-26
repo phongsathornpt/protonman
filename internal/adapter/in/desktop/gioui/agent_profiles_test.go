@@ -4,6 +4,7 @@ package gioui
 
 import (
 	"context"
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
@@ -44,6 +45,82 @@ func TestCommandSpecForACPAgentResolvesEnvironmentAtRuntime(t *testing.T) {
 	}
 	if !slices.Equal(spec.Env, []string{"CUSTOM_ACP_TOKEN=secret"}) {
 		t.Fatalf("environment = %#v", spec.Env)
+	}
+}
+
+func TestAgentSessionLockRegistryReleasesUnusedKeys(t *testing.T) {
+	var registry agentSessionLockRegistry
+	for index := range 1024 {
+		unlock := registry.lock(fmt.Sprintf("agent-%d", index))
+		unlock()
+	}
+	if count := len(registry.locks); count != 0 {
+		t.Fatalf("retained %d idle agent locks", count)
+	}
+}
+
+func TestAgentSessionLockRegistryKeepsWaitersOnSameLock(t *testing.T) {
+	var registry agentSessionLockRegistry
+	firstUnlock := registry.lock("reviewer")
+	acquired := make(chan func(), 1)
+	finished := make(chan struct{})
+	go func() {
+		unlock := registry.lock("reviewer")
+		acquired <- unlock
+		close(finished)
+	}()
+
+	select {
+	case <-acquired:
+		t.Fatal("second operation acquired the agent lock concurrently")
+	case <-time.After(10 * time.Millisecond):
+	}
+	firstUnlock()
+
+	var secondUnlock func()
+	select {
+	case secondUnlock = <-acquired:
+	case <-time.After(time.Second):
+		t.Fatal("waiting operation did not acquire the agent lock")
+	}
+	if count := len(registry.locks); count != 1 {
+		t.Fatalf("lock entries while held = %d, want 1", count)
+	}
+	secondUnlock()
+	<-finished
+	if count := len(registry.locks); count != 0 {
+		t.Fatalf("retained %d released agent locks", count)
+	}
+}
+
+func TestAgentSessionLockRegistryCancelsWaitingAcquisition(t *testing.T) {
+	var registry agentSessionLockRegistry
+	firstUnlock := registry.lock("reviewer")
+	ctx, cancel := context.WithCancel(context.Background())
+	acquired := make(chan bool, 1)
+	go func() {
+		unlock, ok := registry.lockContext(ctx, "reviewer")
+		if ok {
+			unlock()
+		}
+		acquired <- ok
+	}()
+	cancel()
+
+	select {
+	case ok := <-acquired:
+		if ok {
+			t.Fatal("cancelled waiter acquired the agent lock")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("cancelled waiter remained blocked")
+	}
+	if count := registry.locks["reviewer"].refs; count != 1 {
+		t.Fatalf("retained waiter references = %d, want only the holder", count)
+	}
+	firstUnlock()
+	if count := len(registry.locks); count != 0 {
+		t.Fatalf("retained %d released agent locks", count)
 	}
 }
 
@@ -229,5 +306,45 @@ func TestSaveAgentProfilePersistsAndRequiresRestart(t *testing.T) {
 	}
 	if status != "ACP agent saved · restart Desktop to apply" {
 		t.Fatalf("status = %q", status)
+	}
+}
+
+func TestPruneAgentRuntimeDropsUnusedRemovedProfiles(t *testing.T) {
+	controller := newTestController()
+	controller.profiles["removed"] = app.ACPAgentProfile{ID: "removed", Command: "removed-acp"}
+	controller.profiles["live-session"] = app.ACPAgentProfile{ID: "live-session", Command: "session-acp"}
+	controller.profiles["live-client"] = app.ACPAgentProfile{ID: "live-client", Command: "client-acp"}
+	controller.connections["removed"] = connectionReconnecting
+	controller.statuses["removed"] = "Restart required to connect"
+	controller.connections["live-session"] = connectionConnected
+	controller.statuses["live-session"] = "Connected"
+	controller.clients["live-client"] = &acpclient.Client{}
+	controller.connections["live-client"] = connectionConnected
+	controller.statuses["live-client"] = "Connected"
+	controller.state.Sessions = append(controller.state.Sessions, desktopstate.SessionState{
+		ID:      "existing-session",
+		AgentID: "live-session",
+	})
+
+	controller.mu.Lock()
+	controller.profiles = map[string]app.ACPAgentProfile{
+		controllerAgentID: defaultACPAgentProfile(),
+	}
+	controller.pruneAgentRuntimeLocked()
+	controller.mu.Unlock()
+
+	if _, ok := controller.connections["removed"]; ok {
+		t.Fatal("removed profile connection state was retained")
+	}
+	if _, ok := controller.statuses["removed"]; ok {
+		t.Fatal("removed profile status was retained")
+	}
+	for _, agentID := range []string{"live-session", "live-client", controllerAgentID} {
+		if _, ok := controller.connections[agentID]; !ok {
+			t.Fatalf("live connection state for %q was pruned", agentID)
+		}
+		if _, ok := controller.statuses[agentID]; !ok {
+			t.Fatalf("live status for %q was pruned", agentID)
+		}
 	}
 }

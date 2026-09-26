@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -22,11 +23,12 @@ func newTestClient(t *testing.T) (*Client, *bufferWriteCloser) {
 	ctx, cancel := context.WithCancel(context.Background())
 	writer := &bufferWriteCloser{}
 	return &Client{
-		ctx:     ctx,
-		stdin:   writer,
-		cancel:  cancel,
-		pending: make(map[uint64]chan response),
-		closed:  make(chan struct{}),
+		ctx:      ctx,
+		stdin:    writer,
+		cancel:   cancel,
+		pending:  make(map[uint64]chan response),
+		requests: make(chan incomingRequest, incomingRequestQueueCapacity),
+		closed:   make(chan struct{}),
 	}, writer
 }
 
@@ -64,6 +66,97 @@ func TestHandleRequestWithoutHandlerWritesMethodNotFound(t *testing.T) {
 	if got.Error == nil || got.Error.Code != -32601 {
 		t.Fatalf("error = %#v", got.Error)
 	}
+}
+
+func TestReadLoopBoundsQueuedReverseRequests(t *testing.T) {
+	client, _ := newTestClient(t)
+	client.requests = make(chan incomingRequest, 1)
+	input := strings.NewReader(
+		`{"jsonrpc":"2.0","id":1,"method":"first","params":{}}` + "\n" +
+			`{"jsonrpc":"2.0","id":2,"method":"second","params":{}}` + "\n",
+	)
+	client.readLoop(input)
+
+	if got := len(client.requests); got != 1 {
+		t.Fatalf("queued reverse requests = %d, want bounded capacity 1", got)
+	}
+	queued := <-client.requests
+	if string(queued.request.ID) != "1" {
+		t.Fatalf("queued request ID = %s, want 1", queued.request.ID)
+	}
+	select {
+	case <-client.closed:
+	default:
+		t.Fatal("queue overflow did not shut down the ACP connection")
+	}
+}
+
+func TestReadLoopRejectsOversizedReverseRequestParamsWithoutQueueingThem(t *testing.T) {
+	client, _ := newTestClient(t)
+	params := `{"data":"` + strings.Repeat("x", maxIncomingRequestParams+1) + `"}`
+	line, err := json.Marshal(envelope{
+		JSONRPC: "2.0",
+		ID:      json.RawMessage("3"),
+		Method:  "session/request_permission",
+		Params:  json.RawMessage(params),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	client.readLoop(strings.NewReader(string(line) + "\n"))
+
+	queued := <-client.requests
+	if len(queued.request.Params) != 0 {
+		t.Fatalf("oversized params retained in request queue: %d bytes", len(queued.request.Params))
+	}
+	if queued.errorCode != -32600 || queued.errorText == "" {
+		t.Fatalf("oversized params response = code %d, message %q", queued.errorCode, queued.errorText)
+	}
+}
+
+func TestRequestWorkersBoundConcurrentHandlers(t *testing.T) {
+	client, _ := newTestClient(t)
+	started := make(chan struct{}, incomingRequestWorkers+1)
+	release := make(chan struct{})
+	client.SetRequestHandler(func(context.Context, Request) (any, error) {
+		started <- struct{}{}
+		<-release
+		return nil, nil
+	})
+
+	for i := 0; i < incomingRequestWorkers+2; i++ {
+		client.requests <- incomingRequest{request: Request{ID: json.RawMessage("1"), Method: "blocked"}}
+	}
+
+	var workers sync.WaitGroup
+	workers.Add(incomingRequestWorkers)
+	for range incomingRequestWorkers {
+		go func() {
+			defer workers.Done()
+			client.requestLoop()
+		}()
+	}
+
+	for i := 0; i < incomingRequestWorkers; i++ {
+		select {
+		case <-started:
+		case <-time.After(time.Second):
+			close(release)
+			client.shutdown(nil)
+			workers.Wait()
+			t.Fatal("timed out waiting for request worker")
+		}
+	}
+	if got := len(client.requests); got != 2 {
+		close(release)
+		client.shutdown(nil)
+		workers.Wait()
+		t.Fatalf("queued requests while all workers are blocked = %d, want 2", got)
+	}
+
+	close(release)
+	client.shutdown(nil)
+	workers.Wait()
 }
 
 func TestCommandSpecIsIndependentFromLegacyStart(t *testing.T) {

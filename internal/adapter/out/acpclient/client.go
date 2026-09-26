@@ -70,6 +70,7 @@ type Client struct {
 	mu       sync.Mutex
 	pending  map[uint64]chan response
 	handler  RequestHandler
+	requests chan incomingRequest
 	nextID   atomic.Uint64
 	onEvent  func(Event)
 	closed   chan struct{}
@@ -80,6 +81,22 @@ type Client struct {
 	// uses it to avoid reporting a partial stderr tail while the drain is still
 	// reading the last bytes of a dead process.
 	stderrDone chan struct{}
+}
+
+const (
+	incomingRequestWorkers       = 4
+	incomingRequestQueueCapacity = 16
+	maxIncomingRequestParams     = 256 << 10
+	maxIncomingRequestID         = 4 << 10
+	maxIncomingRequestMethod     = 512
+)
+
+var errIncomingRequestQueueFull = errors.New("ACP reverse request queue is full")
+
+type incomingRequest struct {
+	request   Request
+	errorCode int
+	errorText string
 }
 
 // stderrTailLimit bounds the retained child stderr. Startup and crash diagnostics
@@ -179,8 +196,12 @@ func StartCommand(ctx context.Context, spec CommandSpec, onEvent func(Event)) (*
 
 	client := &Client{
 		ctx: procCtx, cmd: cmd, stdin: stdin, cancel: cancel, onEvent: onEvent,
-		pending: make(map[uint64]chan response), closed: make(chan struct{}),
+		pending: make(map[uint64]chan response), requests: make(chan incomingRequest, incomingRequestQueueCapacity),
+		closed:     make(chan struct{}),
 		stderrDone: make(chan struct{}),
+	}
+	for range incomingRequestWorkers {
+		go client.requestLoop()
 	}
 	go client.readLoop(stdout)
 	go func() {
@@ -291,9 +312,33 @@ func (c *Client) readLoop(r io.Reader) {
 			continue
 		}
 		if msg.Method != "" {
-			if len(msg.ID) > 0 && string(msg.ID) != "null" {
-				request := Request{ID: append(json.RawMessage(nil), msg.ID...), Method: msg.Method, Params: append(json.RawMessage(nil), msg.Params...)}
-				go c.handleRequest(request)
+			if len(msg.ID) > 0 && !(len(msg.ID) == len("null") && string(msg.ID) == "null") {
+				request := incomingRequest{}
+				if len(msg.ID) > maxIncomingRequestID {
+					request.request.ID = json.RawMessage("null")
+					request.errorCode = -32600
+					request.errorText = "ACP request ID exceeds the supported size"
+				} else {
+					request.request.ID = append(json.RawMessage(nil), msg.ID...)
+					if len(msg.Method) > maxIncomingRequestMethod {
+						request.errorCode = -32600
+						request.errorText = "ACP request method exceeds the supported size"
+					} else {
+						request.request.Method = strings.Clone(msg.Method)
+					}
+				}
+				if request.errorCode == 0 && len(msg.Params) > maxIncomingRequestParams {
+					request.errorCode = -32600
+					request.errorText = "ACP request parameters exceed the supported size"
+				} else if request.errorCode == 0 {
+					request.request.Params = append(json.RawMessage(nil), msg.Params...)
+				}
+				select {
+				case c.requests <- request:
+				default:
+					c.shutdown(errIncomingRequestQueueFull)
+					return
+				}
 				continue
 			}
 			if c.onEvent != nil {
@@ -322,6 +367,31 @@ func (c *Client) readLoop(r io.Reader) {
 		c.shutdown(fmt.Errorf("read ACP stream: %w", err))
 	} else {
 		c.shutdown(io.EOF)
+	}
+}
+
+func (c *Client) requestLoop() {
+	for {
+		if c.ctx.Err() != nil {
+			return
+		}
+		select {
+		case <-c.closed:
+			return
+		case incoming := <-c.requests:
+			if c.ctx.Err() != nil {
+				return
+			}
+			if incoming.errorCode != 0 {
+				_ = c.write(envelope{
+					JSONRPC: "2.0",
+					ID:      incoming.request.ID,
+					Error:   &RPCError{Code: incoming.errorCode, Message: incoming.errorText},
+				})
+				continue
+			}
+			c.handleRequest(incoming.request)
+		}
 	}
 }
 

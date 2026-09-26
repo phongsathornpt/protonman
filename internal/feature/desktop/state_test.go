@@ -157,6 +157,7 @@ func TestClonePresentationStateDetachesRenderedAndNavigationData(t *testing.T) {
 				ID:                    "active",
 				AdditionalDirectories: []string{"/shared"},
 				Timeline:              []TimelineItem{{ID: "item"}},
+				HistoryTruncated:      true,
 				Subagents:             []SubagentState{{ID: "child"}},
 				Context: SessionContextState{
 					Todo:   TodoState{Items: []TodoItemState{{ID: "todo"}}},
@@ -165,7 +166,19 @@ func TestClonePresentationStateDetachesRenderedAndNavigationData(t *testing.T) {
 			},
 			{
 				ID:                    "inactive",
+				AgentID:               "agent",
+				ProjectID:             "project",
+				Title:                 "Inactive session",
+				Workspace:             "/inactive",
+				Status:                TaskCompleted,
+				HistoryTruncated:      true,
 				AdditionalDirectories: []string{"/inactive-shared"},
+				Timeline:              []TimelineItem{{ID: "inactive-item"}},
+				Subagents:             []SubagentState{{ID: "inactive-child"}},
+				Context: SessionContextState{
+					Todo:   TodoState{Items: []TodoItemState{{ID: "inactive-todo"}}},
+					Memory: MemoryState{Workspace: []MemoryEntryState{{ID: "inactive-memory"}}},
+				},
 			},
 		},
 		PermissionInbox: []PermissionRequest{{RequestID: "permission", Options: []PermissionOption{{ID: "allow"}}}},
@@ -180,10 +193,10 @@ func TestClonePresentationStateDetachesRenderedAndNavigationData(t *testing.T) {
 	clone.Sessions[0].Subagents[0].ID = "changed-child"
 	clone.Sessions[0].Context.Todo.Items[0].ID = "changed-todo"
 	clone.Sessions[0].Context.Memory.Workspace[0].ID = "changed-memory"
-	clone.Sessions[1].AdditionalDirectories[0] = "/changed-inactive"
 	clone.PermissionInbox[0].Options[0].ID = "changed-permission"
 	clone.Integrations[0].Args[0] = "changed-arg"
 	clone.Integrations[0].Env[0] = "CHANGED=value"
+	inactive := clone.Sessions[1]
 
 	if original.Projects[0].Folders[0].Path != "/workspace" ||
 		original.Projects[0].AgentIDs[0] != "agent" ||
@@ -192,11 +205,18 @@ func TestClonePresentationStateDetachesRenderedAndNavigationData(t *testing.T) {
 		original.Sessions[0].Subagents[0].ID != "child" ||
 		original.Sessions[0].Context.Todo.Items[0].ID != "todo" ||
 		original.Sessions[0].Context.Memory.Workspace[0].ID != "memory" ||
-		original.Sessions[1].AdditionalDirectories[0] != "/inactive-shared" ||
 		original.PermissionInbox[0].Options[0].ID != "allow" ||
 		original.Integrations[0].Args[0] != "arg" ||
 		original.Integrations[0].Env[0] != "KEY=value" {
 		t.Fatal("ClonePresentationState aliased detached state")
+	}
+	if inactive.ID != "inactive" || inactive.AgentID != "agent" || inactive.ProjectID != "project" || inactive.Title != "Inactive session" || inactive.Status != TaskCompleted {
+		t.Fatalf("inactive navigation metadata = %+v", inactive)
+	}
+	if inactive.AdditionalDirectories != nil || inactive.Timeline != nil || inactive.Subagents != nil ||
+		inactive.Context.Goal != "" || inactive.Context.Todo.Items != nil || inactive.Context.Memory.Workspace != nil || inactive.Context.Memory.Global != nil ||
+		inactive.Runtime != (RuntimeSettingsState{}) || !inactive.HistoryTruncated || !clone.Sessions[0].HistoryTruncated {
+		t.Fatalf("inactive presentation state retained non-navigation data: %+v", inactive)
 	}
 }
 

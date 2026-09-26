@@ -29,9 +29,11 @@ notifications remain a follow-up capability.
 
 ## Product direction
 
-Protonman Desktop is a dense developer productivity tool. The interface uses
-Material Design 3 hierarchy, tonal surfaces, restrained borders, compact
-semantic status treatments, and predictable keyboard navigation.
+Protonman Desktop is a focused coding workbench. It uses a Material 3 inspired
+structure with neutral graphite surfaces, one cobalt interaction color, and
+distinct semantic feedback for connection, success, warning, and failure.
+Panels use quiet separation instead of lavender blocks; selected and focused
+states carry the visual emphasis.
 
 The following patterns are intentionally rejected:
 
@@ -44,26 +46,38 @@ The following patterns are intentionally rejected:
 
 ## Material tokens
 
-The first token set follows the baseline Material 3 palette and the verified
-Protonman desktop references.
+The palette keeps the cobalt native window chrome in view while removing the
+lavender cast from the application surface. Light and dark modes share the
+same roles and contrast intent.
 
 | Role | Light | Dark |
 | --- | --- | --- |
-| Surface | `#FFFBFE` | `#1C1B1F` |
-| Surface container | `#F3EDF7` | `#211F26` |
-| Surface container high | `#E8DEF8` | `#2B2930` |
-| On surface | `#1C1B1F` | `#E6E1E5` |
-| On surface variant | `#49454F` | `#CAC4D0` |
-| Primary | `#6750A4` | `#D0BCFF` |
-| On primary | `#FFFFFF` | `#381E72` |
-| Primary container | `#E8DEF8` | `#4F378B` |
-| On primary container | `#21005D` | `#EADDFF` |
-| Secondary container | `#F3DFE2` | `#633B48` |
-| On secondary container | `#7D5260` | `#FFD8E4` |
-| Outline | `#79747E` | `#938F99` |
-| Outline variant | `#CAC4D0` | `#49454F` |
-| Error container | `#F9DEDC` | `#8C1D18` |
-| On error container | `#410E0B` | `#F9DEDC` |
+| Surface | `#F6F7F9` | `#10141A` |
+| Surface container | `#FFFFFF` | `#171D25` |
+| Surface container high | `#E9EDF2` | `#222A35` |
+| On surface | `#17202B` | `#E8EEF6` |
+| On surface variant | `#536171` | `#B2BECC` |
+| Primary | `#315BE8` | `#9DB7FF` |
+| On primary | `#FFFFFF` | `#182F68` |
+| Primary container | `#E2E9FF` | `#233B78` |
+| On primary container | `#183A9C` | `#DCE6FF` |
+| Secondary container | `#E7EBF1` | `#242E3A` |
+| On secondary container | `#2D3A4A` | `#D2DCE8` |
+| Outline variant | `#C7CFD9` | `#3A4655` |
+| Success container | `#E4F5EB` | `#20392A` |
+| On success container | `#1B6538` | `#B8F0CA` |
+| Warning container | `#FFF1CC` | `#403316` |
+| On warning container | `#604600` | `#FFE3A3` |
+| Error container | `#FDE9E9` | `#472B30` |
+| On error container | `#8C2725` | `#FFDADD` |
+| Tertiary container (thinking) | `#F3E8FF` | `#3B1C56` |
+| On tertiary container | `#4C1D95` | `#F3E8FF` |
+| Strength container (STR) | `#FFEDD5` | `#431B06` |
+| On strength container | `#7C2D12` | `#FDBA74` |
+| Agility container (AGI) | `#CCFBF1` | `#0A332C` |
+| On agility container | `#115E59` | `#5EEAD4` |
+| Intelligence container (INT) | `#EDE9FE` | `#2E1065` |
+| On intelligence container | `#4C1D95` | `#DDD6FE` |
 
 Components use theme roles rather than component-local hex values. Text pairs
 must retain at least 4.5:1 contrast in both themes.
@@ -73,8 +87,8 @@ must retain at least 4.5:1 contrast in both themes.
 The client requests `Roboto, Arial, sans-serif` through Gio's system-font
 shaper and uses Material type emphasis:
 
-- display small: 36sp semibold for a single empty-state title;
-- headline small: 24sp semibold for window and session titles;
+- display small: 30sp semibold for a single empty-state title;
+- headline small: 22sp semibold for window and session titles;
 - title medium: 16sp semibold for card and section titles;
 - body large: 16sp regular for primary explanatory text;
 - body medium: 14sp regular for metadata and supporting content;
@@ -86,14 +100,37 @@ forcing horizontal overflow.
 
 ## Layout
 
-- Top workspace bar: 64dp minimum height.
+- Top workspace bar: 64dp minimum height with an 8dp window inset.
 - Project/session sidebar: 288dp at wide sizes and 248dp below 900dp.
+- Sidebar and main pane: 8dp outer inset with a 12dp separation.
 - Interactive controls and session rows: at least 44dp; session rows use 56dp.
-- Main content: flexible width with a 760dp maximum card width.
+- Main content: flexible width with a 680dp maximum empty-state card width.
 - Window minimum: 760 by 600dp.
 - Default window size: 1180 by 760dp.
 - Detail rows collapse from two columns to one column below 480dp available
   width.
+
+## Shapes
+
+Use the shared corner-radius scale from `theme.go` adhering to Material 3:
+
+- small: 8dp for compact inputs and row controls;
+- medium: 12dp for buttons, cards, and interactive rows;
+- large: 16dp for panels, message bubbles, and workspace surfaces; and
+- extra large: 24dp for prominent empty-state cards.
+
+## AI Chat and Workbench Features
+
+Protonman Desktop integrates native AI features into the conversation and inspector:
+
+- **Thinking Blocks**: Assistant messages parse `<think>...</think>` into collapsible Material 3 cards with live status while streaming and one-click disclosure.
+- **Active Goal**: Highlighted goal surface in the inspector and composer context chips to orient multi-turn autonomy.
+- **Task Plan (TODO)**: Checklist with completion markers (`✓`, `◐`, `○`) and visual linear progress indicator.
+- **Durable Memory**: Segmented cards for workspace-local facts and global preferences with confidence ratings.
+- **Subagent Delegations**: Dota-style attribute cards for STRENGTH, AGILITY, and INTELLIGENCE participants.
+
+Focus rings use the same radius as their control. Inner surfaces that continue
+into adjacent content may stay square so the whole pane reads as one surface.
 
 The project/session sidebar, top workspace surface, selected-session state,
 conversation timeline, composer, permission panel, and scrollable inspector
@@ -114,10 +151,13 @@ model.
 - Tab order follows visual order through the top status surface, sidebar
   actions, session rows, inspector controls, and composer.
 - Focused controls receive a visible 2dp primary focus ring.
+- Primary actions use a solid cobalt fill; secondary actions use a neutral
+  surface; destructive actions use the error role.
 - Selected session rows emit `semantic.SelectedOp(true)`.
 - Buttons and session rows emit semantic descriptions containing their full
   action context.
-- Status is always expressed with text; color is supplementary.
+- Status is always expressed with text; semantic success, warning, and failure
+  colors are supplementary.
 - Empty states explain the next action and use the real create-session path.
 - Motion must be interruptible, limited to one or two purposeful elements,
   constrained to 150–300ms, and skipped when reduced motion is requested.

@@ -37,6 +37,28 @@ func TestSessionRefreshTrackerThrottlesIndependently(t *testing.T) {
 	}
 }
 
+func TestCompactInspectorTextBoundsRuneScanning(t *testing.T) {
+	for _, test := range []struct {
+		name string
+		text string
+		max  int
+		want string
+	}{
+		{name: "short text", text: "  short  ", max: 8, want: "short"},
+		{name: "truncate", text: "abcdef", max: 4, want: "abc…"},
+		{name: "unicode", text: "กขคงจ", max: 4, want: "กขค…"},
+		{name: "single rune limit", text: "ab", max: 1, want: "…"},
+		{name: "single rune value", text: "ก", max: 1, want: "ก"},
+		{name: "nonpositive limit", text: "  keep all  ", max: 0, want: "keep all"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if got := compactInspectorText(test.text, test.max); got != test.want {
+				t.Fatalf("compactInspectorText(%q, %d) = %q, want %q", test.text, test.max, got, test.want)
+			}
+		})
+	}
+}
+
 func TestProjectSessionInspectorPayloads(t *testing.T) {
 	contextResult := sessionContextResult{SessionID: " session-1 ", Goal: " ship "}
 	contextResult.Todo.Revision = 4
@@ -107,6 +129,10 @@ func TestInspectorResultsRejectStaleClient(t *testing.T) {
 	}
 	if got := controller.state.Sessions[0].Runtime; got.Model != "gpt" || got.Reasoning != "high" {
 		t.Fatalf("runtime state = %+v", got)
+	}
+	controller.state.ActiveSessionID = "another-session"
+	if controller.applySessionMemory(current, sessionMemoryResult{SessionID: "session-1", WorkspaceKey: "inactive"}) {
+		t.Fatal("inactive session memory result was retained")
 	}
 }
 

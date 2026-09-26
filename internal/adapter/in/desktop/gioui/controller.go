@@ -76,7 +76,7 @@ type controller struct {
 	cancel   context.CancelFunc
 	onChange func()
 
-	sessionLocks  sync.Map
+	sessionLocks  agentSessionLockRegistry
 	mu            sync.RWMutex
 	state         desktopstate.State
 	profiles      map[string]app.ACPAgentProfile
@@ -85,15 +85,20 @@ type controller struct {
 	statuses      map[string]string
 	activeAgentID string
 
-	histories       map[string]historyState
-	historyStaging  map[string][]desktopstate.Event
-	messageStreams  map[string]string
-	messageSequence map[string]uint64
-	permissionWait  map[string]chan string
-	contextRefresh  *sessionRefreshTracker
-	memoryRefresh   *sessionRefreshTracker
-	runtimeRefresh  *sessionRefreshTracker
-	runtimeMutation string
+	histories               map[string]historyState
+	historyLoads            map[string]*sessionHistoryLoad
+	historyStaging          map[string][]desktopstate.Event
+	historyStagingBytes     map[string]int
+	historyStagingTruncated map[string]bool
+	timelineBytes           map[string]int
+	messageStreams          map[messageStreamKey]string
+	messageStreamBuffers    map[messageStreamKey]*messageStreamBuffer
+	messageSequence         map[string]uint64
+	permissionWait          map[string]chan string
+	contextRefresh          *sessionRefreshTracker
+	memoryRefresh           *sessionRefreshTracker
+	runtimeRefresh          *sessionRefreshTracker
+	runtimeMutation         string
 
 	agentProfiles         app.ACPAgents
 	agentMutation         bool
@@ -120,25 +125,30 @@ func newController(parent context.Context, onChange func(), agents app.ACPAgents
 		agentError = compactError(profileErr)
 	}
 	instance := &controller{
-		ctx:                   ctx,
-		cancel:                cancel,
-		onChange:              onChange,
-		profiles:              make(map[string]app.ACPAgentProfile, len(profiles)),
-		clients:               make(map[string]*acpclient.Client, len(profiles)),
-		connections:           make(map[string]connectionPhase, len(profiles)),
-		statuses:              make(map[string]string, len(profiles)),
-		histories:             make(map[string]historyState),
-		historyStaging:        make(map[string][]desktopstate.Event),
-		messageStreams:        make(map[string]string),
-		messageSequence:       make(map[string]uint64),
-		permissionWait:        make(map[string]chan string),
-		contextRefresh:        newSessionRefreshTracker(contextRefreshInterval),
-		memoryRefresh:         newSessionRefreshTracker(memoryRefreshInterval),
-		runtimeRefresh:        newSessionRefreshTracker(runtimeRefreshInterval),
-		agentProfiles:         agents,
-		agentConfigOverridden: strings.TrimSpace(os.Getenv(acpAgentsEnvironment)) != "",
-		agentError:            agentError,
-		mcpIntegrations:       integrations,
+		ctx:                     ctx,
+		cancel:                  cancel,
+		onChange:                onChange,
+		profiles:                make(map[string]app.ACPAgentProfile, len(profiles)),
+		clients:                 make(map[string]*acpclient.Client, len(profiles)),
+		connections:             make(map[string]connectionPhase, len(profiles)),
+		statuses:                make(map[string]string, len(profiles)),
+		histories:               make(map[string]historyState),
+		historyLoads:            make(map[string]*sessionHistoryLoad),
+		historyStaging:          make(map[string][]desktopstate.Event),
+		historyStagingBytes:     make(map[string]int),
+		historyStagingTruncated: make(map[string]bool),
+		timelineBytes:           make(map[string]int),
+		messageStreams:          make(map[messageStreamKey]string),
+		messageStreamBuffers:    make(map[messageStreamKey]*messageStreamBuffer),
+		messageSequence:         make(map[string]uint64),
+		permissionWait:          make(map[string]chan string),
+		contextRefresh:          newSessionRefreshTracker(contextRefreshInterval),
+		memoryRefresh:           newSessionRefreshTracker(memoryRefreshInterval),
+		runtimeRefresh:          newSessionRefreshTracker(runtimeRefreshInterval),
+		agentProfiles:           agents,
+		agentConfigOverridden:   strings.TrimSpace(os.Getenv(acpAgentsEnvironment)) != "",
+		agentError:              agentError,
+		mcpIntegrations:         integrations,
 	}
 	for _, profile := range profiles {
 		instance.profiles[profile.ID] = cloneACPAgentProfile(profile)
@@ -161,6 +171,17 @@ func (c *controller) close() {
 		clients = append(clients, client)
 	}
 	clear(c.clients)
+	for sessionID, load := range c.historyLoads {
+		load.cancel()
+		delete(c.historyLoads, sessionID)
+	}
+	for _, buffer := range c.messageStreamBuffers {
+		if buffer.timer != nil {
+			buffer.timer.Stop()
+		}
+	}
+	clear(c.messageStreamBuffers)
+	clear(c.messageStreams)
 	c.mu.Unlock()
 	for _, client := range clients {
 		_ = client.Close()
@@ -203,6 +224,36 @@ func (c *controller) snapshot() controllerSnapshot {
 	return snapshot
 }
 
+// advanceSnapshotCacheForTimelineLocked reuses the cached presentation snapshot
+// when a stream flush changed only one session's timeline. It path-copies the
+// sessions slice and the active timeline, keeping snapshots already returned to
+// the UI immutable while avoiding clones of unrelated state.
+func (c *controller) advanceSnapshotCacheForTimelineLocked(sessionID string) bool {
+	cache := &c.snapshotCache
+	if !cache.valid || cache.revision+1 != c.revision || cache.value.State.ActiveSessionID != sessionID {
+		return false
+	}
+	index, ok := sessionIndex(cache.value.State.Sessions, sessionID)
+	if !ok {
+		return false
+	}
+	live := desktopstateSessionPointer(&c.state, sessionID)
+	if live == nil {
+		return false
+	}
+
+	next := cache.value
+	next.State.Sessions = slices.Clone(cache.value.State.Sessions)
+	nextSession := next.State.Sessions[index]
+	nextSession.Timeline = slices.Clone(live.Timeline)
+	nextSession.HistoryTruncated = live.HistoryTruncated
+	next.State.Sessions[index] = nextSession
+	next.Revision = c.revision
+	cache.value = next
+	cache.revision = c.revision
+	return true
+}
+
 func (c *controller) selectSession(sessionID string) {
 	c.mu.Lock()
 	desktopstate.Apply(&c.state, desktopstate.Event{
@@ -218,7 +269,9 @@ func (c *controller) selectSession(sessionID string) {
 			break
 		}
 	}
+	c.pruneInactiveSessionHistoryLocked(c.state.ActiveSessionID)
 	c.revision++
+	c.snapshotCache = controllerSnapshotCache{}
 	activeSessionID := c.state.ActiveSessionID
 	c.mu.Unlock()
 	c.notify()
@@ -435,7 +488,7 @@ func (c *controller) setClient(agentID string, client *acpclient.Client) {
 	c.mu.Lock()
 	c.clients[agentID] = client
 	c.connections[agentID] = connectionConnected
-	status := "Connected · ACP v1"
+	status := "Connected"
 	if c.mcpError != "" {
 		status = "Connected · MCP settings unavailable"
 	}

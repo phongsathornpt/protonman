@@ -100,16 +100,35 @@ func (s *shell) syncAgentProfileEditors(snapshot controllerSnapshot) {
 
 func (s *shell) layoutAgentSelectorBar(gtx layout.Context, snapshot controllerSnapshot) layout.Dimensions {
 	gtx.Constraints.Min.Y = gtx.Dp(56)
-	return s.roundedSurface(gtx, 0, s.theme.surfaceContainer, func(gtx layout.Context) layout.Dimensions {
-		return layout.Inset{Top: 6, Bottom: 6, Left: 16, Right: 16}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-			return s.agentSelectorList.Layout(gtx, len(snapshot.AgentProfiles), func(gtx layout.Context, index int) layout.Dimensions {
-				profile := snapshot.AgentProfiles[index]
-				return layout.UniformInset(3).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-					return s.layoutAgentChoiceButton(gtx, profile, profile.ID == snapshot.ActiveAgentID, snapshot.AgentConnections[profile.ID])
+	return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
+		layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+			return layout.Spacer{}.Layout(gtx)
+		}),
+		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			gtx.Constraints.Min.X = gtx.Dp(320)
+			gtx.Constraints.Max.X = min(gtx.Constraints.Max.X, gtx.Dp(460))
+			return s.roundedSurface(gtx, shapeMedium, s.theme.surfaceContainerHigh, func(gtx layout.Context) layout.Dimensions {
+				return layout.Inset{Top: 6, Bottom: 6, Left: 16, Right: 16}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+					return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
+						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+							return s.layoutLabel(gtx, "Choose agent", textBodyMedium, font.Medium, s.theme.onSurfaceVariant, 1)
+						}),
+						layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+							return layout.Spacer{}.Layout(gtx)
+						}),
+						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+							return s.agentSelectorList.Layout(gtx, len(snapshot.AgentProfiles), func(gtx layout.Context, index int) layout.Dimensions {
+								profile := snapshot.AgentProfiles[index]
+								return layout.UniformInset(3).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+									return s.layoutAgentChoiceButton(gtx, profile, profile.ID == snapshot.ActiveAgentID, snapshot.AgentConnections[profile.ID])
+								})
+							})
+						}),
+					)
 				})
 			})
-		})
-	})
+		}),
+	)
 }
 
 func (s *shell) layoutAgentChoiceButton(gtx layout.Context, profile app.ACPAgentProfile, selected bool, phase connectionPhase) layout.Dimensions {
@@ -121,8 +140,8 @@ func (s *shell) layoutAgentChoiceButton(gtx layout.Context, profile app.ACPAgent
 	background := s.theme.surface
 	foreground := s.theme.onSurface
 	if selected {
-		background = s.theme.secondaryContainer
-		foreground = s.theme.onSecondaryContainer
+		background = s.theme.primaryContainer
+		foreground = s.theme.onPrimaryContainer
 	} else if button.Hovered() {
 		background = s.theme.primaryContainer
 		foreground = s.theme.onPrimaryContainer
@@ -134,14 +153,14 @@ func (s *shell) layoutAgentChoiceButton(gtx layout.Context, profile app.ACPAgent
 		semantic.Button.Add(gtx.Ops)
 		semantic.SelectedOp(selected).Add(gtx.Ops)
 		semantic.DescriptionOp("Select agent " + profile.DisplayName + ", " + connectionLabel(phase)).Add(gtx.Ops)
-		return s.roundedSurface(gtx, 12, background, func(gtx layout.Context) layout.Dimensions {
+		return s.roundedSurface(gtx, shapeSmall, background, func(gtx layout.Context) layout.Dimensions {
 			return layout.Inset{Top: 8, Bottom: 8, Left: 12, Right: 12}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-				return s.layoutLabel(gtx, profile.DisplayName+" · "+connectionLabel(phase), textLabelMedium, font.SemiBold, foreground, 1)
+				return s.layoutLabel(gtx, profile.DisplayName+" · "+connectionChipLabel(phase), textLabelMedium, font.SemiBold, foreground, 1)
 			})
 		})
 	})
 	if gtx.Focused(button) {
-		widget.Border{Color: s.theme.primary, CornerRadius: 12, Width: 2}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+		widget.Border{Color: s.theme.primary, CornerRadius: shapeSmall, Width: 2}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 			return layout.Dimensions{Size: dims.Size}
 		})
 	}
@@ -156,6 +175,17 @@ func connectionLabel(phase connectionPhase) string {
 		return "reconnecting"
 	default:
 		return "connecting"
+	}
+}
+
+func connectionChipLabel(phase connectionPhase) string {
+	switch phase {
+	case connectionConnected:
+		return "ready"
+	case connectionReconnecting:
+		return "retrying"
+	default:
+		return "starting"
 	}
 }
 
@@ -241,12 +271,12 @@ func (s *shell) layoutAgentProfilesPanel(gtx layout.Context, snapshot controller
 				return s.layoutAgentProfileEditor(gtx, "Environment keys JSON", &s.agentEnvEditor, enabled)
 			}),
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				return s.layoutButton(gtx, &s.agentSaveButton, "Save agent", enabled && strings.TrimSpace(s.agentIDEditor.Text()) != "" && strings.TrimSpace(s.agentCommandEditor.Text()) != "", func() {
+				return s.layoutPrimaryButton(gtx, &s.agentSaveButton, "Save agent", enabled && strings.TrimSpace(s.agentIDEditor.Text()) != "" && strings.TrimSpace(s.agentCommandEditor.Text()) != "", func() {
 					s.onSaveAgentProfile(s.agentEditorOriginalID, s.agentIDEditor.Text(), s.agentNameEditor.Text(), s.agentCommandEditor.Text(), s.agentArgsEditor.Text(), s.agentEnvEditor.Text())
 				})
 			}),
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				return s.layoutButton(gtx, &s.agentRemoveButton, "Remove agent", enabled && s.agentEditorOriginalID != "" && len(profiles) > 1, func() {
+				return s.layoutDangerButton(gtx, &s.agentRemoveButton, "Remove agent", enabled && s.agentEditorOriginalID != "" && len(profiles) > 1, func() {
 					s.onRemoveAgentProfile(s.agentEditorOriginalID)
 				})
 			}),
@@ -284,8 +314,8 @@ func (s *shell) layoutAgentProfileRow(gtx layout.Context, profile app.ACPAgentPr
 	background := s.theme.surface
 	foreground := s.theme.onSurface
 	if selected {
-		background = s.theme.secondaryContainer
-		foreground = s.theme.onSecondaryContainer
+		background = s.theme.primaryContainer
+		foreground = s.theme.onPrimaryContainer
 	} else if button.Hovered() {
 		background = s.theme.surfaceContainerHigh
 	}
@@ -295,14 +325,14 @@ func (s *shell) layoutAgentProfileRow(gtx layout.Context, profile app.ACPAgentPr
 		semantic.SelectedOp(selected).Add(gtx.Ops)
 		semantic.EnabledOp(gtx.Enabled()).Add(gtx.Ops)
 		semantic.DescriptionOp("Edit ACP agent " + profile.DisplayName).Add(gtx.Ops)
-		return s.roundedSurface(gtx, 12, background, func(gtx layout.Context) layout.Dimensions {
+		return s.roundedSurface(gtx, shapeSmall, background, func(gtx layout.Context) layout.Dimensions {
 			return layout.Inset{Top: 8, Bottom: 8, Left: 10, Right: 10}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 				return s.layoutLabel(gtx, profile.DisplayName+" · "+profile.ID, textBodyMedium, font.Medium, foreground, 1)
 			})
 		})
 	})
 	if enabled && rowContext.Focused(button) {
-		widget.Border{Color: s.theme.primary, CornerRadius: 12, Width: 2}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+		widget.Border{Color: s.theme.primary, CornerRadius: shapeSmall, Width: 2}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 			return layout.Dimensions{Size: dims.Size}
 		})
 	}

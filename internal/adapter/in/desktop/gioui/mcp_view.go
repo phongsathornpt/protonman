@@ -161,12 +161,12 @@ func (s *shell) layoutMCPIntegrationsPanel(gtx layout.Context, snapshot controll
 				return s.layoutLabel(gtx, "Values are read from the Protonman process environment and are never stored.", textLabelMedium, font.Normal, s.theme.onSurfaceVariant, 3)
 			}),
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				return s.layoutButton(gtx, &s.mcpSaveButton, "Save integration", enabled && strings.TrimSpace(s.mcpNameEditor.Text()) != "" && strings.TrimSpace(s.mcpCommandEditor.Text()) != "", func() {
+				return s.layoutPrimaryButton(gtx, &s.mcpSaveButton, "Save integration", enabled && strings.TrimSpace(s.mcpNameEditor.Text()) != "" && strings.TrimSpace(s.mcpCommandEditor.Text()) != "", func() {
 					s.onSaveMCPIntegration(s.mcpNameEditor.Text(), s.mcpCommandEditor.Text(), s.mcpArgsEditor.Text(), s.mcpEnvEditor.Text())
 				})
 			}),
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				return s.layoutButton(gtx, &s.mcpRemoveButton, "Remove integration", enabled && strings.TrimSpace(s.mcpSelectedName) != "", func() {
+				return s.layoutDangerButton(gtx, &s.mcpRemoveButton, "Remove integration", enabled && strings.TrimSpace(s.mcpSelectedName) != "", func() {
 					s.onRemoveMCPIntegration(s.mcpSelectedName)
 				})
 			}),
@@ -227,8 +227,8 @@ func (s *shell) layoutMCPIntegrationRow(gtx layout.Context, item desktopstate.MC
 	background := s.theme.surface
 	foreground := s.theme.onSurface
 	if selected {
-		background = s.theme.secondaryContainer
-		foreground = s.theme.onSecondaryContainer
+		background = s.theme.primaryContainer
+		foreground = s.theme.onPrimaryContainer
 	} else if button.Hovered() {
 		background = s.theme.surfaceContainerHigh
 	}
@@ -238,14 +238,14 @@ func (s *shell) layoutMCPIntegrationRow(gtx layout.Context, item desktopstate.MC
 		semantic.SelectedOp(selected).Add(gtx.Ops)
 		semantic.EnabledOp(gtx.Enabled()).Add(gtx.Ops)
 		semantic.DescriptionOp("Edit MCP integration " + item.Name).Add(gtx.Ops)
-		return s.roundedSurface(gtx, 12, background, func(gtx layout.Context) layout.Dimensions {
+		return s.roundedSurface(gtx, shapeSmall, background, func(gtx layout.Context) layout.Dimensions {
 			return layout.Inset{Top: 8, Bottom: 8, Left: 10, Right: 10}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 				return s.layoutLabel(gtx, item.Name, textBodyMedium, font.Medium, foreground, 1)
 			})
 		})
 	})
 	if enabled && rowContext.Focused(button) {
-		widget.Border{Color: s.theme.primary, CornerRadius: 12, Width: 2}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+		widget.Border{Color: s.theme.primary, CornerRadius: shapeSmall, Width: 2}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 			return layout.Dimensions{Size: dims.Size}
 		})
 	}

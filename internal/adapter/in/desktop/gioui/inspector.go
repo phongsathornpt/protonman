@@ -170,7 +170,7 @@ func (c *controller) beginSessionRefresh(sessionID string, force bool, kind sess
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	session, ok := desktopSessionByID(c.state, sessionID)
-	if !ok || session.AgentID != controllerAgentID {
+	if !ok || sessionID != c.state.ActiveSessionID || session.AgentID != controllerAgentID {
 		return nil, nil, false
 	}
 	client, agentID := c.clientForSessionLocked(sessionID)
@@ -335,7 +335,7 @@ func (c *controller) applySessionContext(client *acpclient.Client, result sessio
 	}
 	c.mu.Lock()
 	session, ok := desktopSessionByID(c.state, sessionID)
-	if !ok || !c.clientCurrentLocked(session.AgentID, client) {
+	if !ok || sessionID != c.state.ActiveSessionID || !c.clientCurrentLocked(session.AgentID, client) {
 		c.mu.Unlock()
 		return false
 	}
@@ -357,7 +357,7 @@ func (c *controller) applySessionMemory(client *acpclient.Client, result session
 	}
 	c.mu.Lock()
 	session, ok := desktopSessionByID(c.state, sessionID)
-	if !ok || !c.clientCurrentLocked(session.AgentID, client) {
+	if !ok || sessionID != c.state.ActiveSessionID || !c.clientCurrentLocked(session.AgentID, client) {
 		c.mu.Unlock()
 		return false
 	}
@@ -379,7 +379,7 @@ func (c *controller) applySessionRuntime(client *acpclient.Client, result sessio
 	}
 	c.mu.Lock()
 	session, ok := desktopSessionByID(c.state, sessionID)
-	if !ok || !c.clientCurrentLocked(session.AgentID, client) {
+	if !ok || sessionID != c.state.ActiveSessionID || !c.clientCurrentLocked(session.AgentID, client) {
 		c.mu.Unlock()
 		return false
 	}

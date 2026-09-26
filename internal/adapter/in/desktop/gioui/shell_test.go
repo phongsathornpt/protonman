@@ -4,17 +4,257 @@ package gioui
 
 import (
 	"image"
+	"image/color"
+	"runtime"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"gioui.org/io/input"
 	"gioui.org/layout"
 	"gioui.org/op"
 	"gioui.org/unit"
+	"gioui.org/x/richtext"
 
 	"github.com/phongsathornpt/protonman/internal/app"
 	desktopstate "github.com/phongsathornpt/protonman/internal/feature/desktop"
 )
+
+func TestDesktopStreamingRenderRetentionSoak(t *testing.T) {
+	view := newShell(newTheme("light"))
+	snapshot := benchmarkShellSnapshot()
+	snapshot.State.Sessions[0].Timeline = []desktopstate.TimelineItem{{
+		ID: "assistant-stream", Kind: desktopstate.TimelineAssistant, Streaming: true,
+	}}
+	variants := make([]string, 32)
+	for index := range variants {
+		variants[index] = strings.Repeat("streaming assistant **markdown** ", 128) + strconv.Itoa(index)
+	}
+	var operations op.Ops
+	var router input.Router
+	gtx := layout.Context{
+		Ops:         &operations,
+		Constraints: layout.Exact(image.Pt(1180, 760)),
+		Metric:      unit.Metric{},
+		Now:         time.Unix(1, 0),
+		Source:      router.Source(),
+	}
+	view.layout(gtx, snapshot)
+	router.Frame(gtx.Ops)
+	runtime.GC()
+	var baseline runtime.MemStats
+	runtime.ReadMemStats(&baseline)
+
+	previousRetained := baseline.HeapAlloc
+	for cycle := range 3 {
+		for frame := range 5000 {
+			snapshot.State.Sessions[0].Timeline[0].Text = variants[frame%len(variants)]
+			snapshot.Revision++
+			operations.Reset()
+			view.layout(gtx, snapshot)
+			router.Frame(gtx.Ops)
+		}
+		runtime.GC()
+		runtime.GC()
+		var after runtime.MemStats
+		runtime.ReadMemStats(&after)
+		runtime.KeepAlive(view)
+		runtime.KeepAlive(snapshot)
+		runtime.KeepAlive(router)
+		delta := int64(after.HeapAlloc) - int64(previousRetained)
+		t.Logf("render soak cycle=%d retained_heap=%d delta=%d bytes", cycle+1, after.HeapAlloc, delta)
+		if cycle > 0 {
+			if delta < 0 {
+				delta = -delta
+			}
+			if delta > 8<<20 {
+				t.Fatalf("retained heap changed by %d bytes across render soak cycles", delta)
+			}
+		}
+		previousRetained = after.HeapAlloc
+	}
+}
+
+func TestDesktopCompletedOversizedMessageRenderRetentionSoak(t *testing.T) {
+	view := newShell(newTheme("light"))
+	snapshot := benchmarkShellSnapshot()
+	textA := strings.Repeat("completed response **markdown** a ", 1<<15)
+	textB := strings.Repeat("completed response **markdown** b ", 1<<15)
+	snapshot.State.Sessions[0].Timeline = []desktopstate.TimelineItem{{
+		ID: "assistant-completed", Kind: desktopstate.TimelineAssistant, Text: textA,
+	}}
+	var operations op.Ops
+	var router input.Router
+	gtx := layout.Context{
+		Ops:         &operations,
+		Constraints: layout.Exact(image.Pt(1180, 760)),
+		Metric:      unit.Metric{},
+		Now:         time.Unix(1, 0),
+		Source:      router.Source(),
+	}
+	view.layout(gtx, snapshot)
+	router.Frame(gtx.Ops)
+	key := makeConversationCacheKey(snapshot.State.ActiveSessionID, 0, snapshot.State.Sessions[0].Timeline[0])
+	runtime.GC()
+	var baseline runtime.MemStats
+	runtime.ReadMemStats(&baseline)
+
+	previousRetained := baseline.HeapAlloc
+	for cycle := range 3 {
+		for frame := range 1000 {
+			if frame%2 == 0 {
+				snapshot.State.Sessions[0].Timeline[0].Text = textB
+				view.conversationExpanded[key] = true
+				view.conversationPage[key] = 1
+			} else {
+				snapshot.State.Sessions[0].Timeline[0].Text = textA
+				view.conversationExpanded[key] = false
+				view.conversationPage[key] = 0
+			}
+			snapshot.Revision++
+			operations.Reset()
+			view.layout(gtx, snapshot)
+			router.Frame(gtx.Ops)
+		}
+		runtime.GC()
+		runtime.GC()
+		var after runtime.MemStats
+		runtime.ReadMemStats(&after)
+		runtime.KeepAlive(view)
+		runtime.KeepAlive(snapshot)
+		runtime.KeepAlive(router)
+		runtime.KeepAlive(textA)
+		runtime.KeepAlive(textB)
+		delta := int64(after.HeapAlloc) - int64(previousRetained)
+		t.Logf("completed-message render soak cycle=%d retained_heap=%d delta=%d bytes", cycle+1, after.HeapAlloc, delta)
+		if cycle > 0 {
+			if delta < 0 {
+				delta = -delta
+			}
+			if delta > 8<<20 {
+				t.Fatalf("retained heap changed by %d bytes across completed-message render cycles", delta)
+			}
+		}
+		previousRetained = after.HeapAlloc
+	}
+}
+
+func TestLargeMessagePreviewIsBoundedAndUTF8Safe(t *testing.T) {
+	source := strings.Repeat("界", largeMessagePreviewBytes)
+	preview := largeMessagePreview(source)
+	if !utf8.ValidString(preview) {
+		t.Fatal("large message preview contains invalid UTF-8")
+	}
+	if len(preview) > largeMessagePreviewBytes+len("\n…") {
+		t.Fatalf("preview bytes = %d, limit = %d", len(preview), largeMessagePreviewBytes+len("\n…"))
+	}
+	if !strings.HasSuffix(preview, "\n…") {
+		t.Fatalf("large message preview lacks its truncation marker: %q", preview[len(preview)-8:])
+	}
+	if got := largeMessagePreview("short message"); got != "short message" {
+		t.Fatalf("short preview = %q", got)
+	}
+
+	windowSource := strings.Repeat("界", largeMessagePageBytes*2) + " tail"
+	pageCount := (len(windowSource) + largeMessagePageBytes - 1) / largeMessagePageBytes
+	var reconstructed strings.Builder
+	previousEnd := 0
+	for page := range pageCount {
+		window, start, end := largeMessageWindow(windowSource, page)
+		if start != previousEnd || end < start || end-start > largeMessagePageBytes+utf8.UTFMax {
+			t.Fatalf("page %d bounds = (%d,%d), previous end = %d", page, start, end, previousEnd)
+		}
+		if !utf8.ValidString(window) {
+			t.Fatalf("page %d contains invalid UTF-8", page)
+		}
+		reconstructed.WriteString(window)
+		previousEnd = end
+	}
+	if reconstructed.String() != windowSource {
+		t.Fatal("large-message pages did not preserve the complete source")
+	}
+}
+
+func TestSyncConversationReleasesLargeMessageDisclosureState(t *testing.T) {
+	view := newShell(newTheme("light"))
+	key := conversationCacheKey{sessionID: "old-session", itemID: "large-item"}
+	view.conversationExpanded[key] = true
+	view.conversationPage[key] = 2
+	view.conversationExpandButtons[key] = &conversationDisclosureButtons{}
+
+	view.syncConversation(desktopstate.State{ActiveSessionID: "new-session"})
+	if len(view.conversationExpanded) != 0 || len(view.conversationPage) != 0 || len(view.conversationExpandButtons) != 0 {
+		t.Fatalf("session switch retained large-message disclosure state: expanded=%d pages=%d buttons=%d", len(view.conversationExpanded), len(view.conversationPage), len(view.conversationExpandButtons))
+	}
+}
+
+func TestLargeMessageDisclosurePagesContentOnDemand(t *testing.T) {
+	view := newShell(newTheme("light"))
+	key := conversationCacheKey{sessionID: "session", itemID: "large-message", kind: desktopstate.TimelineAssistant}
+	source := strings.Repeat("界", largeMessagePageBytes*2)
+	var operations op.Ops
+	var router input.Router
+	gtx := layout.Context{
+		Ops:         &operations,
+		Constraints: layout.Exact(image.Pt(800, 600)),
+		Metric:      unit.Metric{},
+		Now:         time.Unix(1, 0),
+		Source:      router.Source(),
+	}
+	view.layoutLargeMessage(gtx, key, source, view.theme.onSurface)
+	router.Frame(gtx.Ops)
+	buttons := view.conversationExpandButtons[key]
+	if buttons == nil || view.conversationExpanded[key] {
+		t.Fatal("large message did not start in bounded preview mode")
+	}
+
+	buttons.show.Click()
+	operations.Reset()
+	view.layoutLargeMessage(gtx, key, source, view.theme.onSurface)
+	router.Frame(gtx.Ops)
+	if !view.conversationExpanded[key] || view.conversationPage[key] != 0 {
+		t.Fatalf("show-full action state: expanded=%v page=%d", view.conversationExpanded[key], view.conversationPage[key])
+	}
+
+	buttons.next.Click()
+	operations.Reset()
+	view.layoutLargeMessage(gtx, key, source, view.theme.onSurface)
+	router.Frame(gtx.Ops)
+	if page := view.conversationPage[key]; page != 1 {
+		t.Fatalf("next-part action page = %d, want 1", page)
+	}
+
+	buttons.previous.Click()
+	operations.Reset()
+	view.layoutLargeMessage(gtx, key, source, view.theme.onSurface)
+	router.Frame(gtx.Ops)
+	if page := view.conversationPage[key]; page != 0 {
+		t.Fatalf("previous-part action page = %d, want 0", page)
+	}
+
+	buttons.collapse.Click()
+	operations.Reset()
+	view.layoutLargeMessage(gtx, key, source, view.theme.onSurface)
+	router.Frame(gtx.Ops)
+	if view.conversationExpanded[key] {
+		t.Fatal("show-less action did not return to the bounded preview")
+	}
+}
+
+func TestLargeMessageDisclosureStateIsBounded(t *testing.T) {
+	view := newShell(newTheme("light"))
+	for index := range maxConversationExpansionKeys + 1 {
+		key := conversationCacheKey{sessionID: "session", itemID: strconv.Itoa(index)}
+		view.conversationExpanded[key] = true
+		view.conversationPage[key] = index
+		view.largeMessageDisclosureButtons(key)
+	}
+	if len(view.conversationExpandButtons) > maxConversationExpansionKeys || len(view.conversationExpanded) > maxConversationExpansionKeys || len(view.conversationPage) > maxConversationExpansionKeys {
+		t.Fatalf("large-message UI state exceeded bound: buttons=%d expanded=%d pages=%d", len(view.conversationExpandButtons), len(view.conversationExpanded), len(view.conversationPage))
+	}
+}
 
 func TestShellLaysOutResponsiveStates(t *testing.T) {
 	view := newShell(newTheme("light"))
@@ -46,7 +286,7 @@ func TestShellLaysOutResponsiveStates(t *testing.T) {
 				}},
 			},
 			Connection: connectionConnected,
-			Status:     "Connected · ACP v1",
+			Status:     "Connected",
 		},
 		{
 			State: desktopstate.State{
@@ -106,6 +346,159 @@ func TestShellLaysOutResponsiveStates(t *testing.T) {
 				t.Fatalf("layout size = %v, want %v", dims.Size, size)
 			}
 		}
+	}
+}
+
+func TestBuildSidebarRowsGroupsSessionsWithoutChangingOrder(t *testing.T) {
+	state := desktopstate.State{
+		Projects: []desktopstate.ProjectState{{ID: "p2", Name: "Second"}, {ID: "p1", Name: "First"}},
+		Sessions: []desktopstate.SessionState{
+			{ID: "s1", ProjectID: "p1", AgentID: controllerAgentID, Title: "One", Status: desktopstate.TaskIdle},
+			{ID: "s2", ProjectID: "p2", AgentID: controllerAgentID, Title: "Two", Status: desktopstate.TaskRunning},
+			{ID: "s3", ProjectID: "p1", AgentID: controllerAgentID, Title: "Three", Status: desktopstate.TaskCompleted},
+			{ID: "orphan", ProjectID: "missing", AgentID: controllerAgentID, Title: "Hidden"},
+		},
+	}
+	profiles := []app.ACPAgentProfile{defaultACPAgentProfile()}
+	rows, cache := buildSidebarRows(state, profiles)
+	want := []string{"p2", "s2", "p1", "s1", "s3"}
+	if len(rows) != len(want) {
+		t.Fatalf("sidebar rows = %#v, want ids %v", rows, want)
+	}
+	for index, id := range want {
+		actual := rows[index].ProjectID
+		if rows[index].Kind == sidebarSessionRow {
+			actual = rows[index].SessionID
+		}
+		if actual != id {
+			t.Fatalf("sidebar row %d id = %q, want %q", index, actual, id)
+		}
+	}
+	if !cache.matches(state, profiles) {
+		t.Fatal("sidebar cache did not match the state used to build it")
+	}
+	state.Sessions[2].Status = desktopstate.TaskFailed
+	if cache.matches(state, profiles) {
+		t.Fatal("sidebar cache matched after a visible session status changed")
+	}
+}
+
+func TestMarkdownCacheStaysWithinByteBudget(t *testing.T) {
+	view := newShell(newTheme("light"))
+	key := conversationCacheKey{sessionID: "session", itemID: "new", kind: desktopstate.TimelineAssistant}
+	view.conversationCache[conversationCacheKey{sessionID: "old", itemID: "old"}] = conversationMarkdownCache{
+		source: strings.Repeat("x", maxConversationCacheBytes),
+		bytes:  maxConversationCacheBytes,
+	}
+	view.conversationCacheBytes = maxConversationCacheBytes
+
+	var operations op.Ops
+	var router input.Router
+	gtx := layout.Context{
+		Ops:         &operations,
+		Constraints: layout.Exact(image.Pt(840, 600)),
+		Metric:      unit.Metric{},
+		Now:         time.Unix(1, 0),
+		Source:      router.Source(),
+	}
+	source := "small **message**"
+	view.layoutMarkdown(gtx, key, source, color.NRGBA{})
+
+	cached := view.conversationCache[key]
+	if len(view.conversationCache) != 1 || view.conversationCacheBytes != cached.bytes {
+		t.Fatalf("cache after byte-budget eviction: entries=%d bytes=%d", len(view.conversationCache), view.conversationCacheBytes)
+	}
+	if cached.source != source {
+		t.Fatalf("new markdown cache entry = %q, want %q", cached.source, source)
+	}
+}
+
+func TestMarkdownCacheAccountsForExpandedSpanStorage(t *testing.T) {
+	view := newShell(newTheme("light"))
+	key := conversationCacheKey{sessionID: "session", itemID: "many-spans", kind: desktopstate.TimelineAssistant}
+	source := strings.Repeat("**x** ", 20_000)
+	spans, err := view.conversationMarkdown.Render([]byte(source))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cached := conversationMarkdownCache{source: source, spans: spans}
+	if size := markdownCacheEntryBytes(key, cached); size <= maxConversationCacheBytes {
+		t.Fatalf("fixture cache weight = %d bytes across %d spans, want over %d", size, len(spans), maxConversationCacheBytes)
+	}
+	if !view.storeMarkdownCache(key, cached) {
+		t.Fatal("plain-text fallback marker was not retained")
+	}
+	retained := view.conversationCache[key]
+	if !retained.plain || len(retained.spans) != 0 || retained.bytes > maxConversationCacheBytes {
+		t.Fatalf("high-expansion entry was not reduced to a bounded fallback: %#v", retained)
+	}
+	if len(view.conversationCache) != 1 || view.conversationCacheBytes != retained.bytes {
+		t.Fatalf("fallback cache accounting: entries=%d bytes=%d want=%d", len(view.conversationCache), view.conversationCacheBytes, retained.bytes)
+	}
+}
+
+func TestMarkdownCacheDropsStaleEntryForOversizedSource(t *testing.T) {
+	view := newShell(newTheme("light"))
+	key := conversationCacheKey{sessionID: "session", itemID: "growing", kind: desktopstate.TimelineAssistant}
+	if !view.storeMarkdownCache(key, conversationMarkdownCache{source: "small", spans: []richtext.SpanStyle{{Content: "small"}}}) {
+		t.Fatal("small markdown entry was not cached")
+	}
+	var operations op.Ops
+	var router input.Router
+	gtx := layout.Context{
+		Ops:         &operations,
+		Constraints: layout.Exact(image.Pt(840, 600)),
+		Metric:      unit.Metric{},
+		Now:         time.Unix(1, 0),
+		Source:      router.Source(),
+	}
+	view.layoutMarkdown(gtx, key, strings.Repeat("x", maxCachedMarkdownItemBytes+1), color.NRGBA{})
+	if len(view.conversationCache) != 0 || view.conversationCacheBytes != 0 {
+		t.Fatalf("stale markdown entry retained after source grew: entries=%d bytes=%d", len(view.conversationCache), view.conversationCacheBytes)
+	}
+}
+
+func TestConversationItemDescriptionMatchesBoundedCompaction(t *testing.T) {
+	items := []desktopstate.TimelineItem{
+		{Kind: desktopstate.TimelineAssistant, Title: "Review", Status: "running", Text: "short answer"},
+		{Kind: desktopstate.TimelineAssistant, Text: strings.Repeat("x", 1<<20)},
+		{Kind: desktopstate.TimelineUser, Title: "  question  ", Text: strings.Repeat("界", 600)},
+		{Kind: desktopstate.TimelineTool, Status: "", Text: "  output  "},
+	}
+	for _, item := range items {
+		var parts []string
+		parts = append(parts, string(item.Kind))
+		if item.Title != "" {
+			parts = append(parts, item.Title)
+		}
+		if item.Status != "" {
+			parts = append(parts, item.Status)
+		}
+		if item.Text != "" {
+			parts = append(parts, item.Text)
+		}
+		want := compactInspectorText(strings.Join(parts, ", "), 512)
+		if got := conversationItemDescription(item); got != want {
+			t.Fatalf("description = %q, want %q", got, want)
+		}
+	}
+}
+
+func TestMarkdownCacheBypassesOversizedMessages(t *testing.T) {
+	view := newShell(newTheme("light"))
+	var operations op.Ops
+	var router input.Router
+	gtx := layout.Context{
+		Ops:         &operations,
+		Constraints: layout.Exact(image.Pt(840, 600)),
+		Metric:      unit.Metric{},
+		Now:         time.Unix(1, 0),
+		Source:      router.Source(),
+	}
+	source := strings.Repeat("x", maxCachedMarkdownItemBytes+1)
+	view.layoutMarkdown(gtx, conversationCacheKey{sessionID: "session", itemID: "large"}, source, color.NRGBA{})
+	if len(view.conversationCache) != 0 || view.conversationCacheBytes != 0 {
+		t.Fatalf("oversized markdown was cached: entries=%d bytes=%d", len(view.conversationCache), view.conversationCacheBytes)
 	}
 }
 
