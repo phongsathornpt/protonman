@@ -39,6 +39,7 @@ const (
 	EventTextDelta      = turn.EventTextDelta
 	EventToolCall       = turn.EventToolCall
 	EventToolResult     = turn.EventToolResult
+	EventMemoryActivity = turn.EventMemoryActivity
 	EventRetryScheduled = turn.EventRetryScheduled
 	EventCompleted      = turn.EventCompleted
 	EventFailed         = turn.EventFailed

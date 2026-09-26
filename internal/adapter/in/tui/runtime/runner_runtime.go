@@ -12,6 +12,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/app"
+	corememory "github.com/phongsathornpt/protonman/internal/core/memory"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 )
@@ -93,6 +94,7 @@ func (m *bubbleModel) reconfigureRunner() {
 	// Keep root durable-memory retrieval/extraction bound to the session that is
 	// actually active. A no-op when the app factory does not own root memory.
 	app.BindRootMemory(m.application.ModelFactory, m.sessionID, m.workspaceKey)
+	app.ObserveRootMemory(m.application.ModelFactory, m.queueMemoryActivity)
 	var remote *model.RemoteModel
 	if resolved, ok := m.activeRemoteModel(); ok {
 		remote = &resolved
@@ -107,6 +109,20 @@ func (m *bubbleModel) reconfigureRunner() {
 	if conversation != nil {
 		m.runner = conversation
 		m.syncPromptPlaceholder()
+	}
+}
+
+func (m *bubbleModel) queueMemoryActivity(activity corememory.Activity) {
+	if m == nil || m.memoryActivities == nil {
+		return
+	}
+	if m.ctx == nil {
+		m.memoryActivities <- activity
+		return
+	}
+	select {
+	case m.memoryActivities <- activity:
+	case <-m.ctx.Done():
 	}
 }
 

@@ -23,7 +23,7 @@ var (
 	ColorBorderFocus  = DefaultDarkPalette.Brand
 
 	AccentAssistant = ColorPrimary
-	AccentUser      = ColorPrimaryHover
+	AccentUser      = ColorInfo
 	AccentTool      = ColorTextTertiary
 	AccentSystem    = ColorTextSecondary
 	AccentPlan      = ColorPrimary

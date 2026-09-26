@@ -24,6 +24,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/base/envconfig"
 	"github.com/phongsathornpt/protonman/internal/base/runtimepolicy"
 	"github.com/phongsathornpt/protonman/internal/core/conversation"
+	corememory "github.com/phongsathornpt/protonman/internal/core/memory"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/engine/toolcall"
 	"github.com/phongsathornpt/protonman/internal/feature/agent"
@@ -52,6 +53,7 @@ func composerNewlineKeyNames() []string {
 }
 
 type agentLifecycleMsg struct{ event agent.Event }
+type memoryActivityMsg struct{ activity corememory.Activity }
 
 type turnProgress struct {
 	Round     int
@@ -142,23 +144,25 @@ type executionPolicyState struct {
 }
 
 type presentationModelState struct {
-	viewport           viewport.Model
-	spinner            spinner.Model
-	help               help.Model
-	keys               bubbleKeyMap
-	planMode           bool
-	reducedMotion      bool
-	icons              tuistyle.IconSet
-	panes              paneState
-	nextID             uint64
-	layout             layoutState
-	viewportViewCache  viewportViewCache
-	liveViewCache      string
-	liveViewCacheValid bool
-	sessionHeaderCache sessionHeaderCache
-	keyboardCapability keyboardCapability
-	transientNotice    string
-	transientNoticeID  uint64
+	viewport             viewport.Model
+	spinner              spinner.Model
+	help                 help.Model
+	keys                 bubbleKeyMap
+	planMode             bool
+	reducedMotion        bool
+	icons                tuistyle.IconSet
+	panes                paneState
+	nextID               uint64
+	layout               layoutState
+	viewportViewCache    viewportViewCache
+	liveViewCache        string
+	liveViewCacheValid   bool
+	sessionHeaderCache   sessionHeaderCache
+	keyboardCapability   keyboardCapability
+	transientNotice      string
+	transientNoticeID    uint64
+	promptAnimationPhase int
+	memoryActivities     chan corememory.Activity
 }
 
 type viewportViewCache struct {
@@ -241,14 +245,15 @@ func newBubbleModel(ctx context.Context, service *toolcall.Service, registry too
 			workDir: workDir,
 		},
 		presentationModelState: presentationModelState{
-			viewport:      pane,
-			spinner:       spin,
-			help:          helpView,
-			keys:          newBubbleKeyMap(),
-			panes:         paneState{bottom: bottom, transcript: transcriptPane},
-			reducedMotion: reducedMotion,
-			icons:         icons,
-			layout:        layoutState{width: defaultBubbleWidth, height: defaultBubbleHeight},
+			viewport:         pane,
+			spinner:          spin,
+			help:             helpView,
+			keys:             newBubbleKeyMap(),
+			panes:            paneState{bottom: bottom, transcript: transcriptPane},
+			reducedMotion:    reducedMotion,
+			memoryActivities: make(chan corememory.Activity, 32),
+			icons:            icons,
+			layout:           layoutState{width: defaultBubbleWidth, height: defaultBubbleHeight},
 		},
 		conversationModelState: conversationModelState{
 			historyState:         tuihistory.NewHistoryState(maxBubbleScrollback),
@@ -322,7 +327,27 @@ func (m *bubbleModel) Init() tea.Cmd {
 		commands = append(commands, textarea.Blink)
 	}
 	commands = append(commands, m.nextAgentEvent())
+	commands = append(commands, m.nextMemoryActivity())
 	return tea.Batch(commands...)
+}
+
+func (m *bubbleModel) nextMemoryActivity() tea.Cmd {
+	if m == nil || m.memoryActivities == nil {
+		return nil
+	}
+	activities := m.memoryActivities
+	ctx := m.ctx
+	return func() tea.Msg {
+		if ctx == nil {
+			return memoryActivityMsg{activity: <-activities}
+		}
+		select {
+		case activity := <-activities:
+			return memoryActivityMsg{activity: activity}
+		case <-ctx.Done():
+			return nil
+		}
+	}
 }
 
 // spinnerIndicator returns the animated busy frame, or an empty string when

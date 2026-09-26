@@ -52,6 +52,7 @@ func (m *bubbleModel) promptView() string {
 	prompt := m.panes.bottom.prompt()
 	dividerStyle := tuistyle.PromptDividerIdle
 	focused := prompt.Focused()
+	animated := false
 	switch {
 	case m.permissionView() != nil:
 		dividerStyle = tuistyle.PromptDividerWarning
@@ -61,9 +62,13 @@ func (m *bubbleModel) promptView() string {
 		focused = false
 	case focused:
 		dividerStyle = tuistyle.PromptDividerFocused
+		animated = m.busy && !m.reducedMotion
 	}
 	usableWidth := composerUsableWidth(m.layout.width)
 	border := renderPromptDivider(dividerStyle, usableWidth, focused)
+	if animated {
+		border = renderAnimatedPromptDivider(usableWidth, m.promptAnimationPhase)
+	}
 	return border + "\n" + prompt.View() + "\n" + border
 }
 
@@ -78,6 +83,30 @@ func renderPromptDivider(style lipgloss.Style, width int, focused bool) string {
 	neutral := strings.Repeat("─", width-accentWidth)
 	return tuistyle.PromptDividerFocused.Render(accent) +
 		tuistyle.PromptDividerIdle.Render(neutral)
+}
+
+func renderAnimatedPromptDivider(width, phase int) string {
+	width = max(1, width)
+	segmentWidth := min(5, width)
+	maxStart := width - segmentWidth
+	if maxStart > 0 {
+		cycle := maxStart * 2
+		phase = ((phase % cycle) + cycle) % cycle
+		if phase > maxStart {
+			phase = cycle - phase
+		}
+	} else {
+		phase = 0
+	}
+	parts := make([]string, 0, 3)
+	if phase > 0 {
+		parts = append(parts, tuistyle.PromptDividerIdle.Render(strings.Repeat("─", phase)))
+	}
+	parts = append(parts, tuistyle.PromptDividerFocused.Render(strings.Repeat("─", segmentWidth)))
+	if tail := width - phase - segmentWidth; tail > 0 {
+		parts = append(parts, tuistyle.PromptDividerIdle.Render(strings.Repeat("─", tail)))
+	}
+	return strings.Join(parts, "")
 }
 
 func (m *bubbleModel) modeChip() string {

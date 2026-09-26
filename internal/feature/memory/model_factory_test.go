@@ -50,11 +50,16 @@ func TestMemoryModelPrependsContextToCurrentUserWithoutMutatingInput(t *testing.
 	base := &captureModel{}
 	factory := NewModelFactory(captureFactory{model: base}, repo, "ws", runtimepolicy.DurableMemory())
 	model := factory.Build(modelclient.Request{ModelID: "test-model"})
+	var activities []corememory.Activity
+	ctx := corememory.WithActivitySink(context.Background(), func(_ context.Context, activity corememory.Activity) error {
+		activities = append(activities, activity)
+		return nil
+	})
 	messages := []sdk.Message{
 		{ID: "system", Role: sdk.RoleSystem, Content: "stable system prompt"},
 		{ID: "user-1", Role: sdk.RoleUser, Content: "please run test verification"},
 	}
-	stream, err := model.Stream(context.Background(), sdk.Request{Messages: messages})
+	stream, err := model.Stream(ctx, sdk.Request{Messages: messages})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,6 +79,9 @@ func TestMemoryModelPrependsContextToCurrentUserWithoutMutatingInput(t *testing.
 	}
 	if len(messages) != 2 || messages[1].Content != "please run test verification" {
 		t.Fatalf("input messages mutated: %+v", messages)
+	}
+	if len(activities) != 1 || activities[0] != (corememory.Activity{Kind: corememory.ActivityContextIncluded, WorkspaceEntries: 1}) {
+		t.Fatalf("memory activities = %+v, want one included workspace memory", activities)
 	}
 }
 

@@ -10,6 +10,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/toolview"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/app"
+	corememory "github.com/phongsathornpt/protonman/internal/core/memory"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/proton-sdk/domain"
 )
@@ -69,12 +70,50 @@ func (m *bubbleModel) applyTurnEvent(event app.Event) {
 		m.applyToolResult(event.Call.Name, result, event.Err)
 		m.syncTodoSnapshot()
 		m.activity = ""
+	case app.EventMemoryActivity:
+		m.appendMemoryActivity(event.MemoryActivity)
 	case app.EventCompleted:
 		m.turnProgress.Retry = domain.RetryEvent{}
 		m.ensureHistoryState().CommitActive()
 	case app.EventFailed:
 		m.turnProgress.Retry = domain.RetryEvent{}
 		m.appendTurnFailure(event.Err)
+	}
+}
+
+func (m *bubbleModel) appendMemoryActivity(activity corememory.Activity) {
+	text := memoryActivityText(activity)
+	if text == "" {
+		return
+	}
+	m.ensureHistoryState().Append(&tuihistory.MemoryActivityCell{Text: text})
+}
+
+func memoryActivityText(activity corememory.Activity) string {
+	total := activity.WorkspaceEntries + activity.GlobalEntries
+	plural := "items"
+	if total == 1 {
+		plural = "item"
+	}
+	scopes := make([]string, 0, 2)
+	if activity.WorkspaceEntries > 0 {
+		scopes = append(scopes, fmt.Sprintf("workspace %d", activity.WorkspaceEntries))
+	}
+	if activity.GlobalEntries > 0 {
+		scopes = append(scopes, fmt.Sprintf("global %d", activity.GlobalEntries))
+	}
+	scopeSummary := strings.Join(scopes, ", ")
+	switch activity.Kind {
+	case corememory.ActivityContextIncluded:
+		return fmt.Sprintf("Included %d saved memory %s in model request (%s)", total, plural, scopeSummary)
+	case corememory.ActivityContextUnavailable:
+		return "Saved context could not be loaded; this request continues without it"
+	case corememory.ActivityEntriesSaved:
+		return fmt.Sprintf("Saved %d memory %s from prior sessions (%s)", total, plural, scopeSummary)
+	case corememory.ActivityUpdateFailed:
+		return "Background memory update failed; no successful save was confirmed"
+	default:
+		return ""
 	}
 }
 

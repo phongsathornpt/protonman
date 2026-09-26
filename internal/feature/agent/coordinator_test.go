@@ -127,6 +127,8 @@ func TestCoordinatorRunsSubagentInGoroutine(t *testing.T) {
 
 func TestCoordinatorEnforcesConcurrencySemaphore(t *testing.T) {
 	maxConcurrency := 2
+	started := make(chan struct{}, 6)
+	release := make(chan struct{})
 	var currentActive atomic.Int32
 	var peakActive atomic.Int32
 
@@ -150,7 +152,12 @@ func TestCoordinatorEnforcesConcurrencySemaphore(t *testing.T) {
 						}
 					}
 
-					time.Sleep(30 * time.Millisecond)
+					started <- struct{}{}
+					select {
+					case <-release:
+					case <-ctx.Done():
+						return turn.Result{}, ctx.Err()
+					}
 					return turn.Result{
 						Message: model.Message{Role: model.RoleAssistant, Content: "done"},
 					}, nil
@@ -177,6 +184,15 @@ func TestCoordinatorEnforcesConcurrencySemaphore(t *testing.T) {
 		}(i)
 	}
 
+	for i := 0; i < maxConcurrency; i++ {
+		select {
+		case <-started:
+		case <-time.After(time.Second):
+			close(release)
+			t.Fatalf("only %d subagents entered concurrently; want %d", i, maxConcurrency)
+		}
+	}
+	close(release)
 	wg.Wait()
 
 	if peak := peakActive.Load(); peak > int32(maxConcurrency) {
@@ -224,6 +240,8 @@ func TestCoordinatorCancelsChildWhenParentContextCancels(t *testing.T) {
 }
 
 func TestCoordinatorSerializesMutatingWorkers(t *testing.T) {
+	started := make(chan struct{}, 4)
+	release := make(chan struct{})
 	var currentWorkers atomic.Int32
 	var peakWorkers atomic.Int32
 
@@ -246,7 +264,12 @@ func TestCoordinatorSerializesMutatingWorkers(t *testing.T) {
 						}
 					}
 
-					time.Sleep(30 * time.Millisecond)
+					started <- struct{}{}
+					select {
+					case <-release:
+					case <-ctx.Done():
+						return turn.Result{}, ctx.Err()
+					}
 					return turn.Result{
 						Message: model.Message{Role: model.RoleAssistant, Content: "worker done"},
 					}, nil
@@ -273,6 +296,20 @@ func TestCoordinatorSerializesMutatingWorkers(t *testing.T) {
 		}(i)
 	}
 
+	waitForTest(t, time.Second, func() bool {
+		statuses := coord.Active()
+		if len(statuses) != totalWorkers || len(started) != 1 {
+			return false
+		}
+		queued := 0
+		for _, status := range statuses {
+			if status.State == StateQueued {
+				queued++
+			}
+		}
+		return queued == totalWorkers-1
+	})
+	close(release)
 	wg.Wait()
 
 	// Mutating workers MUST be strictly serialized (peak == 1)
@@ -505,6 +542,8 @@ func TestCoordinatorEmitsLifecycleEvents(t *testing.T) {
 }
 
 func TestCoordinatorConcurrentCloseAndRun(t *testing.T) {
+	var startedOnce sync.Once
+	runnerStarted := make(chan struct{})
 	coord := NewCoordinator(
 		nil,
 		emptyRegistry{},
@@ -513,14 +552,9 @@ func TestCoordinatorConcurrentCloseAndRun(t *testing.T) {
 		WithRunnerFactory(func(p Profile, tools *toolcall.Service) (turn.Runner, error) {
 			return &mockRunner{
 				runFunc: func(ctx context.Context, messages []model.Message, sink turn.Sink) (turn.Result, error) {
-					select {
-					case <-ctx.Done():
-						return turn.Result{}, ctx.Err()
-					case <-time.After(10 * time.Millisecond):
-						return turn.Result{
-							Message: model.Message{Role: model.RoleAssistant, Content: "done"},
-						}, nil
-					}
+					startedOnce.Do(func() { close(runnerStarted) })
+					<-ctx.Done()
+					return turn.Result{}, ctx.Err()
 				},
 			}, nil
 		}),
@@ -540,15 +574,20 @@ func TestCoordinatorConcurrentCloseAndRun(t *testing.T) {
 		}()
 	}
 
-	// Concurrently close the coordinator while callers are in flight
-	time.Sleep(2 * time.Millisecond)
+	// Close only after a runner is active so the test exercises in-flight cancellation.
+	select {
+	case <-runnerStarted:
+	case <-time.After(time.Second):
+		t.Fatal("no runner started before concurrent close")
+	}
 	_ = coord.Close()
 
 	wg.Wait()
 }
 
 func TestCoordinatorResilientEmitOnCancel(t *testing.T) {
-	var failedEmitted atomic.Bool
+	failedEmitted := make(chan struct{}, 1)
+	runnerStarted := make(chan struct{}, 1)
 	coord := NewCoordinator(
 		nil,
 		emptyRegistry{},
@@ -558,7 +597,10 @@ func TestCoordinatorResilientEmitOnCancel(t *testing.T) {
 			if ev.Kind == EventAgentFailed {
 				// Even if childCtx was canceled, ctx passed to emit must remain usable
 				if ctx.Err() == nil {
-					failedEmitted.Store(true)
+					select {
+					case failedEmitted <- struct{}{}:
+					default:
+					}
 				}
 			}
 			return nil
@@ -566,6 +608,7 @@ func TestCoordinatorResilientEmitOnCancel(t *testing.T) {
 		WithRunnerFactory(func(p Profile, tools *toolcall.Service) (turn.Runner, error) {
 			return &mockRunner{
 				runFunc: func(ctx context.Context, messages []model.Message, sink turn.Sink) (turn.Result, error) {
+					runnerStarted <- struct{}{}
 					<-ctx.Done()
 					return turn.Result{}, ctx.Err()
 				},
@@ -575,19 +618,26 @@ func TestCoordinatorResilientEmitOnCancel(t *testing.T) {
 	defer coord.Close()
 
 	ctx, cancel := context.WithCancel(context.Background())
+	runDone := make(chan struct{})
 	go func() {
-		time.Sleep(5 * time.Millisecond)
-		cancel()
+		defer close(runDone)
+		_, _ = coord.Run(ctx, Request{Profile: ProfileAgility, Task: "cancel task"})
 	}()
-
-	_, _ = coord.Run(ctx, Request{
-		Profile: ProfileAgility,
-		Task:    "cancel task",
-	})
-
-	time.Sleep(20 * time.Millisecond)
-	if !failedEmitted.Load() {
-		t.Errorf("expected resilient emit of EventAgentFailed with valid context on cancellation")
+	select {
+	case <-runnerStarted:
+	case <-time.After(time.Second):
+		t.Fatal("runner did not start before cancellation")
+	}
+	cancel()
+	select {
+	case <-runDone:
+	case <-time.After(time.Second):
+		t.Fatal("run did not finish after cancellation")
+	}
+	select {
+	case <-failedEmitted:
+	case <-time.After(time.Second):
+		t.Error("expected resilient emit of EventAgentFailed with valid context")
 	}
 }
 
@@ -735,7 +785,7 @@ func TestCoordinatorWorkspaceGateCancelsExclusiveWait(t *testing.T) {
 		_, err := coord.acquireWorkspace(ctx, true)
 		done <- err
 	}()
-	time.Sleep(5 * time.Millisecond)
+	waitForTest(t, time.Second, func() bool { return len(coord.wsWriter) == 1 && len(coord.wsAdmission) == 1 })
 	cancel()
 	select {
 	case err := <-done:
@@ -1021,6 +1071,7 @@ func TestCoordinatorCloseIsBoundedForNonCooperativeRunner(t *testing.T) {
 
 func TestCoordinatorQueueTimeoutReportsLifecycleMetrics(t *testing.T) {
 	release := make(chan struct{})
+	holderStarted := make(chan struct{}, 1)
 	events := make(chan Event, 8)
 	coord := NewCoordinator(nil, emptyRegistry{}, nil, nil,
 		WithMaxConcurrency(1),
@@ -1029,6 +1080,7 @@ func TestCoordinatorQueueTimeoutReportsLifecycleMetrics(t *testing.T) {
 		WithEventSink(func(_ context.Context, ev Event) error { events <- ev; return nil }),
 		WithRunnerFactory(func(Profile, *toolcall.Service) (turn.Runner, error) {
 			return &mockRunner{runFunc: func(ctx context.Context, _ []model.Message, _ turn.Sink) (turn.Result, error) {
+				holderStarted <- struct{}{}
 				select {
 				case <-release:
 					return turn.Result{Message: model.Message{Role: model.RoleAssistant, Content: "done"}}, nil
@@ -1044,7 +1096,11 @@ func TestCoordinatorQueueTimeoutReportsLifecycleMetrics(t *testing.T) {
 		_, err := coord.Run(context.Background(), Request{Profile: ProfileAgility, Task: "holder", QueueTimeout: time.Second})
 		firstDone <- err
 	}()
-	time.Sleep(10 * time.Millisecond)
+	select {
+	case <-holderStarted:
+	case <-time.After(time.Second):
+		t.Fatal("holder runner did not start before queueing the second agent")
+	}
 	res, err := coord.Run(context.Background(), Request{Profile: ProfileAgility, Task: "queued timeout"})
 	if !errors.Is(err, context.DeadlineExceeded) || !errors.Is(err, ErrQueueTimeout) {
 		t.Fatalf("queued Run() error = %v, want typed queue deadline", err)

@@ -57,10 +57,12 @@ type composerState struct {
 }
 
 type paneState struct {
-	bottom         *bottomPane
-	transcript     viewport.Model
-	showTranscript bool
-	rawTranscript  bool
+	bottom              *bottomPane
+	transcript          viewport.Model
+	showTranscript      bool
+	rawTranscript       bool
+	transcriptTailOnly  bool
+	transcriptTailStale bool
 }
 
 type bottomPane struct {

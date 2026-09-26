@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	tea "charm.land/bubbletea/v2"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -823,6 +824,61 @@ func TestTranscriptOverlayIncludesLiveAssistantTail(t *testing.T) {
 	_ = m.updateTranscriptKey(testText("r"))
 	if !m.panes.rawTranscript {
 		t.Fatal("r did not toggle raw transcript mode")
+	}
+}
+
+func TestTranscriptOverlayUsesTailDuringStreamingAndHydratesForScroll(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.resize(80, 24)
+	for i := 0; i < 70; i++ {
+		m.appendUser(fmt.Sprintf("question %02d with context", i))
+		m.appendAssistant("answer with **markdown** and enough detail to wrap across lines")
+	}
+	m.appendAssistantDelta(strings.Repeat("live response line\n", 20))
+	m.busy = true
+	m.panes.showTranscript = true
+	m.refreshTranscriptViewport(true)
+	_ = m.panes.transcript.View()
+	if !m.panes.transcriptTailOnly {
+		t.Fatal("live transcript did not use a bounded tail")
+	}
+	tailLines := m.panes.transcript.TotalLineCount()
+	fullLines := len(m.historyState.RenderLinesAt(max(1, m.panes.transcript.Width())))
+	if tailLines >= fullLines {
+		t.Fatalf("tail line count=%d, want fewer than full history=%d", tailLines, fullLines)
+	}
+
+	_ = m.updateTranscriptKey(testKey(tea.KeyPgUp))
+	if m.panes.transcriptTailOnly {
+		t.Fatal("scrolling did not hydrate full transcript history")
+	}
+	if m.panes.transcript.TotalLineCount() <= tailLines {
+		t.Fatalf("hydrated line count=%d, want more than bounded tail=%d", m.panes.transcript.TotalLineCount(), tailLines)
+	}
+	if m.panes.transcript.AtBottom() {
+		t.Fatalf("scroll-up did not move into transcript history: offset=%d height=%d lines=%d", m.panes.transcript.YOffset(), m.panes.transcript.Height(), m.panes.transcript.TotalLineCount())
+	}
+
+	m.appendAssistantDelta("latest delta")
+	m.refreshTranscriptViewport(false)
+	if !m.panes.transcriptTailStale {
+		t.Fatal("offscreen stream update did not mark transcript tail stale")
+	}
+	visibleLines := m.panes.transcript.TotalLineCount()
+	m.panes.transcript.GotoBottom()
+	m.refreshTranscriptViewport(false)
+	if !m.panes.transcriptTailOnly || m.panes.transcriptTailStale {
+		t.Fatalf("returning to live tail left tail_only=%v stale=%v", m.panes.transcriptTailOnly, m.panes.transcriptTailStale)
+	}
+	if m.panes.transcript.TotalLineCount() >= visibleLines {
+		t.Fatalf("return to tail kept full history lines=%d, previous full lines=%d", m.panes.transcript.TotalLineCount(), visibleLines)
+	}
+	if !strings.Contains(testPlain(m.panes.transcript.View()), "latest delta") {
+		t.Fatal("live transcript tail omitted the latest streamed delta")
+	}
+	m.updateMouseEvent(tea.MouseWheelMsg{Button: tea.MouseWheelUp})
+	if m.panes.transcriptTailOnly || m.panes.transcript.AtBottom() {
+		t.Fatalf("mouse scroll did not hydrate older transcript: tail_only=%v offset=%d lines=%d", m.panes.transcriptTailOnly, m.panes.transcript.YOffset(), m.panes.transcript.TotalLineCount())
 	}
 }
 

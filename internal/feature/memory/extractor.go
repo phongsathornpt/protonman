@@ -24,6 +24,7 @@ type Extractor struct {
 	currentSessionID string
 	workspaceKey     string
 	policy           runtimepolicy.MemoryPolicy
+	activityObserver corememory.ActivityObserver
 	now              func() time.Time
 }
 
@@ -42,6 +43,19 @@ func NewExtractor(sessions session.Repository, memories corememory.Repository, m
 	}
 }
 
+func (e *Extractor) SetActivityObserver(observer corememory.ActivityObserver) {
+	if e == nil {
+		return
+	}
+	e.activityObserver = observer
+}
+
+func (e *Extractor) reportActivity(activity corememory.Activity) {
+	if e != nil && e.activityObserver != nil {
+		e.activityObserver(activity)
+	}
+}
+
 func (e *Extractor) Run(ctx context.Context) error {
 	if e == nil || e.sessions == nil || e.memories == nil || e.model == nil {
 		return nil
@@ -56,6 +70,14 @@ func (e *Extractor) Run(ctx context.Context) error {
 		return fmt.Errorf("list sessions for memory extraction: %w", err)
 	}
 	processed := 0
+	saved := corememory.Activity{}
+	defer func() {
+		if saved.WorkspaceEntries+saved.GlobalEntries == 0 {
+			return
+		}
+		saved.Kind = corememory.ActivityEntriesSaved
+		e.reportActivity(saved)
+	}()
 	for _, summary := range summaries {
 		if processed >= e.policy.MaxExtractionSessions {
 			break
@@ -101,12 +123,15 @@ func (e *Extractor) Run(ctx context.Context) error {
 			continue
 		}
 		candidates = validateCandidateEvidence(candidates, state)
-		if err := mergeCandidates(ctx, e.memories, e.workspaceKey, candidates, extractionEvidence{
+		saveCounts, mergeErr := mergeCandidates(ctx, e.memories, e.workspaceKey, candidates, extractionEvidence{
 			SessionID:       summary.ID,
 			SessionRevision: state.Revision,
 			ObservedAt:      state.UpdatedAt,
-		}, e.policy); err != nil {
-			return fmt.Errorf("merge memory from session %q: %w", summary.ID, err)
+		}, e.policy)
+		saved.WorkspaceEntries += saveCounts.WorkspaceEntries
+		saved.GlobalEntries += saveCounts.GlobalEntries
+		if mergeErr != nil {
+			return fmt.Errorf("merge memory from session %q: %w", summary.ID, mergeErr)
 		}
 		if err := e.memories.MarkProcessed(ctx, summary.ID, state.Revision); err != nil {
 			return fmt.Errorf("mark session %q processed: %w", summary.ID, err)
@@ -131,6 +156,7 @@ func (e *Extractor) StartBackground(parent context.Context) {
 		ctx, cancel := context.WithTimeout(parent, timeout)
 		defer cancel()
 		if err := e.Run(ctx); err != nil {
+			e.reportActivity(corememory.Activity{Kind: corememory.ActivityUpdateFailed})
 			slog.Debug("background memory extraction stopped", "error", err)
 		}
 	}()

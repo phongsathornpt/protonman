@@ -26,6 +26,43 @@ func TestScrollAnchorTracksCellAcrossEarlierExpansion(t *testing.T) {
 	}
 }
 
+func TestRenderTailContentAtMatchesAlternateWidthSuffix(t *testing.T) {
+	state := NewHistoryState(100)
+	for i := 0; i < 12; i++ {
+		state.Append(&UserCell{Text: strings.Repeat("question ", 4) + string(rune('a'+i))})
+		state.Append(&AssistantCell{Text: strings.Repeat("answer with **markdown** and `code` ", 3) + string(rune('a'+i))})
+	}
+	state.AppendAssistantDelta(strings.Repeat("live response line\n", 8))
+	const width, maxLines = 28, 9
+	full := state.RenderLinesAt(width)
+	tail, truncated := state.RenderTailContentAt(width, maxLines)
+	if !truncated {
+		t.Fatal("tail render did not report omitted history")
+	}
+	want := strings.Join(full[len(full)-maxLines:], "\n")
+	if tail != want {
+		t.Fatalf("alternate-width tail mismatch\n got: %q\nwant: %q", tail, want)
+	}
+}
+
+func TestRawTailContentMatchesTranscriptSuffix(t *testing.T) {
+	state := NewHistoryState(100)
+	state.Append(&UserCell{Text: "question"})
+	state.Append(&AssistantCell{Text: "answer line one\nanswer line two"})
+	state.Append(&UserCell{Text: "follow up"})
+	state.AppendAssistantDelta("live line one\nlive line two\nlive line three")
+	fullLines := strings.Split(state.Raw(), "\n")
+	const maxLines = 4
+	tail, truncated := state.RawTailContent(maxLines)
+	if !truncated {
+		t.Fatal("raw tail did not report omitted history")
+	}
+	want := strings.Join(fullLines[len(fullLines)-maxLines:], "\n")
+	if tail != want {
+		t.Fatalf("raw tail mismatch\n got: %q\nwant: %q", tail, want)
+	}
+}
+
 func TestScrollAnchorsMatchRenderedContentLines(t *testing.T) {
 	state := NewHistoryState(100)
 	state.Append(&SystemCell{Text: "one"})

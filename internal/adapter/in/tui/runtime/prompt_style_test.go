@@ -77,3 +77,47 @@ func TestPromptDividerBlurredComposerUsesIdleStyle(t *testing.T) {
 		t.Fatalf("idle divider = %q, want %q", got, want)
 	}
 }
+
+func TestAnimatedPromptDividerMovesAccentWithoutChangingWidth(t *testing.T) {
+	const width = 28
+	first := renderAnimatedPromptDivider(width, 0)
+	second := renderAnimatedPromptDivider(width, 1)
+	if first == second {
+		t.Fatal("animated divider did not move its accent")
+	}
+	for phase, line := range []string{
+		first,
+		second,
+		renderAnimatedPromptDivider(width, width),
+		renderAnimatedPromptDivider(width, width-5),
+	} {
+		if got := lipgloss.Width(line); got != width {
+			t.Errorf("phase %d width = %d, want %d", phase, got, width)
+		}
+	}
+}
+
+func TestBusyPromptDividerAnimatesUnlessReducedMotion(t *testing.T) {
+	for _, reducedMotion := range []bool{false, true} {
+		name := "motion enabled"
+		if reducedMotion {
+			name = "reduced motion"
+		}
+		t.Run(name, func(t *testing.T) {
+			m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+			m.resize(40, 16)
+			m.busy = true
+			m.reducedMotion = reducedMotion
+			before := promptDividerLine(t, m)
+			updated, _ := m.Update(spinnerTickMessage())
+			m = updated.(*bubbleModel)
+			after := promptDividerLine(t, m)
+			if reducedMotion && before != after {
+				t.Fatalf("reduced-motion divider changed: %q -> %q", before, after)
+			}
+			if !reducedMotion && before == after {
+				t.Fatal("busy divider did not animate")
+			}
+		})
+	}
+}

@@ -192,8 +192,25 @@ func TestE2EACPCancellation(t *testing.T) {
 	)
 	send(promptReq)
 
-	// Allow bash to start running
-	time.Sleep(100 * time.Millisecond)
+	// Cancel only after the server reports that the bash tool call is in progress.
+	for {
+		line, err := reader.ReadString('\n')
+		if err != nil {
+			t.Fatalf("read tool start notification: %v", err)
+		}
+		var notification map[string]any
+		if err := json.Unmarshal([]byte(strings.TrimSpace(line)), &notification); err != nil {
+			continue
+		}
+		if notification["method"] != "session/update" {
+			continue
+		}
+		params, _ := notification["params"].(map[string]any)
+		update, _ := params["update"].(map[string]any)
+		if update["sessionUpdate"] == "tool_call" && update["status"] == "in_progress" {
+			break
+		}
+	}
 
 	// Send session/cancel
 	cancelReq := fmt.Sprintf(

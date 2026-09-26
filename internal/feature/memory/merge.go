@@ -20,13 +20,14 @@ type extractionEvidence struct {
 	ObservedAt      time.Time
 }
 
-func mergeCandidates(ctx context.Context, repository corememory.Repository, workspaceKey string, candidates []candidate, evidence extractionEvidence, policy runtimepolicy.MemoryPolicy) error {
+func mergeCandidates(ctx context.Context, repository corememory.Repository, workspaceKey string, candidates []candidate, evidence extractionEvidence, policy runtimepolicy.MemoryPolicy) (corememory.Activity, error) {
+	saved := corememory.Activity{}
 	if len(candidates) == 0 {
-		return nil
+		return saved, nil
 	}
 	workspaceSnapshot, err := repository.Load(ctx, corememory.ScopeWorkspace, workspaceKey)
 	if err != nil {
-		return err
+		return saved, err
 	}
 	workspaceEntries := make([]corememory.Entry, 0, len(candidates))
 	globalEntries := make([]corememory.Entry, 0, len(candidates))
@@ -42,6 +43,7 @@ func mergeCandidates(ctx context.Context, repository corememory.Repository, work
 		}
 	}
 	if len(workspaceEntries) > 0 || len(promoted) > 0 {
+		workspaceSaved := 0
 		if err := repository.Update(ctx, corememory.ScopeWorkspace, workspaceKey, func(existing []corememory.Entry) ([]corememory.Entry, error) {
 			filtered := existing[:0]
 			for _, entry := range existing {
@@ -50,19 +52,40 @@ func mergeCandidates(ctx context.Context, repository corememory.Repository, work
 				}
 				filtered = append(filtered, entry)
 			}
-			return mergeEntries(filtered, workspaceEntries, policy.MaxIndexEntries), nil
+			merged := mergeEntries(filtered, workspaceEntries, policy.MaxIndexEntries)
+			workspaceSaved = countMergedEntries(workspaceEntries, merged)
+			return merged, nil
 		}); err != nil {
-			return err
+			return saved, err
 		}
+		saved.WorkspaceEntries = workspaceSaved
 	}
 	if len(globalEntries) > 0 {
+		globalSaved := 0
 		if err := repository.Update(ctx, corememory.ScopeGlobal, "", func(existing []corememory.Entry) ([]corememory.Entry, error) {
-			return mergeEntries(existing, globalEntries, policy.MaxIndexEntries), nil
+			merged := mergeEntries(existing, globalEntries, policy.MaxIndexEntries)
+			globalSaved = countMergedEntries(globalEntries, merged)
+			return merged, nil
 		}); err != nil {
-			return err
+			return saved, err
+		}
+		saved.GlobalEntries = globalSaved
+	}
+	return saved, nil
+}
+
+func countMergedEntries(incoming, merged []corememory.Entry) int {
+	ids := make(map[string]struct{}, len(merged))
+	for _, entry := range merged {
+		ids[entry.ID] = struct{}{}
+	}
+	count := 0
+	for _, entry := range incoming {
+		if _, ok := ids[entry.ID]; ok {
+			count++
 		}
 	}
-	return nil
+	return count
 }
 
 func effectiveCandidateScope(item candidate, workspace []corememory.Entry, sessionID string, policy runtimepolicy.MemoryPolicy) corememory.Scope {

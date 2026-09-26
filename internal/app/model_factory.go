@@ -3,6 +3,7 @@ package app
 import (
 	"strings"
 
+	corememory "github.com/phongsathornpt/protonman/internal/core/memory"
 	"github.com/phongsathornpt/protonman/internal/core/modelclient"
 	"github.com/phongsathornpt/protonman/proton-sdk/port"
 )
@@ -21,6 +22,10 @@ type rootMemoryBinder interface {
 	BindSession(sessionID, workspaceKey string)
 }
 
+type rootMemoryActivityObserver interface {
+	SetActivityObserver(corememory.ActivityObserver)
+}
+
 // BindRootMemory points the root model factory at the active session after a
 // session switch. It is a no-op for factories that do not own root memory, so
 // callers can invoke it unconditionally.
@@ -33,6 +38,14 @@ func BindRootMemory(factory LanguageModelFactory, sessionID, workspaceKey string
 		return
 	}
 	binder.BindSession(sessionID, workspaceKey)
+}
+
+// ObserveRootMemory registers an observer for background durable-memory
+// updates owned by the root model factory. Non-memory factories ignore it.
+func ObserveRootMemory(factory LanguageModelFactory, observer corememory.ActivityObserver) {
+	if binder, ok := factory.(rootMemoryActivityObserver); ok && binder != nil {
+		binder.SetActivityObserver(observer)
+	}
 }
 
 // subagentBaseFactory is the optional capability a root-only model decorator

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/phongsathornpt/protonman/internal/base/runtimepolicy"
+	corememory "github.com/phongsathornpt/protonman/internal/core/memory"
 	"github.com/phongsathornpt/protonman/internal/core/session"
 	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 )
@@ -87,6 +88,8 @@ func TestExtractorPersistsWorkspaceMemoryAndRevision(t *testing.T) {
 	memories := &fakeRepository{}
 	model := &extractionModel{output: `{"memories":[{"scope":"workspace","kind":"procedure","key":"verification command","value":"Run go test ./... before finishing","keywords":["go test"],"confidence":0.95,"message_ids":["m1"]}]}`}
 	extractor := NewExtractor(sessions, memories, model, "current", "ws", runtimepolicy.DurableMemory())
+	var activities []corememory.Activity
+	extractor.SetActivityObserver(func(activity corememory.Activity) { activities = append(activities, activity) })
 	extractor.now = func() time.Time { return now }
 	if err := extractor.Run(context.Background()); err != nil {
 		t.Fatal(err)
@@ -96,6 +99,9 @@ func TestExtractorPersistsWorkspaceMemoryAndRevision(t *testing.T) {
 	}
 	if revision, ok := memories.processed["previous"]; !ok || revision != 3 {
 		t.Fatalf("processed = %+v", memories.processed)
+	}
+	if len(activities) != 1 || activities[0] != (corememory.Activity{Kind: corememory.ActivityEntriesSaved, WorkspaceEntries: 1}) {
+		t.Fatalf("memory activities = %+v, want one saved workspace entry", activities)
 	}
 }
 

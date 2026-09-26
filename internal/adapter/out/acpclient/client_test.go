@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"sync"
@@ -185,8 +186,8 @@ func TestHelperACPProcess(t *testing.T) {
 			return
 		}
 		fmt.Fprint(os.Stdout, `{"jsonrpc":"2.0","id":1,"error":{"code":-32601,"message":"session/list is not supported"}}`+"\n")
-		// Stay alive so the read loop is the one that observes the response.
-		time.Sleep(2 * time.Second)
+		// Stay alive until the client closes stdin so the read loop observes the response.
+		_, _ = io.Copy(io.Discard, os.Stdin)
 	case "noisy_then_error":
 		// A banner on stdout must not break the framed protocol reader.
 		fmt.Fprint(os.Stdout, "agent starting up\n")
@@ -195,7 +196,7 @@ func TestHelperACPProcess(t *testing.T) {
 			return
 		}
 		fmt.Fprint(os.Stdout, `{"jsonrpc":"2.0","id":1,"error":{"code":-32000,"message":"upstream refused"}}`+"\n")
-		time.Sleep(2 * time.Second)
+		_, _ = io.Copy(io.Discard, os.Stdin)
 	}
 }
 

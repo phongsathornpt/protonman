@@ -15,6 +15,7 @@ const (
 	HistoryCellAssistant
 	HistoryCellTool
 	HistoryCellSystem
+	HistoryCellMemory
 	HistoryCellError
 )
 
@@ -29,6 +30,8 @@ func (k HistoryCellKind) String() string {
 		return "tool"
 	case HistoryCellSystem:
 		return "system"
+	case HistoryCellMemory:
+		return "memory"
 	case HistoryCellError:
 		return "error"
 	default:

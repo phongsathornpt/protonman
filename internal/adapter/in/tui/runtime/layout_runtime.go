@@ -414,6 +414,10 @@ func (m *bubbleModel) refreshFrameLayout() {
 }
 
 func (m *bubbleModel) refreshStatusFrame() {
+	m.refreshStatusAndComposerFrame(false)
+}
+
+func (m *bubbleModel) refreshStatusAndComposerFrame(animateComposer bool) {
 	if m == nil {
 		return
 	}
@@ -430,9 +434,22 @@ func (m *bubbleModel) refreshStatusFrame() {
 		m.requestRelayout()
 		return
 	}
+	var newComposer string
+	if animateComposer && m.panes.bottom.composerVisible() {
+		profile := m.layoutProfile()
+		keepLowerRule := profile.Mode != panecommon.LayoutTiny || m.layout.frame.top == ""
+		newComposer = composerContentView(m.promptView(), keepLowerRule)
+		if lipgloss.Height(newComposer) != lipgloss.Height(m.layout.frame.composer) {
+			m.requestRelayout()
+			return
+		}
+	}
 	m.layout.generation++
 	m.layout.frame.generation = m.layout.generation
 	m.layout.frame.status = newStatus
+	if animateComposer && m.panes.bottom.composerVisible() {
+		m.layout.frame.composer = newComposer
+	}
 	m.invalidateLiveView()
 }
 

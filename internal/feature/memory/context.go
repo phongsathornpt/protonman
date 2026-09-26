@@ -12,8 +12,13 @@ import (
 // RenderContext serializes selected memories as bounded evidence data. The
 // managed system prompt owns instruction precedence; this payload never does.
 func RenderContext(entries []corememory.Entry, policy runtimepolicy.MemoryPolicy) string {
+	contextText, _, _ := renderContext(entries, policy)
+	return contextText
+}
+
+func renderContext(entries []corememory.Entry, policy runtimepolicy.MemoryPolicy) (string, int, int) {
 	if len(entries) == 0 {
-		return ""
+		return "", 0, 0
 	}
 	if policy.MaxContextBytes <= 0 {
 		policy = runtimepolicy.DurableMemory()
@@ -21,6 +26,7 @@ func RenderContext(entries []corememory.Entry, policy runtimepolicy.MemoryPolicy
 	const open = "<memory-context>\n"
 	const close = "</memory-context>"
 	var body strings.Builder
+	workspaceCount, globalCount := 0, 0
 	for _, entry := range entries {
 		line := "  <memory scope=" + strconv.Quote(string(entry.Scope)) +
 			" kind=" + strconv.Quote(string(entry.Kind)) +
@@ -30,9 +36,14 @@ func RenderContext(entries []corememory.Entry, policy runtimepolicy.MemoryPolicy
 			continue
 		}
 		body.WriteString(line)
+		if entry.Scope == corememory.ScopeWorkspace {
+			workspaceCount++
+		} else if entry.Scope == corememory.ScopeGlobal {
+			globalCount++
+		}
 	}
 	if body.Len() == 0 {
-		return ""
+		return "", 0, 0
 	}
-	return open + body.String() + close
+	return open + body.String() + close, workspaceCount, globalCount
 }
