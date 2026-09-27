@@ -265,6 +265,9 @@ func (m *bubbleModel) updateAnimationEvent(msg tea.Msg) (tea.Cmd, bool) {
 		if !m.busy {
 			return nil, true
 		}
+		if m.historyState != nil {
+			m.historyState.UpdateActiveSpinner(m.spinnerIndicator())
+		}
 		prompt := m.panes.bottom.prompt()
 		animateComposer := !m.reducedMotion && m.panes.bottom.composerVisible() &&
 			prompt != nil && prompt.Focused() &&

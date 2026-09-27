@@ -75,7 +75,7 @@ func TestRuntimeStatusProjectionDistinguishesStreamingAndToolWork(t *testing.T) 
 
 	m.historyState.AppendAssistantDelta("streaming")
 	streaming := m.runtimeStatusState(now)
-	if streaming.Phase != runtimeui.PhaseStreaming || streaming.Activity != "streaming response" {
+	if streaming.Phase != runtimeui.PhaseStreaming || streaming.Activity != "responding" {
 		t.Fatalf("streaming state = %#v", streaming)
 	}
 

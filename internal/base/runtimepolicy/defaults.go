@@ -77,6 +77,7 @@ type MemoryPolicy struct {
 	MaxExtractionInputBytes    int
 	ExtractionIdleAge          time.Duration
 	ExtractionTimeout          time.Duration
+	ContextThresholdRatio      float64
 	GlobalPromotionMinSessions int
 	StaleRepoFactAge           time.Duration
 	StaleFailureAge            time.Duration
@@ -91,6 +92,7 @@ func DurableMemory() MemoryPolicy {
 		MaxExtractionInputBytes:    64 * 1024,
 		ExtractionIdleAge:          2 * time.Minute,
 		ExtractionTimeout:          2 * time.Minute,
+		ContextThresholdRatio:      0.75,
 		GlobalPromotionMinSessions: 2,
 		StaleRepoFactAge:           30 * 24 * time.Hour,
 		StaleFailureAge:            60 * 24 * time.Hour,

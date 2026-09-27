@@ -10,7 +10,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/engine/turn"
 )
 
-func TestMemoryContextActivityAppearsInTranscriptWithoutMemoryContents(t *testing.T) {
+func TestMemoryContextActivityOmittedFromTranscript(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	m.applyTurnEvent(turn.Event{
 		Kind: turn.EventMemoryActivity,
@@ -20,11 +20,23 @@ func TestMemoryContextActivityAppearsInTranscriptWithoutMemoryContents(t *testin
 	})
 
 	got := plainTranscript(m)
-	if !strings.Contains(got, "Memory · Included 2 saved memory items in model request (workspace 1, global 1)") {
-		t.Fatalf("transcript missing memory context activity: %q", got)
+	if strings.Contains(got, "Included") || strings.Contains(got, "memory") || strings.Contains(got, "Memory") {
+		t.Fatalf("expected transcript to omit routine memory context activity, got: %q", got)
 	}
 	if strings.Contains(got, "stored memory contents") {
 		t.Fatalf("transcript exposed memory contents: %q", got)
+	}
+
+	// Verify durable saves are still surfaced.
+	m.applyTurnEvent(turn.Event{
+		Kind: turn.EventMemoryActivity,
+		MemoryActivity: memory.Activity{
+			Kind: memory.ActivityEntriesSaved, WorkspaceEntries: 1,
+		},
+	})
+	gotSaved := plainTranscript(m)
+	if !strings.Contains(gotSaved, "Saved 1 memory item") {
+		t.Fatalf("expected durable memory save in transcript, got: %q", gotSaved)
 	}
 }
 

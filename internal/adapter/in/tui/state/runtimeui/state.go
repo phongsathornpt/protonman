@@ -85,6 +85,7 @@ type Input struct {
 	Canceling         bool
 	Streaming         bool
 	Retry             domain.RetryEvent
+	Round             int
 	RunningTool       string
 	ExplicitActivity  string
 	FallbackActivity  string
@@ -147,6 +148,7 @@ func Project(input Input) State {
 			activity = "delegating"
 		}
 		state := State{Phase: PhaseDelegating, Activity: activity, Meta: []string{agentCount(input.ActiveAgents)}}
+		state.Meta = appendRoundCount(state.Meta, input.Round)
 		return appendElapsed(state, true, input.StartedAt, now)
 	}
 
@@ -157,13 +159,18 @@ func Project(input Input) State {
 		if explicit != "" && explicit != ActivityReady {
 			activity = explicit
 		}
+		if !strings.HasPrefix(strings.ToLower(activity), "running ") {
+			activity = "running " + activity
+		}
 		state := State{Phase: PhaseToolRunning, Activity: activity}
+		state.Meta = appendRoundCount(state.Meta, input.Round)
 		state.Meta = appendToolCount(state.Meta, input.ToolCalls)
 		return appendElapsed(state, true, input.StartedAt, now)
 	}
 
 	if input.Streaming {
-		state := State{Phase: PhaseStreaming, Activity: "streaming response"}
+		state := State{Phase: PhaseStreaming, Activity: "responding"}
+		state.Meta = appendRoundCount(state.Meta, input.Round)
 		state.Meta = appendToolCount(state.Meta, input.ToolCalls)
 		return appendElapsed(state, true, input.StartedAt, now)
 	}
@@ -173,11 +180,19 @@ func Project(input Input) State {
 		activity = strings.TrimSpace(input.FallbackActivity)
 	}
 	if activity == "" {
-		activity = "working"
+		activity = "thinking"
 	}
 	state := State{Phase: PhaseWorking, Activity: activity}
+	state.Meta = appendRoundCount(state.Meta, input.Round)
 	state.Meta = appendToolCount(state.Meta, input.ToolCalls)
 	return appendElapsed(state, true, input.StartedAt, now)
+}
+
+func appendRoundCount(meta []string, round int) []string {
+	if round >= 2 {
+		return append(meta, fmt.Sprintf("round %d", round))
+	}
+	return meta
 }
 
 func appendToolCount(meta []string, count int) []string {

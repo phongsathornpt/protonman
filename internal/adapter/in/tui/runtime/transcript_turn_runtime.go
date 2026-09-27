@@ -51,7 +51,7 @@ func (m *bubbleModel) applyTurnEvent(event app.Event) {
 	switch event.Kind {
 	case app.EventReasoningDelta:
 		m.turnProgress.Retry = domain.RetryEvent{}
-		m.activity = "thinking"
+		m.activity = "reasoning"
 		m.appendReasoningDelta(event.Text)
 	case app.EventTextDelta:
 		m.finalizeActiveReasoning()
@@ -76,7 +76,7 @@ func (m *bubbleModel) applyTurnEvent(event app.Event) {
 		}
 		m.applyToolResult(event.Call.Name, result, event.Err)
 		m.syncTodoSnapshot()
-		m.activity = ""
+		m.activity = "thinking"
 	case app.EventMemoryActivity:
 		m.appendMemoryActivity(event.MemoryActivity)
 	case app.EventCompleted:
@@ -118,6 +118,12 @@ func (m *bubbleModel) finalizeActiveReasoning() {
 }
 
 func (m *bubbleModel) appendMemoryActivity(activity corememory.Activity) {
+	// Memory retrieval is a routine part of eligible model requests. Reporting it
+	// in the transcript on every user turn adds noise without changing the
+	// conversation, so keep reads internal and surface only save/failure events.
+	if activity.Kind == corememory.ActivityContextIncluded {
+		return
+	}
 	text := memoryActivityText(activity)
 	if text == "" {
 		return
@@ -140,8 +146,6 @@ func memoryActivityText(activity corememory.Activity) string {
 	}
 	scopeSummary := strings.Join(scopes, ", ")
 	switch activity.Kind {
-	case corememory.ActivityContextIncluded:
-		return fmt.Sprintf("Included %d saved memory %s in model request (%s)", total, plural, scopeSummary)
 	case corememory.ActivityContextUnavailable:
 		return "Saved context could not be loaded; this request continues without it"
 	case corememory.ActivityEntriesSaved:

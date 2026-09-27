@@ -21,6 +21,45 @@ func (s *HistoryState) StartToolCell(cell HistoryCell) {
 	s.touchActive()
 }
 
+// UpdateActiveSpinner updates the spinner indicator on any in-flight running cell.
+func (s *HistoryState) UpdateActiveSpinner(spinner string) {
+	if s == nil || s.active == nil {
+		return
+	}
+	switch cell := s.active.(type) {
+	case *ExecCell:
+		if cell.Running && cell.Spinner != spinner {
+			cell.Spinner = spinner
+			s.touchActive()
+			s.cacheValid = false
+		}
+	case *PatchCell:
+		if cell.Running && cell.Spinner != spinner {
+			cell.Spinner = spinner
+			s.touchActive()
+			s.cacheValid = false
+		}
+	case *ToolCell:
+		if cell.Running && cell.Spinner != spinner {
+			cell.Spinner = spinner
+			s.touchActive()
+			s.cacheValid = false
+		}
+	case *AgentToolCell:
+		if cell.Running && cell.Spinner != spinner {
+			cell.Spinner = spinner
+			s.touchActive()
+			s.cacheValid = false
+		}
+	case *ReasoningCell:
+		if cell.Streaming && cell.Spinner != spinner {
+			cell.Spinner = spinner
+			s.touchActive()
+			s.cacheValid = false
+		}
+	}
+}
+
 func (s *HistoryState) CompleteTool(completed ToolCell) {
 	completed.Running = false
 	s.CompleteToolCall(completed.CallID, completed.Name, &completed)
