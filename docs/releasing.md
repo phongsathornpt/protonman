@@ -44,13 +44,15 @@ only pushes an already-created local tag to `origin`.
 
 - validates the version tag
 - runs `go test ./...` and the offline installer integration tests
-- builds Linux amd64 and macOS arm64
+- builds CLI releases for Linux amd64 and macOS arm64
 - injects the exact Git tag into every binary
 - smoke-tests the native Linux amd64 binary with `--version`
 - packages `protonman_<version>_<os>_<arch>` archives
 - generates SHA-256 checksums
 - creates the GitHub Release with generated release notes
 - installs the published release through `install.sh` and verifies its embedded version
+
+Desktop binaries are temporarily omitted from release artifacts.
 
 Prerelease tags such as `v1.2.3-rc.1` create a GitHub prerelease. Re-running
 the workflow is safe: existing release assets are uploaded with `--clobber`.
