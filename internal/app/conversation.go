@@ -37,8 +37,10 @@ type Sink = turn.Sink
 
 const (
 	EventTextDelta      = turn.EventTextDelta
+	EventReasoningDelta = turn.EventReasoningDelta
 	EventToolCall       = turn.EventToolCall
 	EventToolResult     = turn.EventToolResult
+	EventMemoryActivity = turn.EventMemoryActivity
 	EventRetryScheduled = turn.EventRetryScheduled
 	EventCompleted      = turn.EventCompleted
 	EventFailed         = turn.EventFailed

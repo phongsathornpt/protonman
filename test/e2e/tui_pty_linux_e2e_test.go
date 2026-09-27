@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 	"syscall"
@@ -34,6 +35,12 @@ func (b *safeBuffer) String() string {
 	return b.b.String()
 }
 
+func (b *safeBuffer) Len() int {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	return b.b.Len()
+}
+
 func waitForPTYOutput(t *testing.T, output *safeBuffer, timeout time.Duration, description string, ready func(string) bool) string {
 	t.Helper()
 	deadline := time.Now().Add(timeout)
@@ -49,6 +56,13 @@ func waitForPTYOutput(t *testing.T, output *safeBuffer, timeout time.Duration, d
 		}
 		<-ticker.C
 	}
+}
+
+func waitForPTYOutputAfter(t *testing.T, output *safeBuffer, previousLen int, description string) string {
+	t.Helper()
+	return waitForPTYOutput(t, output, 2*time.Second, description, func(view string) bool {
+		return len(view) > previousLen
+	})
 }
 
 func TestE2ETUIStartupAndExitWithRealPTY(t *testing.T) {
@@ -183,10 +197,11 @@ func TestE2ETUIRapidResizeWithRealPTY(t *testing.T) {
 	}
 
 	for _, size := range []struct{ cols, rows uint16 }{{40, 12}, {120, 40}, {24, 8}, {100, 30}, {60, 16}} {
+		previousLen := output.Len()
 		if err := unix.IoctlSetWinsize(int(master.Fd()), unix.TIOCSWINSZ, &unix.Winsize{Col: size.cols, Row: size.rows}); err != nil {
 			t.Fatalf("resize PTY to %dx%d: %v", size.cols, size.rows, err)
 		}
-		time.Sleep(25 * time.Millisecond)
+		waitForPTYOutputAfter(t, &output, previousLen, "TUI redraw after resize")
 	}
 	if err := cmd.Process.Signal(syscall.Signal(0)); err != nil {
 		t.Fatalf("TUI exited during resize sequence: %v\noutput: %q", err, output.String())
@@ -401,17 +416,21 @@ func TestE2ETUIBracketedUnicodePasteSurvivesResize(t *testing.T) {
 		}
 	}()
 
-	time.Sleep(100 * time.Millisecond)
+	waitForPTYOutput(t, &output, 2*time.Second, "TUI bracketed-paste mode", func(view string) bool {
+		return strings.Contains(view, "\x1b[?2004h")
+	})
 	paste := "\x1b[200~ภาษาไทย café 東京\nsecond line\nthird line\x1b[201~"
 	if _, err := master.Write([]byte(paste)); err != nil {
 		t.Fatalf("paste unicode multiline draft: %v", err)
 	}
-	time.Sleep(100 * time.Millisecond)
+	waitForPTYOutput(t, &output, 2*time.Second, "pasted Unicode draft", func(view string) bool {
+		return strings.Contains(view, "ภาษาไทย") && strings.Contains(view, "café") && strings.Contains(view, "東京") && strings.Contains(view, "third line")
+	})
+	beforeResize := output.Len()
 	if err := unix.IoctlSetWinsize(int(master.Fd()), unix.TIOCSWINSZ, &unix.Winsize{Col: 36, Row: 10}); err != nil {
 		t.Fatalf("resize PTY after paste: %v", err)
 	}
-	time.Sleep(150 * time.Millisecond)
-	view := output.String()
+	view := waitForPTYOutputAfter(t, &output, beforeResize, "redraw after resizing pasted draft")
 	for _, want := range []string{"ภาษาไทย", "café", "東京", "second line", "third line"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("pasted PTY output missing %q: %q", want, view)
@@ -424,8 +443,9 @@ func TestE2ETUIBracketedUnicodePasteSurvivesResize(t *testing.T) {
 	}
 
 	// First Ctrl+C clears the draft; the second exits the now-idle TUI.
+	beforeClear := output.Len()
 	_, _ = master.Write([]byte{3})
-	time.Sleep(50 * time.Millisecond)
+	waitForPTYOutputAfter(t, &output, beforeClear, "draft clear after Ctrl+C")
 	_, _ = master.Write([]byte{3})
 	if err := cmd.Wait(); err != nil && ctx.Err() != nil {
 		t.Fatalf("TUI did not exit after unicode paste: %v", err)
@@ -482,10 +502,24 @@ func TestE2ETUIExitsWhenPTYDetachesDuringRunningTool(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("timed out waiting for TUI raw mode")
 	}
-	if _, err := master.Write([]byte("!sleep 3; echo should-not-survive\r")); err != nil {
+	startedPath := filepath.Join(ws, ".protonman-test-tool-started")
+	if _, err := master.Write([]byte("!touch .protonman-test-tool-started; sleep 3; echo should-not-survive\r")); err != nil {
 		t.Fatalf("start running tool: %v", err)
 	}
-	time.Sleep(150 * time.Millisecond)
+	deadline := time.Now().Add(2 * time.Second)
+	ticker := time.NewTicker(5 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		if _, err := os.Stat(startedPath); err == nil {
+			break
+		} else if !os.IsNotExist(err) {
+			t.Fatalf("check tool start marker: %v", err)
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("timed out waiting for shell tool to start")
+		}
+		<-ticker.C
+	}
 	if err := cmd.Process.Signal(syscall.Signal(0)); err != nil {
 		t.Fatalf("TUI exited before detach: %v", err)
 	}
@@ -575,20 +609,24 @@ func TestE2ETUISlashHelpWithRealPTY(t *testing.T) {
 		}
 	}()
 
-	time.Sleep(100 * time.Millisecond)
+	waitForPTYOutput(t, &output, 2*time.Second, "TUI bracketed-paste mode", func(view string) bool {
+		return strings.Contains(view, "\x1b[?2004h")
+	})
 	if _, err := master.Write([]byte("/he")); err != nil {
 		t.Fatalf("type slash command: %v", err)
 	}
-	time.Sleep(150 * time.Millisecond)
-	view := output.String()
-	for _, want := range []string{"/help", "tab", "complete", "enter", "select", "go back"} {
-		if !strings.Contains(view, want) {
-			t.Fatalf("slash PTY output missing %q: %q", want, view)
+	waitForPTYOutput(t, &output, 2*time.Second, "slash command suggestions", func(view string) bool {
+		for _, want := range []string{"/help", "tab", "complete", "enter", "select", "go back"} {
+			if !strings.Contains(view, want) {
+				return false
+			}
 		}
-	}
+		return true
+	})
 	// First Ctrl+C clears the draft; the second exits the idle TUI.
+	beforeClear := output.Len()
 	_, _ = master.Write([]byte{3})
-	time.Sleep(50 * time.Millisecond)
+	waitForPTYOutputAfter(t, &output, beforeClear, "slash draft clear after Ctrl+C")
 	_, _ = master.Write([]byte{3})
 	if err := cmd.Wait(); err != nil && ctx.Err() != nil {
 		t.Fatalf("TUI did not exit before timeout: %v", err)
@@ -664,16 +702,26 @@ func TestE2ETUIKeyboardProtocolFromRealPTY(t *testing.T) {
 			}
 		}
 	}()
-	time.Sleep(150 * time.Millisecond)
 	// Simulate a terminal acknowledging basic Kitty keyboard disambiguation.
+	waitForPTYOutput(t, &output, 2*time.Second, "TUI raw mode", func(view string) bool {
+		return strings.Contains(view, "\x1b[?2004h")
+	})
 	_, _ = master.Write([]byte("\x1b[?1u"))
-	time.Sleep(75 * time.Millisecond)
+	waitForPTYOutput(t, &output, 2*time.Second, "keyboard capability update", func(view string) bool {
+		return strings.Contains(view, `"to":"disambiguated"`)
+	})
 	_, _ = master.Write([]byte("\x1b[13;5u"))
-	time.Sleep(75 * time.Millisecond)
+	waitForPTYOutput(t, &output, 2*time.Second, "Ctrl+Enter key event", func(view string) bool {
+		return strings.Contains(view, `"key":"ctrl+enter"`)
+	})
 	_, _ = master.Write([]byte{10})
-	time.Sleep(75 * time.Millisecond)
+	waitForPTYOutput(t, &output, 2*time.Second, "Ctrl+J key event", func(view string) bool {
+		return strings.Contains(view, `"key":"ctrl+j"`)
+	})
 	_, _ = master.Write([]byte{'\r'})
-	time.Sleep(75 * time.Millisecond)
+	waitForPTYOutput(t, &output, 2*time.Second, "Enter key event", func(view string) bool {
+		return strings.Contains(view, `"key":"enter"`)
+	})
 	_, _ = master.Write([]byte{3})
 	if err := cmd.Wait(); err != nil && ctx.Err() != nil {
 		t.Fatalf("TUI did not exit before timeout: %v", err)

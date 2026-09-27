@@ -57,32 +57,47 @@ func NewEdit(workspaceRoot *workspace.Workspace, store checkpoint.Store) tool.Ha
 
 func (h editHandler) Definition() tool.Definition {
 	return tool.Definition{
-		Name:        tool.NameEdit,
-		Description: "Edit workspace files. Use action=write to create/replace a full file, replace for exact text replacement, patch for a bounded multi-file patch, or restore for a Protonman checkpoint.",
-		Kind:        tool.KindEdit,
-		Mutability:  tool.MutabilityMutating,
-		Safety:      tool.SafetyContract{MutationDomain: tool.MutationDomainWorkspace, MutationSafety: tool.MutationSafetyDynamic, CheckpointPolicy: tool.CheckpointPolicyWhenKnown, Boundary: tool.BoundaryPolicyWorkspaceWrite},
-		Semantics:   h.callSemantics,
-		InputAliases: map[string][]string{
-			"filePath":       {"path", "filepath"},
-			"expectedSha256": {"sha256"},
+		Name:         tool.NameEdit,
+		Description:  "Edit workspace files. Use action=write to create/replace a full file, replace for exact text replacement, patch for a bounded multi-file patch, or restore for a Protonman checkpoint.",
+		Kind:         tool.KindEdit,
+		Mutability:   tool.MutabilityMutating,
+		Safety:       tool.SafetyContract{MutationDomain: tool.MutationDomainWorkspace, MutationSafety: tool.MutationSafetyDynamic, CheckpointPolicy: tool.CheckpointPolicyWhenKnown, Boundary: tool.BoundaryPolicyWorkspaceWrite},
+		Semantics:    h.callSemantics,
+		InputAliases: editInputAliases(),
+		InputSchema:  editInputSchema(),
+	}
+}
+
+func editInputAliases() map[string][]string {
+	return map[string][]string{
+		"filePath":       {"path", "filepath"},
+		"expectedSha256": {"sha256"},
+	}
+}
+
+func editInputSchema() map[string]any {
+	properties := map[string]any{
+		"action":         map[string]any{"type": "string", "enum": []string{"write", "replace", "patch", "restore"}, "description": "Edit operation to perform"},
+		"filePath":       map[string]any{"type": "string", "description": "Workspace-relative file path"},
+		"content":        map[string]any{"type": "string", "description": "Complete UTF-8 file content for write"},
+		"expectedSha256": map[string]any{"type": "string", "description": "SHA-256 from a complete read result when overwriting an existing file"},
+		"oldString":      map[string]any{"type": "string", "description": "Exact text to replace"},
+		"newString":      map[string]any{"type": "string", "description": "Replacement text"},
+		"replaceAll":     map[string]any{"type": "boolean", "description": "Replace all exact matches"},
+		"patch":          map[string]any{"type": "string", "description": "Patch enclosed by *** Begin Patch and *** End Patch"},
+		"checkpointId":   map[string]any{"type": "string", "description": "Checkpoint identifier to restore"},
+	}
+	return map[string]any{
+		"type":       "object",
+		"properties": properties,
+		"oneOf": []any{
+			map[string]any{"properties": map[string]any{"action": map[string]any{"const": "write"}}, "required": []string{"action", "filePath", "content"}},
+			map[string]any{"properties": map[string]any{"action": map[string]any{"const": "replace"}}, "required": []string{"action", "filePath", "oldString", "newString"}},
+			map[string]any{"properties": map[string]any{"action": map[string]any{"const": "patch"}}, "required": []string{"action", "patch"}},
+			map[string]any{"properties": map[string]any{"action": map[string]any{"const": "restore"}}, "required": []string{"action", "checkpointId"}},
 		},
-		InputSchema: map[string]any{
-			"type": "object",
-			"properties": map[string]any{
-				"action":         map[string]any{"type": "string", "enum": []string{"write", "replace", "patch", "restore"}, "description": "Edit operation to perform"},
-				"filePath":       map[string]any{"type": "string", "description": "Workspace-relative file path for write or replace"},
-				"content":        map[string]any{"type": "string", "description": "Complete UTF-8 file content for write"},
-				"expectedSha256": map[string]any{"type": "string", "description": "SHA-256 from a complete read result when overwriting an existing file"},
-				"oldString":      map[string]any{"type": "string", "description": "Exact text to replace"},
-				"newString":      map[string]any{"type": "string", "description": "Replacement text"},
-				"replaceAll":     map[string]any{"type": "boolean", "description": "Replace all exact matches"},
-				"patch":          map[string]any{"type": "string", "description": "Patch enclosed by *** Begin Patch and *** End Patch"},
-				"checkpointId":   map[string]any{"type": "string", "description": "Checkpoint identifier to restore"},
-			},
-			"required":             []string{"action"},
-			"additionalProperties": false,
-		},
+		"required":             []string{"action"},
+		"additionalProperties": false,
 	}
 }
 

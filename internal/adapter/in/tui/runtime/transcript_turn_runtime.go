@@ -4,12 +4,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	tuihistory "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/history"
 	tuipresentation "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/presentation"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/toolview"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/app"
+	corememory "github.com/phongsathornpt/protonman/internal/core/memory"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/proton-sdk/domain"
 )
@@ -47,7 +49,12 @@ func (m *bubbleModel) applyTurnEvent(event app.Event) {
 		m.turnProgress.Round = event.Round
 	}
 	switch event.Kind {
+	case app.EventReasoningDelta:
+		m.turnProgress.Retry = domain.RetryEvent{}
+		m.activity = "thinking"
+		m.appendReasoningDelta(event.Text)
 	case app.EventTextDelta:
+		m.finalizeActiveReasoning()
 		m.turnProgress.Retry = domain.RetryEvent{}
 		m.activity = ""
 		m.appendAssistantDelta(event.Text)
@@ -55,6 +62,7 @@ func (m *bubbleModel) applyTurnEvent(event app.Event) {
 		m.turnProgress.Retry = event.Retry
 		m.activity = "retrying"
 	case app.EventToolCall:
+		m.finalizeActiveReasoning()
 		m.turnProgress.Retry = domain.RetryEvent{}
 		m.turnProgress.ToolCalls++
 		m.appendToolCall(event.Call)
@@ -69,12 +77,79 @@ func (m *bubbleModel) applyTurnEvent(event app.Event) {
 		m.applyToolResult(event.Call.Name, result, event.Err)
 		m.syncTodoSnapshot()
 		m.activity = ""
+	case app.EventMemoryActivity:
+		m.appendMemoryActivity(event.MemoryActivity)
 	case app.EventCompleted:
+		m.finalizeActiveReasoning()
 		m.turnProgress.Retry = domain.RetryEvent{}
 		m.ensureHistoryState().CommitActive()
 	case app.EventFailed:
+		m.finalizeActiveReasoning()
 		m.turnProgress.Retry = domain.RetryEvent{}
 		m.appendTurnFailure(event.Err)
+	}
+}
+
+func (m *bubbleModel) appendReasoningDelta(text string) {
+	if text == "" {
+		return
+	}
+	history := m.ensureHistoryState()
+	reasoning := history.ActiveReasoning()
+	if reasoning == nil {
+		reasoning = history.StartReasoning(m.spinnerIndicator(), m.icons)
+	}
+	reasoning.Content += text
+	history.InvalidateCache()
+	m.requestRelayout()
+}
+
+func (m *bubbleModel) finalizeActiveReasoning() {
+	history := m.ensureHistoryState()
+	if reasoning := history.ActiveReasoning(); reasoning != nil && reasoning.Streaming {
+		reasoning.Streaming = false
+		reasoning.SetExpanded(false)
+		if reasoning.Duration == 0 && !reasoning.StartedAt.IsZero() {
+			reasoning.Duration = time.Since(reasoning.StartedAt)
+		}
+		history.CommitActive()
+		m.requestRelayout()
+	}
+}
+
+func (m *bubbleModel) appendMemoryActivity(activity corememory.Activity) {
+	text := memoryActivityText(activity)
+	if text == "" {
+		return
+	}
+	m.ensureHistoryState().Append(&tuihistory.MemoryActivityCell{Text: text})
+}
+
+func memoryActivityText(activity corememory.Activity) string {
+	total := activity.WorkspaceEntries + activity.GlobalEntries
+	plural := "items"
+	if total == 1 {
+		plural = "item"
+	}
+	scopes := make([]string, 0, 2)
+	if activity.WorkspaceEntries > 0 {
+		scopes = append(scopes, fmt.Sprintf("workspace %d", activity.WorkspaceEntries))
+	}
+	if activity.GlobalEntries > 0 {
+		scopes = append(scopes, fmt.Sprintf("global %d", activity.GlobalEntries))
+	}
+	scopeSummary := strings.Join(scopes, ", ")
+	switch activity.Kind {
+	case corememory.ActivityContextIncluded:
+		return fmt.Sprintf("Included %d saved memory %s in model request (%s)", total, plural, scopeSummary)
+	case corememory.ActivityContextUnavailable:
+		return "Saved context could not be loaded; this request continues without it"
+	case corememory.ActivityEntriesSaved:
+		return fmt.Sprintf("Saved %d memory %s from prior sessions (%s)", total, plural, scopeSummary)
+	case corememory.ActivityUpdateFailed:
+		return "Background memory update failed; no successful save was confirmed"
+	default:
+		return ""
 	}
 }
 

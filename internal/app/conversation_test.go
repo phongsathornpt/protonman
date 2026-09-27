@@ -128,16 +128,12 @@ func TestSubagentRuntimeContextOptionalChildIsNonBlockingAndFinalized(t *testing
 		t.Fatal("optional child must not hold the completion barrier")
 	}
 	provider.Finalize(ctx)
-	deadline := time.Now().Add(time.Second)
-	for time.Now().Before(deadline) {
-		status, ok := coord.Get(handle.ID)
-		if ok && status.State.Terminal() {
-			return
-		}
-		time.Sleep(time.Millisecond)
+	if _, err := coord.Wait(ctx, handle.ID, time.Second); err != nil {
+		t.Fatalf("wait for optional child finalization: %v", err)
 	}
-	status, _ := coord.Get(handle.ID)
-	t.Fatalf("optional child remained live after finalization: %+v", status)
+	if status, ok := coord.Get(handle.ID); !ok || !status.State.Terminal() {
+		t.Fatalf("optional child remained live after finalization: %+v", status)
+	}
 }
 
 func TestSubagentRuntimeContextMarksDeliveredResultConsumed(t *testing.T) {
@@ -198,17 +194,10 @@ func TestSubagentRuntimeContextFinalizeCancelsRequiredChild(t *testing.T) {
 	}
 	provider := newSubagentRuntimeContextProvider(NewAgents(coord))
 	provider.Finalize(ctx)
-	deadline := time.Now().Add(time.Second)
-	for time.Now().Before(deadline) {
-		status, ok := coord.Get(handle.ID)
-		if ok && status.State.Terminal() {
-			if status.State != agent.StateCanceled {
-				t.Fatalf("required child state=%s, want canceled", status.State)
-			}
-			return
-		}
-		time.Sleep(time.Millisecond)
+	if _, err := coord.Wait(ctx, handle.ID, time.Second); err != nil {
+		t.Fatalf("wait for required child finalization: %v", err)
 	}
-	status, _ := coord.Get(handle.ID)
-	t.Fatalf("required child remained live after parent finalization: %+v", status)
+	if status, ok := coord.Get(handle.ID); !ok || status.State != agent.StateCanceled {
+		t.Fatalf("required child state=%v, want canceled", status)
+	}
 }

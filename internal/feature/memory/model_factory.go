@@ -107,6 +107,8 @@ type modelFactory struct {
 	sessions         session.Repository
 	retriever        *Retriever
 	policy           runtimepolicy.MemoryPolicy
+	observerMu       sync.RWMutex
+	observer         corememory.ActivityObserver
 	backgroundCtx    context.Context
 	cancelBackground context.CancelFunc
 	binding          sessionBinding
@@ -130,6 +132,27 @@ func (f *modelFactory) BindSession(sessionID, workspaceKey string) {
 	f.binding.bind(sessionID, workspaceKey)
 }
 
+func (f *modelFactory) SetActivityObserver(observer corememory.ActivityObserver) {
+	if f == nil {
+		return
+	}
+	f.observerMu.Lock()
+	f.observer = observer
+	f.observerMu.Unlock()
+}
+
+func (f *modelFactory) observeActivity(activity corememory.Activity) {
+	if f == nil {
+		return
+	}
+	f.observerMu.RLock()
+	observer := f.observer
+	f.observerMu.RUnlock()
+	if observer != nil {
+		observer(activity)
+	}
+}
+
 // BaseFactory returns the undecorated provider-neutral factory this decorator
 // wraps. Subagent admission must build from it so child turns never load or
 // write durable memory.
@@ -147,7 +170,9 @@ func (f *modelFactory) Build(request modelclient.Request) port.LanguageModel {
 	}
 	bound, currentSessionID, workspaceKey := f.binding.snapshot()
 	if f.sessions != nil && bound && f.binding.claimExtraction(currentSessionID) {
-		NewExtractor(f.sessions, f.repository, base, currentSessionID, workspaceKey, f.policy).StartBackground(f.backgroundCtx)
+		extractor := NewExtractor(f.sessions, f.repository, base, currentSessionID, workspaceKey, f.policy)
+		extractor.SetActivityObserver(f.observeActivity)
+		extractor.StartBackground(f.backgroundCtx)
 	}
 	model := &memoryLanguageModel{
 		base:      base,
@@ -196,7 +221,10 @@ func (m *memoryLanguageModel) PrepareRequest(ctx context.Context, request domain
 	if index < 0 || queryText == "" {
 		return request, nil
 	}
-	memoryContext := m.contextFor(ctx, queryKey, queryText)
+	memoryContext, err := m.contextFor(ctx, queryKey, queryText)
+	if err != nil {
+		return domain.Request{}, err
+	}
 	if memoryContext == "" {
 		return request, nil
 	}
@@ -213,13 +241,13 @@ func (m *memoryLanguageModel) PrepareRequest(ctx context.Context, request domain
 	return request, nil
 }
 
-func (m *memoryLanguageModel) contextFor(ctx context.Context, queryKey, queryText string) string {
+func (m *memoryLanguageModel) contextFor(ctx context.Context, queryKey, queryText string) (string, error) {
 	if m.retriever == nil {
-		return ""
+		return "", nil
 	}
 	bound, _, workspaceKey := m.binding.snapshot()
 	if !bound || workspaceKey == "" {
-		return ""
+		return "", nil
 	}
 	// A rebind (TUI session switch) must invalidate the cached retrieval so a
 	// previous session's memory cannot be injected into the new session. The
@@ -229,18 +257,32 @@ func (m *memoryLanguageModel) contextFor(ctx context.Context, queryKey, queryTex
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if cacheKey == m.lastQueryKey {
-		return m.lastContext
+		return m.lastContext, nil
 	}
 	entries, err := m.retriever.Retrieve(ctx, Query{WorkspaceKey: workspaceKey, Text: queryText})
 	if err != nil {
 		slog.DebugContext(ctx, "memory retrieval unavailable", "error", err)
+		if reportErr := corememory.ReportActivity(ctx, corememory.Activity{Kind: corememory.ActivityContextUnavailable}); reportErr != nil {
+			return "", reportErr
+		}
 		m.lastQueryKey = cacheKey
 		m.lastContext = ""
-		return ""
+		return "", nil
+	}
+	memoryContext, workspaceCount, globalCount := renderContext(entries, m.policy)
+	if memoryContext != "" {
+		activity := corememory.Activity{
+			Kind:             corememory.ActivityContextIncluded,
+			WorkspaceEntries: workspaceCount,
+			GlobalEntries:    globalCount,
+		}
+		if reportErr := corememory.ReportActivity(ctx, activity); reportErr != nil {
+			return "", reportErr
+		}
 	}
 	m.lastQueryKey = cacheKey
-	m.lastContext = RenderContext(entries, m.policy)
-	return m.lastContext
+	m.lastContext = memoryContext
+	return m.lastContext, nil
 }
 
 type profiledMemoryLanguageModel struct {

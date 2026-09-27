@@ -28,6 +28,19 @@ func validatorsForRegistry(registry tool.Registry, definition tool.Definition) (
 	return compileDefinitionValidators(definition)
 }
 
+func initialValidatorsForRegistry(registry tool.Registry, definition tool.Definition) (compiledToolValidators, error) {
+	if snapshots, ok := registry.(tool.SnapshotRegistry); ok {
+		snapshot, found := snapshots.LookupSnapshot(definition.Name)
+		if found {
+			if snapshot.ValidatorsCompiled {
+				return compiledToolValidators{input: snapshot.InputValidator, output: snapshot.OutputValidator}, nil
+			}
+			return compileDefinitionValidators(snapshot.Definition)
+		}
+	}
+	return validatorsForRegistry(registry, definition)
+}
+
 func structuredJSONType(raw json.RawMessage) string {
 	value := bytes.TrimSpace(raw)
 	if len(value) == 0 {
@@ -66,15 +79,27 @@ func compileDefinitionValidators(definition tool.Definition) (compiledToolValida
 }
 
 func (s *Service) validatorsFor(definition tool.Definition) (compiledToolValidators, error) {
-	s.mu.RLock()
-	validators, ok := s.validators[definition.Name]
-	s.mu.RUnlock()
-	if ok {
-		return validators, nil
+	_, dynamic := s.registry.(tool.DynamicRegistrar)
+	if !dynamic {
+		s.mu.RLock()
+		validators, ok := s.validators[definition.Name]
+		s.mu.RUnlock()
+		if ok {
+			return validators, nil
+		}
 	}
-	compiled, err := validatorsForRegistry(s.registry, definition)
+	var compiled compiledToolValidators
+	var err error
+	if dynamic {
+		compiled, err = compileDefinitionValidators(definition)
+	} else {
+		compiled, err = validatorsForRegistry(s.registry, definition)
+	}
 	if err != nil {
 		return compiledToolValidators{}, err
+	}
+	if dynamic {
+		return compiled, nil
 	}
 	s.mu.Lock()
 	if existing, exists := s.validators[definition.Name]; exists {

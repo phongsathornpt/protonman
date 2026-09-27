@@ -15,7 +15,9 @@ const (
 	HistoryCellAssistant
 	HistoryCellTool
 	HistoryCellSystem
+	HistoryCellMemory
 	HistoryCellError
+	HistoryCellReasoning
 )
 
 // String returns the human-readable spelling of a history cell kind.
@@ -29,8 +31,12 @@ func (k HistoryCellKind) String() string {
 		return "tool"
 	case HistoryCellSystem:
 		return "system"
+	case HistoryCellMemory:
+		return "memory"
 	case HistoryCellError:
 		return "error"
+	case HistoryCellReasoning:
+		return "reasoning"
 	default:
 		return "unknown"
 	}
@@ -46,6 +52,15 @@ type HistoryCell interface {
 	RenderWidth(width int) []string
 	RawLines() []string
 	LineCount() int
+}
+
+// CollapsibleCell is a HistoryCell that can be expanded or collapsed inline.
+type CollapsibleCell interface {
+	HistoryCell
+	IsExpanded() bool
+	SetExpanded(expanded bool)
+	ToggleExpanded()
+	CanExpand() bool
 }
 
 func renderHistoryCell(cell HistoryCell, width int) []string {

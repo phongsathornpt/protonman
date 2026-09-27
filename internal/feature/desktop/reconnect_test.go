@@ -45,8 +45,14 @@ func TestMarkAgentDisconnectedOnlyPausesOwnedSessions(t *testing.T) {
 	state := State{Sessions: []SessionState{
 		{ID: "proton", AgentID: "protonman", Status: TaskRunning},
 		{ID: "agy", AgentID: "antigravity", Status: TaskRunning},
+	}, PermissionInbox: []PermissionRequest{
+		{RequestID: "proton-permission", SessionID: "proton"},
+		{RequestID: "agy-permission", SessionID: "agy"},
 	}}
 	next := MarkAgentDisconnected(state, "antigravity")
 	assertStatus(t, next, "proton", TaskRunning)
 	assertStatus(t, next, "agy", TaskPaused)
+	if len(next.PermissionInbox) != 1 || next.PermissionInbox[0].RequestID != "proton-permission" {
+		t.Fatalf("permission inbox = %#v", next.PermissionInbox)
+	}
 }

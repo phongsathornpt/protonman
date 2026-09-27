@@ -9,31 +9,40 @@ import (
 // their trailing space so every profile preserves the same layout contract.
 // Brand and Status are bare marks because callers compose their spacing.
 type IconSet struct {
-	Composer    string
-	Prompt      string
-	Mark        string
-	Tool        string
-	ToolSuccess string
-	ToolError   string
-	ToolDenied  string
-	Web         string
-	Read        string
-	Dir         string
-	Search      string
-	Exec        string
-	Edit        string
-	Skill       string
-	Agent       string
-	Git         string
-	Generic     string
-	TodoPending string
-	TodoActive  string
-	Brand       string
-	Status      string
-	Attachment  string
-	Image       string
-	Link        string
-	Vision      string
+	Composer        string
+	Prompt          string
+	Mark            string
+	Tool            string
+	ToolSuccess     string
+	ToolError       string
+	ToolDenied      string
+	Web             string
+	Read            string
+	Dir             string
+	Search          string
+	Exec            string
+	Edit            string
+	Skill           string
+	Agent           string
+	Git             string
+	Generic         string
+	TodoPending     string
+	TodoActive      string
+	Brand           string
+	Status          string
+	Attachment      string
+	Image           string
+	Link            string
+	Vision          string
+	Thought         string
+	FoldCollapsed   string
+	FoldExpanded    string
+	CardTopLeft     string
+	CardTopRight    string
+	CardBottomLeft  string
+	CardBottomRight string
+	CardVertical    string
+	CardHorizontal  string
 }
 
 // IconMode selects the terminal glyph capability profile.
@@ -49,60 +58,78 @@ const (
 // intentionally the historical ASCII prompt; Prompt is the existing Unicode
 // selection marker used elsewhere in the TUI.
 const (
-	UnicodeComposer    = "> "
-	UnicodePrompt      = "› "
-	UnicodeMark        = "› "
-	UnicodeTool        = "$ "
-	UnicodeToolSuccess = "✓ "
-	UnicodeToolError   = "× "
-	UnicodeToolDenied  = "! "
-	UnicodeWeb         = "↗ "
-	UnicodeRead        = "≡ "
-	UnicodeDir         = "▸ "
-	UnicodeSearch      = "? "
-	UnicodeExec        = "$ "
-	UnicodeEdit        = "+ "
-	UnicodeSkill       = "* "
-	UnicodeAgent       = "→ "
-	UnicodeGit         = "⌥ "
-	UnicodeGeneric     = "· "
-	UnicodeTodoPending = "○ "
-	UnicodeTodoActive  = "● "
-	UnicodeBrand       = "◆"
-	UnicodeStatus      = "◌"
-	UnicodeAttachment  = "📎 "
-	UnicodeImage       = "🖼  "
-	UnicodeLink        = "↗ "
-	UnicodeVision      = "◉ "
+	UnicodeComposer        = "> "
+	UnicodePrompt          = "› "
+	UnicodeMark            = "› "
+	UnicodeTool            = "$ "
+	UnicodeToolSuccess     = "✓ "
+	UnicodeToolError       = "× "
+	UnicodeToolDenied      = "! "
+	UnicodeWeb             = "↗ "
+	UnicodeRead            = "≡ "
+	UnicodeDir             = "▸ "
+	UnicodeSearch          = "? "
+	UnicodeExec            = "$ "
+	UnicodeEdit            = "+ "
+	UnicodeSkill           = "* "
+	UnicodeAgent           = "→ "
+	UnicodeGit             = "⌥ "
+	UnicodeGeneric         = "· "
+	UnicodeTodoPending     = "○ "
+	UnicodeTodoActive      = "● "
+	UnicodeBrand           = "◆"
+	UnicodeStatus          = "◌"
+	UnicodeAttachment      = "📎 "
+	UnicodeImage           = "🖼  "
+	UnicodeLink            = "↗ "
+	UnicodeVision          = "◉ "
+	UnicodeThought         = "◈ "
+	UnicodeFoldCollapsed   = "▶ "
+	UnicodeFoldExpanded    = "▼ "
+	UnicodeCardTopLeft     = "╭"
+	UnicodeCardTopRight    = "╮"
+	UnicodeCardBottomLeft  = "╰"
+	UnicodeCardBottomRight = "╯"
+	UnicodeCardVertical    = "│"
+	UnicodeCardHorizontal  = "─"
 )
 
 // ASCII profile is safe for dumb terminals, redirected output, and logs.
 const (
-	ASCIIComposer    = "> "
-	ASCIIPrompt      = "> "
-	ASCIIMark        = "> "
-	ASCIITool        = "$ "
-	ASCIIToolSuccess = "+ "
-	ASCIIToolError   = "x "
-	ASCIIToolDenied  = "! "
-	ASCIIWeb         = "> "
-	ASCIIRead        = "= "
-	ASCIIDir         = "> "
-	ASCIISearch      = "? "
-	ASCIIExec        = "$ "
-	ASCIIEdit        = "+ "
-	ASCIISkill       = "* "
-	ASCIIAgent       = "> "
-	ASCIIGit         = "@ "
-	ASCIIGeneric     = ". "
-	ASCIITodoPending = "o "
-	ASCIITodoActive  = "* "
-	ASCIIBrand       = "*"
-	ASCIIStatus      = "o"
-	ASCIIAttachment  = "@ "
-	ASCIIImage       = "# "
-	ASCIILink        = "> "
-	ASCIIVision      = "* "
+	ASCIIComposer        = "> "
+	ASCIIPrompt          = "> "
+	ASCIIMark            = "> "
+	ASCIITool            = "$ "
+	ASCIIToolSuccess     = "+ "
+	ASCIIToolError       = "x "
+	ASCIIToolDenied      = "! "
+	ASCIIWeb             = "> "
+	ASCIIRead            = "= "
+	ASCIIDir             = "> "
+	ASCIISearch          = "? "
+	ASCIIExec            = "$ "
+	ASCIIEdit            = "+ "
+	ASCIISkill           = "* "
+	ASCIIAgent           = "> "
+	ASCIIGit             = "@ "
+	ASCIIGeneric         = ". "
+	ASCIITodoPending     = "o "
+	ASCIITodoActive      = "* "
+	ASCIIBrand           = "*"
+	ASCIIStatus          = "o"
+	ASCIIAttachment      = "@ "
+	ASCIIImage           = "# "
+	ASCIILink            = "> "
+	ASCIIVision          = "* "
+	ASCIIThought         = "* "
+	ASCIIFoldCollapsed   = "> "
+	ASCIIFoldExpanded    = "v "
+	ASCIICardTopLeft     = "+"
+	ASCIICardTopRight    = "+"
+	ASCIICardBottomLeft  = "+"
+	ASCIICardBottomRight = "+"
+	ASCIICardVertical    = "|"
+	ASCIICardHorizontal  = "-"
 )
 
 var (
@@ -114,6 +141,10 @@ var (
 		Generic: UnicodeGeneric, TodoPending: UnicodeTodoPending, TodoActive: UnicodeTodoActive,
 		Brand: UnicodeBrand, Status: UnicodeStatus,
 		Attachment: UnicodeAttachment, Image: UnicodeImage, Link: UnicodeLink, Vision: UnicodeVision,
+		Thought: UnicodeThought, FoldCollapsed: UnicodeFoldCollapsed, FoldExpanded: UnicodeFoldExpanded,
+		CardTopLeft: UnicodeCardTopLeft, CardTopRight: UnicodeCardTopRight,
+		CardBottomLeft: UnicodeCardBottomLeft, CardBottomRight: UnicodeCardBottomRight,
+		CardVertical: UnicodeCardVertical, CardHorizontal: UnicodeCardHorizontal,
 	}
 	ASCIIIcons = IconSet{
 		Composer: ASCIIComposer, Prompt: ASCIIPrompt, Mark: ASCIIMark, Tool: ASCIITool,
@@ -123,6 +154,10 @@ var (
 		Generic: ASCIIGeneric, TodoPending: ASCIITodoPending, TodoActive: ASCIITodoActive,
 		Brand: ASCIIBrand, Status: ASCIIStatus,
 		Attachment: ASCIIAttachment, Image: ASCIIImage, Link: ASCIILink, Vision: ASCIIVision,
+		Thought: ASCIIThought, FoldCollapsed: ASCIIFoldCollapsed, FoldExpanded: ASCIIFoldExpanded,
+		CardTopLeft: ASCIICardTopLeft, CardTopRight: ASCIICardTopRight,
+		CardBottomLeft: ASCIICardBottomLeft, CardBottomRight: ASCIICardBottomRight,
+		CardVertical: ASCIICardVertical, CardHorizontal: ASCIICardHorizontal,
 	}
 )
 

@@ -40,7 +40,9 @@ func (l *Loop) effectivePromptSpec(definitions []tool.Definition, extras []strin
 		case tool.KindTask:
 			spec.Capabilities.Tasks = true
 		case tool.KindAgent:
-			spec.Capabilities.Agents = true
+			if agentToolCanSpawn(definition) {
+				spec.Capabilities.Agents = true
+			}
 		case tool.KindMCP:
 			spec.Capabilities.MCP = true
 		}
@@ -63,6 +65,39 @@ func (l *Loop) effectivePromptSpec(definitions []tool.Definition, extras []strin
 	}
 	spec.ExtraInstructions = append(append([]string(nil), l.promptSpec.ExtraInstructions...), extras...)
 	return spec
+}
+
+func agentToolCanSpawn(definition tool.Definition) bool {
+	if definition.Name != tool.NameSubagent {
+		return true
+	}
+	properties, ok := definition.InputSchema["properties"].(map[string]any)
+	if !ok {
+		return true
+	}
+	action, ok := properties["action"].(map[string]any)
+	if !ok {
+		return true
+	}
+	enum, constrained := action["enum"]
+	if !constrained {
+		return true
+	}
+	switch values := enum.(type) {
+	case []string:
+		for _, value := range values {
+			if value == tool.ActionSpawn {
+				return true
+			}
+		}
+	case []any:
+		for _, value := range values {
+			if value == tool.ActionSpawn {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func messagesContainImages(messages []model.Message) bool {

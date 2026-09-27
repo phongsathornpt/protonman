@@ -75,7 +75,7 @@ func TestBuildRuntimeRepairsOpenCodeSelectionWithoutModel(t *testing.T) {
     "opencode": {
       "name": "opencode",
       "type": "openai",
-      "base_url": "https://opencode.ai/zen/v1"
+      "base_url": "https://opencode.ai/inference/openai/v1"
     }
   },
   "model": {
@@ -135,7 +135,7 @@ func TestBuildRuntimeFallsBackToOpenCodeWhenSavedProviderIsMissing(t *testing.T)
     "opencode": {
       "name": "opencode",
       "type": "openai",
-      "base_url": "https://opencode.ai/zen/v1"
+      "base_url": "https://opencode.ai/inference/openai/v1"
     },
     "protonman": {
       "name": "protonman",

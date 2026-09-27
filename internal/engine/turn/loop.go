@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
+	corememory "github.com/phongsathornpt/protonman/internal/core/memory"
 	"github.com/phongsathornpt/protonman/internal/core/modelprofile"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/core/workspace"
@@ -121,12 +122,16 @@ type EventKind string
 const (
 	// EventTextDelta forwards streamed model text.
 	EventTextDelta EventKind = "text_delta"
+	// EventReasoningDelta forwards streamed model reasoning text.
+	EventReasoningDelta EventKind = "reasoning_delta"
 	// EventToolCall reports a validated tool call before permission evaluation.
 	EventToolCall EventKind = "tool_call"
 	// EventToolResult reports the terminal result of a permission-aware call.
 	EventToolResult EventKind = "tool_result"
 	// EventRetryScheduled reports a bounded model/provider retry before its wait begins.
 	EventRetryScheduled EventKind = "retry_scheduled"
+	// EventMemoryActivity reports when durable memory is included in a model request or unavailable.
+	EventMemoryActivity EventKind = "memory_activity"
 	// EventCompleted marks a final model response with no further tool calls.
 	EventCompleted EventKind = "completed"
 	// EventFailed reports a terminal loop failure.
@@ -135,14 +140,15 @@ const (
 
 // Event is one progress or terminal notification from a model/tool turn.
 type Event struct {
-	Kind    EventKind
-	Round   int
-	Text    string
-	Call    tool.Call
-	Result  tool.Result
-	Retry   domain.RetryEvent
-	Message model.Message
-	Err     error
+	Kind           EventKind
+	Round          int
+	Text           string
+	Call           tool.Call
+	Result         tool.Result
+	Retry          domain.RetryEvent
+	Message        model.Message
+	MemoryActivity corememory.Activity
+	Err            error
 }
 
 // Sink receives loop events in emission order.
@@ -321,6 +327,10 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 	if sink == nil {
 		sink = func(context.Context, Event) error { return nil }
 	}
+	activityContext := ctx
+	ctx = corememory.WithActivitySink(ctx, func(_ context.Context, activity corememory.Activity) error {
+		return emit(activityContext, sink, Event{Kind: EventMemoryActivity, MemoryActivity: activity})
+	})
 	startedAt := time.Now()
 	terminalReason := "unknown"
 	roundsCompleted := 0

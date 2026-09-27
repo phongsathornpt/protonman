@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	tea "charm.land/bubbletea/v2"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -324,6 +325,22 @@ func TestErrorCellToolFailureKeepsTargetAndDiscoveryCompact(t *testing.T) {
 	for _, line := range strings.Split(narrow, "\n") {
 		if strings.HasPrefix(strings.TrimLeft(line, " "), "internal/base") && !strings.HasPrefix(line, "  ") {
 			t.Fatalf("wrapped target lost indentation: %q", line)
+		}
+	}
+}
+
+func TestErrorCellToolFailureShowsDiagnosticAlongsideTarget(t *testing.T) {
+	cell := &ErrorCell{
+		ErrorKind: ErrorKindToolFailed,
+		Title:     "Read",
+		Target:    "internal/core/tool/tool.go",
+		Badge:     "invalid_arguments",
+		Text:      "read endLine must be greater than or equal to startLine",
+	}
+	rendered := ansi.Strip(strings.Join(cell.RenderWidth(80), "\n"))
+	for _, want := range []string{"invalid arguments", "internal/core/tool/tool.go", "endLine must be greater than or equal to startLine"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("tool failure missing %q:\n%s", want, rendered)
 		}
 	}
 }
@@ -810,6 +827,61 @@ func TestTranscriptOverlayIncludesLiveAssistantTail(t *testing.T) {
 	}
 }
 
+func TestTranscriptOverlayUsesTailDuringStreamingAndHydratesForScroll(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.resize(80, 24)
+	for i := 0; i < 70; i++ {
+		m.appendUser(fmt.Sprintf("question %02d with context", i))
+		m.appendAssistant("answer with **markdown** and enough detail to wrap across lines")
+	}
+	m.appendAssistantDelta(strings.Repeat("live response line\n", 20))
+	m.busy = true
+	m.panes.showTranscript = true
+	m.refreshTranscriptViewport(true)
+	_ = m.panes.transcript.View()
+	if !m.panes.transcriptTailOnly {
+		t.Fatal("live transcript did not use a bounded tail")
+	}
+	tailLines := m.panes.transcript.TotalLineCount()
+	fullLines := len(m.historyState.RenderLinesAt(max(1, m.panes.transcript.Width())))
+	if tailLines >= fullLines {
+		t.Fatalf("tail line count=%d, want fewer than full history=%d", tailLines, fullLines)
+	}
+
+	_ = m.updateTranscriptKey(testKey(tea.KeyPgUp))
+	if m.panes.transcriptTailOnly {
+		t.Fatal("scrolling did not hydrate full transcript history")
+	}
+	if m.panes.transcript.TotalLineCount() <= tailLines {
+		t.Fatalf("hydrated line count=%d, want more than bounded tail=%d", m.panes.transcript.TotalLineCount(), tailLines)
+	}
+	if m.panes.transcript.AtBottom() {
+		t.Fatalf("scroll-up did not move into transcript history: offset=%d height=%d lines=%d", m.panes.transcript.YOffset(), m.panes.transcript.Height(), m.panes.transcript.TotalLineCount())
+	}
+
+	m.appendAssistantDelta("latest delta")
+	m.refreshTranscriptViewport(false)
+	if !m.panes.transcriptTailStale {
+		t.Fatal("offscreen stream update did not mark transcript tail stale")
+	}
+	visibleLines := m.panes.transcript.TotalLineCount()
+	m.panes.transcript.GotoBottom()
+	m.refreshTranscriptViewport(false)
+	if !m.panes.transcriptTailOnly || m.panes.transcriptTailStale {
+		t.Fatalf("returning to live tail left tail_only=%v stale=%v", m.panes.transcriptTailOnly, m.panes.transcriptTailStale)
+	}
+	if m.panes.transcript.TotalLineCount() >= visibleLines {
+		t.Fatalf("return to tail kept full history lines=%d, previous full lines=%d", m.panes.transcript.TotalLineCount(), visibleLines)
+	}
+	if !strings.Contains(testPlain(m.panes.transcript.View()), "latest delta") {
+		t.Fatal("live transcript tail omitted the latest streamed delta")
+	}
+	m.updateMouseEvent(tea.MouseWheelMsg{Button: tea.MouseWheelUp})
+	if m.panes.transcriptTailOnly || m.panes.transcript.AtBottom() {
+		t.Fatalf("mouse scroll did not hydrate older transcript: tail_only=%v offset=%d lines=%d", m.panes.transcriptTailOnly, m.panes.transcript.YOffset(), m.panes.transcript.TotalLineCount())
+	}
+}
+
 func TestInitialMessagesRestoreIntoHistoryAndNextTurn(t *testing.T) {
 	registry, _ := newBubbleTestRegistry()
 	service := newBubbleTestService(t, registry, permission.ModeAsk, permission.Config{})
@@ -834,5 +906,120 @@ func TestRetryLifecycleUpdatesAndClearsTUIProgress(t *testing.T) {
 	m.applyTurnEvent(turn.Event{Kind: turn.EventTextDelta, Round: 1, Text: "recovered"})
 	if !m.turnProgress.Retry.RetryAt.IsZero() || m.activity != "" {
 		t.Fatalf("retry state not cleared after model output: %+v activity=%q", m.turnProgress.Retry, m.activity)
+	}
+}
+
+func TestTranscriptKeyboardNavigationMode(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.resize(80, 24)
+
+	reasoning := &ReasoningCell{Content: "streaming thoughts", Streaming: false}
+	reasoning.SetExpanded(false)
+	patch := &PatchCell{
+		Name:      "edit",
+		Diff:      "@@ -1,5 +1,15 @@\n+line1\n+line2\n+line3\n+line4\n+line5\n+line6\n+line7\n+line8\n+line9\n+line10",
+		Additions: 10,
+	}
+	m.historyState.Append(reasoning)
+	m.historyState.Append(patch)
+
+	collapsibles := m.historyState.CollapsibleCells()
+	if len(collapsibles) != 2 {
+		t.Fatalf("expected 2 collapsibles, got %d", len(collapsibles))
+	}
+
+	if m.navMode {
+		t.Fatal("expected navMode to be false initially")
+	}
+
+	// Press Esc with empty prompt -> enters navMode
+	m.Update(testKey(tea.KeyEsc))
+	if !m.navMode {
+		t.Fatal("expected Esc to enter navMode")
+	}
+	if m.focusedCellIndex != 1 {
+		t.Fatalf("expected focusedCellIndex=1, got %d", m.focusedCellIndex)
+	}
+	if !patch.Highlighted {
+		t.Fatal("expected patch to be highlighted")
+	}
+
+	// Press 'k' -> moves highlight to index 0 (reasoning)
+	m.Update(testText("k"))
+	if m.focusedCellIndex != 0 {
+		t.Fatalf("expected focusedCellIndex=0, got %d", m.focusedCellIndex)
+	}
+	if !reasoning.Highlighted || patch.Highlighted {
+		t.Fatal("expected reasoning highlighted and patch not highlighted")
+	}
+
+	// Press Enter -> toggles reasoning expansion
+	if reasoning.IsExpanded() {
+		t.Fatal("expected reasoning collapsed initially")
+	}
+	m.Update(testKey(tea.KeyEnter))
+	if !reasoning.IsExpanded() {
+		t.Fatal("expected Enter to expand reasoning")
+	}
+
+	// Press 'j' -> moves highlight back to index 1 (patch)
+	m.Update(testText("j"))
+	if m.focusedCellIndex != 1 {
+		t.Fatalf("expected focusedCellIndex=1, got %d", m.focusedCellIndex)
+	}
+
+	// Press Space -> toggles patch expansion
+	if patch.IsExpanded() {
+		t.Fatal("expected patch collapsed initially")
+	}
+	m.Update(testText(" "))
+	if !patch.IsExpanded() {
+		t.Fatal("expected Space to expand patch")
+	}
+
+	// Press 'i' -> exits navMode
+	m.Update(testText("i"))
+	if m.navMode {
+		t.Fatal("expected 'i' to exit navMode")
+	}
+	if reasoning.Highlighted || patch.Highlighted {
+		t.Fatal("expected highlights cleared after exiting navMode")
+	}
+
+	// Press Esc again -> re-enters navMode
+	m.Update(testKey(tea.KeyEsc))
+	if !m.navMode {
+		t.Fatal("expected Esc to enter navMode again")
+	}
+
+	// Press Esc again -> exits navMode
+	m.Update(testKey(tea.KeyEsc))
+	if m.navMode {
+		t.Fatal("expected Esc to exit navMode")
+	}
+}
+
+func TestTranscriptMouseClickTogglesCollapsible(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.resize(80, 24)
+
+	reasoning := &ReasoningCell{Content: "thinking steps", Streaming: false}
+	reasoning.SetExpanded(false)
+	m.historyState.Append(reasoning)
+
+	if reasoning.IsExpanded() {
+		t.Fatal("expected reasoning to be collapsed initially")
+	}
+
+	// Click on line 0 in the viewport
+	m.Update(tea.MouseClickMsg{X: 5, Y: 0, Button: tea.MouseLeft})
+	if !reasoning.IsExpanded() {
+		t.Fatal("expected mouse click to toggle reasoning expanded")
+	}
+
+	// Click again to collapse
+	m.Update(tea.MouseClickMsg{X: 5, Y: 0, Button: tea.MouseLeft})
+	if reasoning.IsExpanded() {
+		t.Fatal("expected mouse click to toggle reasoning collapsed")
 	}
 }

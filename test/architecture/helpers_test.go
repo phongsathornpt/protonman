@@ -26,9 +26,9 @@ var (
 )
 
 var (
-	desktopGraphOnce sync.Once
-	desktopGraph     map[string]listedPackage
-	desktopGraphErr  error
+	desktopGioGraphOnce sync.Once
+	desktopGioGraph     map[string]listedPackage
+	desktopGioGraphErr  error
 )
 
 func assertNoImports(t *testing.T, packages map[string]listedPackage, source string, forbidden []string) {
@@ -101,21 +101,16 @@ func listPackages(t *testing.T) map[string]listedPackage {
 	return packageGraph
 }
 
-// listDesktopPackages returns the repository package graph with the desktop
-// build tag enabled. The Fyne frontend in internal/adapter/in/desktop and
-// cmd/protonman-desktop is tag-gated, so it is absent from the default graph and
-// invisible to every guard that uses listPackages. Guards that must cover the
-// desktop subsystem use this loader.
-func listDesktopPackages(t *testing.T) map[string]listedPackage {
+func listDesktopGioPackages(t *testing.T) map[string]listedPackage {
 	t.Helper()
 	root := repositoryRoot(t)
-	desktopGraphOnce.Do(func() {
-		desktopGraph, desktopGraphErr = loadPackageGraph(root, "desktop")
+	desktopGioGraphOnce.Do(func() {
+		desktopGioGraph, desktopGioGraphErr = loadPackageGraph(root, "desktop")
 	})
-	if desktopGraphErr != nil {
-		t.Fatalf("load desktop package graph: %v", desktopGraphErr)
+	if desktopGioGraphErr != nil {
+		t.Fatalf("load Gio desktop package graph: %v", desktopGioGraphErr)
 	}
-	return desktopGraph
+	return desktopGioGraph
 }
 
 func loadPackages(root string) (map[string]listedPackage, error) {

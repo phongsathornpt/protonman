@@ -35,9 +35,44 @@ type PatchCell struct {
 	Retrying     bool   // Whether the patch is currently awaiting or executing a retry
 	LastError    string // Diagnostic message from the last failure
 	CheckpointID string // Durable pre-edit checkpoint identifier
+	Expanded     *bool  // Explicit fold override, or nil for smart fold default
+	Highlighted  bool   // Highlighted in transcript navigation mode
 }
 
 func (PatchCell) Kind() HistoryCellKind { return HistoryCellTool }
+
+func (c *PatchCell) IsExpanded() bool {
+	if c == nil {
+		return false
+	}
+	if c.Expanded != nil {
+		return *c.Expanded
+	}
+	if c.FailureCode != "" || c.Denied || c.Retrying {
+		return true
+	}
+	return (c.Additions + c.Deletions) <= 8
+}
+
+func (c *PatchCell) SetExpanded(expanded bool) {
+	if c != nil {
+		c.Expanded = &expanded
+	}
+}
+
+func (c *PatchCell) ToggleExpanded() {
+	if c != nil {
+		expanded := !c.IsExpanded()
+		c.Expanded = &expanded
+	}
+}
+
+func (c *PatchCell) CanExpand() bool {
+	if c == nil {
+		return false
+	}
+	return c.Diff != "" || c.LastError != "" || (c.Body != "" && (c.Denied || c.FailureCode != ""))
+}
 func (c PatchCell) RenderWidth(width int) []string {
 	width = max(1, width)
 	icons := tuistyle.OrUnicodeIcons(c.Icons)
@@ -136,6 +171,9 @@ func (c PatchCell) RenderWidth(width int) []string {
 	if metaText != "" {
 		headerLine += metaStyle.Render(metaText)
 	}
+	if c.Highlighted {
+		headerLine = tuistyle.NavHighlightStyle.Render("» ") + headerLine
+	}
 
 	out := make([]string, 0, 2)
 	for _, line := range wrapStyledLines(headerLine, width) {
@@ -184,22 +222,36 @@ func (c PatchCell) RenderWidth(width int) []string {
 			}
 		}
 
-		// C. Render syntax-colored diff preview (up to 5 lines) with progressive fold indicator
+		// C. Render syntax-colored diff preview with progressive fold indicator
 		if c.Diff != "" {
-			previewLines, remaining := toolview.ExtractDiffPreview(c.Diff, 5)
-			for _, line := range previewLines {
-				styled, isDiff := toolview.StyleDiffLine(line)
-				if !isDiff {
-					styled = tuistyle.MutedStyle.Render(line)
+			if !c.IsExpanded() {
+				foldIcon := icons.FoldCollapsed
+				totalLines := c.Additions + c.Deletions
+				if totalLines <= 0 {
+					totalLines = len(strings.Split(c.Diff, "\n"))
 				}
-				for _, wrapped := range safeWrappedLines(styled, max(1, width-2)) {
-					out = append(out, "  "+wrapped)
+				foldMsg := tuistyle.ToolFoldStyle.Render(fmt.Sprintf("  %sdiff (%d lines) · [click or Enter to expand]", foldIcon, totalLines))
+				out = append(out, foldMsg)
+			} else {
+				maxPreview := 5
+				if c.Expanded != nil && *c.Expanded {
+					maxPreview = 10000
 				}
-			}
-			if remaining > 0 {
-				foldMsg := tuistyle.ToolFoldStyle.Render(fmt.Sprintf("  … (+%d more lines · ctrl+t for full diff)", remaining))
-				for _, line := range wrapStyledLines(foldMsg, width) {
-					out = append(out, line)
+				previewLines, remaining := toolview.ExtractDiffPreview(c.Diff, maxPreview)
+				for _, line := range previewLines {
+					styled, isDiff := toolview.StyleDiffLine(line)
+					if !isDiff {
+						styled = tuistyle.MutedStyle.Render(line)
+					}
+					for _, wrapped := range safeWrappedLines(styled, max(1, width-2)) {
+						out = append(out, "  "+wrapped)
+					}
+				}
+				if remaining > 0 {
+					foldMsg := tuistyle.ToolFoldStyle.Render(fmt.Sprintf("  … (+%d more lines · ctrl+t for full diff)", remaining))
+					for _, line := range wrapStyledLines(foldMsg, width) {
+						out = append(out, line)
+					}
 				}
 			}
 		}
@@ -286,3 +338,5 @@ func (c PatchCell) LineCount() int           { return len(c.RawLines()) }
 func (c PatchCell) historyToolID() string    { return c.CallID }
 func (c PatchCell) historyToolName() string  { return c.Name }
 func (c PatchCell) historyToolRunning() bool { return c.Running }
+
+var _ CollapsibleCell = (*PatchCell)(nil)

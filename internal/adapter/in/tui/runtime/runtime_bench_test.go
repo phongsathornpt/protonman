@@ -11,6 +11,8 @@ import (
 	applicationturn "github.com/phongsathornpt/protonman/internal/engine/turn"
 )
 
+var tuiBenchmarkViewSink string
+
 func BenchmarkHistoryStateRenderLines50Cells(b *testing.B) {
 	state := NewHistoryState(1000)
 	for i := 0; i < 25; i++ {
@@ -146,6 +148,24 @@ func BenchmarkRefreshViewportStreamingLongHistory(b *testing.B) {
 	}
 }
 
+func BenchmarkRefreshVisibleTranscriptStreamingLongHistory(b *testing.B) {
+	m := newBubbleModel(context.Background(), nil, nil, nil, nil, newPermissionBridge(), "/tmp/proton")
+	m.busy = true
+	m.panes.showTranscript = true
+	m.resize(100, 30)
+	for i := 0; i < 250; i++ {
+		m.historyState.Append(&UserCell{Text: fmt.Sprintf("Question %d with enough text to represent a realistic long session", i)})
+		m.historyState.Append(&AssistantCell{Text: fmt.Sprintf("Answer %d with **markdown**, `code`, and a second line.\nMore detail here.", i)})
+	}
+	m.historyState.AppendAssistantDelta(strings.Repeat("streaming **tail** with `code` and details\n", 250))
+	m.refreshTranscriptViewport(true)
+	b.ResetTimer()
+	b.ReportAllocs()
+	for b.Loop() {
+		m.refreshTranscriptViewport(true)
+	}
+}
+
 func BenchmarkAssistantStreamingTailContent20KB(b *testing.B) {
 	chunk := "A paragraph with **bold text**, `inline code`, and [a link](https://example.com).\n"
 	b.ReportAllocs()
@@ -198,10 +218,15 @@ func BenchmarkViewBusyLongHistory(b *testing.B) {
 		m.historyState.Append(&AssistantCell{Text: fmt.Sprintf("Answer %d with **markdown** and `code`.", i)})
 	}
 	m.refreshViewport()
+	m.primeViewCaches()
 	b.ResetTimer()
 	b.ReportAllocs()
-	for b.Loop() {
-		_ = m.View().Content
+	for i := 0; b.Loop(); i++ {
+		// Alternate the visible scroll offset so the compiler cannot collapse
+		// repeated reads of an unchanged memoized frame.
+		m.viewport.SetYOffset(i % 2)
+		m.primeViewCaches()
+		tuiBenchmarkViewSink = m.View().Content
 	}
 }
 
@@ -214,11 +239,15 @@ func BenchmarkAnimationTickViewLongHistory(b *testing.B) {
 		m.historyState.Append(&AssistantCell{Text: fmt.Sprintf("Answer %d with **markdown** and `code`.", i)})
 	}
 	m.refreshViewport()
+	m.primeViewCaches()
 	b.ResetTimer()
 	b.ReportAllocs()
 	for b.Loop() {
 		m.refreshStatusFrame()
-		_ = m.View().Content
+		// Update primes the memoized viewport and live frame before Bubble Tea
+		// asks for View. Include that production boundary in this benchmark.
+		m.primeViewCaches()
+		tuiBenchmarkViewSink = m.View().Content
 	}
 }
 

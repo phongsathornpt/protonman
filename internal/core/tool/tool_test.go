@@ -479,12 +479,18 @@ func TestNormalizeArgumentsCanonicalizesIntegralNumbers(t *testing.T) {
 		},
 	}
 	for raw, want := range map[string]string{
-		`{"limit":3.0}`:              `"limit":3`,
-		`{"limit":100.00}`:           `"limit":100`,
-		`{"limit":1e2}`:              `"limit":100`,
-		`{"limit":-5.0}`:             `"limit":-5`,
-		`{"offset":0.0}`:             `"offset":0`,
-		`{"limit":3.0,"offset":2.0}`: `"limit":3`,
+		`{"limit":3.0}`:                        `"limit":3`,
+		`{"limit":100.00}`:                     `"limit":100`,
+		`{"limit":1e2}`:                        `"limit":100`,
+		`{"limit":3.1400e2}`:                   `"limit":314`,
+		`{"limit":1000000000000000000000e-20}`: `"limit":10`,
+		`{"limit":9007199254740993.0}`:         `"limit":9007199254740993`,
+		`{"limit":9223372036854775807.0}`:      `"limit":9223372036854775807`,
+		`{"limit":-9223372036854775808.0}`:     `"limit":-9223372036854775808`,
+		`{"limit":0e999999}`:                   `"limit":0`,
+		`{"limit":-5.0}`:                       `"limit":-5`,
+		`{"offset":0.0}`:                       `"offset":0`,
+		`{"limit":3.0,"offset":2.0}`:           `"limit":3`,
 	} {
 		got := string(NormalizeArguments(definition, json.RawMessage(raw)))
 		if !strings.Contains(got, want) {
@@ -498,6 +504,10 @@ func TestNormalizeArgumentsCanonicalizesIntegralNumbers(t *testing.T) {
 		`{"limit":3.5}`,
 		`{"limit":"3"}`,
 		`{"limit":true}`,
+		`{"limit":9223372036854775808.0}`,
+		`{"limit":-9223372036854775809.0}`,
+		`{"limit":1e999999}`,
+		`{"limit":1e-999999}`,
 		`{"path":"a.go"}`,
 	} {
 		if got := string(NormalizeArguments(definition, json.RawMessage(raw))); got != raw {

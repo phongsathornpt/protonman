@@ -12,6 +12,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/clipboardimage"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/transientnotice"
 	turnmsg "github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/turn"
+	"github.com/phongsathornpt/protonman/internal/core/permission"
 )
 
 type clipboardImageLoadedMsg struct {
@@ -168,8 +169,14 @@ func (m *bubbleModel) updateTerminalEvent(msg tea.Msg) (tea.Cmd, bool) {
 func (m *bubbleModel) updateMouseEvent(message tea.MouseMsg) tea.Cmd {
 	mouse := message.Mouse()
 	if m.panes.showTranscript {
+		if mouse.Button == tea.MouseWheelUp && m.panes.transcriptTailOnly {
+			m.hydrateTranscriptViewport()
+		}
 		var command tea.Cmd
 		m.panes.transcript, command = m.panes.transcript.Update(message)
+		if m.panes.transcriptTailStale && m.panes.transcript.AtBottom() {
+			m.refreshTranscriptViewport(true)
+		}
 		return command
 	}
 	if top := m.panes.bottom.top(); top != nil {
@@ -193,12 +200,24 @@ func (m *bubbleModel) updateMouseEvent(message tea.MouseMsg) tea.Cmd {
 		if top, bottom, ok := m.composerMouseRegion(); ok && mouse.Y >= top && mouse.Y < bottom {
 			if prompt := m.panes.bottom.prompt(); prompt != nil {
 				_ = prompt.Focus()
+				if m.navMode {
+					m.exitTranscriptNavMode()
+				}
 				return nil
 			}
 		}
 	}
 	if mouse.Y < 0 || mouse.Y >= m.viewport.Height() {
 		return nil
+	}
+	if clicked && mouse.Button == tea.MouseLeft {
+		renderedLine := mouse.Y + m.viewport.YOffset()
+		if cell := m.ensureHistoryState().CollapsibleCellAtLine(renderedLine); cell != nil {
+			cell.ToggleExpanded()
+			m.ensureHistoryState().InvalidateCache()
+			m.requestRelayout()
+			return nil
+		}
 	}
 	return m.updateConversationViewport(message)
 }
@@ -246,7 +265,15 @@ func (m *bubbleModel) updateAnimationEvent(msg tea.Msg) (tea.Cmd, bool) {
 		if !m.busy {
 			return nil, true
 		}
-		m.refreshStatusFrame()
+		prompt := m.panes.bottom.prompt()
+		animateComposer := !m.reducedMotion && m.panes.bottom.composerVisible() &&
+			prompt != nil && prompt.Focused() &&
+			m.permissionView() == nil &&
+			(m.service == nil || m.service.Mode() != permission.ModeDeny)
+		if animateComposer {
+			m.promptAnimationPhase++
+		}
+		m.refreshStatusAndComposerFrame(animateComposer)
 		return command, true
 	case cursor.BlinkMsg:
 		if m.reducedMotion {
@@ -309,6 +336,9 @@ func (m *bubbleModel) updateRuntimeEvent(msg tea.Msg) (tea.Cmd, bool) {
 	switch message := msg.(type) {
 	case agentLifecycleMsg:
 		return m.updateAgentLifecycle(message), true
+	case memoryActivityMsg:
+		m.appendMemoryActivity(message.activity)
+		return m.nextMemoryActivity(), true
 	case permissionRequestMsg:
 		return m.updatePermissionRequest(message), true
 	case permissionBridgeClosedMsg:

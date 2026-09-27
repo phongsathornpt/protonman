@@ -216,7 +216,7 @@ func TestE2EOpenCodeFreeProviderConfig(t *testing.T) {
 		BaseURL: model.DefaultOpenCodeEndpoint,
 		APIKey:  "",
 	}
-	defaultModel := "nemotron-3.5-lightning-free"
+	defaultModel := model.DefaultOpenCodeModel
 	err := config.SaveUserProviderConfig(home, prov, defaultModel)
 	if err != nil {
 		t.Fatalf("SaveUserProviderConfig for OpenCode error = %v", err)
@@ -237,7 +237,7 @@ func TestE2EOpenCodeFreeProviderConfig(t *testing.T) {
 		t.Fatalf("read config file: %v", err)
 	}
 	fileStr := string(content)
-	if !strings.Contains(fileStr, "https://opencode.ai/zen/v1") {
+	if !strings.Contains(fileStr, "https://opencode.ai/inference/openai/v1") {
 		t.Fatalf("config missing OpenCode endpoint, got:\n%s", fileStr)
 	}
 	if !strings.Contains(fileStr, defaultModel) {
@@ -295,10 +295,10 @@ func TestE2EProviderSwitchAndSelect(t *testing.T) {
 	ocProv := config.ProviderConfig{
 		Name:    "opencode",
 		Type:    "openai",
-		BaseURL: "https://opencode.ai/zen/v1",
+		BaseURL: "https://opencode.ai/inference/openai/v1",
 		APIKey:  "",
 	}
-	if err := config.SaveUserProviderConfig(home, ocProv, "nemotron-3.5-lightning-free"); err != nil {
+	if err := config.SaveUserProviderConfig(home, ocProv, model.DefaultOpenCodeModel); err != nil {
 		t.Fatalf("SaveUserProviderConfig(opencode) error: %v", err)
 	}
 

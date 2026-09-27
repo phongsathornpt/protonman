@@ -179,19 +179,18 @@ func TestE2EAgentWaitIsScopedToParentTurn(t *testing.T) {
 	}
 
 	close(releaseB)
-	deadline := time.Now().Add(time.Second)
-	for time.Now().Before(deadline) {
-		found := false
-		for _, status := range coord.List() {
-			if status.ParentID == "turn-b" && status.State.Terminal() {
-				found = true
-				break
-			}
-		}
-		if found {
+	var childBID string
+	for _, status := range coord.List() {
+		if status.ParentID == "turn-b" {
+			childBID = status.ID
 			break
 		}
-		time.Sleep(time.Millisecond)
+	}
+	if childBID == "" {
+		t.Fatal("parent B child was not retained after spawn")
+	}
+	if _, err := coord.Wait(ctxB, childBID, time.Second); err != nil {
+		t.Fatalf("wait for parent B child completion: %v", err)
 	}
 
 	waitA := callAgentToolContext(t, ctxA, service, "wait-a-1", "subagent", map[string]any{"action": "wait"})

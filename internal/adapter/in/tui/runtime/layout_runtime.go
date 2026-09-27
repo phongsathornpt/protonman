@@ -79,7 +79,7 @@ func (m *bubbleModel) computeLiveView() string {
 			}
 		}
 	}
-	if frame.footer != "" {
+	if frame.footer != "" && (m.layoutProfile().Mode == panecommon.LayoutTiny || m.layout.width < 24 || !m.panes.bottom.composerVisible()) {
 		parts = append(parts, frame.footer)
 	}
 	return strings.Join(parts, "\n")
@@ -296,13 +296,29 @@ func (m *bubbleModel) buildFrameLayout() frameLayout {
 	frame.top = m.panes.bottom.renderTop(m)
 	frame.footer = m.footerView()
 	if m.panes.bottom.composerVisible() {
-		frame.divider = chromeDivider(m.layout.width)
-		keepLowerRule := profile.Mode != panecommon.LayoutTiny || frame.top == ""
-		frame.composer = composerContentView(m.promptView(), keepLowerRule)
+		if profile.Mode == panecommon.LayoutTiny || m.layout.width < 24 {
+			frame.divider = chromeDivider(m.layout.width)
+			keepLowerRule := frame.top == ""
+			frame.composer = composerContentView(m.promptView(), keepLowerRule)
+		} else {
+			topAbove := false
+			if top := m.panes.bottom.top(); top != nil && top.PresentationMode() != paneBelowComposer {
+				topAbove = true
+			}
+			if frame.top != "" && topAbove {
+				frame.divider = chromeDivider(m.layout.width)
+			}
+			frame.composer = composerContentView(m.promptView(), true)
+		}
 	}
-	for _, part := range []string{frame.header, frame.divider, frame.status, frame.top, frame.composer, frame.footer} {
+	for _, part := range []string{frame.header, frame.divider, frame.status, frame.top, frame.composer} {
 		if part != "" {
 			frame.height += lipgloss.Height(part)
+		}
+	}
+	if profile.Mode == panecommon.LayoutTiny || m.layout.width < 24 || !m.panes.bottom.composerVisible() {
+		if frame.footer != "" {
+			frame.height += lipgloss.Height(frame.footer)
 		}
 	}
 	return frame
@@ -313,18 +329,7 @@ func chromeDivider(width int) string {
 }
 
 func composerContentView(view string, keepLowerRule bool) string {
-	if view == "" {
-		return ""
-	}
-	lines := strings.Split(view, "\n")
-	if len(lines) <= 2 {
-		return view
-	}
-	end := len(lines)
-	if !keepLowerRule {
-		end--
-	}
-	return strings.Join(lines[1:end], "\n")
+	return view
 }
 
 type viewportScrollSnapshot struct {
@@ -414,6 +419,10 @@ func (m *bubbleModel) refreshFrameLayout() {
 }
 
 func (m *bubbleModel) refreshStatusFrame() {
+	m.refreshStatusAndComposerFrame(false)
+}
+
+func (m *bubbleModel) refreshStatusAndComposerFrame(animateComposer bool) {
 	if m == nil {
 		return
 	}
@@ -430,9 +439,22 @@ func (m *bubbleModel) refreshStatusFrame() {
 		m.requestRelayout()
 		return
 	}
+	var newComposer string
+	if animateComposer && m.panes.bottom.composerVisible() {
+		profile := m.layoutProfile()
+		keepLowerRule := profile.Mode != panecommon.LayoutTiny || m.layout.frame.top == ""
+		newComposer = composerContentView(m.promptView(), keepLowerRule)
+		if lipgloss.Height(newComposer) != lipgloss.Height(m.layout.frame.composer) {
+			m.requestRelayout()
+			return
+		}
+	}
 	m.layout.generation++
 	m.layout.frame.generation = m.layout.generation
 	m.layout.frame.status = newStatus
+	if animateComposer && m.panes.bottom.composerVisible() {
+		m.layout.frame.composer = newComposer
+	}
 	m.invalidateLiveView()
 }
 

@@ -41,6 +41,7 @@ func (l *Loop) streamRound(
 	if stream == nil {
 		return model.Message{}, nil, fmt.Errorf("stream model round %d: nil stream", round)
 	}
+	streamOpenedAt := time.Now()
 	defer func() {
 		closeErr := stream.Close()
 		slog.DebugContext(ctx, "model round stream closed",
@@ -49,7 +50,7 @@ func (l *Loop) streamRound(
 			"close_error", closeErr != nil,
 		)
 	}()
-	assistant, calls, streamErr := consumeSDKStream(ctx, round, stream, sink)
+	assistant, calls, streamErr := consumeSDKStream(ctx, round, stream, startedAt, streamOpenedAt, sink)
 	if streamErr != nil {
 		return model.Message{}, nil, streamErr
 	}
@@ -68,10 +69,12 @@ func promptCacheHitPercent(usage domain.Usage) float64 {
 	return float64(usage.CachedInputTokens) * 100 / float64(usage.InputTokens)
 }
 
-func consumeSDKStream(ctx context.Context, round int, stream port.Stream, sink Sink) (model.Message, []model.ToolCall, error) {
+func consumeSDKStream(ctx context.Context, round int, stream port.Stream, startedAt, streamOpenedAt time.Time, sink Sink) (model.Message, []model.ToolCall, error) {
 	var text strings.Builder
 	var reasoning strings.Builder
 	calls := make([]model.ToolCall, 0)
+	var firstEventAt time.Time
+	firstTextSeen := false
 	for {
 		event, err := stream.Next(ctx)
 		if errors.Is(err, io.EOF) {
@@ -83,10 +86,32 @@ func consumeSDKStream(ctx context.Context, round int, stream port.Stream, sink S
 		if err := event.Validate(); err != nil {
 			return model.Message{}, nil, fmt.Errorf("validate model stream round %d: %w", round, err)
 		}
+		if firstEventAt.IsZero() {
+			firstEventAt = time.Now()
+			slog.DebugContext(ctx, "model round first stream event",
+				"round", round,
+				"event_kind", event.Kind,
+				"stream_open_ms", streamOpenedAt.Sub(startedAt).Milliseconds(),
+				"first_event_ms", firstEventAt.Sub(startedAt).Milliseconds(),
+			)
+		}
 		switch event.Kind {
 		case domain.EventReasoningDelta:
 			reasoning.WriteString(event.ReasoningContent)
+			if event.ReasoningContent != "" {
+				if err := emit(ctx, sink, Event{Kind: EventReasoningDelta, Round: round, Text: event.ReasoningContent}); err != nil {
+					return model.Message{}, nil, err
+				}
+			}
 		case domain.EventTextDelta:
+			if event.Text != "" && !firstTextSeen {
+				firstTextSeen = true
+				slog.DebugContext(ctx, "model round first visible text",
+					"round", round,
+					"first_text_ms", time.Since(startedAt).Milliseconds(),
+					"first_text_after_event_ms", time.Since(firstEventAt).Milliseconds(),
+				)
+			}
 			text.WriteString(event.Text)
 			if err := emit(ctx, sink, Event{Kind: EventTextDelta, Round: round, Text: event.Text}); err != nil {
 				return model.Message{}, nil, err

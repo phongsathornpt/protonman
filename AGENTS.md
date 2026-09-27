@@ -12,7 +12,7 @@ Protonman is a Go 1.27 autonomous coding agent with four inbound modes:
 - Bubble Tea interactive TUI
 - headless CLI for scripts and CI
 - ACP stdio server for editor/IDE integrations
-- Fyne desktop GUI, which drives the CLI runtime over ACP (build with `-tags desktop`; see `docs/desktop.md`)
+- Gio desktop GUI, which drives the CLI runtime over ACP (build with `-tags desktop`; see `docs/desktop.md`)
 
 The project prioritizes clean architecture, explicit capability boundaries,
 fail-closed security, bounded concurrency, structured tool contracts, and
@@ -40,14 +40,14 @@ When changing Protonman:
 
 ```text
 cmd/protonman/                     composition root and CLI mode selection
-cmd/protonman-desktop/             desktop composition root (`-tags desktop`)
+cmd/protonman-desktop-gio/         Gio desktop composition root (`-tags desktop`)
 internal/adapter/in/            inbound adapters
   acp/                          ACP JSON-RPC/stdin-stdout adapter
   headless/                     non-interactive CLI adapter
   tui/                          Bubble Tea presentation layer
-  desktop/                      Fyne desktop frontend (`-tags desktop`; drives the CLI over ACP)
+  desktop/gioui/                Gio desktop frontend (`-tags desktop`; drives the CLI over ACP)
 internal/adapter/out/           driven infrastructure adapters
-  acpclient/                    ACP client used by the desktop frontend
+  acpclient/                    ACP client used by the Gio desktop frontend
   config/                       layered JSON configuration loading and persistence
   memoryfs/                     file-backed memory repository
   model/                        provider discovery and SDK adaptation
@@ -122,7 +122,7 @@ Important application boundaries:
 
 Inbound adapters must not call config persistence, provider discovery, session
 filesystem stores, or coordinator methods directly. This rule covers the
-build-tag gated desktop adapter as well (`test/architecture/desktop_contract_test.go`
+build-tag gated Gio desktop adapter as well (`test/architecture/desktop_contract_test.go`
 enforces it).
 
 ### Composition Root
@@ -722,7 +722,7 @@ go test ./...
 # E2E only
 make test-e2e
 
-# Desktop frontend tests (build-tag gated)
+# Gio desktop frontend tests (build-tag gated)
 make test-desktop
 
 # Architecture guards with desktop packages visible
@@ -750,9 +750,10 @@ go test -race \
   ./internal/adapter/in/tui
 ```
 
-Desktop frontend code lives behind the `desktop` build tag and is invisible to
-the default package graph, `go test ./...`, and `go vet ./...`. Any change to
-the desktop subsystem requires the tagged verifiers (`make test-desktop`,
+The Gio desktop implementation lives behind the `desktop` build tag. The
+package keeps a no-tag import stub so tooling can resolve the import, but the
+stub returns a build-tag error when launched. Any change to the desktop
+subsystem requires the tagged verifiers (`make test-desktop`,
 `make test-architecture-desktop`) instead of their untagged equivalents.
 
 Run architecture tests whenever moving packages, adding cross-layer imports, or
@@ -788,7 +789,7 @@ When implementing a change, place it according to ownership:
 | permission execution pipeline | `internal/engine/toolcall` + `internal/core/permission` |
 | user/project JSON persistence | `internal/adapter/out/config`, exposed via `internal/app` |
 | terminal interaction/rendering | `internal/adapter/in/tui` |
-| desktop frontend/rendering | `internal/adapter/in/desktop` (`-tags desktop`) |
+| desktop frontend/rendering | `internal/adapter/in/desktop/gioui` (`-tags desktop`) |
 | desktop presentation state | `internal/feature/desktop` |
 | ACP client for the desktop frontend | `internal/adapter/out/acpclient` |
 | provider model discovery/adaptation | `internal/adapter/out/model` |
@@ -796,7 +797,7 @@ When implementing a change, place it according to ownership:
 | session persistence | `internal/adapter/out/sessionfs` |
 | memory persistence and use cases | `internal/adapter/out/memoryfs` + `internal/feature/memory`, exposed via `internal/app.Memories` |
 | reusable low-level defaults/helpers | `internal/base/*` only if truly dependency-free |
-| composition/wiring | `cmd/protonman` (desktop: `cmd/protonman-desktop`) |
+| composition/wiring | `cmd/protonman` (desktop: `cmd/protonman-desktop-gio`) |
 
 ### Configuration invariants
 
@@ -896,7 +897,7 @@ Before declaring a task complete, verify the relevant subset of:
 
 For common investigations, begin here:
 
-- startup/wiring: `cmd/protonman/bootstrap.go` (desktop: `cmd/protonman-desktop/main.go`)
+- startup/wiring: `cmd/protonman/bootstrap.go` (desktop: `cmd/protonman-desktop-gio/main.go`)
 - architecture guardrails: `test/architecture/dependency_test.go` (desktop: `test/architecture/desktop_contract_test.go`)
 - tool contracts: `internal/core/tool/`
 - default tools: `internal/adapter/out/tool/builtin/registry.go`
@@ -908,7 +909,7 @@ For common investigations, begin here:
 - subagent publication: `internal/adapter/out/tool/agent/capability_registry.go`
 - configuration: `internal/adapter/out/config/`
 - TUI commands/state: `internal/adapter/in/tui/`
-- desktop frontend: `internal/adapter/in/desktop/`, `internal/feature/desktop/` (`-tags desktop`)
+- desktop frontend: `internal/adapter/in/desktop/gioui/`, `internal/feature/desktop/` (`-tags desktop`)
 - sessions: `internal/core/session/`, `internal/adapter/out/sessionfs/`
 - memory: `internal/core/memory/`, `internal/feature/memory/`, `internal/adapter/out/memoryfs/`
 - tasks: `internal/feature/todo/`, `internal/adapter/out/tool/todo/`

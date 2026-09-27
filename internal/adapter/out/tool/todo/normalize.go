@@ -33,6 +33,15 @@ func (taskArgumentNormalizer) NormalizeArguments(arguments json.RawMessage) json
 	}
 
 	changed := false
+	// Accept the snake_case spelling emitted by some models, just as the
+	// shared tool argument normalizer accepts the legacy top-level alias.
+	if _, canonicalExists := object["expectedRevision"]; !canonicalExists {
+		if legacy, ok := object["expected_revision"]; ok {
+			object["expectedRevision"] = legacy
+			delete(object, "expected_revision")
+			changed = true
+		}
+	}
 	if raw, ok := object["expectedRevision"]; ok {
 		if canonical, differs := canonicalRevision(raw); differs {
 			object["expectedRevision"] = canonical

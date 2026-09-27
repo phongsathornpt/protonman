@@ -60,7 +60,7 @@ func NewService(registry tool.Registry, policy *permission.Policy, options ...Op
 		}
 	}
 	for _, definition := range registry.Definitions() {
-		validators, err := validatorsForRegistry(registry, definition)
+		validators, err := initialValidatorsForRegistry(registry, definition)
 		if err != nil {
 			return nil, fmt.Errorf("%w: compile schema contract for %q: %v", ErrInvalidService, definition.Name, err)
 		}
@@ -170,6 +170,22 @@ func (s *Service) Definitions() []tool.Definition {
 	return s.registry.Definitions()
 }
 
+func (s *Service) lookupHandler(name string) (tool.Handler, tool.Definition, compiledToolValidators, bool, bool) {
+	if snapshots, ok := s.registry.(tool.SnapshotRegistry); ok {
+		snapshot, found := snapshots.LookupSnapshot(name)
+		if !found {
+			return nil, tool.Definition{}, compiledToolValidators{}, false, false
+		}
+		validators := compiledToolValidators{input: snapshot.InputValidator, output: snapshot.OutputValidator}
+		return snapshot.Handler, snapshot.Definition, validators, snapshot.ValidatorsCompiled, true
+	}
+	handler, found := s.registry.Lookup(name)
+	if !found {
+		return nil, tool.Definition{}, compiledToolValidators{}, false, false
+	}
+	return handler, handler.Definition(), compiledToolValidators{}, false, true
+}
+
 // SetPrompt replaces the interactive resolver used by ask and auto modes.
 func (s *Service) SetPrompt(prompt PermissionPrompt) {
 	s.mu.Lock()
@@ -215,7 +231,7 @@ func (s *Service) call(ctx context.Context, call tool.Call, recoveryDepth int) (
 		s.observeCallResult(ctx, telemetry, result, wrappedErr)
 		return result, wrappedErr
 	}
-	handler, ok := s.registry.Lookup(call.Name)
+	handler, definition, validators, validatorsCompiled, ok := s.lookupHandler(call.Name)
 	if !ok {
 		unknownErr := fmt.Errorf("%w: %s", ErrUnknownTool, call.Name)
 		result := tool.Result{
@@ -226,11 +242,13 @@ func (s *Service) call(ctx context.Context, call tool.Call, recoveryDepth int) (
 		s.observeCallResult(ctx, telemetry, result, unknownErr)
 		return result, unknownErr
 	}
-	definition := handler.Definition()
 	call.Arguments = tool.NormalizeArgumentsForHandler(handler, definition, call.Arguments)
 	telemetry.call.Arguments = append(json.RawMessage(nil), call.Arguments...)
 	telemetry.toolKind = definition.Kind
-	validators, validatorErr := s.validatorsFor(definition)
+	var validatorErr error
+	if !validatorsCompiled {
+		validators, validatorErr = s.validatorsFor(definition)
+	}
 	if validatorErr != nil {
 		contractErr := tool.WrapToolError(tool.ErrorCodeExecution, fmt.Sprintf("tool %q has an invalid schema contract", call.Name), validatorErr)
 		result := tool.Result{CallID: call.ID, ToolName: call.Name, Failure: tool.FailureFromError(contractErr)}

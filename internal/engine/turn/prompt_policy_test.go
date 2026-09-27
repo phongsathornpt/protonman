@@ -29,6 +29,31 @@ func TestEffectivePromptSpecDerivesCapabilitiesAndMutationDomains(t *testing.T) 
 	}
 }
 
+func TestEffectivePromptSpecOmitsDelegationWhenOnlyLifecycleActionsArePublished(t *testing.T) {
+	loop := &Loop{promptSpec: &prompt.Spec{}, languageModel: &scriptedClient{}}
+	spec := loop.effectivePromptSpec([]tool.Definition{{
+		Name: tool.NameSubagent,
+		Kind: tool.KindAgent,
+		InputSchema: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"action": map[string]any{"type": "string", "enum": []string{
+					tool.ActionWait, tool.ActionGet, tool.ActionList, tool.ActionCancel,
+				}},
+			},
+		},
+	}}, nil)
+	if spec.Capabilities.Agents {
+		t.Fatal("lifecycle-only subagent tool enabled delegation prompt")
+	}
+	got := prompt.Render(spec)
+	for _, unavailable := range []string{"# Delegation Protocol", "subagent action=spawn", "subagent action=resume"} {
+		if strings.Contains(got, unavailable) {
+			t.Fatalf("prompt advertises unavailable action %q:\n%s", unavailable, got)
+		}
+	}
+}
+
 func TestNonWorkspaceMutationDoesNotEnableEditingVerificationPrompt(t *testing.T) {
 	loop := &Loop{promptSpec: &prompt.Spec{}, languageModel: &scriptedClient{}}
 	defs := []tool.Definition{{Name: "agents", Kind: tool.KindAgent, Mutability: tool.MutabilityMutating, Safety: tool.SafetyContract{MutationDomain: tool.MutationDomainAgentState}}}

@@ -25,6 +25,8 @@ func (m *bubbleModel) closeTranscriptOverlay() {
 		return
 	}
 	m.panes.showTranscript = false
+	m.panes.transcriptTailOnly = false
+	m.panes.transcriptTailStale = false
 	if m.historyState != nil {
 		m.historyState.ReleaseAlternateRenderCache()
 		m.historyState.ReleaseRawTextCache()
@@ -33,14 +35,34 @@ func (m *bubbleModel) closeTranscriptOverlay() {
 }
 
 func (m *bubbleModel) refreshTranscriptViewport(forceTail bool) {
+	m.refreshTranscriptViewportMode(forceTail, false)
+}
+
+func (m *bubbleModel) refreshTranscriptViewportMode(forceTail, forceRefresh bool) {
 	if m.historyState == nil {
 		return
 	}
 	follow := forceTail || m.panes.transcript.AtBottom()
+	if m.busy && !follow && !forceRefresh {
+		// Keep the reader's existing buffer stable while new tokens arrive
+		// outside their visible region. Refresh when they return to the tail.
+		m.panes.transcriptTailStale = true
+		return
+	}
 	scrollPercent := m.panes.transcript.ScrollPercent()
 	content := ""
+	tailOnly := false
 	if m.panes.rawTranscript {
-		content = m.historyState.Raw()
+		if m.busy && follow {
+			content, tailOnly = m.historyState.RawTailContent(max(1, m.panes.transcript.Height()))
+		} else {
+			content = m.historyState.Raw()
+		}
+	} else if m.busy && follow {
+		content, tailOnly = m.historyState.RenderTailContentAt(
+			max(1, m.panes.transcript.Width()),
+			max(1, m.panes.transcript.Height()),
+		)
 	} else {
 		content = strings.Join(m.historyState.RenderLinesAt(max(1, m.panes.transcript.Width())), "\n")
 	}
@@ -48,6 +70,8 @@ func (m *bubbleModel) refreshTranscriptViewport(forceTail bool) {
 		content = mutedStyle.Render("No transcript yet.")
 	}
 	m.panes.transcript.SetContent(content)
+	m.panes.transcriptTailOnly = tailOnly
+	m.panes.transcriptTailStale = false
 	if follow {
 		m.panes.transcript.GotoBottom()
 		return
@@ -90,13 +114,39 @@ func (m *bubbleModel) updateTranscriptKey(message tea.KeyPressMsg) tea.Cmd {
 				m.historyState.ReleaseRawTextCache()
 			}
 		}
-		m.refreshTranscriptViewport(false)
+		m.refreshTranscriptViewportMode(false, true)
 		return nil
 	}
 	if key.Matches(message, paneutil.Keys.Nav) {
+		if m.panes.transcriptTailOnly {
+			m.hydrateTranscriptViewport()
+		}
 		updated, command := m.panes.transcript.Update(message)
 		m.panes.transcript = updated
+		if m.panes.transcriptTailStale && m.panes.transcript.AtBottom() {
+			m.refreshTranscriptViewport(true)
+		}
 		return command
 	}
 	return nil
+}
+
+func (m *bubbleModel) hydrateTranscriptViewport() {
+	if m == nil || m.historyState == nil || !m.panes.transcriptTailOnly {
+		return
+	}
+	content := ""
+	if m.panes.rawTranscript {
+		content = m.historyState.Raw()
+	} else {
+		content = strings.Join(m.historyState.RenderLinesAt(max(1, m.panes.transcript.Width())), "\n")
+	}
+	if strings.TrimSpace(content) == "" {
+		content = mutedStyle.Render("No transcript yet.")
+	}
+	m.panes.transcript.SetContent(content)
+	m.panes.transcript.GotoBottom()
+	m.panes.transcriptTailOnly = false
+	// Any active deltas observed during hydration are present in the snapshot.
+	m.panes.transcriptTailStale = false
 }

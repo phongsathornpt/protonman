@@ -67,6 +67,58 @@ func (r *fakeRegistry) Definitions() []tool.Definition {
 	return []tool.Definition{r.handler.definition}
 }
 
+type refreshingValidatorRegistry struct {
+	handler          *fakeHandler
+	replacement      *fakeHandler
+	validatorLookups int
+}
+
+func (r *refreshingValidatorRegistry) Lookup(name string) (tool.Handler, bool) {
+	if r.handler == nil || r.handler.definition.Name != name {
+		return nil, false
+	}
+	return r.handler, true
+}
+
+func (r *refreshingValidatorRegistry) Definitions() []tool.Definition {
+	if r.handler == nil {
+		return []tool.Definition{}
+	}
+	return []tool.Definition{r.handler.definition}
+}
+
+func (r *refreshingValidatorRegistry) LookupSnapshot(name string) (tool.HandlerSnapshot, bool) {
+	if r.handler == nil || r.handler.definition.Name != name {
+		return tool.HandlerSnapshot{}, false
+	}
+	validators, err := compileDefinitionValidators(r.handler.Definition())
+	if err != nil {
+		return tool.HandlerSnapshot{}, false
+	}
+	snapshot := tool.HandlerSnapshot{
+		Handler: r.handler, Definition: r.handler.Definition(),
+		InputValidator: validators.input, OutputValidator: validators.output,
+		ValidatorsCompiled: true,
+	}
+	if r.replacement != nil {
+		r.handler = r.replacement
+		r.replacement = nil
+	}
+	return snapshot, true
+}
+
+func (r *refreshingValidatorRegistry) CompiledValidators(name string) (*sdk.ToolSchemaValidator, *sdk.ToolSchemaValidator, bool) {
+	r.validatorLookups++
+	if r.handler == nil || r.handler.definition.Name != name {
+		return nil, nil, false
+	}
+	validators, err := compileDefinitionValidators(r.handler.Definition())
+	if err != nil {
+		return nil, nil, false
+	}
+	return validators.input, validators.output, true
+}
+
 type cachedValidatorRegistry struct {
 	handler *fakeHandler
 }
@@ -794,6 +846,97 @@ func TestServiceValidatesInputSchemaBeforePermissionAndExecution(t *testing.T) {
 	}
 	if prompted != 1 || handler.calls != 1 {
 		t.Fatalf("valid input prompted=%d handler_calls=%d, want both 1", prompted, handler.calls)
+	}
+}
+
+func TestServiceUsesCurrentValidatorAfterDynamicSchemaRefresh(t *testing.T) {
+	handler := &fakeHandler{definition: tool.Definition{
+		Name: "dynamic", Description: "dynamic tool", Kind: tool.KindRead,
+		InputSchema: map[string]any{
+			"type":       "object",
+			"properties": map[string]any{"old": map[string]any{"type": "string"}},
+			"required":   []string{"old"}, "additionalProperties": false,
+		},
+	}}
+	registry := &refreshingValidatorRegistry{handler: handler}
+	policy, err := permission.NewPolicy(permission.Config{
+		Rules: []permission.Rule{{Action: permission.ActionAllow, Tool: permission.ToolRead}},
+	})
+	if err != nil {
+		t.Fatalf("NewPolicy() error = %v", err)
+	}
+	service, err := NewService(registry, policy)
+	if err != nil {
+		t.Fatalf("NewService() error = %v", err)
+	}
+
+	handler.definition.InputSchema = map[string]any{
+		"type":       "object",
+		"properties": map[string]any{"current": map[string]any{"type": "string"}},
+		"required":   []string{"current"}, "additionalProperties": false,
+	}
+	currentCall, err := tool.NewCall("current-schema", "dynamic", json.RawMessage(`{"current":"value"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.Call(context.Background(), currentCall); err != nil {
+		t.Fatalf("Call() rejected refreshed schema: %v", err)
+	}
+
+	staleCall, err := tool.NewCall("stale-schema", "dynamic", json.RawMessage(`{"old":"value"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.Call(context.Background(), staleCall); err == nil {
+		t.Fatal("Call() accepted arguments from the replaced schema")
+	}
+	if handler.calls != 1 {
+		t.Fatalf("handler calls = %d, want only the refreshed-schema call", handler.calls)
+	}
+	if registry.validatorLookups != 0 {
+		t.Fatalf("registry validator lookups = %d, want snapshot validators", registry.validatorLookups)
+	}
+}
+
+func TestServiceKeepsLookupSnapshotValidatorBoundToHandler(t *testing.T) {
+	oldHandler := &fakeHandler{definition: tool.Definition{
+		Name: "dynamic", Description: "dynamic tool", Kind: tool.KindRead,
+		InputSchema: map[string]any{
+			"type": "object", "properties": map[string]any{"old": map[string]any{"type": "string"}},
+			"required": []string{"old"}, "additionalProperties": false,
+		},
+	}}
+	newHandler := &fakeHandler{definition: tool.Definition{
+		Name: "dynamic", Description: "dynamic tool", Kind: tool.KindRead,
+		InputSchema: map[string]any{
+			"type": "object", "properties": map[string]any{"current": map[string]any{"type": "string"}},
+			"required": []string{"current"}, "additionalProperties": false,
+		},
+	}}
+	registry := &refreshingValidatorRegistry{handler: oldHandler}
+	policy, err := permission.NewPolicy(permission.Config{
+		Rules: []permission.Rule{{Action: permission.ActionAllow, Tool: permission.ToolRead}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	service, err := NewService(registry, policy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	registry.replacement = newHandler
+	call, err := tool.NewCall("old-snapshot", "dynamic", json.RawMessage(`{"old":"value"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.Call(context.Background(), call); err != nil {
+		t.Fatalf("Call() mixed handler and validator generations: %v", err)
+	}
+	if oldHandler.calls != 1 || newHandler.calls != 0 {
+		t.Fatalf("handler calls old=%d new=%d, want only old handler", oldHandler.calls, newHandler.calls)
+	}
+	if registry.validatorLookups != 0 {
+		t.Fatalf("registry validator lookups = %d, want atomic snapshot", registry.validatorLookups)
 	}
 }
 

@@ -1,19 +1,29 @@
 package config
 
+import "encoding/json"
+
 type fileDocument struct {
-	Permission filePermission          `json:"permission,omitempty"`
-	Workspace  fileWorkspace           `json:"workspace,omitempty"`
-	UI         fileUI                  `json:"ui,omitempty"`
-	Sandbox    fileSandbox             `json:"sandbox,omitempty"`
-	Providers  map[string]fileProvider `json:"providers,omitempty"`
-	Model      fileModel               `json:"model,omitempty"`
-	Agent      fileAgent               `json:"agent,omitempty"`
-	Runtime    fileRuntime             `json:"runtime,omitempty"`
-	Skills     *fileSkills             `json:"skills,omitempty"`
+	Permission  filePermission             `json:"permission,omitempty"`
+	Workspace   fileWorkspace              `json:"workspace,omitempty"`
+	UI          fileUI                     `json:"ui,omitempty"`
+	Sandbox     fileSandbox                `json:"sandbox,omitempty"`
+	Providers   map[string]fileProvider    `json:"providers,omitempty"`
+	Model       fileModel                  `json:"model,omitempty"`
+	Agent       fileAgent                  `json:"agent,omitempty"`
+	Runtime     fileRuntime                `json:"runtime,omitempty"`
+	Skills      *fileSkills                `json:"skills,omitempty"`
+	Preferences map[string]json.RawMessage `json:"preferences,omitempty"`
 }
 
 type fileSkills struct {
 	Active []string `json:"active,omitempty"`
+}
+
+type fileMCPIntegration struct {
+	Name    string   `json:"name"`
+	Command string   `json:"command"`
+	Args    []string `json:"args,omitempty"`
+	Env     []string `json:"env,omitempty"`
 }
 
 type fileProvider struct {

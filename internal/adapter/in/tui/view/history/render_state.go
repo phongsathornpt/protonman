@@ -160,21 +160,46 @@ func (s *HistoryState) committedRenderText() string {
 // RenderTailContent renders only the newest rich transcript lines. It reports
 // whether older lines were omitted so callers can hydrate full scrollback on demand.
 func (s *HistoryState) RenderTailContent(maxLines int) (string, bool) {
-	if s == nil || maxLines <= 0 {
-		return s.RenderContent(), false
+	if s == nil {
+		return "", false
 	}
-	s.buildCommittedCache()
+	return s.RenderTailContentAt(s.renderWidth, maxLines)
+}
+
+// RenderTailContentAt renders only the newest lines at width. It keeps the
+// committed prefix cached independently for alternate-width transcript views.
+func (s *HistoryState) RenderTailContentAt(width, maxLines int) (string, bool) {
+	if s == nil {
+		return "", false
+	}
+	if width <= 0 {
+		width = s.renderWidth
+	}
+	if maxLines <= 0 {
+		if width == s.renderWidth {
+			return s.RenderContent(), false
+		}
+		return strings.Join(s.RenderLinesAt(width), "\n"), false
+	}
+	var committed []string
+	if width == s.renderWidth {
+		s.buildCommittedCache()
+		committed = s.cachedRender
+	} else {
+		s.buildAlternateRenderCache(width)
+		committed = s.altRender
+	}
 	var activeLines []string
 	if s.active != nil {
-		activeLines = renderHistoryCell(s.active, s.renderWidth)
+		activeLines = renderHistoryCell(s.active, width)
 	}
-	separator := len(s.cachedRender) > 0 && len(activeLines) > 0
-	totalLines := len(s.cachedRender) + len(activeLines)
+	separator := len(committed) > 0 && len(activeLines) > 0
+	totalLines := len(committed) + len(activeLines)
 	if separator {
 		totalLines++
 	}
 	if totalLines <= maxLines {
-		return s.RenderContent(), false
+		return joinRenderedTail(committed, separator, activeLines), false
 	}
 
 	remaining := maxLines
@@ -189,12 +214,12 @@ func (s *HistoryState) RenderTailContent(maxLines int) (string, bool) {
 		includeSeparator = true
 		remaining--
 	}
-	committedStart := len(s.cachedRender)
+	committedStart := len(committed)
 	if remaining > 0 {
-		take := min(remaining, len(s.cachedRender))
+		take := min(remaining, len(committed))
 		committedStart -= take
 	}
-	return joinRenderedTail(s.cachedRender[committedStart:], includeSeparator, activeLines[activeStart:]), true
+	return joinRenderedTail(committed[committedStart:], includeSeparator, activeLines[activeStart:]), true
 }
 
 func joinRenderedTail(committed []string, blankSeparator bool, active []string) string {
@@ -320,6 +345,60 @@ func (s *HistoryState) Raw() string {
 	out.WriteByte('\n')
 	out.WriteString(activeRaw)
 	return out.String()
+}
+
+// RawTailContent returns the newest raw transcript lines without rebuilding
+// the committed transcript prefix. The boolean reports omitted older lines.
+func (s *HistoryState) RawTailContent(maxLines int) (string, bool) {
+	if s == nil {
+		return "", false
+	}
+	if maxLines <= 0 {
+		return s.Raw(), false
+	}
+	committed := s.committedRawText()
+	activeLines := []string(nil)
+	if s.active != nil {
+		activeLines = s.active.RawLines()
+	}
+	committedCount := 0
+	if committed != "" {
+		committedCount = strings.Count(committed, "\n") + 1
+	}
+	truncated := committedCount+len(activeLines) > maxLines
+	if len(activeLines) >= maxLines {
+		activeLines = activeLines[len(activeLines)-maxLines:]
+		return strings.Join(activeLines, "\n"), truncated || committedCount > 0
+	}
+	remaining := maxLines - len(activeLines)
+	committedTail := rawTextTail(committed, remaining)
+	if committedTail == "" {
+		return strings.Join(activeLines, "\n"), truncated
+	}
+	if len(activeLines) == 0 {
+		return committedTail, truncated
+	}
+	return committedTail + "\n" + strings.Join(activeLines, "\n"), truncated
+}
+
+func rawTextTail(text string, maxLines int) string {
+	text = strings.TrimRight(text, "\n")
+	if text == "" || maxLines <= 0 {
+		return ""
+	}
+	start := len(text)
+	for line := 0; line < maxLines && start > 0; line++ {
+		separator := strings.LastIndexByte(text[:start], '\n')
+		if separator < 0 {
+			start = 0
+			break
+		}
+		start = separator
+	}
+	if start < len(text) && text[start] == '\n' {
+		start++
+	}
+	return text[start:]
 }
 
 func (s *HistoryState) committedRawText() string {

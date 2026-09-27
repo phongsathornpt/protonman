@@ -10,6 +10,7 @@ import (
 	"charm.land/bubbles/v2/textarea"
 	"charm.land/bubbles/v2/viewport"
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 
 	tuiconv "github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/conversation"
 	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/style"
@@ -57,10 +58,12 @@ type composerState struct {
 }
 
 type paneState struct {
-	bottom         *bottomPane
-	transcript     viewport.Model
-	showTranscript bool
-	rawTranscript  bool
+	bottom              *bottomPane
+	transcript          viewport.Model
+	showTranscript      bool
+	rawTranscript       bool
+	transcriptTailOnly  bool
+	transcriptTailStale bool
 }
 
 type bottomPane struct {
@@ -275,7 +278,7 @@ func newPrompt(hasRunner bool, reducedMotion bool) textarea.Model {
 	prompt.CharLimit = 0
 	prompt.DynamicHeight = true
 	prompt.MinHeight = 1
-	prompt.MaxHeight = 4
+	prompt.MaxHeight = 6
 	prompt.ShowLineNumbers = false
 	prompt.EndOfBufferCharacter = ' '
 	configureComposerNewline(&prompt, nil, keyboardCapabilityUnknown)
@@ -298,6 +301,9 @@ func applyPromptChrome(prompt *textarea.Model, bash bool, icons tuistyle.IconSet
 	if bash {
 		prefix = "! "
 		accent = commandColor
+		prompt.Placeholder = "Run workspace shell command…"
+	} else {
+		prompt.Placeholder = "Ask universal to build, test, or type / for commands…"
 	}
 	prompt.Prompt = prefix
 	styles := prompt.Styles()
@@ -357,6 +363,59 @@ func (s *attachmentState) attachImageWithOwnership(prompt *textarea.Model, path 
 	prompt.SetValue(value)
 	prompt.CursorEnd()
 	s.localImages = append(s.localImages, localImageAttachment{placeholder: placeholder, path: path, temporary: temporary})
+}
+
+func (s *attachmentState) RemoveLast(prompt *textarea.Model) bool {
+	if s == nil || len(s.localImages) == 0 {
+		return false
+	}
+	last := s.localImages[len(s.localImages)-1]
+	if last.temporary && strings.TrimSpace(last.path) != "" {
+		_ = os.Remove(last.path)
+	}
+	s.localImages = s.localImages[:len(s.localImages)-1]
+	if prompt != nil {
+		val := prompt.Value()
+		val = strings.Replace(val, last.placeholder, "", 1)
+		val = strings.TrimSpace(val)
+		prompt.SetValue(val)
+		prompt.CursorEnd()
+	}
+	return true
+}
+
+func (s *attachmentState) RenderChips(width int, icons tuistyle.IconSet) string {
+	if s == nil || len(s.localImages) == 0 {
+		return ""
+	}
+	icons = tuistyle.OrUnicodeIcons(icons)
+	chips := make([]string, 0, len(s.localImages))
+	for _, img := range s.localImages {
+		name := filepath.Base(img.path)
+		meta := ""
+		if fi, err := os.Stat(img.path); err == nil && fi.Size() > 0 {
+			sz := fi.Size()
+			switch {
+			case sz >= 1024*1024:
+				meta = fmt.Sprintf("%.1f MB", float64(sz)/(1024*1024))
+			case sz >= 1024:
+				meta = fmt.Sprintf("%d KB", sz/1024)
+			default:
+				meta = fmt.Sprintf("%d B", sz)
+			}
+		}
+		label := name
+		if meta != "" {
+			label = fmt.Sprintf("%s · %s", name, meta)
+		}
+		pillText := fmt.Sprintf("%s%s", icons.Image, label)
+		chips = append(chips, tuistyle.ComposerAttachmentPill.Render(pillText)+" "+tuistyle.ComposerAttachmentRemove.Render("✕"))
+	}
+	joined := strings.Join(chips, "  ")
+	if width > 0 && ansi.StringWidth(joined) > width {
+		joined = truncateWithEllipsis(joined, width)
+	}
+	return joined
 }
 
 func (s *attachmentState) release() {

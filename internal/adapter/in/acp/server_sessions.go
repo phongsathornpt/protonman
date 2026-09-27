@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 
 	"github.com/phongsathornpt/protonman/internal/app"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
@@ -150,6 +151,14 @@ func (s *Server) newSession(ctx context.Context, sessionID string, cwd string, a
 	}
 	sess := NewSession(sessionID, cwd, service, registry, runner, s.sessionService, s.agents.ForSession(sessionID))
 	bindSessionRuntime(s, sess)
+	// Without a prompt, ask/auto mode denies every non-statically-allowed call
+	// with "no permission prompt is configured". Install the ACP reverse request
+	// for this session and its subagents so delegated work asks the same client.
+	if s.permissions != nil {
+		prompt := s.permissions.prompt(sessionID)
+		service.SetPrompt(prompt)
+		sess.agents.SetPrompt(prompt)
+	}
 	sess.mcpServers = cloneMCPServerConfigs(mcpServers)
 	sess.resource = mcpResource
 	return sess, nil
@@ -158,6 +167,7 @@ func (s *Server) newSession(ctx context.Context, sessionID string, cwd string, a
 func (s *Server) listSessions(ctx context.Context, cwd string) ([]SessionInfo, error) {
 	s.mu.Lock()
 	seen := make(map[string]bool)
+	activeIndexes := make(map[string]int, len(s.sessions))
 	list := make([]SessionInfo, 0, len(s.sessions))
 	for id, sess := range s.sessions {
 		if cwd != "" && sess.cwd != "" && sess.cwd != cwd {
@@ -165,6 +175,7 @@ func (s *Server) listSessions(ctx context.Context, cwd string) ([]SessionInfo, e
 		}
 		seen[id] = true
 		preview := session.Preview(session.FromModelMessages(sess.Messages()))
+		activeIndexes[id] = len(list)
 		list = append(list, SessionInfo{
 			SessionID:             id,
 			Cwd:                   sess.cwd,
@@ -186,6 +197,9 @@ func (s *Server) listSessions(ctx context.Context, cwd string) ([]SessionInfo, e
 		}
 		for _, summary := range summaries {
 			if seen[summary.ID] {
+				if index, ok := activeIndexes[summary.ID]; ok && !summary.UpdatedAt.IsZero() {
+					list[index].UpdatedAt = summary.UpdatedAt.Format(time.RFC3339Nano)
+				}
 				continue
 			}
 			list = append(list, SessionInfo{
@@ -194,7 +208,7 @@ func (s *Server) listSessions(ctx context.Context, cwd string) ([]SessionInfo, e
 				Title:         sessionListTitle(summary.ID, summary.WorkspaceName, summary.Preview),
 				WorkspaceKey:  summary.WorkspaceKey,
 				WorkspaceName: summary.WorkspaceName,
-				UpdatedAt:     summary.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
+				UpdatedAt:     summary.UpdatedAt.Format(time.RFC3339Nano),
 			})
 		}
 	}

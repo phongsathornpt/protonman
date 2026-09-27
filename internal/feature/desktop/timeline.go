@@ -76,14 +76,23 @@ func MergeTimelineItem(previous, next TimelineItem) TimelineItem {
 	if next.Kind == "" {
 		next.Kind = previous.Kind
 	}
+	if previous.Streaming {
+		next.Streaming = true
+	}
 	if next.Title == "" {
 		next.Title = previous.Title
 	}
-	if next.Text == "" {
-		next.Text = previous.Text
-	}
 	if next.Status == "" {
 		next.Status = previous.Status
+	}
+	if next.Kind == TimelineUser || next.Kind == TimelineAssistant {
+		if next.Text == "" {
+			next.Text = previous.Text
+		} else {
+			next.Text = previous.Text + next.Text
+		}
+	} else if next.Text == "" {
+		next.Text = previous.Text
 	}
 	return next
 }

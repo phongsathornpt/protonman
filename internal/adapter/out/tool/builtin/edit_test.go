@@ -2,10 +2,14 @@ package builtin
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/phongsathornpt/protonman/internal/core/tool"
+	sdk "github.com/phongsathornpt/protonman/proton-sdk"
 )
 
 func TestEditFacadeDispatchesActions(t *testing.T) {
@@ -56,6 +60,59 @@ func TestEditFacadeDispatchesActions(t *testing.T) {
 	}
 	if store.restored != "cp-old" {
 		t.Fatalf("restored = %q, want cp-old", store.restored)
+	}
+}
+
+func TestEditSchemaRequiresActionSpecificArguments(t *testing.T) {
+	definition := NewEdit(nil, nil).Definition()
+	validator, err := sdk.CompileToolInputValidator(sdk.Tool{
+		Name: definition.Name, Description: definition.Description, InputSchema: definition.InputSchema,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	valid := []string{
+		`{"action":"write","filePath":"a","content":"x"}`,
+		`{"action":"replace","filePath":"a","oldString":"x","newString":"y"}`,
+		`{"action":"patch","patch":"*** Begin Patch\n*** End Patch"}`,
+		`{"action":"restore","checkpointId":"cp"}`,
+	}
+	for _, raw := range valid {
+		if err := validator.Validate(json.RawMessage(raw)); err != nil {
+			t.Errorf("valid call rejected %s: %v", raw, err)
+		}
+	}
+	invalid := []string{
+		`{"action":"write","filePath":"a"}`,
+		`{"action":"replace","filePath":"a","oldString":"x"}`,
+		`{"action":"patch"}`,
+		`{"action":"restore"}`,
+	}
+	for _, raw := range invalid {
+		if err := validator.Validate(json.RawMessage(raw)); err == nil {
+			t.Errorf("invalid call accepted %s", raw)
+		}
+	}
+}
+
+func TestEditAliasesNormalizeBeforeActionDispatch(t *testing.T) {
+	ws := newTestWorkspace(t, nil)
+	handler := NewEdit(ws, &recordingCheckpointStore{id: "cp-edit"})
+	definition := handler.Definition()
+	call := newJSONCall(t, "edit-alias", "edit", map[string]any{"action": "write", "path": "alias.txt", "content": "ok"})
+	call.Arguments = tool.NormalizeArgumentsForHandler(handler, definition, call.Arguments)
+	validator, err := sdk.CompileToolInputValidator(sdk.Tool{Name: definition.Name, Description: definition.Description, InputSchema: definition.InputSchema})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := validator.Validate(call.Arguments); err != nil {
+		t.Fatalf("normalized alias call rejected by schema: %v", err)
+	}
+	if _, err := handler.Execute(context.Background(), call); err != nil {
+		t.Fatalf("write using path alias: %v", err)
+	}
+	if got, err := os.ReadFile(filepath.Join(ws.Root(), "alias.txt")); err != nil || string(got) != "ok" {
+		t.Fatalf("alias write = %q, err=%v", got, err)
 	}
 }
 

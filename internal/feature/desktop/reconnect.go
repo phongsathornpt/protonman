@@ -12,10 +12,12 @@ func MarkDisconnected(current State) State {
 // process. Other agents may continue serving their sessions.
 func MarkAgentDisconnected(current State, agentID string) State {
 	next := cloneState(current)
+	ownedSessions := make(map[string]struct{})
 	for i := range next.Sessions {
 		if agentID != "" && next.Sessions[i].AgentID != agentID {
 			continue
 		}
+		ownedSessions[next.Sessions[i].ID] = struct{}{}
 		switch next.Sessions[i].Status {
 		case TaskQueued, TaskRunning, TaskWaitingPermission, TaskWaitingUser:
 			next.Sessions[i].Status = TaskPaused
@@ -23,6 +25,16 @@ func MarkAgentDisconnected(current State, agentID string) State {
 	}
 	// Permission requests belong to the dead ACP process and cannot safely be
 	// answered after reconnect. A resumed session may request them again.
-	next.PermissionInbox = nil
+	if agentID == "" {
+		next.PermissionInbox = nil
+		return next
+	}
+	permissions := next.PermissionInbox[:0]
+	for _, permission := range next.PermissionInbox {
+		if _, owned := ownedSessions[permission.SessionID]; !owned {
+			permissions = append(permissions, permission)
+		}
+	}
+	next.PermissionInbox = permissions
 	return next
 }

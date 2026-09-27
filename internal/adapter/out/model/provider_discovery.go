@@ -17,6 +17,24 @@ import (
 // RemoteModel is provider-neutral discovered model metadata.
 type RemoteModel = modelcatalog.RemoteModel
 
+// ErrUnauthorized indicates that a remote provider rejected credentials (HTTP 401).
+var ErrUnauthorized = errors.New("authentication failed (401)")
+
+var openCodeInferenceFreeModels = []RemoteModel{
+	{ID: "big-pickle", Name: "Big Pickle", Provider: DefaultOpenCodeName},
+	{ID: "mimo-v2.5-free", Name: "MiMo V2.5 Free", Provider: DefaultOpenCodeName},
+	{ID: DefaultOpenCodeModel, Name: "Nemotron 3 Super Free", Provider: DefaultOpenCodeName},
+}
+
+// OpenCodeInferenceFreeModels returns a copy of the documented keyless chat
+// model seed. The Inference API does not expose a public /models contract, so
+// discovery must not probe that endpoint and turn a route mismatch into a 404.
+func OpenCodeInferenceFreeModels() []RemoteModel {
+	models := make([]RemoteModel, len(openCodeInferenceFreeModels))
+	copy(models, openCodeInferenceFreeModels)
+	return models
+}
+
 // IsFreeModel reports whether a given model ID represents an OpenCode free-tier model.
 func IsFreeModel(id string) bool {
 	idLower := strings.ToLower(strings.TrimSpace(id))
@@ -51,11 +69,30 @@ func FetchProviderModelsForProtocol(ctx context.Context, protocol ProviderProtoc
 		}
 	}
 
+	if protocol == ProviderProtocolOpenAI && IsOpenCodeInferenceEndpoint(baseURL) {
+		return OpenCodeInferenceFreeModels(), nil
+	}
+
 	client := &http.Client{Timeout: runtimepolicy.ModelDiscoveryTimeout}
 	for _, option := range options {
 		if option != nil {
 			option(client)
 		}
+	}
+
+	if protocol == ProviderProtocolOpenAI && (IsOpenCodeZenEndpoint(baseURL) || IsOpenCodeGoEndpoint(baseURL)) {
+		if strings.TrimSpace(apiKey) == "" {
+			return nil, fmt.Errorf("%w: OpenCode Zen/Go requires an API key", ErrUnauthorized)
+		}
+		models, err := fetchModelsFromURL(ctx, client, baseURL+"/models", apiKey)
+		if err != nil {
+			return nil, err
+		}
+		models = filterOpenCodeCatalog(models)
+		if len(models) == 0 {
+			return nil, errors.New("no supported models returned by OpenCode catalog")
+		}
+		return models, nil
 	}
 
 	if protocol == ProviderProtocolAnthropic {
@@ -70,7 +107,7 @@ func FetchProviderModelsForProtocol(ctx context.Context, protocol ProviderProtoc
 	}
 
 	// If 401 Unauthorized, return error directly to let user check their key
-	if err != nil && strings.Contains(err.Error(), "401") {
+	if err != nil && errors.Is(err, ErrUnauthorized) {
 		return nil, err
 	}
 
@@ -109,7 +146,7 @@ func fetchModelsFromURL(ctx context.Context, client *http.Client, urlStr string,
 	}
 
 	if resp.StatusCode == http.StatusUnauthorized {
-		return nil, fmt.Errorf("authentication failed (401): invalid or missing API key")
+		return nil, fmt.Errorf("%w: invalid or missing API key", ErrUnauthorized)
 	}
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("endpoint returned status %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
@@ -144,7 +181,7 @@ func fetchAnthropicModels(ctx context.Context, client *http.Client, baseURL stri
 		return nil, fmt.Errorf("read anthropic models response: %w", err)
 	}
 	if resp.StatusCode == http.StatusUnauthorized {
-		return nil, fmt.Errorf("authentication failed (401): invalid or missing API key")
+		return nil, fmt.Errorf("%w: invalid or missing API key", ErrUnauthorized)
 	}
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("endpoint returned status %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))

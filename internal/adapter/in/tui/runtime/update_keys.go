@@ -1,6 +1,8 @@
 package runtime
 
 import (
+	"strings"
+
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/keyboardpolicy"
@@ -94,6 +96,9 @@ func (m *bubbleModel) updateKey(message tea.KeyPressMsg) tea.Cmd {
 			return m.withSpinner(command)
 		}
 	}
+	if handled, command := m.handleTranscriptNavKey(message); handled {
+		return m.withSpinner(command)
+	}
 	return m.handlePromptKey(message)
 }
 
@@ -162,9 +167,13 @@ func (m *bubbleModel) handlePromptKey(message tea.KeyPressMsg) tea.Cmd {
 		if m.panes.bottom.bashMode() {
 			m.setBashMode(false)
 		}
-		m.resetPrompt()
-		m.syncSlashView()
-		m.requestRelayout()
+		if prompt.Value() != "" {
+			m.resetPrompt()
+			m.syncSlashView()
+			m.requestRelayout()
+			return nil
+		}
+		m.enterTranscriptNavMode()
 		return nil
 	}
 	switch m.composerAction(message) {
@@ -185,6 +194,15 @@ func (m *bubbleModel) handlePromptKey(message tea.KeyPressMsg) tea.Cmd {
 		m.setBashMode(false)
 		return nil
 	}
+	if !m.panes.bottom.bashMode() && key.Matches(message, composerKeys.ExitBash) && len(m.panes.bottom.composer.attachments.localImages) > 0 {
+		cleanText := strings.TrimSpace(stripAttachmentPlaceholders(prompt.Value(), m.panes.bottom.composer.attachments.snapshot(nil)))
+		if cleanText == "" {
+			if m.panes.bottom.composer.attachments.RemoveLast(prompt) {
+				m.requestRelayout()
+				return nil
+			}
+		}
+	}
 	if key.Matches(message, composerKeys.HistoryUp) {
 		lineInfo := prompt.LineInfo()
 		if prompt.LineCount() == 1 || (prompt.Line() == 0 && lineInfo.RowOffset == 0 && lineInfo.ColumnOffset == 0) {
@@ -203,4 +221,67 @@ func (m *bubbleModel) handlePromptKey(message tea.KeyPressMsg) tea.Cmd {
 	m.syncSlashView()
 	m.requestRelayout()
 	return command
+}
+
+func (m *bubbleModel) handleTranscriptNavKey(message tea.KeyPressMsg) (bool, tea.Cmd) {
+	if !m.navMode {
+		return false, nil
+	}
+	collapsibles := m.ensureHistoryState().CollapsibleCells()
+	if len(collapsibles) == 0 {
+		m.exitTranscriptNavMode()
+		return false, nil
+	}
+
+	keyStr := message.String()
+	switch {
+	case message.Code == tea.KeyEsc || keyStr == "i":
+		m.exitTranscriptNavMode()
+		return true, nil
+	case keyStr == "j" || message.Code == tea.KeyDown:
+		if m.focusedCellIndex < len(collapsibles)-1 {
+			m.focusedCellIndex++
+		}
+		m.ensureHistoryState().SetHighlightedCell(collapsibles[m.focusedCellIndex])
+		m.requestRelayout()
+		return true, nil
+	case keyStr == "k" || message.Code == tea.KeyUp:
+		if m.focusedCellIndex > 0 {
+			m.focusedCellIndex--
+		}
+		m.ensureHistoryState().SetHighlightedCell(collapsibles[m.focusedCellIndex])
+		m.requestRelayout()
+		return true, nil
+	case keyStr == " " || keyStr == "space" || message.Code == ' ' || message.Code == tea.KeySpace || message.Code == tea.KeyEnter:
+		if m.focusedCellIndex >= 0 && m.focusedCellIndex < len(collapsibles) {
+			collapsibles[m.focusedCellIndex].ToggleExpanded()
+			m.ensureHistoryState().InvalidateCache()
+			m.requestRelayout()
+		}
+		return true, nil
+	}
+	return false, nil
+}
+
+func (m *bubbleModel) enterTranscriptNavMode() {
+	collapsibles := m.ensureHistoryState().CollapsibleCells()
+	if len(collapsibles) == 0 {
+		return
+	}
+	m.navMode = true
+	m.focusedCellIndex = len(collapsibles) - 1
+	m.ensureHistoryState().SetHighlightedCell(collapsibles[m.focusedCellIndex])
+	if prompt := m.panes.bottom.prompt(); prompt != nil {
+		prompt.Blur()
+	}
+	m.requestRelayout()
+}
+
+func (m *bubbleModel) exitTranscriptNavMode() {
+	m.navMode = false
+	m.ensureHistoryState().SetHighlightedCell(nil)
+	if prompt := m.panes.bottom.prompt(); prompt != nil {
+		_ = prompt.Focus()
+	}
+	m.requestRelayout()
 }

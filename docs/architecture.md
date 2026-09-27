@@ -11,6 +11,7 @@ cmd/protonman/                    composition root and mode selection
         |      acp/                          ACP JSON-RPC over stdio
         |      headless/                     non-interactive CLI
         |      tui/                          Bubble Tea TUI
+        |      desktop/gioui/               Gio desktop frontend
         |
         +--> internal/app/                  application use-case ports
         |
@@ -56,7 +57,7 @@ Driving adapters translate external interaction into application operations:
 - `acp/`: ACP JSON-RPC/stdin-stdout protocol handling.
 - `headless/`: non-interactive CLI output for scripts and CI.
 - `tui/`: Bubble Tea terminal presentation and interaction.
-- `desktop/`: Fyne desktop frontend behind the `desktop` build tag. See [`desktop.md`](desktop.md).
+- `desktop/gioui/`: Gio desktop frontend behind the `desktop` build tag, with a no-tag import stub for tooling compatibility. See [`desktop.md`](desktop.md).
   It drives the CLI over ACP through `adapter/out/acpclient` rather than embedding a
   second agent loop, so its presentation state lives in `feature/desktop` and its
   driven boundary is `desktop_contract_test.go` rather than the untagged package graph.
@@ -157,7 +158,7 @@ network, provider, and terminal concerns remain in adapters/platform packages.
 Driven adapters implement infrastructure-facing ports:
 
 - `config/`: layered TOML loading, merge, provenance, and persistence. Effective settings are created through `DefaultSnapshot()`, whose product defaults come only from `internal/base/runtimepolicy`; user and project writers share one atomic document persistence primitive while retaining scope-specific security checks and file modes. Persisted TOML provider/model records use dedicated file-schema structs and explicit conversion into runtime config types, so runtime representation changes do not silently redefine the on-disk format. The current contract and refactor boundaries are documented in [`settings.md`](settings.md).
-- `acpclient/`: ACP client used by the build-tag gated desktop frontend to drive CLI sessions over stdio.
+- `acpclient/`: ACP client used by the build-tag gated Gio desktop frontend to drive CLI sessions over stdio.
 - `memoryfs/`: file-backed memory repository implementing the `core/memory` port.
 - `model/`: provider presets, discovery, catalog normalization, SDK adaptation, and narrowly scoped provider-specific wrappers. Models can use a shared provider+endpoint+model low-concurrency scheduler here for bounded admission, low concurrency, adaptive pacing, and route-wide provider cooldowns. The default `auto` policy currently recommends it for OpenCode free models; `/low on` can force the same provider-neutral scheduler for any active provider/model and `/low off` bypasses it. Replay-safe stream recovery is a separate wrapper: OpenCode free models keep timeouts plus the full retry budget with open-retry ownership, while all other models use a bounded generic replay-safe retry for pre-commit incomplete streams and empty finishes.
 - `sessionfs/`: file-backed session repository and agent lifecycle persistence.
@@ -245,9 +246,9 @@ Key invariants include:
 6. Composition/wiring remains in `cmd/protonman` rather than leaking into domain packages.
 7. The TUI runtime root stays within its ratcheting production-file budget.
 8. Focused `tui/runtime/*` subpackages never import the root `tui/runtime` package.
-9. The desktop frontend is covered by `desktop_contract_test.go` with a desktop-tagged
-   package graph: its driven-adapter surface is `acpclient` only, and it keeps the same
-   application-port discipline as the other inbound adapters.
+9. The Gio desktop frontend is covered by `desktop_contract_test.go` with a
+   `desktop`-tagged package graph: its driven-adapter surface is `acpclient` only,
+   and it keeps the same application-port discipline as the other inbound adapters.
 
 Run `go test ./test/architecture` whenever moving packages or changing dependency direction.
 

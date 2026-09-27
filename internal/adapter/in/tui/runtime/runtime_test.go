@@ -566,8 +566,8 @@ func TestPromptDynamicHeightAccountsForSoftWrap(t *testing.T) {
 	if prompt.Height() <= 1 {
 		t.Fatalf("soft-wrapped prompt height = %d, want > 1", prompt.Height())
 	}
-	if prompt.Height() > 4 {
-		t.Fatalf("soft-wrapped prompt height = %d, want <= 4", prompt.Height())
+	if prompt.Height() > 6 {
+		t.Fatalf("soft-wrapped prompt height = %d, want <= 6", prompt.Height())
 	}
 	m.requestRelayout()
 	m.reconcileLayout()

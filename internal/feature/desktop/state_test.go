@@ -108,6 +108,147 @@ func TestReduceDoesNotAliasPermissionOptions(t *testing.T) {
 	}
 }
 
+func TestCloneStateDoesNotAliasNestedData(t *testing.T) {
+	original := State{
+		Projects: []ProjectState{{ID: "project", Folders: []ProjectFolder{{Path: "/workspace"}}}},
+		Sessions: []SessionState{{
+			ID:        "session",
+			Timeline:  []TimelineItem{{ID: "item"}},
+			Subagents: []SubagentState{{ID: "agent"}},
+			Context: SessionContextState{
+				Todo:   TodoState{Items: []TodoItemState{{ID: "todo"}}},
+				Memory: MemoryState{Workspace: []MemoryEntryState{{ID: "memory"}}},
+			},
+		}},
+		PermissionInbox: []PermissionRequest{{RequestID: "permission", Options: []PermissionOption{{ID: "allow"}}}},
+		Integrations:    []MCPIntegrationState{{Name: "mcp", Args: []string{"arg"}}},
+	}
+
+	clone := CloneState(original)
+	clone.Projects[0].Folders[0].Path = "/changed"
+	clone.Sessions[0].Timeline[0].ID = "changed"
+	clone.Sessions[0].Subagents[0].ID = "changed"
+	clone.Sessions[0].Context.Todo.Items[0].ID = "changed"
+	clone.Sessions[0].Context.Memory.Workspace[0].ID = "changed"
+	clone.PermissionInbox[0].Options[0].ID = "changed"
+	clone.Integrations[0].Args[0] = "changed"
+
+	if original.Projects[0].Folders[0].Path != "/workspace" ||
+		original.Sessions[0].Timeline[0].ID != "item" ||
+		original.Sessions[0].Subagents[0].ID != "agent" ||
+		original.Sessions[0].Context.Todo.Items[0].ID != "todo" ||
+		original.Sessions[0].Context.Memory.Workspace[0].ID != "memory" ||
+		original.PermissionInbox[0].Options[0].ID != "allow" ||
+		original.Integrations[0].Args[0] != "arg" {
+		t.Fatal("CloneState aliased nested state")
+	}
+}
+
+func TestClonePresentationStateDetachesRenderedAndNavigationData(t *testing.T) {
+	original := State{
+		ActiveSessionID: "active",
+		Projects: []ProjectState{{
+			ID:       "project",
+			Folders:  []ProjectFolder{{Path: "/workspace"}},
+			AgentIDs: []string{"agent"},
+		}},
+		Sessions: []SessionState{
+			{
+				ID:                    "active",
+				AdditionalDirectories: []string{"/shared"},
+				Timeline:              []TimelineItem{{ID: "item"}},
+				HistoryTruncated:      true,
+				Subagents:             []SubagentState{{ID: "child"}},
+				Context: SessionContextState{
+					Todo:   TodoState{Items: []TodoItemState{{ID: "todo"}}},
+					Memory: MemoryState{Workspace: []MemoryEntryState{{ID: "memory"}}},
+				},
+			},
+			{
+				ID:                    "inactive",
+				AgentID:               "agent",
+				ProjectID:             "project",
+				Title:                 "Inactive session",
+				Workspace:             "/inactive",
+				Status:                TaskCompleted,
+				HistoryTruncated:      true,
+				AdditionalDirectories: []string{"/inactive-shared"},
+				Timeline:              []TimelineItem{{ID: "inactive-item"}},
+				Subagents:             []SubagentState{{ID: "inactive-child"}},
+				Context: SessionContextState{
+					Todo:   TodoState{Items: []TodoItemState{{ID: "inactive-todo"}}},
+					Memory: MemoryState{Workspace: []MemoryEntryState{{ID: "inactive-memory"}}},
+				},
+			},
+		},
+		PermissionInbox: []PermissionRequest{{RequestID: "permission", Options: []PermissionOption{{ID: "allow"}}}},
+		Integrations:    []MCPIntegrationState{{Name: "mcp", Args: []string{"arg"}, Env: []string{"KEY=value"}}},
+	}
+
+	clone := ClonePresentationState(original)
+	clone.Projects[0].Folders[0].Path = "/changed"
+	clone.Projects[0].AgentIDs[0] = "changed-agent"
+	clone.Sessions[0].AdditionalDirectories[0] = "/changed-shared"
+	clone.Sessions[0].Timeline[0].ID = "changed-item"
+	clone.Sessions[0].Subagents[0].ID = "changed-child"
+	clone.Sessions[0].Context.Todo.Items[0].ID = "changed-todo"
+	clone.Sessions[0].Context.Memory.Workspace[0].ID = "changed-memory"
+	clone.PermissionInbox[0].Options[0].ID = "changed-permission"
+	clone.Integrations[0].Args[0] = "changed-arg"
+	clone.Integrations[0].Env[0] = "CHANGED=value"
+	inactive := clone.Sessions[1]
+
+	if original.Projects[0].Folders[0].Path != "/workspace" ||
+		original.Projects[0].AgentIDs[0] != "agent" ||
+		original.Sessions[0].AdditionalDirectories[0] != "/shared" ||
+		original.Sessions[0].Timeline[0].ID != "item" ||
+		original.Sessions[0].Subagents[0].ID != "child" ||
+		original.Sessions[0].Context.Todo.Items[0].ID != "todo" ||
+		original.Sessions[0].Context.Memory.Workspace[0].ID != "memory" ||
+		original.PermissionInbox[0].Options[0].ID != "allow" ||
+		original.Integrations[0].Args[0] != "arg" ||
+		original.Integrations[0].Env[0] != "KEY=value" {
+		t.Fatal("ClonePresentationState aliased detached state")
+	}
+	if inactive.ID != "inactive" || inactive.AgentID != "agent" || inactive.ProjectID != "project" || inactive.Title != "Inactive session" || inactive.Status != TaskCompleted {
+		t.Fatalf("inactive navigation metadata = %+v", inactive)
+	}
+	if inactive.AdditionalDirectories != nil || inactive.Timeline != nil || inactive.Subagents != nil ||
+		inactive.Context.Goal != "" || inactive.Context.Todo.Items != nil || inactive.Context.Memory.Workspace != nil || inactive.Context.Memory.Global != nil ||
+		inactive.Runtime != (RuntimeSettingsState{}) || !inactive.HistoryTruncated || !clone.Sessions[0].HistoryTruncated {
+		t.Fatalf("inactive presentation state retained non-navigation data: %+v", inactive)
+	}
+}
+
+func TestApplyCopiesEventOwnedSlices(t *testing.T) {
+	state := State{Sessions: []SessionState{{ID: "s1"}}}
+	todo := TodoState{Items: []TodoItemState{{ID: "todo", Text: "ship"}}}
+	memory := MemoryState{Workspace: []MemoryEntryState{{ID: "memory", Value: "keep"}}}
+	integrations := []MCPIntegrationState{{Name: "docs", Args: []string{"--stdio"}}}
+	permission := PermissionRequest{
+		RequestID: "permission",
+		Options:   []PermissionOption{{ID: "allow", Name: "Allow"}},
+	}
+
+	Apply(&state, Event{Kind: EventSessionContextUpdated, SessionID: "s1", Context: SessionContextState{Todo: todo}})
+	Apply(&state, Event{Kind: EventSessionMemoryUpdated, SessionID: "s1", Memory: memory})
+	Apply(&state, Event{Kind: EventIntegrationsReplaced, Integrations: integrations})
+	Apply(&state, Event{Kind: EventPermissionRequested, SessionID: "s1", Permission: permission})
+
+	todo.Items[0].Text = "changed"
+	memory.Workspace[0].Value = "changed"
+	integrations[0].Args[0] = "changed"
+	permission.Options[0].Name = "changed"
+
+	session := state.Sessions[0]
+	if session.Context.Todo.Items[0].Text != "ship" ||
+		session.Context.Memory.Workspace[0].Value != "keep" ||
+		state.Integrations[0].Args[0] != "--stdio" ||
+		state.PermissionInbox[0].Options[0].Name != "Allow" {
+		t.Fatalf("Apply retained event-owned slices: %#v", state)
+	}
+}
+
 func assertStatus(t *testing.T, state State, id string, want TaskStatus) {
 	t.Helper()
 	for _, session := range state.Sessions {

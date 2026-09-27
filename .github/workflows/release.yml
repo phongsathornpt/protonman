@@ -118,12 +118,15 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             gcc \
+            libegl1-mesa-dev \
             libgl1-mesa-dev \
+            libvulkan-dev \
             libwayland-dev \
             libxkbcommon-dev \
+            libxkbcommon-x11-dev \
             wayland-protocols \
             xorg-dev
-      - name: Build Desktop artifact
+      - name: Build Gio desktop artifact
         shell: bash
         env:
           GOOS: ${{ matrix.goos }}
@@ -146,19 +149,19 @@ jobs:
             -tags desktop \
             -trimpath \
             -ldflags "-s -w -X github.com/phongsathornpt/protonman/internal/base/buildinfo.version=$version" \
-            -o "dist/$package/protonman-desktop" \
-            ./cmd/protonman-desktop
+            -o "dist/$package/protonman-desktop-gio" \
+            ./cmd/protonman-desktop-gio
 
           cat >"dist/$package/run.sh" <<'EOF'
           #!/bin/sh
           set -eu
           root=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
           export PROTONMAN_BINARY="$root/libexec/protonman"
-          exec "$root/protonman-desktop" "$@"
+          exec "$root/protonman-desktop-gio" "$@"
           EOF
           chmod +x "dist/$package/run.sh"
 
-          (cd "dist/$package" && tar -czf "../${package}.tar.gz" protonman-desktop libexec/protonman run.sh)
+          (cd "dist/$package" && tar -czf "../${package}.tar.gz" protonman-desktop-gio libexec/protonman run.sh)
 
       - uses: actions/upload-artifact@v6
         with:

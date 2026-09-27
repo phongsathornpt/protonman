@@ -88,16 +88,23 @@ func TestManagerBindFailureCleansUpServers(t *testing.T) {
 }
 
 type mutableManagedServer struct {
-	mu      sync.Mutex
-	name    string
-	tools   []Tool
-	listErr error
+	mu        sync.Mutex
+	name      string
+	tools     []Tool
+	listErr   error
+	listCalls chan struct{}
 }
 
 func (s *mutableManagedServer) Name() string { return s.name }
 func (s *mutableManagedServer) ListTools(context.Context) ([]Tool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.listCalls != nil {
+		select {
+		case s.listCalls <- struct{}{}:
+		default:
+		}
+	}
 	if s.listErr != nil {
 		return nil, s.listErr
 	}
@@ -113,6 +120,20 @@ func (s *mutableManagedServer) setTools(tools []Tool) {
 	s.mu.Unlock()
 }
 func (s *mutableManagedServer) setError(err error) { s.mu.Lock(); s.listErr = err; s.mu.Unlock() }
+func (s *mutableManagedServer) observeListCalls(ch chan struct{}) {
+	s.mu.Lock()
+	s.listCalls = ch
+	s.mu.Unlock()
+}
+
+func waitForListCall(t *testing.T, calls <-chan struct{}) {
+	t.Helper()
+	select {
+	case <-calls:
+	case <-time.After(time.Second):
+		t.Fatal("manager did not request the refreshed tool list")
+	}
+}
 
 func TestManagerRefreshReplacesCatalogAtomically(t *testing.T) {
 	server := &mutableManagedServer{name: "db", tools: []Tool{{Name: "old"}}}
@@ -211,19 +232,15 @@ func TestManagerRefreshesDebouncedToolListChanges(t *testing.T) {
 	if err := manager.Bind(context.Background(), registry); err != nil {
 		t.Fatal(err)
 	}
+	listCalls := make(chan struct{}, 1)
+	server.observeListCalls(listCalls)
 	server.setTools([]Tool{{Name: "new"}})
 	server.emitToolsChanged()
 	server.emitToolsChanged()
 	server.emitToolsChanged()
-	deadline := time.Now().Add(time.Second)
-	for {
-		if _, ok := registry.Lookup("mcp.db.new"); ok {
-			break
-		}
-		if time.Now().After(deadline) {
-			t.Fatal("tools/list_changed did not refresh catalog")
-		}
-		time.Sleep(10 * time.Millisecond)
+	waitForListCall(t, listCalls)
+	if err := manager.Close(); err != nil {
+		t.Fatal(err)
 	}
 	if _, ok := registry.Lookup("mcp.db.old"); ok {
 		t.Fatal("old tool survived list_changed refresh")
@@ -241,9 +258,14 @@ func TestFailedToolListChangedRefreshRetainsOldCatalog(t *testing.T) {
 	if err := manager.Bind(context.Background(), registry); err != nil {
 		t.Fatal(err)
 	}
+	listCalls := make(chan struct{}, 1)
+	server.observeListCalls(listCalls)
 	server.setTools([]Tool{{Name: "bad tool"}})
 	server.emitToolsChanged()
-	time.Sleep(2 * toolListChangeDebounce)
+	waitForListCall(t, listCalls)
+	if err := manager.Close(); err != nil {
+		t.Fatal(err)
+	}
 	if _, ok := registry.Lookup("mcp.db.old"); !ok {
 		t.Fatal("failed list_changed refresh removed old catalog")
 	}

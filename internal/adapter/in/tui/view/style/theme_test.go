@@ -15,6 +15,7 @@ func TestSemanticStylesUseThemePalette(t *testing.T) {
 		want any
 	}{
 		{"assistant", AssistantStyle.GetForeground(), ColorTextPrimary},
+		{"user accent", UserStyle.GetForeground(), ColorInfo},
 		{"body", BodyStyle.GetForeground(), ColorTextPrimary},
 		{"muted", MutedStyle.GetForeground(), ColorTextMuted},
 		{"info", InfoStyle.GetForeground(), ColorInfo},

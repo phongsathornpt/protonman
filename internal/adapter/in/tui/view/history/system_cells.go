@@ -19,6 +19,19 @@ func (c SystemCell) RenderWidth(width int) []string {
 func (c SystemCell) RawLines() []string { return rawTextLines(c.Text) }
 func (c SystemCell) LineCount() int     { return len(c.RawLines()) }
 
+// MemoryActivityCell keeps durable-memory use visible in the transcript without
+// exposing the stored memory contents.
+type MemoryActivityCell struct{ Text string }
+
+func (MemoryActivityCell) Kind() HistoryCellKind { return HistoryCellMemory }
+func (c MemoryActivityCell) RenderWidth(width int) []string {
+	return styledWrappedLines("Memory · "+strings.TrimSpace(c.Text), width, tuistyle.InfoStyle.Bold(true))
+}
+func (c MemoryActivityCell) RawLines() []string {
+	return rawTextLines("Memory · " + strings.TrimSpace(c.Text))
+}
+func (c MemoryActivityCell) LineCount() int { return len(c.RawLines()) }
+
 // ErrorCell renders a failed operation or classified OpenCode error.
 type ErrorCell struct {
 	Title       string
@@ -84,10 +97,11 @@ func (c ErrorCell) renderCompactToolFailure(width int) []string {
 		header += tuistyle.MutedStyle.Render(tuistyle.GlyphSep + badge)
 	}
 	lines := wrapStyledLines(header, width)
+	if text := strings.TrimSpace(c.Text); text != "" {
+		lines = append(lines, indentedMutedLines(text, width, "  ", "  ")...)
+	}
 	if target := strings.TrimSpace(c.Target); target != "" {
 		lines = append(lines, indentedMutedLines(target, width, "  ", "  ")...)
-	} else if text := strings.TrimSpace(c.Text); text != "" {
-		lines = append(lines, indentedMutedLines(text, width, "  ", "  ")...)
 	}
 	for _, suggestion := range c.Suggestions {
 		lines = append(lines, indentedMutedLines(suggestion, width, "  ↳ ", "    ")...)

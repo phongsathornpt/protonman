@@ -8,7 +8,7 @@ import (
 
 // VisibleForAccess filters a provider catalog to models available to the current access mode.
 func VisibleForAccess(providerName, baseURL, apiKey string, models []model.RemoteModel) []model.RemoteModel {
-	if !model.IsProvider(model.DefaultOpenCodeName, providerName, baseURL) || strings.TrimSpace(apiKey) != "" {
+	if !model.IsOpenCodeRoute(providerName, baseURL) || strings.TrimSpace(apiKey) != "" {
 		return models
 	}
 	visible := make([]model.RemoteModel, 0, len(models))

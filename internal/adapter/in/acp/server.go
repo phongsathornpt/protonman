@@ -56,6 +56,13 @@ type Server struct {
 	sessions               map[string]*Session
 	sessionDirectories     map[string][]string
 	nextID                 uint64
+	permissionSeq          uint64
+	// output is the transport used for server-initiated requests such as
+	// session/request_permission. It is set for the duration of Serve.
+	output io.Writer
+	// permissions routes client answers to blocked tool calls. It is non-nil
+	// only while Serve is running.
+	permissions *permissionBroker
 }
 
 func New(service *toolcall.Service, registry tool.Registry, runner app.Conversation, opts ...Option) (*Server, error) {
@@ -97,6 +104,23 @@ func (s *Server) Serve(ctx context.Context, input io.Reader, output io.Writer) e
 	stopInputWatch := watchInputCancellation(ctx, input)
 	defer stopInputWatch()
 	defer s.closeSessions()
+
+	// Interactive permission needs a reverse channel: the loop below only reads
+	// client-to-server traffic, so tool calls blocked in ask mode are resolved
+	// by matching inbound responses to the requests this server emitted.
+	broker := newPermissionBroker(s)
+	s.mu.Lock()
+	s.output = output
+	s.permissions = broker
+	s.mu.Unlock()
+	defer func() {
+		broker.close()
+		s.mu.Lock()
+		s.output = nil
+		s.permissions = nil
+		s.mu.Unlock()
+	}()
+
 	scanner := bufio.NewScanner(input)
 	scanner.Buffer(make([]byte, 0, 64*1024), 10*1024*1024)
 	var prompts sync.WaitGroup
@@ -107,6 +131,12 @@ func (s *Server) Serve(ctx context.Context, input io.Reader, output io.Writer) e
 		}
 		line := bytes.TrimSpace(scanner.Bytes())
 		if len(line) == 0 {
+			continue
+		}
+		// A payload with an id but no method is a response to a request this
+		// server sent, such as session/request_permission. It must be consumed
+		// before decodeRequest, which rejects method-less frames.
+		if handled := s.handleServerResponse(broker, line); handled {
 			continue
 		}
 		request, parseErr := decodeRequest(line)
