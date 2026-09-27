@@ -122,6 +122,7 @@ jobs:
             libgl1-mesa-dev \
             libvulkan-dev \
             libwayland-dev \
+            libx11-xcb-dev \
             libxkbcommon-dev \
             libxkbcommon-x11-dev \
             wayland-protocols \
