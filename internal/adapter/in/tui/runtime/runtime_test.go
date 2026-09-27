@@ -682,7 +682,7 @@ func TestAssistantMarkdownAndWrapping(t *testing.T) {
 	if strings.Contains(plain, "# Heading") {
 		t.Fatalf("heading marker was not rendered: %q", plain)
 	}
-	for _, expected := range []string{"Heading", "item one", "code", "fmt.Println"} {
+	for _, expected := range []string{"Heading", "item one", "go", "fmt.Println"} {
 		if !strings.Contains(plain, expected) {
 			t.Fatalf("markdown output missing %q: %q", expected, plain)
 		}

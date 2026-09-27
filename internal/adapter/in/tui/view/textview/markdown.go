@@ -10,18 +10,20 @@ import (
 )
 
 var (
-	markdownH1Style     = tuistyle.MarkdownHeadingStyle
-	markdownH2Style     = tuistyle.MarkdownH2Style
-	markdownH3Style     = tuistyle.MarkdownH3Style
-	markdownItalicStyle = tuistyle.MarkdownItalicStyle
-	markdownCodeStyle   = tuistyle.MarkdownCodeStyle
-	markdownQuoteStyle  = tuistyle.MarkdownQuoteStyle
-	markdownBulletStyle = tuistyle.MarkdownBulletStyle
-	markdownBoldStyle   = tuistyle.MarkdownBoldStyle
-	markdownCodeInline  SimpleANSIStyle
-	markdownBoldInline  SimpleANSIStyle
-	markdownLinkInline  SimpleANSIStyle
-	markdownEmInline    SimpleANSIStyle
+	markdownH1Style         = tuistyle.MarkdownHeadingStyle
+	markdownH2Style         = tuistyle.MarkdownH2Style
+	markdownH3Style         = tuistyle.MarkdownH3Style
+	markdownItalicStyle     = tuistyle.MarkdownItalicStyle
+	markdownCodeStyle       = tuistyle.MarkdownCodeStyle
+	markdownCodeGutterStyle = tuistyle.MarkdownCodeGutterStyle
+	markdownCodeHeaderStyle = tuistyle.MarkdownCodeHeaderStyle
+	markdownQuoteStyle      = tuistyle.MarkdownQuoteStyle
+	markdownBulletStyle     = tuistyle.MarkdownBulletStyle
+	markdownBoldStyle       = tuistyle.MarkdownBoldStyle
+	markdownCodeInline      SimpleANSIStyle
+	markdownBoldInline      SimpleANSIStyle
+	markdownLinkInline      SimpleANSIStyle
+	markdownEmInline        SimpleANSIStyle
 )
 
 // proseWidth caps prose measure so long model output stays readable on wide
@@ -88,17 +90,27 @@ func RenderMarkdownLines(markdown string, width int) []string {
 		lines = append(lines, RenderMarkdownLine(raw, width, &state)...)
 	}
 	if state.inFence {
-		lines = append(lines, markdownCodeStyle.Render("  └─ code (unterminated)"))
+		label := state.fenceLang
+		if label == "" {
+			label = "code"
+		}
+		lines = append(lines, markdownCodeGutterStyle.Render("  ╰─ "+label+" (unterminated)"))
 	}
 	return TrimTrailingBlankLines(lines)
 }
 
 type MarkdownState struct {
-	inFence bool
+	inFence        bool
+	fenceLang      string
+	inBlockComment bool
+	inMultilineStr rune
 }
 
 // InFence reports whether incremental markdown parsing is inside a fenced code block.
 func (s MarkdownState) InFence() bool { return s.inFence }
+
+// FenceLang reports the language of the current fenced code block.
+func (s MarkdownState) FenceLang() string { return s.fenceLang }
 
 func RenderMarkdownLine(raw string, width int, state *MarkdownState) []string {
 	line := Sanitize(raw)
@@ -106,21 +118,29 @@ func RenderMarkdownLine(raw string, width int, state *MarkdownState) []string {
 	if strings.HasPrefix(trimmed, "```") || strings.HasPrefix(trimmed, "~~~") {
 		if state.inFence {
 			state.inFence = false
-			return []string{markdownCodeStyle.Render("  └─ code")}
+			state.fenceLang = ""
+			state.inBlockComment = false
+			state.inMultilineStr = 0
+			return []string{markdownCodeGutterStyle.Render("  ╰─")}
 		}
 		state.inFence = true
 		fenceLabel := strings.TrimSpace(strings.TrimLeft(trimmed[3:], "`~"))
-		label := "code"
-		if fenceLabel != "" {
-			label += " · " + fenceLabel
+		state.fenceLang = fenceLabel
+		state.inBlockComment = false
+		state.inMultilineStr = 0
+		label := fenceLabel
+		if label == "" {
+			label = "code"
 		}
-		return []string{markdownCodeStyle.Render("  ┌─ " + label)}
+		return []string{markdownCodeHeaderStyle.Render("  ╭─ " + label)}
 	}
 	if state.inFence {
-		wrapped := WrapLines(line, max(1, width-4))
+		highlighted := HighlightCodeLine(line, state.fenceLang, state)
+		wrapped := WrapLines(highlighted, max(1, width-4))
 		out := make([]string, 0, len(wrapped))
+		gutter := markdownCodeGutterStyle.Render("  │ ")
 		for _, part := range wrapped {
-			out = append(out, markdownCodeStyle.Render("  │ "+part))
+			out = append(out, gutter+part)
 		}
 		return out
 	}

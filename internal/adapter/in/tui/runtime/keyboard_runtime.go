@@ -134,7 +134,17 @@ func (m *bubbleModel) submit() tea.Cmd {
 		}
 		return nil
 	}
-	if len(input.Attachments) == 0 && strings.HasPrefix(input.Text, "/") && isCommandLine(input.Text) {
+	if len(input.Attachments) == 0 && strings.HasPrefix(input.Text, "/") && m.isCommandLine(input.Text) {
+		parsed := parseCommand(input.Text)
+		if m.isSkillCommand(parsed.Name) && (m.busy || m.imagePreparing || m.hasPermissionView()) {
+			if !m.enqueueInput(input) {
+				return nil
+			}
+			m.resetPrompt()
+			m.panes.bottom.remove(slashViewID)
+			m.refreshViewport()
+			return nil
+		}
 		return m.dispatch(input.Text)
 	}
 	if len(input.Attachments) > 0 && !m.currentModelAcceptsImageInput() {
@@ -185,7 +195,7 @@ func (m *bubbleModel) drainQueue() tea.Cmd {
 	if !ok {
 		return nil
 	}
-	if len(input.Attachments) == 0 && strings.HasPrefix(input.Text, "!") && !isCommandLine(input.Text) {
+	if len(input.Attachments) == 0 && strings.HasPrefix(input.Text, "!") && !m.isCommandLine(input.Text) {
 		return m.dispatchBang(strings.TrimPrefix(input.Text, "!"))
 	}
 	return m.dispatchInput(input)
@@ -197,7 +207,7 @@ func (m *bubbleModel) dispatch(line string) tea.Cmd {
 
 func (m *bubbleModel) dispatchInput(input tuiconv.QueuedInput) tea.Cmd {
 	display := submissionDisplayText(input)
-	if len(input.Attachments) == 0 && isCommandLine(input.Text) {
+	if len(input.Attachments) == 0 && m.isCommandLine(input.Text) {
 		parsed := parseCommand(input.Text)
 		if m.rejectBlockedSlashCommand(input.Text) {
 			return nil
@@ -207,7 +217,8 @@ func (m *bubbleModel) dispatchInput(input tuiconv.QueuedInput) tea.Cmd {
 		if history := submissionHistoryText(input); history != "" {
 			m.panes.bottom.recordHistory(history)
 		}
-		if spec, ok := slashview.LookupCommand(parsed.Name); ok && spec.EchoUser {
+		spec, ok := slashview.LookupCommand(parsed.Name)
+		if (ok && spec.EchoUser) || m.isSkillCommand(parsed.Name) {
 			m.appendUser(input.Text)
 		}
 		return m.executeCommand(input.Text)

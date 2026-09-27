@@ -4,7 +4,7 @@ import "testing"
 
 func TestCatalogContainsCanonicalCommandsOnly(t *testing.T) {
 	catalog := Catalog()
-	want := []string{"help", "permission", "low", "model", "provider", "skills", "agents", "goal", "todo", "clear", "resume", "call", "grill-me", "quit"}
+	want := []string{"help", "permission", "low", "model", "provider", "skills", "agents", "goal", "todo", "clear", "resume", "call", "quit"}
 	if len(catalog) != len(want) {
 		t.Fatalf("catalog size = %d, want %d: %#v", len(catalog), len(want), catalog)
 	}
@@ -167,5 +167,39 @@ func TestIsCommandLineDistinguishesFilePathsAndCommands(t *testing.T) {
 				t.Errorf("IsCommandLine(%q) = %v, want %v", tt.input, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestCommandMatchesIncludeActiveSkills(t *testing.T) {
+	context, ok := ParseContext("/gol")
+	if !ok {
+		t.Fatal("ParseContext returned false")
+	}
+	catalog := []Command{
+		{Name: "goal", Description: "manage active goal"},
+		{Name: "help", Description: "list commands"},
+	}
+	skills := []Skill{
+		{Name: "golang-code-review", Description: "review go code", Active: true},
+		{Name: "inactive-skill", Description: "golang test", Active: false},
+	}
+	matches := Matches(context, catalog, skills)
+	if len(matches) != 2 {
+		t.Fatalf("expected 2 matches (/goal and [skill] golang-code-review), got %d", len(matches))
+	}
+	if matches[0].Name != "goal" {
+		t.Fatalf("matches[0].Name = %q, want goal", matches[0].Name)
+	}
+	if matches[1].Name != "golang-code-review" {
+		t.Fatalf("matches[1].Name = %q, want golang-code-review", matches[1].Name)
+	}
+	if matches[1].PrefixTag != "[skill]" {
+		t.Fatalf("matches[1].PrefixTag = %q, want [skill]", matches[1].PrefixTag)
+	}
+	if matches[1].Argument != ArgumentRest {
+		t.Fatalf("matches[1].Argument = %v, want ArgumentRest", matches[1].Argument)
+	}
+	if !matches[1].EchoUser {
+		t.Fatal("expected matches[1].EchoUser = true")
 	}
 }

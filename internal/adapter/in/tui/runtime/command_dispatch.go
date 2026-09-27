@@ -10,6 +10,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/cmdpolicy"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/transientnotice"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/state/runtimeui"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/slashview"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/textview"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/app"
@@ -48,11 +49,14 @@ func (m *bubbleModel) executeCommand(line string) tea.Cmd {
 		return m.openAgentsPane()
 	case cmdpolicy.KindCall:
 		return m.startCall(cmd.Parts)
-	case cmdpolicy.KindGrillMe:
-		return m.handleGrillMeCommand(cmd.Rest)
 	case cmdpolicy.KindQuit:
 		return tea.Quit
 	default:
+		if m.skills != nil {
+			if s, ok := m.skills.Lookup(cmd.Name); ok {
+				return m.handleSkillCommand(s, cmd.Rest)
+			}
+		}
 		m.appendError(fmt.Sprintf("unknown command %q; try /help", cmd.Name))
 	}
 	m.refreshViewport()
@@ -62,6 +66,16 @@ func (m *bubbleModel) executeCommand(line string) tea.Cmd {
 func (m *bubbleModel) appendHelp() {
 	for _, command := range slashCatalog {
 		m.appendLine("/" + textview.PadRight(command.Name, 16) + " " + command.Description)
+	}
+	if m.skills != nil {
+		activeSkills := m.skills.ActiveSkills()
+		if len(activeSkills) > 0 {
+			m.appendLine("")
+			m.appendLine("Active Skills:")
+			for _, s := range activeSkills {
+				m.appendLine("/" + textview.PadRight(s.Name, 16) + " " + s.Description)
+			}
+		}
 	}
 }
 
@@ -124,28 +138,44 @@ func (m *bubbleModel) handleGoalCommand(argument string) tea.Cmd {
 	}
 }
 
-func (m *bubbleModel) handleGrillMeCommand(topic string) tea.Cmd {
-	trimmedTopic := strings.TrimSpace(topic)
-	if m.skills != nil {
-		for _, name := range []string{"grill-me", "grilling"} {
-			if _, ok := m.skills.Lookup(name); ok && !m.skills.IsActivated(name) {
-				_ = m.skills.Activate(name)
-			}
+func (m *bubbleModel) handleSkillCommand(s skill.Skill, args string) tea.Cmd {
+	if m.skills == nil {
+		m.appendError("skills registry is not available")
+		return nil
+	}
+	if !m.skills.IsActivated(s.Name) {
+		if err := m.skills.Activate(s.Name); err != nil {
+			m.appendError(fmt.Sprintf("failed to activate skill %q: %v", s.Name, err))
+			return nil
 		}
+		m.appendMuted(fmt.Sprintf("activated skill %q", s.Name))
 		m.persistActiveSkills()
 		m.refreshSkillsPane()
 	}
 
+	trimmedArgs := strings.TrimSpace(args)
 	var prompt string
-	if trimmedTopic != "" {
-		prompt = fmt.Sprintf("Grill me on: %s", trimmedTopic)
+	if trimmedArgs != "" {
+		prompt = trimmedArgs
 	} else if strings.TrimSpace(m.activeGoal) != "" {
-		prompt = fmt.Sprintf("Grill me on the active goal: %s", m.activeGoal)
+		prompt = fmt.Sprintf("Apply %s to the active goal: %s", s.Name, m.activeGoal)
 	} else {
-		prompt = "Grill me on our current project plan and architecture. What design decisions are on the current frontier?"
+		prompt = fmt.Sprintf("Apply %s to the current workspace.", s.Name)
 	}
 
 	return m.startTurn(prompt)
+}
+
+func (m *bubbleModel) isSkillCommand(name string) bool {
+	if m == nil || m.skills == nil {
+		return false
+	}
+	name = slashview.CanonicalName(name)
+	if cmdpolicy.Classify("/" + name).IsKnown() {
+		return false
+	}
+	_, ok := m.skills.Lookup(name)
+	return ok
 }
 
 func (m *bubbleModel) setActiveGoal(goal string) error {
@@ -879,6 +909,9 @@ func (m *bubbleModel) startBash(command string) tea.Cmd {
 
 func (m *bubbleModel) persistActiveSkills() {
 	if m == nil || m.skills == nil {
+		return
+	}
+	if m.application == (app.Services{}) {
 		return
 	}
 	active := m.skills.ActivatedList()

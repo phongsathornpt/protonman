@@ -157,7 +157,11 @@ func (c *AssistantCell) renderAssistantIncremental(text string, width int) []str
 		out = append(out, decorateAssistantLines(tailLines, stableLen)...)
 	}
 	if state.InFence() {
-		marker := tuistyle.MarkdownCodeStyle.Render("  └─ code (unterminated)")
+		label := state.FenceLang()
+		if label == "" {
+			label = "code"
+		}
+		marker := tuistyle.MarkdownCodeGutterStyle.Render("  ╰─ " + label + " (unterminated)")
 		out = append(out, assistantDecoratedLine(marker, len(out)))
 	}
 	return out

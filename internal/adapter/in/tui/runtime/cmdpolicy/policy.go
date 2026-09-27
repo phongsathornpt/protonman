@@ -20,7 +20,6 @@ const (
 	KindAgents
 	KindCall
 	KindResume
-	KindGrillMe
 	KindQuit
 )
 
@@ -52,7 +51,6 @@ var kindsByName = map[string]Kind{
 	"agents":     KindAgents,
 	"call":       KindCall,
 	"resume":     KindResume,
-	"grill-me":   KindGrillMe,
 	"quit":       KindQuit,
 }
 
