@@ -21,18 +21,19 @@ type callMetadata struct {
 }
 
 var builtinMetadata = map[string]callMetadata{
-	NameRead:     {Metadata: Metadata{Name: NameRead, Kind: KindRead, DisplayName: "Read"}, title: titleReadFile, target: targetReadFile, affectedPaths: affectedSinglePath("path", "filePath", "file_path", "file", "filename", "target")},
-	NameMath:     {Metadata: Metadata{Name: NameMath, Kind: KindCompute, DisplayName: "Calculate"}, title: titleCalculate, target: targetCalculate},
-	NameEdit:     {Metadata: Metadata{Name: NameEdit, Kind: KindEdit, DisplayName: "Edit"}, title: titleEdit, target: targetEdit, affectedPaths: affectedEdit},
-	NameLS:       {Metadata: Metadata{Name: NameLS, Kind: KindRead, DisplayName: "List"}, title: titleListDir, target: targetListDir},
-	NameFind:     {Metadata: Metadata{Name: NameFind, Kind: KindRead, DisplayName: "Find files"}, title: titleFindFiles, target: targetFindFiles},
-	NameGrep:     {Metadata: Metadata{Name: NameGrep, Kind: KindGrep, DisplayName: "Search"}, title: titleGrep, target: targetGrep},
-	NameBash:     {Metadata: Metadata{Name: NameBash, Kind: KindBash, DisplayName: "Run"}, title: titleBash, target: targetBash},
-	NameWeb:      {Metadata: Metadata{Name: NameWeb, Kind: KindWeb, DisplayName: "Web"}, title: titleWeb, target: targetWeb},
-	NameGit:      {Metadata: Metadata{Name: NameGit, Kind: KindGit, DisplayName: "Git"}, title: titleGitStatus, target: targetGitStatus},
-	NameTodo:     {Metadata: Metadata{Name: NameTodo, Kind: KindTask, DisplayName: "Tasks"}, title: titleTodo, target: targetTodo},
-	NameSkill:    {Metadata: Metadata{Name: NameSkill, Kind: KindRead, DisplayName: "Skill"}, title: titleActivateSkill, target: targetActivateSkill},
-	NameSubagent: {Metadata: Metadata{Name: NameSubagent, Kind: KindAgent, DisplayName: "Subagent"}, title: titleSubagent, target: targetSubagent},
+	NameRead:        {Metadata: Metadata{Name: NameRead, Kind: KindRead, DisplayName: "Read"}, title: titleReadFile, target: targetReadFile, affectedPaths: affectedSinglePath("path", "filePath", "file_path", "file", "filename", "target")},
+	NameMath:        {Metadata: Metadata{Name: NameMath, Kind: KindCompute, DisplayName: "Calculate"}, title: titleCalculate, target: targetCalculate},
+	NameEdit:        {Metadata: Metadata{Name: NameEdit, Kind: KindEdit, DisplayName: "Edit"}, title: titleEdit, target: targetEdit, affectedPaths: affectedEdit},
+	NameLS:          {Metadata: Metadata{Name: NameLS, Kind: KindRead, DisplayName: "List"}, title: titleListDir, target: targetListDir},
+	NameFind:        {Metadata: Metadata{Name: NameFind, Kind: KindRead, DisplayName: "Find files"}, title: titleFindFiles, target: targetFindFiles},
+	NameGrep:        {Metadata: Metadata{Name: NameGrep, Kind: KindGrep, DisplayName: "Search"}, title: titleGrep, target: targetGrep},
+	NameBash:        {Metadata: Metadata{Name: NameBash, Kind: KindBash, DisplayName: "Run"}, title: titleBash, target: targetBash},
+	NameWeb:         {Metadata: Metadata{Name: NameWeb, Kind: KindWeb, DisplayName: "Web"}, title: titleWeb, target: targetWeb},
+	NameGit:         {Metadata: Metadata{Name: NameGit, Kind: KindGit, DisplayName: "Git"}, title: titleGitStatus, target: targetGitStatus},
+	NameTodo:        {Metadata: Metadata{Name: NameTodo, Kind: KindTask, DisplayName: "Tasks"}, title: titleTodo, target: targetTodo},
+	NameSkill:       {Metadata: Metadata{Name: NameSkill, Kind: KindRead, DisplayName: "Skill"}, title: titleActivateSkill, target: targetActivateSkill},
+	NameSubagent:    {Metadata: Metadata{Name: NameSubagent, Kind: KindAgent, DisplayName: "Subagent"}, title: titleSubagent, target: targetSubagent},
+	NameAskQuestion: {Metadata: Metadata{Name: NameAskQuestion, Kind: KindQuestion, DisplayName: "Question"}, title: titleAskQuestion, target: targetAskQuestion},
 }
 
 // MetadataForName returns canonical metadata for a known built-in tool.
@@ -375,4 +376,15 @@ func affectedSinglePath(keys ...string) func(map[string]any) []string {
 		}
 		return nil
 	}
+}
+
+func titleAskQuestion(args map[string]any) string {
+	if q := ExtractString(args, "question"); q != "" {
+		return "Ask: " + TruncateRunes(q, 40)
+	}
+	return "Ask user question"
+}
+
+func targetAskQuestion(args map[string]any) string {
+	return ExtractString(args, "question")
 }

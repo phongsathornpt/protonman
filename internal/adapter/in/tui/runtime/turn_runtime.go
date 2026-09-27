@@ -339,6 +339,9 @@ func (m *bubbleModel) updateTurnDone(message turnmsg.Done) tea.Cmd {
 	}
 	m.requestRelayout()
 	if message.Err != nil {
+		if m.panes.bottom != nil && m.panes.bottom.has(questionViewID) {
+			m.panes.bottom.remove(questionViewID)
+		}
 		m.clearQueuedInputs()
 		return nil
 	}

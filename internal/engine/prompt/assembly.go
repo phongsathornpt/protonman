@@ -21,6 +21,7 @@ const (
 	orderToolDiscipline   = 100
 	orderWorkspace        = 200
 	orderTaskCoordination = 300
+	orderQuestions        = 350
 	orderDelegation       = 400
 	orderMCP              = 500
 	orderVerification     = 600

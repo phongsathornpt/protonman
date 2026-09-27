@@ -3,18 +3,19 @@ package tool
 // Canonical public tool names. Runtime, prompts, permissions, telemetry, and
 // tests should use this vocabulary rather than historical aliases.
 const (
-	NameRead     = "read"
-	NameLS       = "ls"
-	NameFind     = "find"
-	NameGrep     = "grep"
-	NameMath     = "math"
-	NameGit      = "git"
-	NameEdit     = "edit"
-	NameWeb      = "web"
-	NameTodo     = "todo"
-	NameSkill    = "skill"
-	NameSubagent = "subagent"
-	NameBash     = "bash"
+	NameRead        = "read"
+	NameLS          = "ls"
+	NameFind        = "find"
+	NameGrep        = "grep"
+	NameMath        = "math"
+	NameGit         = "git"
+	NameEdit        = "edit"
+	NameWeb         = "web"
+	NameTodo        = "todo"
+	NameSkill       = "skill"
+	NameSubagent    = "subagent"
+	NameBash        = "bash"
+	NameAskQuestion = "ask_question"
 )
 
 // Canonical facade actions shared by the public tool capabilities.

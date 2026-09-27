@@ -12,6 +12,7 @@ import (
 	tuihistory "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/history"
 	tuipresentation "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/presentation"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/toolview"
+	questiontool "github.com/phongsathornpt/protonman/internal/adapter/out/tool/question"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 )
 
@@ -196,6 +197,25 @@ func (m *bubbleModel) completedToolCell(callID string, name string, body string,
 			toolKind = handler.Definition().Kind
 		} else {
 			toolKind = tool.KindForName(name)
+		}
+	}
+	if name == tool.NameAskQuestion || name == "ask_question" || toolKind == tool.KindQuestion {
+		var resp questiontool.Response
+		if len(result.StructuredOutput) > 0 {
+			_ = json.Unmarshal(result.StructuredOutput, &resp)
+		}
+		qText := target
+		if qText == "" {
+			qText = m.runningToolTarget(callID, name)
+		}
+		ans := resp.Answer
+		if ans == "" {
+			ans = result.Output
+		}
+		return &tuihistory.QuestionCell{
+			Question: qText,
+			Answer:   ans,
+			Declined: resp.Status == questiontool.StatusDeclined || strings.Contains(ans, "[Declined]"),
 		}
 	}
 	summary := toolview.SummarizeOutput(name, toolKind, target, body, result.ExitCode, result.Truncated)

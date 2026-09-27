@@ -38,7 +38,7 @@ func (m *bubbleModel) handleInterruptKey() tea.Cmd {
 		m.requestRelayout()
 		return nil
 	}
-	if top := m.panes.bottom.top(); top != nil && top.ID() != permissionViewID && top.ID() != slashViewID {
+	if top := m.panes.bottom.top(); top != nil && top.ID() != permissionViewID && top.ID() != questionViewID && top.ID() != slashViewID {
 		if provider, ok := top.(*providerPaneView); ok {
 			provider.cancelFetch()
 		}

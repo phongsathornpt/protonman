@@ -281,7 +281,7 @@ func TestToolKindValidationAndParsing(t *testing.T) {
 	kinds := []ToolKind{
 		ToolAny, ToolRead, ToolEdit, ToolBash,
 		ToolGrep, ToolMCP, ToolWeb,
-		ToolTask, ToolAgent, ToolCompute,
+		ToolTask, ToolAgent, ToolCompute, ToolQuestion,
 	}
 	for _, k := range kinds {
 		if !ValidToolKind(k) {
@@ -318,6 +318,17 @@ func TestComputeIsAllowedByDefaultButExplicitRulesWin(t *testing.T) {
 	}
 	if got := denied.Evaluate(request); got.Action != ActionDeny {
 		t.Fatalf("explicit compute deny = %v, want deny", got.Action)
+	}
+}
+
+func TestQuestionIsAllowedByDefault(t *testing.T) {
+	policy, err := NewPolicy(Config{Default: ActionAsk})
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := Request{ToolName: "ask_question", ToolKind: ToolQuestion, Detail: "Which database should we use?"}
+	if got := policy.Evaluate(request); got.Action != ActionAllow {
+		t.Fatalf("default question action = %v, want allow", got.Action)
 	}
 }
 

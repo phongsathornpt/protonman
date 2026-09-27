@@ -23,3 +23,4 @@ var WithAgentConfig = runtimeui.WithAgentConfig
 var WithRuntimeConfig = runtimeui.WithRuntimeConfig
 var WithProjectContext = runtimeui.WithProjectContext
 var WithCoordinator = runtimeui.WithCoordinator
+var WithQuestionBridge = runtimeui.WithQuestionBridge

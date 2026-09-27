@@ -292,3 +292,33 @@ func TestRenderOmitsEmptyActiveGoal(t *testing.T) {
 		t.Fatalf("empty active goal rendered:\n%s", got)
 	}
 }
+
+func TestRenderQuestionsSectionWhenAvailable(t *testing.T) {
+	got := Render(Spec{
+		Capabilities:   ToolCapabilities{Questions: true},
+		AvailableTools: []string{"read", "ask_question"},
+	})
+	for _, want := range []string{
+		"# User Questions",
+		"When ask_question is available, NEVER ask questions or request user preferences via plain assistant chat text",
+		"Use ask_question to ask the user a clarifying question",
+		"Always explore the workspace, code, and tests first",
+		"Prefer discrete options",
+		"- Use ask_question with question and optional options",
+		"never ask questions in assistant text when ask_question is available",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("questions prompt missing %q:\n%s", want, got)
+		}
+	}
+}
+
+func TestRenderOmitsQuestionsWhenUnavailable(t *testing.T) {
+	got := Render(Spec{AvailableTools: []string{"read"}})
+	if strings.Contains(got, "# User Questions") {
+		t.Fatalf("prompt unexpectedly contained # User Questions:\n%s", got)
+	}
+	if strings.Contains(got, "ask_question") {
+		t.Fatalf("prompt unexpectedly mentioned ask_question:\n%s", got)
+	}
+}

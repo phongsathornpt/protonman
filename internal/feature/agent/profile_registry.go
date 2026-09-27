@@ -38,7 +38,7 @@ func FilterRegistryForProfile(base tool.Registry, profile Profile) tool.Registry
 }
 
 func isToolAllowed(profile Profile, def tool.Definition) bool {
-	if def.Kind == tool.KindAgent || def.Kind == tool.KindTask {
+	if def.Kind == tool.KindAgent || def.Kind == tool.KindTask || def.Kind == tool.KindQuestion {
 		return false
 	}
 	if def.Kind == tool.KindMCP {

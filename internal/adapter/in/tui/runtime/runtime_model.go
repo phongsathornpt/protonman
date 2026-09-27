@@ -14,6 +14,7 @@ import (
 	tuiconv "github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/conversation"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/modelcatalog"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/permissionbridge"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/questionbridge"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/state/agentui"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/state/runtimeui"
 	tuihistory "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/history"
@@ -177,13 +178,14 @@ type viewportViewCache struct {
 }
 
 type bubbleModel struct {
-	ctx         context.Context
-	service     *toolcall.Service
-	registry    tool.Registry
-	skills      *skill.Registry
-	runner      app.Conversation
-	application app.Services
-	bridge      *permissionbridge.Bridge
+	ctx            context.Context
+	service        *toolcall.Service
+	registry       tool.Registry
+	skills         *skill.Registry
+	runner         app.Conversation
+	application    app.Services
+	bridge         *permissionbridge.Bridge
+	questionBridge *questionbridge.Bridge
 	agentModelState
 	turnModelState
 	modelSetupState
@@ -324,6 +326,9 @@ func (k bubbleKeyMap) FullHelp() [][]key.Binding {
 
 func (m *bubbleModel) Init() tea.Cmd {
 	commands := []tea.Cmd{m.bridge.Next()}
+	if m.questionBridge != nil {
+		commands = append(commands, m.questionBridge.Next())
+	}
 	// Reduced motion keeps the caret steady, so the blink loop never starts.
 	if !m.reducedMotion {
 		commands = append(commands, textarea.Blink)

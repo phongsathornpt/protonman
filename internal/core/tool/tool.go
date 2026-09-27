@@ -33,11 +33,13 @@ const (
 	KindAgent Kind = "agent"
 	// KindCompute identifies deterministic local computation tools.
 	KindCompute Kind = "compute"
+	// KindQuestion identifies interactive user clarification tools.
+	KindQuestion Kind = "question"
 )
 
 func validKind(kind Kind) bool {
 	switch kind {
-	case KindRead, KindEdit, KindBash, KindGrep, KindGit, KindMCP, KindWeb, KindTask, KindAgent, KindCompute:
+	case KindRead, KindEdit, KindBash, KindGrep, KindGit, KindMCP, KindWeb, KindTask, KindAgent, KindCompute, KindQuestion:
 		return true
 	default:
 		return false

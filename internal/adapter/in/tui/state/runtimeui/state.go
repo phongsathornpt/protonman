@@ -57,6 +57,8 @@ const (
 	ActivityCanceling = "canceling"
 	// ActivityWaitingForPermission marks a blocking permission prompt.
 	ActivityWaitingForPermission = "waiting for permission"
+	// ActivityWaitingForQuestion marks an interactive question prompt.
+	ActivityWaitingForQuestion = "waiting for user input"
 )
 
 // IsReady reports whether a raw activity is the ready sentinel. An empty
@@ -77,11 +79,17 @@ func IsWaitingForPermission(activity string) bool {
 	return strings.TrimSpace(activity) == ActivityWaitingForPermission
 }
 
+// IsWaitingForQuestion reports whether a raw activity is the question prompt sentinel.
+func IsWaitingForQuestion(activity string) bool {
+	return strings.TrimSpace(activity) == ActivityWaitingForQuestion
+}
+
 // Input contains runtime facts already known by the TUI. The projection does
 // not mutate execution state and therefore cannot drift from the turn engine.
 type Input struct {
 	Busy              bool
 	PermissionPending bool
+	QuestionPending   bool
 	Canceling         bool
 	Streaming         bool
 	Retry             domain.RetryEvent
@@ -119,6 +127,10 @@ func Project(input Input) State {
 
 	if input.PermissionPending {
 		state := State{Phase: PhaseWaitingForInput, Activity: "action required", Meta: []string{"permission"}}
+		return appendElapsed(state, input.Busy, input.StartedAt, now)
+	}
+	if input.QuestionPending {
+		state := State{Phase: PhaseWaitingForInput, Activity: "action required", Meta: []string{"question"}}
 		return appendElapsed(state, input.Busy, input.StartedAt, now)
 	}
 	if !input.Busy {

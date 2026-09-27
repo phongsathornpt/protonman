@@ -4,9 +4,16 @@ import (
 	"fmt"
 	"strings"
 
+	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/paneutil"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/questionbridge"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/state/runtimeui"
+	panecommon "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane/common"
+	questionpane "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane/question"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
+	questiontool "github.com/phongsathornpt/protonman/internal/adapter/out/tool/question"
 	"github.com/phongsathornpt/protonman/internal/feature/agent"
 	tododomain "github.com/phongsathornpt/protonman/internal/feature/todo"
 	"github.com/phongsathornpt/protonman/proton-sdk/domain"
@@ -36,25 +43,27 @@ const (
 	paneActionProviderEdit
 	paneActionProviderFetch
 	paneActionProviderSave
+	paneActionQuestionResolve
 )
 
 type paneAction struct {
-	kind           paneActionKind
-	paneID         string
-	sessionID      string
-	reasoning      domain.ReasoningEffort
-	runSlash       bool
-	skillName      string
-	providerName   string
-	modelID        string
-	activity       string
-	permission     permissionOption
-	permissionMode permissionModeChoice
-	lowConcurrency model.LowConcurrencySetting
-	scrollLines    int
-	key            tea.KeyPressMsg
-	providerItem   providerSelectItem
-	providerSave   providerSaveRequest
+	kind             paneActionKind
+	paneID           string
+	sessionID        string
+	reasoning        domain.ReasoningEffort
+	runSlash         bool
+	skillName        string
+	providerName     string
+	modelID          string
+	activity         string
+	permission       permissionOption
+	permissionMode   permissionModeChoice
+	lowConcurrency   model.LowConcurrencySetting
+	scrollLines      int
+	key              tea.KeyPressMsg
+	providerItem     providerSelectItem
+	providerSave     providerSaveRequest
+	questionResponse questiontool.Response
 }
 
 type paneKeyResult struct {
@@ -125,6 +134,8 @@ func (m *bubbleModel) applyPaneAction(action paneAction) tea.Cmd {
 		m.activity = action.activity
 	case paneActionPermissionResolve:
 		return m.resolvePermission(action.permission)
+	case paneActionQuestionResolve:
+		return m.resolveQuestion(action.questionResponse)
 	case paneActionSetPermissionMode:
 		m.panes.bottom.remove(permissionModeViewID)
 		m.applyPermissionModeChoice(action.permissionMode)
@@ -244,4 +255,220 @@ func newPaneRenderContext(m *bubbleModel) paneRenderContext {
 	}
 
 	return ctx
+}
+
+// --- Question Pane ---
+
+const questionViewID = "question"
+
+type questionRequest = questionbridge.Request
+type questionRequestMsg = questionbridge.RequestMsg
+
+type questionPaneView struct {
+	pending     questionRequest
+	index       int
+	selected    map[int]bool
+	writeInMode bool
+	writeInText string
+	tone        panecommon.Tone
+}
+
+func (*questionPaneView) ID() string                             { return questionViewID }
+func (*questionPaneView) PresentationMode() panePresentationMode { return paneBlocking }
+
+func (v *questionPaneView) Render(ctx paneRenderContext) string {
+	return v.card(ctx)
+}
+
+func (v *questionPaneView) card(ctx paneRenderContext) string {
+	req := v.pending.Request
+	result := questionpane.QuestionView(questionpane.QuestionSnapshot{
+		Width:       ctx.width,
+		Height:      ctx.height,
+		Question:    req.Question,
+		Options:     req.Options,
+		Multiple:    req.Multiple,
+		Index:       v.index,
+		Selected:    v.selected,
+		WriteInMode: v.writeInMode,
+		WriteInText: v.writeInText,
+		Tone:        v.tone,
+	})
+
+	return renderModalRows(ctx, paneToneColor(result.Tone), result.Rows)
+}
+
+func (v *questionPaneView) HandlePaneKey(_ paneRenderContext, message tea.KeyPressMsg) paneKeyResult {
+	req := v.pending.Request
+	hasOptions := len(req.Options) > 0
+
+	resolve := func(status questiontool.Status, answer string, selected []string) paneKeyResult {
+		return paneKeyResult{
+			handled: true,
+			action: paneAction{
+				kind: paneActionQuestionResolve,
+				questionResponse: questiontool.Response{
+					Status:          status,
+					Answer:          answer,
+					SelectedOptions: selected,
+				},
+			},
+		}
+	}
+
+	if v.writeInMode || !hasOptions {
+		switch {
+		case key.Matches(message, paneutil.Keys.Escape):
+			if hasOptions {
+				v.writeInMode = false
+				return paneKeyResult{handled: true}
+			}
+			return resolve(questiontool.StatusDeclined, "User declined to answer", nil)
+		case key.Matches(message, paneutil.Keys.Confirm):
+			text := strings.TrimSpace(v.writeInText)
+			if text == "" {
+				if hasOptions {
+					v.writeInMode = false
+					return paneKeyResult{handled: true}
+				}
+				text = "User declined to answer"
+				return resolve(questiontool.StatusDeclined, text, nil)
+			}
+			return resolve(questiontool.StatusAnswered, text, nil)
+		case message.String() == "backspace":
+			if len(v.writeInText) > 0 {
+				r := []rune(v.writeInText)
+				v.writeInText = string(r[:len(r)-1])
+			}
+			return paneKeyResult{handled: true}
+		case message.Code == ' ' || message.Text == " ":
+			v.writeInText += " "
+			return paneKeyResult{handled: true}
+		default:
+			if text := message.Text; len(text) > 0 {
+				v.writeInText += text
+				return paneKeyResult{handled: true}
+			}
+			return paneKeyResult{handled: true}
+		}
+	}
+
+	// Normal options mode
+	totalItems := len(req.Options) + 1 // options + write-in option
+	if v.index >= totalItems {
+		v.index = totalItems - 1
+	}
+	if v.index < 0 {
+		v.index = 0
+	}
+
+	switch {
+	case key.Matches(message, paneutil.Keys.Escape):
+		return resolve(questiontool.StatusDeclined, "User declined to answer", nil)
+	case key.Matches(message, paneutil.Keys.Up):
+		if v.index > 0 {
+			v.index--
+		}
+		return paneKeyResult{handled: true}
+	case key.Matches(message, paneutil.Keys.Down):
+		if v.index < totalItems-1 {
+			v.index++
+		}
+		return paneKeyResult{handled: true}
+	case message.Text == "w" || message.Text == "W":
+		v.writeInMode = true
+		return paneKeyResult{handled: true}
+	case message.Text >= "1" && message.Text <= "9":
+		idx := int(message.Text[0] - '1')
+		if idx < len(req.Options) {
+			if req.Multiple {
+				if v.selected == nil {
+					v.selected = make(map[int]bool)
+				}
+				v.selected[idx] = !v.selected[idx]
+				v.index = idx
+				return paneKeyResult{handled: true}
+			}
+			opt := req.Options[idx]
+			return resolve(questiontool.StatusAnswered, opt, []string{opt})
+		}
+		return paneKeyResult{handled: true}
+	case message.Text == " ":
+		if req.Multiple && v.index < len(req.Options) {
+			if v.selected == nil {
+				v.selected = make(map[int]bool)
+			}
+			v.selected[v.index] = !v.selected[v.index]
+			return paneKeyResult{handled: true}
+		}
+		return paneKeyResult{handled: true}
+	case key.Matches(message, paneutil.Keys.Confirm):
+		if v.index == len(req.Options) {
+			v.writeInMode = true
+			return paneKeyResult{handled: true}
+		}
+		if req.Multiple {
+			selected := make([]string, 0)
+			for i, opt := range req.Options {
+				if v.selected != nil && v.selected[i] {
+					selected = append(selected, opt)
+				}
+			}
+			if len(selected) == 0 && v.index < len(req.Options) {
+				selected = append(selected, req.Options[v.index])
+			}
+			ans := strings.Join(selected, ", ")
+			return resolve(questiontool.StatusAnswered, ans, selected)
+		}
+		opt := req.Options[v.index]
+		return resolve(questiontool.StatusAnswered, opt, []string{opt})
+	default:
+		return paneKeyResult{handled: true}
+	}
+}
+
+func (m *bubbleModel) questionView() *questionPaneView {
+	if m.panes.bottom == nil {
+		return nil
+	}
+	view, _ := m.panes.bottom.find(questionViewID).(*questionPaneView)
+	return view
+}
+
+func (m *bubbleModel) openQuestion(request questionRequest) {
+	if m.panes.bottom == nil {
+		return
+	}
+	view := &questionPaneView{
+		pending:  request,
+		selected: make(map[int]bool),
+		tone:     panecommon.ToneUser,
+	}
+	m.panes.bottom.push(view)
+	m.requestRelayout()
+	m.reconcileLayout()
+	if !runtimeui.IsWaitingForQuestion(m.activity) {
+		m.pendingActivity = m.activity
+	}
+	m.activity = runtimeui.ActivityWaitingForQuestion
+}
+
+func (m *bubbleModel) resolveQuestion(response questiontool.Response) tea.Cmd {
+	view := m.questionView()
+	if view == nil {
+		return nil
+	}
+	view.pending.Respond(response)
+	m.panes.bottom.remove(questionViewID)
+	m.requestRelayout()
+	m.reconcileLayout()
+	m.activity = m.pendingActivity
+	if m.activity == "" || runtimeui.IsWaitingForQuestion(m.activity) {
+		if m.busy {
+			m.activity = "running tool"
+		} else {
+			m.activity = runtimeui.ActivityReady
+		}
+	}
+	return nil
 }

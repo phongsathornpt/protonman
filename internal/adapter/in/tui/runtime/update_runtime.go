@@ -10,6 +10,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/clipboardimage"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/questionbridge"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/transientnotice"
 	turnmsg "github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/turn"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
@@ -345,6 +346,10 @@ func (m *bubbleModel) updateRuntimeEvent(msg tea.Msg) (tea.Cmd, bool) {
 	case permissionRequestMsg:
 		return m.updatePermissionRequest(message), true
 	case permissionBridgeClosedMsg:
+		return nil, true
+	case questionRequestMsg:
+		return m.updateQuestionRequest(message), true
+	case questionbridge.ClosedMsg:
 		return nil, true
 	case toolResultMsg:
 		return m.updateToolResult(message), true

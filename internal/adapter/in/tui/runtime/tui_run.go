@@ -36,6 +36,7 @@ func (ui *BubbleTeaUI) Run(ctx context.Context) error {
 	runCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	defer ui.bridge.Close()
+	defer ui.questionBridge.Close()
 
 	currentMessages := model.SnapshotMessages(ui.initialMessages)
 	agentRuntime := newAgentRuntimeState(ui.agentConfig, ui.hasAgentConfig)
@@ -56,6 +57,7 @@ func (ui *BubbleTeaUI) Run(ctx context.Context) error {
 			ui.workDir,
 			currentMessages,
 		)
+		bModel.questionBridge = ui.questionBridge
 		bModel.application = ui.application
 		bModel.agents = ui.agents
 		cancelAgentEvents := func() {}
