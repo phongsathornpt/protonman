@@ -85,6 +85,11 @@ var (
 	MarkdownBulletStyle  = lipgloss.NewStyle().Foreground(ColorTextSecondary)
 	MarkdownBoldStyle    = lipgloss.NewStyle().Bold(true)
 	ModalStyle           = lipgloss.NewStyle().Padding(0, 1)
+	ThoughtHeaderStyle   = lipgloss.NewStyle().Foreground(ColorTextSecondary)
+	ThoughtBodyStyle     = lipgloss.NewStyle().Foreground(ColorTextMuted)
+	DiffLineNoStyle      = lipgloss.NewStyle().Foreground(ColorTextMuted)
+	DiffFrameStyle       = lipgloss.NewStyle().Foreground(ColorBorder)
+	NavHighlightStyle    = lipgloss.NewStyle().Bold(true).Foreground(ColorFocus)
 )
 
 // Heading scale. Type size is fixed by the terminal, so hierarchy comes from

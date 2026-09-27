@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
+	tuihistory "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/history"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 	"github.com/phongsathornpt/protonman/internal/feature/agent"
 )
@@ -22,6 +23,14 @@ func (m *bubbleModel) updateAgentLifecycle(message agentLifecycleMsg) tea.Cmd {
 			m.agentActivity[message.event.AgentID] = activity
 			if run := m.ensureHistoryState().AgentRun(message.event.AgentID); run != nil {
 				run.Activity = activity.String()
+				if message.event.Call != nil {
+					run.AppendStep(tuihistory.AgentStepRecord{
+						ToolName: message.event.Call.Name,
+						Summary:  activity.String(),
+						Duration: message.event.Duration,
+						Err:      message.event.Err,
+					})
+				}
 				m.ensureHistoryState().TouchAgentRun(message.event.AgentID)
 			}
 		}

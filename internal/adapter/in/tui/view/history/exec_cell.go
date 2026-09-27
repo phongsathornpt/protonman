@@ -33,9 +33,51 @@ type ExecCell struct {
 	StartedAt       time.Time
 	Duration        time.Duration
 	Icons           tuistyle.IconSet
+	Expanded        *bool // Explicit fold override, or nil for smart fold default
+	Highlighted     bool  // Highlighted in transcript navigation mode
 }
 
 func (ExecCell) Kind() HistoryCellKind { return HistoryCellTool }
+
+func (c *ExecCell) IsExpanded() bool {
+	if c == nil {
+		return false
+	}
+	if c.Expanded != nil {
+		return *c.Expanded
+	}
+	return false
+}
+
+func (c *ExecCell) SetExpanded(expanded bool) {
+	if c != nil {
+		c.Expanded = &expanded
+	}
+}
+
+func (c *ExecCell) ToggleExpanded() {
+	if c != nil {
+		expanded := !c.IsExpanded()
+		c.Expanded = &expanded
+	}
+}
+
+func (c *ExecCell) CanExpand() bool {
+	if c == nil {
+		return false
+	}
+	count := 0
+	if c.Stdout != "" {
+		count += len(strings.Split(strings.TrimRight(c.Stdout, "\n"), "\n"))
+	}
+	if c.Stderr != "" {
+		count += len(strings.Split(strings.TrimRight(c.Stderr, "\n"), "\n"))
+	}
+	if count == 0 && c.Body != "" {
+		count += len(strings.Split(strings.TrimRight(c.Body, "\n"), "\n"))
+	}
+	return count > 3
+}
 func (c ExecCell) RenderWidth(width int) []string {
 	icons := tuistyle.OrUnicodeIcons(c.Icons)
 	command := strings.TrimSpace(c.Command)
@@ -72,6 +114,9 @@ func (c ExecCell) RenderWidth(width int) []string {
 			glyph = tuistyle.SuccessStyle.Render(icons.ToolSuccess)
 		}
 		header := glyph + tuistyle.CommandStyle.Render(title)
+		if c.Highlighted {
+			header = tuistyle.NavHighlightStyle.Render("» ") + header
+		}
 		summary := presentation.Summary
 		if c.Denied {
 			summary = "denied"
@@ -250,23 +295,27 @@ func (c ExecCell) renderOutputLines() []string {
 	if !failed && presentation.SuppressRaw {
 		return append([]string(nil), presentation.Details...)
 	}
+	limit := 3
+	if c.IsExpanded() {
+		limit = 10000
+	}
 	structured := c.Stdout != "" || c.Stderr != "" || c.StdoutTruncated || c.StderrTruncated
 	if !structured {
-		return toolview.FormatOutputFold(resultBodyLines(c.Body, nil, c.Truncated, false, ""), 3)
+		return toolview.FormatOutputFold(resultBodyLines(c.Body, nil, c.Truncated, false, ""), limit)
 	}
 	out := make([]string, 0, 8)
 	stdoutLines := rawTextLines(strings.TrimRight(c.Stdout, "\n"))
 	if c.StdoutTruncated {
 		stdoutLines = append(stdoutLines, "stdout truncated")
 	}
-	out = append(out, toolview.FormatOutputFold(stdoutLines, 3)...)
+	out = append(out, toolview.FormatOutputFold(stdoutLines, limit)...)
 	if c.Stderr != "" || c.StderrTruncated {
 		out = append(out, "stderr:")
 		stderrLines := rawTextLines(strings.TrimRight(c.Stderr, "\n"))
 		if c.StderrTruncated {
 			stderrLines = append(stderrLines, "stderr truncated")
 		}
-		out = append(out, toolview.FormatOutputFold(stderrLines, 3)...)
+		out = append(out, toolview.FormatOutputFold(stderrLines, limit)...)
 	}
 	if c.Truncated && !c.StdoutTruncated && !c.StderrTruncated {
 		out = append(out, "output truncated")
@@ -324,3 +373,5 @@ func (c ExecCell) LineCount() int           { return len(c.RawLines()) }
 func (c ExecCell) historyToolID() string    { return c.CallID }
 func (c ExecCell) historyToolName() string  { return c.Name }
 func (c ExecCell) historyToolRunning() bool { return c.Running }
+
+var _ CollapsibleCell = (*ExecCell)(nil)

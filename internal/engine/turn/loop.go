@@ -122,6 +122,8 @@ type EventKind string
 const (
 	// EventTextDelta forwards streamed model text.
 	EventTextDelta EventKind = "text_delta"
+	// EventReasoningDelta forwards streamed model reasoning text.
+	EventReasoningDelta EventKind = "reasoning_delta"
 	// EventToolCall reports a validated tool call before permission evaluation.
 	EventToolCall EventKind = "tool_call"
 	// EventToolResult reports the terminal result of a permission-aware call.

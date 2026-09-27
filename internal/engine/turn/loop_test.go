@@ -107,6 +107,39 @@ func TestLoopStreamsTextAndCompletes(t *testing.T) {
 	}
 }
 
+func TestLoopStreamsReasoningAndCompletes(t *testing.T) {
+	client := &scriptedClient{streams: []scriptedStreamSpec{{
+		events: []sdk.Event{
+			{Kind: sdk.EventReasoningDelta, ReasoningContent: "thinking step 1"},
+			{Kind: sdk.EventReasoningDelta, ReasoningContent: " and step 2"},
+			{Kind: sdk.EventTextDelta, Text: "the answer"},
+			{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
+		},
+	}}}
+	loop, _ := newTestLoop(t, client, permission.ActionAllow)
+	events := make([]Event, 0)
+
+	result, err := loop.Run(
+		context.Background(),
+		[]model.Message{{Role: model.RoleUser, Content: "solve problem"}},
+		collectEvents(&events),
+	)
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	if got, want := result.Message.ReasoningContent, "thinking step 1 and step 2"; got != want {
+		t.Fatalf("final reasoning = %q, want %q", got, want)
+	}
+	if got, want := result.Message.Content, "the answer"; got != want {
+		t.Fatalf("final content = %q, want %q", got, want)
+	}
+	gotKinds := eventKinds(events)
+	wantKinds := []EventKind{EventReasoningDelta, EventReasoningDelta, EventTextDelta, EventCompleted}
+	if !sameKinds(gotKinds, wantKinds) {
+		t.Fatalf("events = %#v, want %#v", gotKinds, wantKinds)
+	}
+}
+
 func TestLoopRejectsIncompleteModelStream(t *testing.T) {
 	client := &scriptedClient{streams: []scriptedStreamSpec{{
 		events: []sdk.Event{{Kind: sdk.EventTextDelta, Text: "partial"}},

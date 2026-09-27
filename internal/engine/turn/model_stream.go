@@ -98,6 +98,11 @@ func consumeSDKStream(ctx context.Context, round int, stream port.Stream, starte
 		switch event.Kind {
 		case domain.EventReasoningDelta:
 			reasoning.WriteString(event.ReasoningContent)
+			if event.ReasoningContent != "" {
+				if err := emit(ctx, sink, Event{Kind: EventReasoningDelta, Round: round, Text: event.ReasoningContent}); err != nil {
+					return model.Message{}, nil, err
+				}
+			}
 		case domain.EventTextDelta:
 			if event.Text != "" && !firstTextSeen {
 				firstTextSeen = true

@@ -163,6 +163,8 @@ type presentationModelState struct {
 	transientNoticeID    uint64
 	promptAnimationPhase int
 	memoryActivities     chan corememory.Activity
+	navMode              bool
+	focusedCellIndex     int
 }
 
 type viewportViewCache struct {

@@ -200,12 +200,24 @@ func (m *bubbleModel) updateMouseEvent(message tea.MouseMsg) tea.Cmd {
 		if top, bottom, ok := m.composerMouseRegion(); ok && mouse.Y >= top && mouse.Y < bottom {
 			if prompt := m.panes.bottom.prompt(); prompt != nil {
 				_ = prompt.Focus()
+				if m.navMode {
+					m.exitTranscriptNavMode()
+				}
 				return nil
 			}
 		}
 	}
 	if mouse.Y < 0 || mouse.Y >= m.viewport.Height() {
 		return nil
+	}
+	if clicked && mouse.Button == tea.MouseLeft {
+		renderedLine := mouse.Y + m.viewport.YOffset()
+		if cell := m.ensureHistoryState().CollapsibleCellAtLine(renderedLine); cell != nil {
+			cell.ToggleExpanded()
+			m.ensureHistoryState().InvalidateCache()
+			m.requestRelayout()
+			return nil
+		}
 	}
 	return m.updateConversationViewport(message)
 }

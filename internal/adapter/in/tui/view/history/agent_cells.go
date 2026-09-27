@@ -12,38 +12,116 @@ import (
 	"github.com/phongsathornpt/protonman/internal/feature/agent"
 )
 
+// AgentStepRecord captures one child tool or progress event executed by a subagent.
+type AgentStepRecord struct {
+	ToolName string
+	Target   string
+	Summary  string
+	Duration time.Duration
+	Err      error
+}
+
 // AgentRunCell presents one delegated subagent job as a single user-facing
 // lifecycle instead of exposing orchestration implementation details.
 type AgentRunCell struct {
-	AgentID    string
-	Profile    agent.Profile
-	Task       string
-	State      agent.State
-	Activity   string
-	Summary    string
-	Reason     string
-	StartedAt  time.Time
-	FinishedAt time.Time
-	Spinner    string
+	AgentID     string
+	Profile     agent.Profile
+	Task        string
+	State       agent.State
+	Activity    string
+	Summary     string
+	Reason      string
+	StartedAt   time.Time
+	FinishedAt  time.Time
+	Spinner     string
+	Steps       []AgentStepRecord
+	Expanded    *bool
+	Highlighted bool
+	Icons       tuistyle.IconSet
 }
 
 func (AgentRunCell) Kind() HistoryCellKind { return HistoryCellTool }
+
+func (c *AgentRunCell) IsExpanded() bool {
+	if c == nil {
+		return false
+	}
+	if c.Expanded != nil {
+		return *c.Expanded
+	}
+	if c.State == agent.StateFailed || c.State == agent.StateCanceled {
+		return true
+	}
+	return false
+}
+
+func (c *AgentRunCell) SetExpanded(expanded bool) {
+	if c != nil {
+		c.Expanded = &expanded
+	}
+}
+
+func (c *AgentRunCell) ToggleExpanded() {
+	if c != nil {
+		expanded := !c.IsExpanded()
+		c.Expanded = &expanded
+	}
+}
+
+func (c *AgentRunCell) CanExpand() bool {
+	if c == nil {
+		return false
+	}
+	return len(c.Steps) > 0 || c.detail() != ""
+}
+
+func (c *AgentRunCell) AppendStep(step AgentStepRecord) {
+	if c != nil {
+		c.Steps = append(c.Steps, step)
+	}
+}
+
 func (c AgentRunCell) RenderWidth(width int) []string {
 	indicator, style := c.statePresentation()
 	durationText := ""
 	if duration := c.duration(); duration > 0 {
 		durationText = tuistyle.GlyphSep + execview.FormatDuration(duration)
 	}
-	reserved := len([]rune(indicator)) + 1
+	icons := tuistyle.OrUnicodeIcons(c.Icons)
+	foldIcon := icons.FoldCollapsed
+	if c.IsExpanded() {
+		foldIcon = icons.FoldExpanded
+	}
+	reserved := len([]rune(indicator)) + len([]rune(foldIcon)) + 1
 	if durationText != "" {
 		reserved += len([]rune(durationText))
 	}
 	label := textview.TruncateEllipsis(c.title(), max(1, width-reserved))
-	header := style.Render(indicator + label)
+	header := style.Render(indicator + foldIcon + label)
+	if c.Highlighted {
+		header = tuistyle.NavHighlightStyle.Render("» ") + header
+	}
 	if durationText != "" {
 		header += tuistyle.ToolSummaryStyle.Render(durationText)
 	}
 	out := []string{textview.TruncateEllipsis(header, max(1, width))}
+
+	if c.IsExpanded() && len(c.Steps) > 0 {
+		for _, step := range c.Steps {
+			stepText := step.Summary
+			if stepText == "" {
+				stepText = step.ToolName
+				if step.Target != "" {
+					stepText += " " + step.Target
+				}
+			}
+			stepLine := "  ↳ " + stepText
+			for _, line := range wrapStyledLines(tuistyle.ToolExcerptStyle.Render(stepLine), max(1, width)) {
+				out = append(out, line)
+			}
+		}
+	}
+
 	if detail := c.detail(); detail != "" {
 		for _, line := range wrapStyledLines(tuistyle.BodyStyle.Render("  "+detail), max(1, width)) {
 			out = append(out, line)
@@ -144,3 +222,5 @@ func (c AgentRunCell) statePresentation() (string, lipgloss.Style) {
 func (c AgentRunCell) String() string {
 	return fmt.Sprintf("%s:%s", c.AgentID, c.State)
 }
+
+var _ CollapsibleCell = (*AgentRunCell)(nil)

@@ -20,6 +20,7 @@ type ToolCell = tuihistory.ToolCell
 type ExecCell = tuihistory.ExecCell
 type PatchCell = tuihistory.PatchCell
 type AgentRunCell = tuihistory.AgentRunCell
+type ReasoningCell = tuihistory.ReasoningCell
 type SystemCell = tuihistory.SystemCell
 type ErrorCell = tuihistory.ErrorCell
 
@@ -27,6 +28,7 @@ const (
 	HistoryCellUnknown   = tuihistory.HistoryCellUnknown
 	HistoryCellUser      = tuihistory.HistoryCellUser
 	HistoryCellAssistant = tuihistory.HistoryCellAssistant
+	HistoryCellReasoning = tuihistory.HistoryCellReasoning
 	HistoryCellTool      = tuihistory.HistoryCellTool
 	HistoryCellSystem    = tuihistory.HistoryCellSystem
 	HistoryCellError     = tuihistory.HistoryCellError

@@ -908,3 +908,118 @@ func TestRetryLifecycleUpdatesAndClearsTUIProgress(t *testing.T) {
 		t.Fatalf("retry state not cleared after model output: %+v activity=%q", m.turnProgress.Retry, m.activity)
 	}
 }
+
+func TestTranscriptKeyboardNavigationMode(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.resize(80, 24)
+
+	reasoning := &ReasoningCell{Content: "streaming thoughts", Streaming: false}
+	reasoning.SetExpanded(false)
+	patch := &PatchCell{
+		Name:      "edit",
+		Diff:      "@@ -1,5 +1,15 @@\n+line1\n+line2\n+line3\n+line4\n+line5\n+line6\n+line7\n+line8\n+line9\n+line10",
+		Additions: 10,
+	}
+	m.historyState.Append(reasoning)
+	m.historyState.Append(patch)
+
+	collapsibles := m.historyState.CollapsibleCells()
+	if len(collapsibles) != 2 {
+		t.Fatalf("expected 2 collapsibles, got %d", len(collapsibles))
+	}
+
+	if m.navMode {
+		t.Fatal("expected navMode to be false initially")
+	}
+
+	// Press Esc with empty prompt -> enters navMode
+	m.Update(testKey(tea.KeyEsc))
+	if !m.navMode {
+		t.Fatal("expected Esc to enter navMode")
+	}
+	if m.focusedCellIndex != 1 {
+		t.Fatalf("expected focusedCellIndex=1, got %d", m.focusedCellIndex)
+	}
+	if !patch.Highlighted {
+		t.Fatal("expected patch to be highlighted")
+	}
+
+	// Press 'k' -> moves highlight to index 0 (reasoning)
+	m.Update(testText("k"))
+	if m.focusedCellIndex != 0 {
+		t.Fatalf("expected focusedCellIndex=0, got %d", m.focusedCellIndex)
+	}
+	if !reasoning.Highlighted || patch.Highlighted {
+		t.Fatal("expected reasoning highlighted and patch not highlighted")
+	}
+
+	// Press Enter -> toggles reasoning expansion
+	if reasoning.IsExpanded() {
+		t.Fatal("expected reasoning collapsed initially")
+	}
+	m.Update(testKey(tea.KeyEnter))
+	if !reasoning.IsExpanded() {
+		t.Fatal("expected Enter to expand reasoning")
+	}
+
+	// Press 'j' -> moves highlight back to index 1 (patch)
+	m.Update(testText("j"))
+	if m.focusedCellIndex != 1 {
+		t.Fatalf("expected focusedCellIndex=1, got %d", m.focusedCellIndex)
+	}
+
+	// Press Space -> toggles patch expansion
+	if patch.IsExpanded() {
+		t.Fatal("expected patch collapsed initially")
+	}
+	m.Update(testText(" "))
+	if !patch.IsExpanded() {
+		t.Fatal("expected Space to expand patch")
+	}
+
+	// Press 'i' -> exits navMode
+	m.Update(testText("i"))
+	if m.navMode {
+		t.Fatal("expected 'i' to exit navMode")
+	}
+	if reasoning.Highlighted || patch.Highlighted {
+		t.Fatal("expected highlights cleared after exiting navMode")
+	}
+
+	// Press Esc again -> re-enters navMode
+	m.Update(testKey(tea.KeyEsc))
+	if !m.navMode {
+		t.Fatal("expected Esc to enter navMode again")
+	}
+
+	// Press Esc again -> exits navMode
+	m.Update(testKey(tea.KeyEsc))
+	if m.navMode {
+		t.Fatal("expected Esc to exit navMode")
+	}
+}
+
+func TestTranscriptMouseClickTogglesCollapsible(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.resize(80, 24)
+
+	reasoning := &ReasoningCell{Content: "thinking steps", Streaming: false}
+	reasoning.SetExpanded(false)
+	m.historyState.Append(reasoning)
+
+	if reasoning.IsExpanded() {
+		t.Fatal("expected reasoning to be collapsed initially")
+	}
+
+	// Click on line 0 in the viewport
+	m.Update(tea.MouseClickMsg{X: 5, Y: 0, Button: tea.MouseLeft})
+	if !reasoning.IsExpanded() {
+		t.Fatal("expected mouse click to toggle reasoning expanded")
+	}
+
+	// Click again to collapse
+	m.Update(tea.MouseClickMsg{X: 5, Y: 0, Button: tea.MouseLeft})
+	if reasoning.IsExpanded() {
+		t.Fatal("expected mouse click to toggle reasoning collapsed")
+	}
+}

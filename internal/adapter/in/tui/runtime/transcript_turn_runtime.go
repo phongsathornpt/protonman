@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	tuihistory "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/history"
 	tuipresentation "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/presentation"
@@ -48,7 +49,12 @@ func (m *bubbleModel) applyTurnEvent(event app.Event) {
 		m.turnProgress.Round = event.Round
 	}
 	switch event.Kind {
+	case app.EventReasoningDelta:
+		m.turnProgress.Retry = domain.RetryEvent{}
+		m.activity = "thinking"
+		m.appendReasoningDelta(event.Text)
 	case app.EventTextDelta:
+		m.finalizeActiveReasoning()
 		m.turnProgress.Retry = domain.RetryEvent{}
 		m.activity = ""
 		m.appendAssistantDelta(event.Text)
@@ -56,6 +62,7 @@ func (m *bubbleModel) applyTurnEvent(event app.Event) {
 		m.turnProgress.Retry = event.Retry
 		m.activity = "retrying"
 	case app.EventToolCall:
+		m.finalizeActiveReasoning()
 		m.turnProgress.Retry = domain.RetryEvent{}
 		m.turnProgress.ToolCalls++
 		m.appendToolCall(event.Call)
@@ -73,11 +80,40 @@ func (m *bubbleModel) applyTurnEvent(event app.Event) {
 	case app.EventMemoryActivity:
 		m.appendMemoryActivity(event.MemoryActivity)
 	case app.EventCompleted:
+		m.finalizeActiveReasoning()
 		m.turnProgress.Retry = domain.RetryEvent{}
 		m.ensureHistoryState().CommitActive()
 	case app.EventFailed:
+		m.finalizeActiveReasoning()
 		m.turnProgress.Retry = domain.RetryEvent{}
 		m.appendTurnFailure(event.Err)
+	}
+}
+
+func (m *bubbleModel) appendReasoningDelta(text string) {
+	if text == "" {
+		return
+	}
+	history := m.ensureHistoryState()
+	reasoning := history.ActiveReasoning()
+	if reasoning == nil {
+		reasoning = history.StartReasoning(m.spinnerIndicator(), m.icons)
+	}
+	reasoning.Content += text
+	history.InvalidateCache()
+	m.requestRelayout()
+}
+
+func (m *bubbleModel) finalizeActiveReasoning() {
+	history := m.ensureHistoryState()
+	if reasoning := history.ActiveReasoning(); reasoning != nil && reasoning.Streaming {
+		reasoning.Streaming = false
+		reasoning.SetExpanded(false)
+		if reasoning.Duration == 0 && !reasoning.StartedAt.IsZero() {
+			reasoning.Duration = time.Since(reasoning.StartedAt)
+		}
+		history.CommitActive()
+		m.requestRelayout()
 	}
 }
 
