@@ -19,36 +19,30 @@ func promptDividerLine(t *testing.T, m *bubbleModel) string {
 	return lines[0]
 }
 
-func expectedPromptDivider(m *bubbleModel, styleName string) string {
-	line := strings.Repeat("─", composerUsableWidth(m.layout.width))
-	switch styleName {
-	case "warning":
-		return tuistyle.PromptDividerWarning.Render(line)
-	case "error":
-		return tuistyle.PromptDividerError.Render(line)
-	case "idle":
-		return tuistyle.PromptDividerIdle.Render(line)
-	default:
-		return renderPromptDivider(tuistyle.PromptDividerFocused, len([]rune(line)), true)
-	}
+func expectedComposerTopRail(m *bubbleModel, style lipgloss.Style) string {
+	icons := tuistyle.OrUnicodeIcons(m.icons)
+	return m.buildComposerTopRail(m.layout.width, style, icons, false)
 }
 
-func TestFocusedPromptDividerUsesAccentRail(t *testing.T) {
+func TestFocusedComposerCardTopRail(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	line := promptDividerLine(t, m)
 	plain := ansi.Strip(line)
-	if !strings.HasPrefix(plain, strings.Repeat("─", 8)) {
-		t.Fatalf("focused divider missing accent rail: %q", plain)
+	if !strings.HasPrefix(plain, "╭─") || !strings.HasSuffix(plain, "─╮") {
+		t.Fatalf("focused card top rail missing frame glyphs: %q", plain)
 	}
-	if got := lipgloss.Width(line); got != m.layout.width {
-		t.Fatalf("focused divider width = %d, want %d", got, m.layout.width)
+	if !strings.Contains(plain, "universal") || !strings.Contains(plain, "ask") {
+		t.Fatalf("focused card top rail missing profile/mode badges: %q", plain)
+	}
+	if got := ansi.StringWidth(line); got != m.layout.width {
+		t.Fatalf("focused card top rail width = %d, want %d", got, m.layout.width)
 	}
 }
 
 func TestPromptDividerUsesFocusedStyle(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
-	if got, want := promptDividerLine(t, m), expectedPromptDivider(m, "focused"); got != want {
-		t.Fatalf("focused divider = %q, want %q", got, want)
+	if got, want := promptDividerLine(t, m), expectedComposerTopRail(m, tuistyle.ComposerBorderFocused); got != want {
+		t.Fatalf("focused top rail = %q, want %q", got, want)
 	}
 }
 
@@ -58,23 +52,39 @@ func TestPromptDividerPermissionOverridesFocus(t *testing.T) {
 		Request:  permission.Request{ToolName: "edit", ToolKind: permission.ToolEdit, Detail: "main.go"},
 		Response: make(chan permissionResponse, 1),
 	})
-	if got, want := promptDividerLine(t, m), expectedPromptDivider(m, "warning"); got != want {
-		t.Fatalf("permission divider = %q, want %q", got, want)
+	if got, want := promptDividerLine(t, m), expectedComposerTopRail(m, tuistyle.ComposerBorderWarning); got != want {
+		t.Fatalf("permission top rail = %q, want %q", got, want)
 	}
 }
 
 func TestPromptDividerDenyModeUsesErrorStyle(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeDeny, emptyTodoItems())
-	if got, want := promptDividerLine(t, m), expectedPromptDivider(m, "error"); got != want {
-		t.Fatalf("deny divider = %q, want %q", got, want)
+	if got, want := promptDividerLine(t, m), expectedComposerTopRail(m, tuistyle.ComposerBorderError); got != want {
+		t.Fatalf("deny top rail = %q, want %q", got, want)
 	}
 }
 
 func TestPromptDividerBlurredComposerUsesIdleStyle(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	m.panes.bottom.prompt().Blur()
-	if got, want := promptDividerLine(t, m), expectedPromptDivider(m, "idle"); got != want {
-		t.Fatalf("idle divider = %q, want %q", got, want)
+	if got, want := promptDividerLine(t, m), expectedComposerTopRail(m, tuistyle.ComposerBorderNormal); got != want {
+		t.Fatalf("idle top rail = %q, want %q", got, want)
+	}
+}
+
+func TestPromptDividerBashModeUsesBashStyle(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.setBashMode(true)
+	if got, want := promptDividerLine(t, m), expectedComposerTopRail(m, tuistyle.ComposerBorderBash); got != want {
+		t.Fatalf("bash top rail = %q, want %q", got, want)
+	}
+}
+
+func TestPromptDividerPlanModeUsesPlanStyle(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.setPlanEnabled(true)
+	if got, want := promptDividerLine(t, m), expectedComposerTopRail(m, tuistyle.ComposerBorderPlan); got != want {
+		t.Fatalf("plan top rail = %q, want %q", got, want)
 	}
 }
 

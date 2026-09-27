@@ -100,13 +100,16 @@ func TestCompactLayoutReducesChrome(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, []tododomain.Item{{ID: "one", Text: "one", Status: tododomain.StatusPending}})
 	m.activeModel = "provider/a-very-long-model-name"
 	m.resize(60, 18)
-	if strings.Contains(m.promptView(), "╭") || strings.Contains(m.promptView(), "╰") {
-		t.Fatalf("compact prompt renders box chrome: %q", m.promptView())
+	if !strings.Contains(m.promptView(), "╭") || !strings.Contains(m.promptView(), "╰") {
+		t.Fatalf("compact prompt missing box card chrome: %q", m.promptView())
 	}
 	if got := m.infoView(); strings.Contains(got, "ctrl+p") || strings.Contains(got, "/help") {
 		t.Fatalf("compact info leaked shortcut chrome: %q", got)
 	}
 	m.resize(24, 12)
+	if strings.Contains(m.promptView(), "╭") || strings.Contains(m.promptView(), "╰") {
+		t.Fatalf("tiny prompt leaked box chrome: %q", m.promptView())
+	}
 	if got := lipgloss.Height(m.View().Content); got > 12 {
 		t.Fatalf("tiny live view height = %d, want <= 12", got)
 	}
@@ -1478,22 +1481,23 @@ func TestPromptPlaceholderReflectsRunnerState(t *testing.T) {
 		{permission.ModeDeny, false},
 		{permission.ModeAsk, true},
 	} {
-		if got := promptPlaceholder(true, tc.mode, tc.plan); got != "" {
-			t.Fatalf("runner placeholder = %q, want empty", got)
+		if got := promptPlaceholder(true, tc.mode, tc.plan); got != "Ask universal to build, test, or type / for commands…" {
+			t.Fatalf("runner placeholder = %q, want contextual guidance", got)
 		}
 	}
 
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	m.runner = fakeConversation{}
 	m.syncPromptPlaceholder()
-	if got := m.panes.bottom.prompt().Placeholder; got != "" {
-		t.Fatalf("initial runner placeholder = %q, want empty", got)
+	want := "Ask universal to build, test, or type / for commands…"
+	if got := m.panes.bottom.prompt().Placeholder; got != want {
+		t.Fatalf("initial runner placeholder = %q, want %q", got, want)
 	}
 
 	_ = m.setPermissionMode(permission.ModeAlwaysApprove)
 	m.setPlanEnabled(true)
-	if got := m.panes.bottom.prompt().Placeholder; got != "" {
-		t.Fatalf("runner placeholder after mode changes = %q, want empty", got)
+	if got := m.panes.bottom.prompt().Placeholder; got != want {
+		t.Fatalf("runner placeholder after mode changes = %q, want %q", got, want)
 	}
 }
 

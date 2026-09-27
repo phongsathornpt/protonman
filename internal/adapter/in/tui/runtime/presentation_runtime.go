@@ -9,11 +9,13 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/permissionpolicy"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/reasoningpolicy"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/transcriptutil"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/state/agentui"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/state/runtimeui"
 	tuihistory "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/history"
 	agentpane "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane/agent"
+	panecommon "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane/common"
 	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/style"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/core/agentprofile"
@@ -24,15 +26,12 @@ import (
 )
 
 func promptPlaceholder(hasRunner bool, mode permission.Mode, planMode bool) string {
+	_ = mode
+	_ = planMode
 	if !hasRunner {
 		return "Message or /command…"
 	}
-	// Once a runnable model is selected, keep the idle composer visually empty.
-	// The context footer carries model/thinking state and the prompt glyph itself
-	// is enough affordance, matching the compact reference layout.
-	_ = mode
-	_ = planMode
-	return ""
+	return "Ask universal to build, test, or type / for commands…"
 }
 
 func (m *bubbleModel) resetTranscript() {
@@ -42,34 +41,223 @@ func (m *bubbleModel) resetTranscript() {
 }
 
 func composerUsableWidth(terminalWidth int) int {
-	return max(1, terminalWidth)
+	if terminalWidth < 24 {
+		return max(1, terminalWidth)
+	}
+	return max(1, terminalWidth-4)
 }
 
 func (m *bubbleModel) promptView() string {
 	if m.panes.bottom == nil || m.panes.bottom.prompt() == nil {
 		return ""
 	}
+	profile := m.layoutProfile()
+	if profile.Mode == panecommon.LayoutTiny || m.layout.width < 24 {
+		return m.panes.bottom.prompt().View()
+	}
+	return m.renderComposerCard()
+}
+
+func (m *bubbleModel) renderComposerCard() string {
+	totalWidth := m.layout.width
+	if totalWidth <= 0 {
+		totalWidth = defaultBubbleWidth
+	}
+	innerUsableWidth := composerUsableWidth(totalWidth)
+	icons := tuistyle.OrUnicodeIcons(m.icons)
 	prompt := m.panes.bottom.prompt()
-	dividerStyle := tuistyle.PromptDividerIdle
 	focused := prompt.Focused()
 	animated := false
+	bashMode := m.panes.bottom.bashMode()
+
+	borderStyle := tuistyle.ComposerBorderNormal
 	switch {
 	case m.permissionView() != nil:
-		dividerStyle = tuistyle.PromptDividerWarning
+		borderStyle = tuistyle.ComposerBorderWarning
 		focused = false
 	case m.service != nil && m.service.Mode() == permission.ModeDeny:
-		dividerStyle = tuistyle.PromptDividerError
+		borderStyle = tuistyle.ComposerBorderError
 		focused = false
+	case bashMode:
+		borderStyle = tuistyle.ComposerBorderBash
+	case m.planMode:
+		borderStyle = tuistyle.ComposerBorderPlan
 	case focused:
-		dividerStyle = tuistyle.PromptDividerFocused
+		borderStyle = tuistyle.ComposerBorderFocused
 		animated = m.busy && !m.reducedMotion
 	}
-	usableWidth := composerUsableWidth(m.layout.width)
-	border := renderPromptDivider(dividerStyle, usableWidth, focused)
-	if animated {
-		border = renderAnimatedPromptDivider(usableWidth, m.promptAnimationPhase)
+
+	topBorder := m.buildComposerTopRail(totalWidth, borderStyle, icons, animated)
+	bottomBorder := m.buildComposerBottomRail(totalWidth, borderStyle, icons)
+
+	rows := make([]string, 0, 8)
+	rows = append(rows, topBorder)
+
+	// Attachments strip (if any)
+	if len(m.panes.bottom.composer.attachments.localImages) > 0 {
+		chips := m.panes.bottom.composer.attachments.RenderChips(innerUsableWidth, icons)
+		if chips != "" {
+			rows = append(rows, m.formatComposerCardRow(chips, innerUsableWidth, borderStyle, icons))
+		}
 	}
-	return border + "\n" + prompt.View() + "\n" + border
+
+	// Textarea lines
+	promptView := prompt.View()
+	promptLines := strings.Split(promptView, "\n")
+	for _, line := range promptLines {
+		rows = append(rows, m.formatComposerCardRow(line, innerUsableWidth, borderStyle, icons))
+	}
+
+	rows = append(rows, bottomBorder)
+	return strings.Join(rows, "\n")
+}
+
+func (m *bubbleModel) formatComposerCardRow(content string, innerWidth int, borderStyle lipgloss.Style, icons tuistyle.IconSet) string {
+	contentWidth := ansi.StringWidth(content)
+	if contentWidth < innerWidth {
+		content += strings.Repeat(" ", innerWidth-contentWidth)
+	} else if contentWidth > innerWidth {
+		content = ansi.Truncate(content, innerWidth, "")
+	}
+	left := borderStyle.Render(icons.CardVertical) + " "
+	right := " " + borderStyle.Render(icons.CardVertical)
+	return left + content + right
+}
+
+func (m *bubbleModel) buildComposerTopRail(totalWidth int, borderStyle lipgloss.Style, icons tuistyle.IconSet, animated bool) string {
+	cornerLeft := borderStyle.Render(icons.CardTopLeft)
+	cornerRight := borderStyle.Render(icons.CardTopRight)
+	avail := totalWidth - 2
+	if avail <= 0 {
+		return cornerLeft + cornerRight
+	}
+
+	bashMode := m.panes.bottom.bashMode()
+	var leftBadge string
+	switch {
+	case bashMode:
+		leftBadge = borderStyle.Render(icons.CardHorizontal) + " " + tuistyle.ComposerBadgeBashStyle.Render("! bash direct") + " "
+	case m.planMode:
+		leftBadge = borderStyle.Render(icons.CardHorizontal) + " " + tuistyle.ComposerBadgePlanStyle.Render("📋 plan · read-only") + " "
+	default:
+		prof, err := agentprofile.ParseProfile(strings.TrimSpace(m.agentProfile))
+		if err != nil || !prof.Valid() {
+			prof = agentprofile.ProfileUniversal
+		}
+		brandGlyph := icons.Brand
+		if brandGlyph != "" {
+			brandGlyph += " "
+		}
+		profBadge := tuistyle.ComposerBadgeActiveStyle.Render(fmt.Sprintf("%s%s", brandGlyph, string(prof)))
+		modeBadge := tuistyle.ComposerBadgeStyle.Render(m.permissionModeLabel())
+		if totalWidth >= 60 {
+			leftBadge = borderStyle.Render(icons.CardHorizontal) + " " + profBadge + " " + borderStyle.Render(icons.CardHorizontal) + " " + modeBadge + " "
+		} else {
+			leftBadge = borderStyle.Render(icons.CardHorizontal) + " " + profBadge + " "
+		}
+	}
+
+	rightParts := make([]string, 0, 2)
+	prompt := m.panes.bottom.prompt()
+	if prompt != nil && prompt.LineCount() > 1 {
+		rightParts = append(rightParts, tuistyle.ComposerLineCountStyle.Render(fmt.Sprintf("%d lines", prompt.LineCount())))
+	}
+	modelName := modelFooterLabel(m.activeModel)
+	if totalWidth >= 70 && strings.TrimSpace(modelName) != "" && !bashMode {
+		rightParts = append(rightParts, tuistyle.ComposerBadgeStyle.Render(modelName))
+	}
+	var rightBadge string
+	if len(rightParts) > 0 {
+		rightBadge = " " + strings.Join(rightParts, " ") + " " + borderStyle.Render(icons.CardHorizontal)
+	}
+
+	leftW := ansi.StringWidth(leftBadge)
+	rightW := ansi.StringWidth(rightBadge)
+	fillWidth := avail - leftW - rightW
+
+	if fillWidth < 1 && rightBadge != "" {
+		rightBadge = ""
+		rightW = 0
+		fillWidth = avail - leftW
+	}
+	if fillWidth < 1 && leftBadge != "" {
+		leftBadge = ""
+		leftW = 0
+		fillWidth = avail
+	}
+
+	var middleRail string
+	if animated && fillWidth > 0 {
+		middleRail = renderAnimatedPromptDivider(fillWidth, m.promptAnimationPhase)
+	} else if fillWidth > 0 {
+		middleRail = borderStyle.Render(strings.Repeat(icons.CardHorizontal, fillWidth))
+	}
+
+	return cornerLeft + leftBadge + middleRail + rightBadge + cornerRight
+}
+
+func (m *bubbleModel) buildComposerBottomRail(totalWidth int, borderStyle lipgloss.Style, icons tuistyle.IconSet) string {
+	cornerLeft := borderStyle.Render(icons.CardBottomLeft)
+	cornerRight := borderStyle.Render(icons.CardBottomRight)
+	avail := totalWidth - 2
+	if avail <= 0 {
+		return cornerLeft + cornerRight
+	}
+
+	permission := m.permissionModeLabel()
+	reasoning := reasoningpolicy.EffortLabel(m.reasoningEffort)
+	var rightText string
+	if reasoning != "" && reasoning != permission {
+		rightText = reasoning + " · " + permission
+	} else {
+		rightText = permission
+	}
+	rightBadge := tuistyle.ComposerContextMetricStyle.Render(rightText)
+	var rightPart string
+	if strings.TrimSpace(rightText) != "" {
+		rightPart = " " + rightBadge + " " + borderStyle.Render(icons.CardHorizontal)
+	}
+	rightW := ansi.StringWidth(rightPart)
+
+	submitKey := m.keys.Submit.Help().Key
+	newlineKey := m.keys.Newline.Help().Key
+	if submitKey == "" {
+		submitKey = "↵"
+	}
+	if newlineKey == "" {
+		newlineKey = "shift+↵"
+	}
+
+	cand1 := submitKey + " send · " + newlineKey + " newline · ? for shortcuts"
+	cand2 := submitKey + " send · " + newlineKey + " newline"
+	cand3 := submitKey + " send"
+
+	var leftPart string
+	var leftW int
+	for _, cand := range []string{cand1, cand2, cand3, ""} {
+		if cand == "" {
+			leftPart = ""
+			leftW = 0
+		} else {
+			leftPart = borderStyle.Render(icons.CardHorizontal) + " " + tuistyle.ComposerKeyHintStyle.Render(cand) + " "
+			leftW = ansi.StringWidth(leftPart)
+		}
+		if avail-leftW-rightW >= 1 {
+			break
+		}
+	}
+
+	if avail-leftW-rightW < 1 {
+		rightPart = ""
+		rightW = 0
+		leftPart = ""
+		leftW = 0
+	}
+
+	fillWidth := avail - leftW - rightW
+	middleRail := borderStyle.Render(strings.Repeat(icons.CardHorizontal, max(1, fillWidth)))
+
+	return cornerLeft + leftPart + middleRail + rightPart + cornerRight
 }
 
 func renderPromptDivider(style lipgloss.Style, width int, focused bool) string {

@@ -90,6 +90,24 @@ var (
 	DiffLineNoStyle      = lipgloss.NewStyle().Foreground(ColorTextMuted)
 	DiffFrameStyle       = lipgloss.NewStyle().Foreground(ColorBorder)
 	NavHighlightStyle    = lipgloss.NewStyle().Bold(true).Foreground(ColorFocus)
+
+	// Composer Card styles
+	ComposerBorderNormal       = lipgloss.NewStyle().Foreground(ColorBorder)
+	ComposerBorderFocused      = lipgloss.NewStyle().Foreground(ColorBorderFocus)
+	ComposerBorderBash         = lipgloss.NewStyle().Foreground(CommandColor)
+	ComposerBorderPlan         = lipgloss.NewStyle().Foreground(AccentPlan)
+	ComposerBorderWarning      = lipgloss.NewStyle().Foreground(ColorWarning)
+	ComposerBorderError        = lipgloss.NewStyle().Foreground(ColorDanger)
+	ComposerBadgeStyle         = lipgloss.NewStyle().Foreground(ColorTextSecondary)
+	ComposerBadgeActiveStyle   = lipgloss.NewStyle().Foreground(ColorFocus).Bold(true)
+	ComposerBadgeBashStyle     = lipgloss.NewStyle().Foreground(CommandColor).Bold(true)
+	ComposerBadgePlanStyle     = lipgloss.NewStyle().Foreground(AccentPlan).Bold(true)
+	ComposerAttachmentPill     = lipgloss.NewStyle().Foreground(ColorTextPrimary).Background(ColorBorderSubtle).Padding(0, 1)
+	ComposerAttachmentRemove   = lipgloss.NewStyle().Foreground(ColorTextMuted).Bold(true)
+	ComposerLineCountStyle     = lipgloss.NewStyle().Foreground(ColorTextMuted)
+	ComposerKeyHintStyle       = lipgloss.NewStyle().Foreground(ColorTextMuted)
+	ComposerKeyFocusStyle      = lipgloss.NewStyle().Foreground(AccentUser).Bold(true)
+	ComposerContextMetricStyle = lipgloss.NewStyle().Foreground(ColorTextSecondary)
 )
 
 // Heading scale. Type size is fixed by the terminal, so hierarchy comes from

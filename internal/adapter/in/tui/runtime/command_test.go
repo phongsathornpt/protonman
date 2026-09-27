@@ -884,8 +884,14 @@ func TestMultilineTextareaDynamicExpansion(t *testing.T) {
 	model.panes.bottom.prompt().SetValue("1\n2\n3\n4\n5\n6")
 	model.requestRelayout()
 	model.reconcileLayout()
-	if model.panes.bottom.prompt().Height() != 4 {
-		t.Fatalf("expected height 4 for 6 lines, got %d", model.panes.bottom.prompt().Height())
+	if model.panes.bottom.prompt().Height() != 6 {
+		t.Fatalf("expected height 6 for 6 lines, got %d", model.panes.bottom.prompt().Height())
+	}
+	model.panes.bottom.prompt().SetValue("1\n2\n3\n4\n5\n6\n7\n8")
+	model.requestRelayout()
+	model.reconcileLayout()
+	if model.panes.bottom.prompt().Height() != 6 {
+		t.Fatalf("expected height 6 for 8 lines capped at max height, got %d", model.panes.bottom.prompt().Height())
 	}
 }
 

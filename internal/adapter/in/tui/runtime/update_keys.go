@@ -1,6 +1,8 @@
 package runtime
 
 import (
+	"strings"
+
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/keyboardpolicy"
@@ -191,6 +193,15 @@ func (m *bubbleModel) handlePromptKey(message tea.KeyPressMsg) tea.Cmd {
 	if m.panes.bottom.bashMode() && prompt.Value() == "" && key.Matches(message, composerKeys.ExitBash) {
 		m.setBashMode(false)
 		return nil
+	}
+	if !m.panes.bottom.bashMode() && key.Matches(message, composerKeys.ExitBash) && len(m.panes.bottom.composer.attachments.localImages) > 0 {
+		cleanText := strings.TrimSpace(stripAttachmentPlaceholders(prompt.Value(), m.panes.bottom.composer.attachments.snapshot(nil)))
+		if cleanText == "" {
+			if m.panes.bottom.composer.attachments.RemoveLast(prompt) {
+				m.requestRelayout()
+				return nil
+			}
+		}
 	}
 	if key.Matches(message, composerKeys.HistoryUp) {
 		lineInfo := prompt.LineInfo()
