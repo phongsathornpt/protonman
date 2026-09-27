@@ -48,6 +48,8 @@ func (m *bubbleModel) executeCommand(line string) tea.Cmd {
 		return m.openAgentsPane()
 	case cmdpolicy.KindCall:
 		return m.startCall(cmd.Parts)
+	case cmdpolicy.KindGrillMe:
+		return m.handleGrillMeCommand(cmd.Rest)
 	case cmdpolicy.KindQuit:
 		return tea.Quit
 	default:
@@ -120,6 +122,30 @@ func (m *bubbleModel) handleGoalCommand(argument string) tea.Cmd {
 		m.appendMuted("goal · " + goal)
 		return m.startTurn(goal)
 	}
+}
+
+func (m *bubbleModel) handleGrillMeCommand(topic string) tea.Cmd {
+	trimmedTopic := strings.TrimSpace(topic)
+	if m.skills != nil {
+		for _, name := range []string{"grill-me", "grilling"} {
+			if _, ok := m.skills.Lookup(name); ok && !m.skills.IsActivated(name) {
+				_ = m.skills.Activate(name)
+			}
+		}
+		m.persistActiveSkills()
+		m.refreshSkillsPane()
+	}
+
+	var prompt string
+	if trimmedTopic != "" {
+		prompt = fmt.Sprintf("Grill me on: %s", trimmedTopic)
+	} else if strings.TrimSpace(m.activeGoal) != "" {
+		prompt = fmt.Sprintf("Grill me on the active goal: %s", m.activeGoal)
+	} else {
+		prompt = "Grill me on our current project plan and architecture. What design decisions are on the current frontier?"
+	}
+
+	return m.startTurn(prompt)
 }
 
 func (m *bubbleModel) setActiveGoal(goal string) error {

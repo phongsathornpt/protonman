@@ -1420,3 +1420,14 @@ func TestResumeCurrentSessionClosesPane(t *testing.T) {
 		t.Fatalf("expected already in session message: %q", plainTranscript(m))
 	}
 }
+
+func TestSlashGrillMe(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	s := skill.Skill{Name: "grill-me", Description: "Interview to sharpen a plan", Scope: skill.ScopeUser}
+	m.skills = skill.NewRegistry(s)
+
+	_ = m.executeCommand("/grill-me refine prompt")
+	if !m.skills.IsActivated("grill-me") {
+		t.Fatal("expected grill-me skill to be activated by /grill-me")
+	}
+}

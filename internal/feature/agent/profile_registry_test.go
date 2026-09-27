@@ -42,18 +42,18 @@ func (s staticRegistry) Definitions() []tool.Definition {
 
 func TestFilterRegistryForCanonicalProfiles(t *testing.T) {
 	baseReg := staticRegistry{handlers: map[string]tool.Handler{
-		"read":         dummyHandler{def: tool.Definition{Name: "read", Kind: tool.KindRead}},
-		"find":         dummyHandler{def: tool.Definition{Name: "find", Kind: tool.KindRead}},
-		"grep":         dummyHandler{def: tool.Definition{Name: "grep", Kind: tool.KindGrep}},
-		"web":          dummyHandler{def: tool.Definition{Name: "web", Kind: tool.KindWeb}},
-		"edit":         dummyHandler{def: tool.Definition{Name: "edit", Kind: tool.KindEdit}},
-		"bash":         dummyHandler{def: tool.Definition{Name: "bash", Kind: tool.KindBash}},
-		"subagent":     dummyHandler{def: tool.Definition{Name: "subagent", Kind: tool.KindAgent}},
-		"todo":         dummyHandler{def: tool.Definition{Name: "todo", Kind: tool.KindTask}},
-		"ask_question": dummyHandler{def: tool.Definition{Name: "ask_question", Kind: tool.KindQuestion}},
-		"mcp.read":     dummyHandler{def: tool.Definition{Name: "mcp.read", Kind: tool.KindMCP, Mutability: tool.MutabilityReadOnly}},
-		"mcp.write":    dummyHandler{def: tool.Definition{Name: "mcp.write", Kind: tool.KindMCP, Mutability: tool.MutabilityMutating}},
-		"mcp.unknown":  dummyHandler{def: tool.Definition{Name: "mcp.unknown", Kind: tool.KindMCP}},
+		"read":        dummyHandler{def: tool.Definition{Name: "read", Kind: tool.KindRead}},
+		"find":        dummyHandler{def: tool.Definition{Name: "find", Kind: tool.KindRead}},
+		"grep":        dummyHandler{def: tool.Definition{Name: "grep", Kind: tool.KindGrep}},
+		"web":         dummyHandler{def: tool.Definition{Name: "web", Kind: tool.KindWeb}},
+		"edit":        dummyHandler{def: tool.Definition{Name: "edit", Kind: tool.KindEdit}},
+		"bash":        dummyHandler{def: tool.Definition{Name: "bash", Kind: tool.KindBash}},
+		"subagent":    dummyHandler{def: tool.Definition{Name: "subagent", Kind: tool.KindAgent}},
+		"todo":        dummyHandler{def: tool.Definition{Name: "todo", Kind: tool.KindTask}},
+		"askQuestion": dummyHandler{def: tool.Definition{Name: "askQuestion", Kind: tool.KindQuestion}},
+		"mcp.read":    dummyHandler{def: tool.Definition{Name: "mcp.read", Kind: tool.KindMCP, Mutability: tool.MutabilityReadOnly}},
+		"mcp.write":   dummyHandler{def: tool.Definition{Name: "mcp.write", Kind: tool.KindMCP, Mutability: tool.MutabilityMutating}},
+		"mcp.unknown": dummyHandler{def: tool.Definition{Name: "mcp.unknown", Kind: tool.KindMCP}},
 	}}
 
 	for _, profile := range []Profile{ProfileStrength, ProfileIntelligence} {
@@ -63,7 +63,7 @@ func TestFilterRegistryForCanonicalProfiles(t *testing.T) {
 				t.Errorf("%s missing tool %s", profile, name)
 			}
 		}
-		for _, name := range []string{"subagent", "todo", "ask_question"} {
+		for _, name := range []string{"subagent", "todo", "askQuestion"} {
 			if _, ok := scoped.Lookup(name); ok {
 				t.Errorf("%s must not expose %s", profile, name)
 			}

@@ -156,7 +156,7 @@ func WithCoordinator(coordinator *agent.Coordinator) BubbleTeaOption {
 	}
 }
 
-// WithQuestionBridge configures the question bridge used for interactive ask_question tool calls.
+// WithQuestionBridge configures the question bridge used for interactive askQuestion tool calls.
 func WithQuestionBridge(bridge *questionbridge.Bridge) BubbleTeaOption {
 	return func(ui *BubbleTeaUI) error {
 		if bridge != nil {

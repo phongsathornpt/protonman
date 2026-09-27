@@ -345,3 +345,140 @@ func TestBubbleModelQuestionModalDanglingOnTurnDone(t *testing.T) {
 		t.Fatalf("activity = %q, want %q", m.activity, runtimeui.ActivityReady)
 	}
 }
+
+func TestBubbleModelQuestionModalMultiQuestionWizard(t *testing.T) {
+	m := newTestQuestionModel(t)
+	defer m.questionBridge.Close()
+
+	responseCh := make(chan questionbridge.Response, 1)
+	req := questionbridge.Request{
+		Request: questiontool.Request{
+			Questions: []questiontool.QuestionItem{
+				{
+					Question:    "Database choice?",
+					Options:     []string{"PostgreSQL", "SQLite"},
+					Recommended: "PostgreSQL",
+				},
+				{
+					Question: "Cache layer?",
+					Options:  []string{"Redis", "Memory"},
+				},
+			},
+		},
+		Response: responseCh,
+	}
+
+	m.openQuestion(req)
+	view := m.questionView()
+	if view == nil {
+		t.Fatal("question view not open")
+	}
+	if view.currentQuestion != 0 {
+		t.Fatalf("currentQuestion = %d, want 0", view.currentQuestion)
+	}
+	if view.index != 0 {
+		t.Fatalf("expected recommended index = 0, got %d", view.index)
+	}
+
+	// Question 1: Press '2' (pick SQLite)
+	updated, _ := m.Update(testText("2"))
+	m = updated.(*bubbleModel)
+
+	// Now should be on Question 2 (currentQuestion = 1)
+	view = m.questionView()
+	if view == nil {
+		t.Fatal("question view closed prematurely between questions")
+	}
+	if view.currentQuestion != 1 {
+		t.Fatalf("currentQuestion = %d, want 1", view.currentQuestion)
+	}
+
+	// Question 2: Press '1' (pick Redis)
+	updated, _ = m.Update(testText("1"))
+	m = updated.(*bubbleModel)
+
+	// Now modal should be closed and answered
+	if m.questionView() != nil {
+		t.Fatal("question view still open after completing all questions")
+	}
+
+	select {
+	case res := <-responseCh:
+		if res.Response.Status != questiontool.StatusAnswered {
+			t.Fatalf("status = %v, want answered", res.Response.Status)
+		}
+		if len(res.Response.Answers) != 2 {
+			t.Fatalf("expected 2 answers, got %d", len(res.Response.Answers))
+		}
+		if res.Response.Answers[0].Answer != "SQLite" {
+			t.Fatalf("answer 0 = %q, want SQLite", res.Response.Answers[0].Answer)
+		}
+		if res.Response.Answers[1].Answer != "Redis" {
+			t.Fatalf("answer 1 = %q, want Redis", res.Response.Answers[1].Answer)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for response")
+	}
+}
+
+func TestBubbleModelQuestionModalBacktrack(t *testing.T) {
+	m := newTestQuestionModel(t)
+	defer m.questionBridge.Close()
+
+	responseCh := make(chan questionbridge.Response, 1)
+	req := questionbridge.Request{
+		Request: questiontool.Request{
+			Questions: []questiontool.QuestionItem{
+				{
+					Question: "Q1",
+					Options:  []string{"A", "B"},
+				},
+				{
+					Question: "Q2",
+					Options:  []string{"C", "D"},
+				},
+			},
+		},
+		Response: responseCh,
+	}
+
+	m.openQuestion(req)
+
+	// Answer Q1 with '1' (A)
+	updated, _ := m.Update(testText("1"))
+	m = updated.(*bubbleModel)
+
+	view := m.questionView()
+	if view.currentQuestion != 1 {
+		t.Fatalf("currentQuestion = %d, want 1", view.currentQuestion)
+	}
+
+	// Press Esc to backtrack to Q1
+	updated, _ = m.Update(testKey(tea.KeyEsc))
+	m = updated.(*bubbleModel)
+
+	view = m.questionView()
+	if view == nil {
+		t.Fatal("question view unexpectedly closed on backtrack")
+	}
+	if view.currentQuestion != 0 {
+		t.Fatalf("currentQuestion after backtrack = %d, want 0", view.currentQuestion)
+	}
+
+	// Now press Esc on Q0 to decline
+	updated, _ = m.Update(testKey(tea.KeyEsc))
+	m = updated.(*bubbleModel)
+
+	if m.questionView() != nil {
+		t.Fatal("question view remained open after declining at Q0")
+	}
+
+	select {
+	case res := <-responseCh:
+		if res.Response.Status != questiontool.StatusDeclined {
+			t.Fatalf("status = %v, want declined", res.Response.Status)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for response")
+	}
+}

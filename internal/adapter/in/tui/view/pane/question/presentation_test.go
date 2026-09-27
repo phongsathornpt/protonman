@@ -49,3 +49,26 @@ func TestQuestionViewWriteInMode(t *testing.T) {
 		t.Fatal("expected typed text in write-in mode")
 	}
 }
+
+func TestQuestionViewMultiQuestionProgress(t *testing.T) {
+	snap := QuestionSnapshot{
+		Width:          80,
+		Height:         24,
+		Question:       "Which cache layer?",
+		Options:        []string{"Redis", "In-memory"},
+		QuestionIndex:  1,
+		TotalQuestions: 3,
+		Recommended:    "Redis",
+	}
+	res := QuestionView(snap)
+	joined := strings.Join(res.Rows, "\n")
+	if !strings.Contains(joined, "Question 2 of 3") {
+		t.Fatalf("expected progress header, got:\n%s", joined)
+	}
+	if !strings.Contains(joined, "Redis (Recommended)") {
+		t.Fatalf("expected recommended badge, got:\n%s", joined)
+	}
+	if !strings.Contains(joined, "esc/←: back") {
+		t.Fatalf("expected back option in help footer, got:\n%s", joined)
+	}
+}

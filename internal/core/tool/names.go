@@ -15,7 +15,7 @@ const (
 	NameSkill       = "skill"
 	NameSubagent    = "subagent"
 	NameBash        = "bash"
-	NameAskQuestion = "ask_question"
+	NameAskQuestion = "askQuestion"
 )
 
 // Canonical facade actions shared by the public tool capabilities.

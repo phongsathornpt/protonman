@@ -53,6 +53,7 @@ func Catalog() []Command {
 		{Name: "clear", Description: "clear conversation history while preserving session settings"},
 		{Name: "resume", Description: "resume a previous session or open session picker", Argument: ArgumentRest},
 		{Name: "call", Description: "run a registered tool", Argument: ArgumentRest},
+		{Name: "grill-me", Description: "start an interactive design interview on a plan or topic", Argument: ArgumentRest, EchoUser: true},
 		{Name: "quit", Description: "leave Protonman"},
 	}
 }

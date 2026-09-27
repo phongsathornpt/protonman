@@ -1,6 +1,9 @@
 package questiontool
 
-import "context"
+import (
+	"context"
+	"strings"
+)
 
 // Status represents whether the user responded or declined.
 type Status string
@@ -12,18 +15,55 @@ const (
 	StatusDeclined Status = "declined"
 )
 
-// Request defines the input parameters for asking a question.
-type Request struct {
-	Question string   `json:"question"`
-	Options  []string `json:"options,omitempty"`
-	Multiple bool     `json:"multiple,omitempty"`
+// QuestionItem defines a single question in an interview round or question batch.
+type QuestionItem struct {
+	Question    string   `json:"question"`
+	Options     []string `json:"options,omitempty"`
+	Multiple    bool     `json:"multiple,omitempty"`
+	Recommended string   `json:"recommended,omitempty"`
 }
 
-// Response holds the outcome of asking the user a question.
-type Response struct {
-	Status          Status   `json:"status"`
+// Request defines the input parameters for asking a question or a batch of questions.
+type Request struct {
+	Question    string         `json:"question,omitempty"`
+	Options     []string       `json:"options,omitempty"`
+	Multiple    bool           `json:"multiple,omitempty"`
+	Recommended string         `json:"recommended,omitempty"`
+	Questions   []QuestionItem `json:"questions,omitempty"`
+}
+
+// NormalizedItems returns a slice of QuestionItem regardless of whether single question
+// or questions array was supplied.
+func (r Request) NormalizedItems() []QuestionItem {
+	if len(r.Questions) > 0 {
+		return r.Questions
+	}
+	if strings.TrimSpace(r.Question) != "" {
+		return []QuestionItem{
+			{
+				Question:    r.Question,
+				Options:     r.Options,
+				Multiple:    r.Multiple,
+				Recommended: r.Recommended,
+			},
+		}
+	}
+	return nil
+}
+
+// AnswerItem represents the answer to a single question in a multi-question round.
+type AnswerItem struct {
+	Question        string   `json:"question"`
 	Answer          string   `json:"answer"`
-	SelectedOptions []string `json:"selected_options,omitempty"`
+	SelectedOptions []string `json:"selectedOptions,omitempty"`
+}
+
+// Response holds the outcome of asking the user a question or batch of questions.
+type Response struct {
+	Status          Status       `json:"status"`
+	Answer          string       `json:"answer"`
+	SelectedOptions []string     `json:"selectedOptions,omitempty"`
+	Answers         []AnswerItem `json:"answers,omitempty"`
 }
 
 // Prompter delivers an interactive question request to the UI and waits for the response.

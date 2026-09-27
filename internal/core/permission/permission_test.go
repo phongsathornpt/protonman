@@ -326,7 +326,7 @@ func TestQuestionIsAllowedByDefault(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	request := Request{ToolName: "ask_question", ToolKind: ToolQuestion, Detail: "Which database should we use?"}
+	request := Request{ToolName: "askQuestion", ToolKind: ToolQuestion, Detail: "Which database should we use?"}
 	if got := policy.Evaluate(request); got.Action != ActionAllow {
 		t.Fatalf("default question action = %v, want allow", got.Action)
 	}

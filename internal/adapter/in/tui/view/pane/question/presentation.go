@@ -11,16 +11,19 @@ import (
 
 // QuestionSnapshot captures the state of the question prompt for rendering.
 type QuestionSnapshot struct {
-	Width       int
-	Height      int
-	Question    string
-	Options     []string
-	Multiple    bool
-	Index       int
-	Selected    map[int]bool
-	WriteInMode bool
-	WriteInText string
-	Tone        panecommon.Tone
+	Width          int
+	Height         int
+	Question       string
+	Options        []string
+	Multiple       bool
+	Recommended    string
+	QuestionIndex  int
+	TotalQuestions int
+	Index          int
+	Selected       map[int]bool
+	WriteInMode    bool
+	WriteInText    string
+	Tone           panecommon.Tone
 }
 
 // QuestionRender represents the rendered pane content.
@@ -41,7 +44,11 @@ func QuestionView(snapshot QuestionSnapshot) QuestionRender {
 	rows := make([]string, 0, 16)
 
 	// Title
-	rows = append(rows, titleStyle.Render("Question from Assistant"))
+	titleText := "Question from Assistant"
+	if snapshot.TotalQuestions > 1 {
+		titleText = fmt.Sprintf("Question %d of %d", snapshot.QuestionIndex+1, snapshot.TotalQuestions)
+	}
+	rows = append(rows, titleStyle.Render(titleText))
 
 	// Question text
 	qLines := textview.WrapLines(snapshot.Question, contentWidth)
@@ -101,7 +108,14 @@ func QuestionView(snapshot QuestionSnapshot) QuestionRender {
 			shortcut = fmt.Sprintf("[%d] ", i+1)
 		}
 
-		line := textview.TruncateEllipsis(cursor+shortcut+check+opt, contentWidth)
+		optLabel := opt
+		if (snapshot.Recommended != "" && (opt == snapshot.Recommended || strings.EqualFold(opt, snapshot.Recommended))) || strings.Contains(opt, "(Recommended)") {
+			if !strings.Contains(optLabel, "(Recommended)") {
+				optLabel += " (Recommended)"
+			}
+		}
+
+		line := textview.TruncateEllipsis(cursor+shortcut+check+optLabel, contentWidth)
 		if isCursor {
 			rows = append(rows, tuistyle.SelectionStyle.Render(line))
 		} else {
@@ -128,7 +142,16 @@ func QuestionView(snapshot QuestionSnapshot) QuestionRender {
 	if snapshot.Multiple {
 		helpParts = append(helpParts, "space: toggle")
 	}
-	helpParts = append(helpParts, "w: write-in", "enter: confirm", "esc: decline")
+	helpParts = append(helpParts, "w: write-in", "enter: confirm")
+	if snapshot.TotalQuestions > 1 {
+		if snapshot.QuestionIndex > 0 {
+			helpParts = append(helpParts, "esc/←: back")
+		} else {
+			helpParts = append(helpParts, "esc: decline")
+		}
+	} else {
+		helpParts = append(helpParts, "esc: decline")
+	}
 	rows = append(rows, tuistyle.MutedStyle.Render(strings.Join(helpParts, " · ")))
 
 	return QuestionRender{Rows: rows, Tone: snapshot.Tone}

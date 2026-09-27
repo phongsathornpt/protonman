@@ -296,16 +296,16 @@ func TestRenderOmitsEmptyActiveGoal(t *testing.T) {
 func TestRenderQuestionsSectionWhenAvailable(t *testing.T) {
 	got := Render(Spec{
 		Capabilities:   ToolCapabilities{Questions: true},
-		AvailableTools: []string{"read", "ask_question"},
+		AvailableTools: []string{"read", "askQuestion"},
 	})
 	for _, want := range []string{
 		"# User Questions",
-		"When ask_question is available, NEVER ask questions or request user preferences via plain assistant chat text",
-		"Use ask_question to ask the user a clarifying question",
+		"When askQuestion is available, NEVER ask questions or request user preferences via plain assistant chat text",
+		"Use askQuestion to ask the user a clarifying question",
 		"Always explore the workspace, code, and tests first",
 		"Prefer discrete options",
-		"- Use ask_question with question and optional options",
-		"never ask questions in assistant text when ask_question is available",
+		"- Use askQuestion with question and optional options",
+		"never ask questions in assistant text when askQuestion is available",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("questions prompt missing %q:\n%s", want, got)
@@ -318,7 +318,7 @@ func TestRenderOmitsQuestionsWhenUnavailable(t *testing.T) {
 	if strings.Contains(got, "# User Questions") {
 		t.Fatalf("prompt unexpectedly contained # User Questions:\n%s", got)
 	}
-	if strings.Contains(got, "ask_question") {
-		t.Fatalf("prompt unexpectedly mentioned ask_question:\n%s", got)
+	if strings.Contains(got, "askQuestion") {
+		t.Fatalf("prompt unexpectedly mentioned askQuestion:\n%s", got)
 	}
 }

@@ -16,13 +16,13 @@ func TestEffectivePromptSpecDerivesCapabilitiesAndMutationDomains(t *testing.T) 
 		{Name: "edit", Kind: tool.KindEdit, Mutability: tool.MutabilityMutating, Safety: tool.SafetyContract{MutationDomain: tool.MutationDomainWorkspace}},
 		{Name: "mcp.read", Kind: tool.KindMCP, Mutability: tool.MutabilityReadOnly},
 		{Name: "mcp.write", Kind: tool.KindMCP, Mutability: tool.MutabilityMutating},
-		{Name: "ask_question", Kind: tool.KindQuestion, Mutability: tool.MutabilityReadOnly},
+		{Name: "askQuestion", Kind: tool.KindQuestion, Mutability: tool.MutabilityReadOnly},
 	}
 	got := loop.effectivePromptSpec(defs, nil)
 	if !got.Capabilities.Tasks || !got.Capabilities.Agents || !got.Capabilities.MCP || !got.Capabilities.Questions {
 		t.Fatalf("capabilities = %+v", got.Capabilities)
 	}
-	if joined := strings.Join(got.AvailableTools, ","); joined != "tasks,agents,edit,mcp.read,mcp.write,ask_question" {
+	if joined := strings.Join(got.AvailableTools, ","); joined != "tasks,agents,edit,mcp.read,mcp.write,askQuestion" {
 		t.Fatalf("available tools = %q", joined)
 	}
 	if !got.Mutations.Task || !got.Mutations.Agent || !got.Mutations.Source || !got.Mutations.External {

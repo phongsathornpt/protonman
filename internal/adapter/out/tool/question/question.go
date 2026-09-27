@@ -14,7 +14,7 @@ type askQuestionHandler struct {
 	prompter Prompter
 }
 
-// NewAskQuestion creates a new ask_question tool handler.
+// NewAskQuestion creates a new askQuestion tool handler.
 func NewAskQuestion(prompter Prompter) tool.Handler {
 	return &askQuestionHandler{prompter: prompter}
 }
@@ -46,24 +46,39 @@ func (h *askQuestionHandler) Execute(ctx context.Context, call tool.Call) (tool.
 			return tool.Result{}, fmt.Errorf("decode question arguments: %w", err)
 		}
 	}
-	req.Question = strings.TrimSpace(req.Question)
-	if req.Question == "" {
+
+	items := req.NormalizedItems()
+	if len(items) == 0 {
 		return tool.Result{}, errors.New("question must not be empty")
 	}
-	if len(req.Options) > 0 {
-		cleaned := make([]string, 0, len(req.Options))
-		seen := make(map[string]struct{}, len(req.Options))
-		for _, opt := range req.Options {
-			opt = strings.TrimSpace(opt)
-			if opt == "" {
-				continue
-			}
-			if _, exists := seen[opt]; !exists {
-				seen[opt] = struct{}{}
-				cleaned = append(cleaned, opt)
-			}
+
+	for i := range items {
+		items[i].Question = strings.TrimSpace(items[i].Question)
+		if items[i].Question == "" {
+			return tool.Result{}, fmt.Errorf("question at index %d must not be empty", i)
 		}
-		req.Options = cleaned
+		if len(items[i].Options) > 0 {
+			cleaned := make([]string, 0, len(items[i].Options))
+			seen := make(map[string]struct{}, len(items[i].Options))
+			for _, opt := range items[i].Options {
+				opt = strings.TrimSpace(opt)
+				if opt == "" {
+					continue
+				}
+				if _, exists := seen[opt]; !exists {
+					seen[opt] = struct{}{}
+					cleaned = append(cleaned, opt)
+				}
+			}
+			items[i].Options = cleaned
+		}
+	}
+	req.Questions = items
+	if len(items) == 1 {
+		req.Question = items[0].Question
+		req.Options = items[0].Options
+		req.Multiple = items[0].Multiple
+		req.Recommended = items[0].Recommended
 	}
 
 	if h.prompter == nil {
@@ -89,6 +104,24 @@ func (h *askQuestionHandler) Execute(ctx context.Context, call tool.Call) (tool.
 			Status: StatusDeclined,
 			Answer: fmt.Sprintf("Question dismissed: %v", err),
 		}
+	}
+
+	if resp.Answer == "" && len(resp.Answers) > 0 {
+		if len(resp.Answers) == 1 {
+			resp.Answer = resp.Answers[0].Answer
+		} else {
+			var sb strings.Builder
+			for i, a := range resp.Answers {
+				if i > 0 {
+					sb.WriteString("\n")
+				}
+				sb.WriteString(fmt.Sprintf("%d. %s: %s", i+1, a.Question, a.Answer))
+			}
+			resp.Answer = sb.String()
+		}
+	}
+	if len(resp.SelectedOptions) == 0 && len(resp.Answers) == 1 {
+		resp.SelectedOptions = resp.Answers[0].SelectedOptions
 	}
 
 	raw, jsonErr := json.Marshal(resp)

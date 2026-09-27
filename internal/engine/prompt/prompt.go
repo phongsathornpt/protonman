@@ -212,7 +212,7 @@ func toolDisciplineSection(spec Spec) string {
 		lines = append(lines, "- Use bash for actual programs, builds, tests, package managers, language runtimes, transformations, and shell workflows not represented by an available dedicated capability; pass cwd to execute in a subdirectory.")
 	}
 	if has(tool.NameAskQuestion) {
-		lines = append(lines, "- Use ask_question with question and optional options for interactive user clarification when requirements are ambiguous or decisions require user input; never ask questions in assistant text when ask_question is available; do not ask questions answerable from repository evidence.")
+		lines = append(lines, "- Use askQuestion with question and optional options for interactive user clarification when requirements are ambiguous or decisions require user input; never ask questions in assistant text when askQuestion is available; do not ask questions answerable from repository evidence.")
 	}
 	lines = append(lines,
 		"- Planning, status, and orchestration metadata are not evidence about source code or runtime behavior.",
@@ -341,8 +341,9 @@ func verificationSection() string {
 
 func questionsSection() string {
 	return `# User Questions
-- When ask_question is available, NEVER ask questions or request user preferences via plain assistant chat text. Always invoke the ask_question tool so the user is prompted interactively.
-- Use ask_question to ask the user a clarifying question with optional discrete choices when requirements are genuinely ambiguous, high-impact trade-offs require user direction, or missing information cannot be discovered from repository evidence.
+- When askQuestion is available, NEVER ask questions or request user preferences via plain assistant chat text. Always invoke the askQuestion tool so the user is prompted interactively.
+- Use askQuestion to ask the user a clarifying question with optional discrete choices when requirements are genuinely ambiguous, high-impact trade-offs require user direction, or missing information cannot be discovered from repository evidence.
+- For interview rounds, design frontiers, or multiple questions (such as grill-me or plan interviews), provide all questions in the questions array of askQuestion instead of writing markdown in assistant text.
 - Always explore the workspace, code, and tests first to answer questions empirically before interrupting the user.
 - Prefer discrete options with clear explanations when reasonable choices exist. Keep questions concise and focused.
 - If the user declines to answer, proceed using the most reasonable standard engineering practice.`

@@ -265,12 +265,15 @@ type questionRequest = questionbridge.Request
 type questionRequestMsg = questionbridge.RequestMsg
 
 type questionPaneView struct {
-	pending     questionRequest
-	index       int
-	selected    map[int]bool
-	writeInMode bool
-	writeInText string
-	tone        panecommon.Tone
+	pending         questionRequest
+	items           []questiontool.QuestionItem
+	currentQuestion int
+	answers         []questiontool.AnswerItem
+	index           int
+	selected        map[int]bool
+	writeInMode     bool
+	writeInText     string
+	tone            panecommon.Tone
 }
 
 func (*questionPaneView) ID() string                             { return questionViewID }
@@ -280,40 +283,131 @@ func (v *questionPaneView) Render(ctx paneRenderContext) string {
 	return v.card(ctx)
 }
 
+func (v *questionPaneView) initQuestionState() {
+	v.index = 0
+	v.selected = make(map[int]bool)
+	v.writeInMode = false
+	v.writeInText = ""
+	if v.currentQuestion < len(v.items) {
+		item := v.items[v.currentQuestion]
+		if item.Recommended != "" {
+			for i, opt := range item.Options {
+				if opt == item.Recommended || strings.EqualFold(opt, item.Recommended) {
+					v.index = i
+					break
+				}
+			}
+		} else {
+			for i, opt := range item.Options {
+				if strings.Contains(opt, "(Recommended)") {
+					v.index = i
+					break
+				}
+			}
+		}
+	}
+}
+
 func (v *questionPaneView) card(ctx paneRenderContext) string {
-	req := v.pending.Request
+	if len(v.items) == 0 {
+		return ""
+	}
+	item := v.items[v.currentQuestion]
 	result := questionpane.QuestionView(questionpane.QuestionSnapshot{
-		Width:       ctx.width,
-		Height:      ctx.height,
-		Question:    req.Question,
-		Options:     req.Options,
-		Multiple:    req.Multiple,
-		Index:       v.index,
-		Selected:    v.selected,
-		WriteInMode: v.writeInMode,
-		WriteInText: v.writeInText,
-		Tone:        v.tone,
+		Width:          ctx.width,
+		Height:         ctx.height,
+		Question:       item.Question,
+		Options:        item.Options,
+		Multiple:       item.Multiple,
+		Recommended:    item.Recommended,
+		QuestionIndex:  v.currentQuestion,
+		TotalQuestions: len(v.items),
+		Index:          v.index,
+		Selected:       v.selected,
+		WriteInMode:    v.writeInMode,
+		WriteInText:    v.writeInText,
+		Tone:           v.tone,
 	})
 
 	return renderModalRows(ctx, paneToneColor(result.Tone), result.Rows)
 }
 
 func (v *questionPaneView) HandlePaneKey(_ paneRenderContext, message tea.KeyPressMsg) paneKeyResult {
-	req := v.pending.Request
-	hasOptions := len(req.Options) > 0
+	if len(v.items) == 0 {
+		return paneKeyResult{handled: true}
+	}
+	item := v.items[v.currentQuestion]
+	hasOptions := len(item.Options) > 0
 
-	resolve := func(status questiontool.Status, answer string, selected []string) paneKeyResult {
+	resolveDeclined := func() paneKeyResult {
 		return paneKeyResult{
 			handled: true,
 			action: paneAction{
 				kind: paneActionQuestionResolve,
 				questionResponse: questiontool.Response{
-					Status:          status,
-					Answer:          answer,
-					SelectedOptions: selected,
+					Status: questiontool.StatusDeclined,
+					Answer: "User declined to answer",
 				},
 			},
 		}
+	}
+
+	recordAnswerAndAdvance := func(ans string, selected []string) paneKeyResult {
+		ansItem := questiontool.AnswerItem{
+			Question:        item.Question,
+			Answer:          ans,
+			SelectedOptions: selected,
+		}
+		if v.currentQuestion < len(v.answers) {
+			v.answers[v.currentQuestion] = ansItem
+		} else {
+			v.answers = append(v.answers, ansItem)
+		}
+
+		if v.currentQuestion < len(v.items)-1 {
+			v.currentQuestion++
+			v.initQuestionState()
+			return paneKeyResult{handled: true}
+		}
+
+		var finalAnswer string
+		if len(v.answers) == 1 {
+			finalAnswer = v.answers[0].Answer
+		} else {
+			var sb strings.Builder
+			for i, a := range v.answers {
+				if i > 0 {
+					sb.WriteString("\n")
+				}
+				sb.WriteString(fmt.Sprintf("%d. %s: %s", i+1, a.Question, a.Answer))
+			}
+			finalAnswer = sb.String()
+		}
+		primarySelected := selected
+		if len(v.answers) > 0 {
+			primarySelected = v.answers[0].SelectedOptions
+		}
+		return paneKeyResult{
+			handled: true,
+			action: paneAction{
+				kind: paneActionQuestionResolve,
+				questionResponse: questiontool.Response{
+					Status:          questiontool.StatusAnswered,
+					Answer:          finalAnswer,
+					SelectedOptions: primarySelected,
+					Answers:         v.answers,
+				},
+			},
+		}
+	}
+
+	backtrack := func() paneKeyResult {
+		if v.currentQuestion > 0 {
+			v.currentQuestion--
+			v.initQuestionState()
+			return paneKeyResult{handled: true}
+		}
+		return resolveDeclined()
 	}
 
 	if v.writeInMode || !hasOptions {
@@ -323,7 +417,7 @@ func (v *questionPaneView) HandlePaneKey(_ paneRenderContext, message tea.KeyPre
 				v.writeInMode = false
 				return paneKeyResult{handled: true}
 			}
-			return resolve(questiontool.StatusDeclined, "User declined to answer", nil)
+			return backtrack()
 		case key.Matches(message, paneutil.Keys.Confirm):
 			text := strings.TrimSpace(v.writeInText)
 			if text == "" {
@@ -331,10 +425,9 @@ func (v *questionPaneView) HandlePaneKey(_ paneRenderContext, message tea.KeyPre
 					v.writeInMode = false
 					return paneKeyResult{handled: true}
 				}
-				text = "User declined to answer"
-				return resolve(questiontool.StatusDeclined, text, nil)
+				return backtrack()
 			}
-			return resolve(questiontool.StatusAnswered, text, nil)
+			return recordAnswerAndAdvance(text, nil)
 		case message.String() == "backspace":
 			if len(v.writeInText) > 0 {
 				r := []rune(v.writeInText)
@@ -354,7 +447,7 @@ func (v *questionPaneView) HandlePaneKey(_ paneRenderContext, message tea.KeyPre
 	}
 
 	// Normal options mode
-	totalItems := len(req.Options) + 1 // options + write-in option
+	totalItems := len(item.Options) + 1 // options + write-in option
 	if v.index >= totalItems {
 		v.index = totalItems - 1
 	}
@@ -363,8 +456,8 @@ func (v *questionPaneView) HandlePaneKey(_ paneRenderContext, message tea.KeyPre
 	}
 
 	switch {
-	case key.Matches(message, paneutil.Keys.Escape):
-		return resolve(questiontool.StatusDeclined, "User declined to answer", nil)
+	case key.Matches(message, paneutil.Keys.Escape) || message.String() == "left":
+		return backtrack()
 	case key.Matches(message, paneutil.Keys.Up):
 		if v.index > 0 {
 			v.index--
@@ -380,8 +473,8 @@ func (v *questionPaneView) HandlePaneKey(_ paneRenderContext, message tea.KeyPre
 		return paneKeyResult{handled: true}
 	case message.Text >= "1" && message.Text <= "9":
 		idx := int(message.Text[0] - '1')
-		if idx < len(req.Options) {
-			if req.Multiple {
+		if idx < len(item.Options) {
+			if item.Multiple {
 				if v.selected == nil {
 					v.selected = make(map[int]bool)
 				}
@@ -389,12 +482,12 @@ func (v *questionPaneView) HandlePaneKey(_ paneRenderContext, message tea.KeyPre
 				v.index = idx
 				return paneKeyResult{handled: true}
 			}
-			opt := req.Options[idx]
-			return resolve(questiontool.StatusAnswered, opt, []string{opt})
+			opt := item.Options[idx]
+			return recordAnswerAndAdvance(opt, []string{opt})
 		}
 		return paneKeyResult{handled: true}
 	case message.Text == " ":
-		if req.Multiple && v.index < len(req.Options) {
+		if item.Multiple && v.index < len(item.Options) {
 			if v.selected == nil {
 				v.selected = make(map[int]bool)
 			}
@@ -403,25 +496,25 @@ func (v *questionPaneView) HandlePaneKey(_ paneRenderContext, message tea.KeyPre
 		}
 		return paneKeyResult{handled: true}
 	case key.Matches(message, paneutil.Keys.Confirm):
-		if v.index == len(req.Options) {
+		if v.index == len(item.Options) {
 			v.writeInMode = true
 			return paneKeyResult{handled: true}
 		}
-		if req.Multiple {
+		if item.Multiple {
 			selected := make([]string, 0)
-			for i, opt := range req.Options {
+			for i, opt := range item.Options {
 				if v.selected != nil && v.selected[i] {
 					selected = append(selected, opt)
 				}
 			}
-			if len(selected) == 0 && v.index < len(req.Options) {
-				selected = append(selected, req.Options[v.index])
+			if len(selected) == 0 && v.index < len(item.Options) {
+				selected = append(selected, item.Options[v.index])
 			}
 			ans := strings.Join(selected, ", ")
-			return resolve(questiontool.StatusAnswered, ans, selected)
+			return recordAnswerAndAdvance(ans, selected)
 		}
-		opt := req.Options[v.index]
-		return resolve(questiontool.StatusAnswered, opt, []string{opt})
+		opt := item.Options[v.index]
+		return recordAnswerAndAdvance(opt, []string{opt})
 	default:
 		return paneKeyResult{handled: true}
 	}
@@ -439,11 +532,16 @@ func (m *bubbleModel) openQuestion(request questionRequest) {
 	if m.panes.bottom == nil {
 		return
 	}
+	items := request.Request.NormalizedItems()
 	view := &questionPaneView{
-		pending:  request,
-		selected: make(map[int]bool),
-		tone:     panecommon.ToneUser,
+		pending:         request,
+		items:           items,
+		currentQuestion: 0,
+		answers:         make([]questiontool.AnswerItem, 0, len(items)),
+		selected:        make(map[int]bool),
+		tone:            panecommon.ToneUser,
 	}
+	view.initQuestionState()
 	m.panes.bottom.push(view)
 	m.requestRelayout()
 	m.reconcileLayout()
