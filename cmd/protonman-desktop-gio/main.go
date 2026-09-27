@@ -14,7 +14,8 @@ import (
 func main() {
 	agents := app.NewACPAgents(config.NewUserACPAgentsStore(""))
 	integrations := app.NewMCPIntegrations(config.NewUserMCPIntegrationsStore(""))
-	if err := desktopgio.Run(context.Background(), agents, integrations); err != nil {
+	preferences := app.NewDesktopPreferences(config.NewUserDesktopPreferencesStore(""))
+	if err := desktopgio.Run(context.Background(), agents, integrations, preferences); err != nil {
 		log.Fatal(err)
 	}
 }

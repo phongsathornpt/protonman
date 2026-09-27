@@ -248,6 +248,10 @@ func (c *Client) Call(ctx context.Context, method string, params any, result any
 		return ErrClosed
 	default:
 	}
+	if c.pending == nil {
+		c.mu.Unlock()
+		return ErrClosed
+	}
 	c.pending[id] = ch
 	c.mu.Unlock()
 

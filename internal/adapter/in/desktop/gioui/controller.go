@@ -64,6 +64,9 @@ type controllerSnapshot struct {
 	MCPReconnecting       bool
 	MCPError              string
 	Revision              uint64
+	PinnedSessions        []string
+	CustomTitles          map[string]string
+	FilterMode            string
 }
 
 type controllerSnapshotCache struct {
@@ -85,6 +88,11 @@ type controller struct {
 	connections   map[string]connectionPhase
 	statuses      map[string]string
 	activeAgentID string
+
+	preferences    *app.DesktopPreferences
+	pinnedSessions []string
+	customTitles   map[string]string
+	filterMode     string
 
 	histories               map[string]historyState
 	historyLoads            map[string]*sessionHistoryLoad
@@ -116,7 +124,7 @@ type controller struct {
 	snapshotCache   controllerSnapshotCache
 }
 
-func newController(parent context.Context, onChange func(), agents app.ACPAgents, integrations app.MCPIntegrations) *controller {
+func newController(parent context.Context, onChange func(), agents app.ACPAgents, integrations app.MCPIntegrations, preferences *app.DesktopPreferences) *controller {
 	ctx, cancel := context.WithCancel(parent)
 	defaults := []app.ACPAgentProfile{defaultACPAgentProfile()}
 	profiles, profileErr := agents.Resolve(ctx, defaults, os.Getenv(acpAgentsEnvironment))
@@ -150,6 +158,10 @@ func newController(parent context.Context, onChange func(), agents app.ACPAgents
 		agentConfigOverridden:   strings.TrimSpace(os.Getenv(acpAgentsEnvironment)) != "",
 		agentError:              agentError,
 		mcpIntegrations:         integrations,
+		preferences:             preferences,
+		pinnedSessions:          make([]string, 0),
+		customTitles:            make(map[string]string),
+		filterMode:              "all",
 	}
 	for _, profile := range profiles {
 		instance.profiles[profile.ID] = cloneACPAgentProfile(profile)
@@ -160,8 +172,37 @@ func newController(parent context.Context, onChange func(), agents app.ACPAgents
 	if integrations.Available() {
 		instance.loadMCPIntegrations()
 	}
+	if preferences != nil && preferences.Available() {
+		instance.loadPreferences()
+	}
 	go instance.run()
 	return instance
+}
+
+func (c *controller) loadPreferences() {
+	state, err := c.preferences.Load(c.ctx)
+	if err != nil {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.pinnedSessions = slices.Clone(state.PinnedSessions)
+	c.customTitles = cloneCustomTitles(state.CustomTitles)
+	if state.FilterMode != "" {
+		c.filterMode = state.FilterMode
+	}
+	c.revision++
+}
+
+func cloneCustomTitles(m map[string]string) map[string]string {
+	if m == nil {
+		return make(map[string]string)
+	}
+	out := make(map[string]string, len(m))
+	for k, v := range m {
+		out[k] = v
+	}
+	return out
 }
 
 func (c *controller) close() {
@@ -212,6 +253,9 @@ func (c *controller) snapshot() controllerSnapshot {
 		MCPReconnecting:       c.mcpReconnect,
 		MCPError:              c.mcpError,
 		Revision:              c.revision,
+		PinnedSessions:        slices.Clone(c.pinnedSessions),
+		CustomTitles:          cloneCustomTitles(c.customTitles),
+		FilterMode:            c.filterMode,
 	}
 	for agentID, phase := range c.connections {
 		snapshot.AgentConnections[agentID] = phase
@@ -278,6 +322,148 @@ func (c *controller) selectSession(sessionID string) {
 	c.notify()
 	c.loadSessionHistory(activeSessionID)
 	c.refreshActiveSession(true)
+}
+
+func (c *controller) deleteSession(sessionID string) {
+	sessionID = strings.TrimSpace(sessionID)
+	if sessionID == "" {
+		return
+	}
+	c.mu.Lock()
+	var (
+		targetAgentID   string
+		targetProjectID string
+	)
+	for i := range c.state.Sessions {
+		if c.state.Sessions[i].ID == sessionID {
+			targetAgentID = c.state.Sessions[i].AgentID
+			targetProjectID = c.state.Sessions[i].ProjectID
+			break
+		}
+	}
+	client := c.clients[targetAgentID]
+	activeSessionDeleted := c.state.ActiveSessionID == sessionID
+	c.mu.Unlock()
+
+	if client != nil {
+		type sessionDeleteParams struct {
+			SessionID string `json:"sessionId"`
+		}
+		_ = client.Call(c.ctx, "session/delete", sessionDeleteParams{SessionID: sessionID}, nil)
+	}
+
+	if c.preferences != nil {
+		_ = c.preferences.RemoveSession(c.ctx, sessionID)
+	}
+
+	c.mu.Lock()
+	newSessions := make([]desktopstate.SessionState, 0, len(c.state.Sessions))
+	var fallbackSessionID string
+	for _, sess := range c.state.Sessions {
+		if sess.ID != sessionID {
+			newSessions = append(newSessions, sess)
+			if activeSessionDeleted && sess.ProjectID == targetProjectID && fallbackSessionID == "" {
+				fallbackSessionID = sess.ID
+			}
+		}
+	}
+	c.state.Sessions = newSessions
+
+	if activeSessionDeleted {
+		c.state.ActiveSessionID = fallbackSessionID
+	}
+
+	if load, ok := c.historyLoads[sessionID]; ok {
+		load.cancel()
+		delete(c.historyLoads, sessionID)
+	}
+	delete(c.histories, sessionID)
+	delete(c.historyStaging, sessionID)
+	delete(c.historyStagingBytes, sessionID)
+	delete(c.historyStagingTruncated, sessionID)
+	delete(c.timelineBytes, sessionID)
+
+	if c.preferences != nil {
+		snap := c.preferences.Snapshot()
+		c.pinnedSessions = slices.Clone(snap.PinnedSessions)
+		c.customTitles = cloneCustomTitles(snap.CustomTitles)
+		c.filterMode = snap.FilterMode
+	}
+
+	c.revision++
+	c.mu.Unlock()
+
+	if activeSessionDeleted && fallbackSessionID != "" {
+		c.selectSession(fallbackSessionID)
+	} else {
+		c.notify()
+	}
+}
+
+func (c *controller) renameSession(sessionID, newTitle string) {
+	sessionID = strings.TrimSpace(sessionID)
+	if sessionID == "" {
+		return
+	}
+	newTitle = strings.TrimSpace(newTitle)
+	if c.preferences != nil {
+		_ = c.preferences.SetCustomTitle(c.ctx, sessionID, newTitle)
+	}
+	c.mu.Lock()
+	if c.preferences != nil {
+		c.customTitles = cloneCustomTitles(c.preferences.Snapshot().CustomTitles)
+	} else {
+		if c.customTitles == nil {
+			c.customTitles = make(map[string]string)
+		}
+		if newTitle == "" {
+			delete(c.customTitles, sessionID)
+		} else {
+			c.customTitles[sessionID] = newTitle
+		}
+	}
+	c.revision++
+	c.mu.Unlock()
+	c.notify()
+}
+
+func (c *controller) togglePinSession(sessionID string) {
+	sessionID = strings.TrimSpace(sessionID)
+	if sessionID == "" {
+		return
+	}
+	if c.preferences != nil {
+		_, _ = c.preferences.TogglePin(c.ctx, sessionID)
+	}
+	c.mu.Lock()
+	if c.preferences != nil {
+		c.pinnedSessions = slices.Clone(c.preferences.Snapshot().PinnedSessions)
+	} else {
+		idx := slices.Index(c.pinnedSessions, sessionID)
+		if idx >= 0 {
+			c.pinnedSessions = slices.Delete(c.pinnedSessions, idx, idx+1)
+		} else {
+			c.pinnedSessions = append(c.pinnedSessions, sessionID)
+		}
+	}
+	c.revision++
+	c.mu.Unlock()
+	c.notify()
+}
+
+func (c *controller) setFilterMode(mode string) {
+	mode = strings.ToLower(strings.TrimSpace(mode))
+	if mode != "running" && mode != "pinned" {
+		mode = "all"
+	}
+	if c.preferences != nil {
+		_ = c.preferences.SetFilterMode(c.ctx, mode)
+	}
+	c.mu.Lock()
+	c.filterMode = mode
+	c.revision++
+	c.mu.Unlock()
+	c.notify()
 }
 
 func (c *controller) newSession() {

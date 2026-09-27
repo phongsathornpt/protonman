@@ -31,6 +31,7 @@ type sidebarRowKind uint8
 const (
 	sidebarProjectRow sidebarRowKind = iota
 	sidebarSessionRow
+	sidebarPinnedHeaderRow
 )
 
 type sidebarRow struct {
@@ -43,6 +44,7 @@ type sidebarRow struct {
 	Status         string
 	SessionCount   int
 	LastActivityAt time.Time
+	Pinned         bool
 }
 
 type sidebarProjectCache struct {
@@ -58,13 +60,16 @@ type sidebarSessionCache struct {
 	subtitle       string
 	status         string
 	lastActivityAt time.Time
+	pinned         bool
 }
 
 type sidebarRowsCache struct {
-	valid    bool
-	rows     []sidebarRow
-	projects []sidebarProjectCache
-	sessions []sidebarSessionCache
+	valid      bool
+	rows       []sidebarRow
+	projects   []sidebarProjectCache
+	sessions   []sidebarSessionCache
+	filterMode string
+	pinnedHash string
 }
 
 type shell struct {
@@ -150,21 +155,53 @@ type shell struct {
 	agentRemoveButton            widget.Clickable
 	activeSessionID              string
 	syncRevision                 uint64
-	onSelectSession              func(string)
-	onSelectProject              func(string)
-	onNewSession                 func()
-	onSendPrompt                 func(string)
-	onCancelPrompt               func()
-	onResolvePermission          func(string, string)
-	onSetRuntimeModel            func(string, string)
-	onSetRuntimeReasoning        func(string)
-	onSetRuntimeLow              func(string)
-	onSaveMCPIntegration         func(string, string, string, string)
-	onRemoveMCPIntegration       func(string)
-	onReconnectMCP               func()
-	onSelectAgent                func(string)
-	onSaveAgentProfile           func(string, string, string, string, string, string)
-	onRemoveAgentProfile         func(string)
+
+	sessionMenuButtons map[string]*widget.Clickable
+	sessionMenuLive    map[string]struct{}
+	menuSessionID      string
+	menuPinButton      widget.Clickable
+	menuRenameButton   widget.Clickable
+	menuDeleteButton   widget.Clickable
+
+	editingSessionID    string
+	sessionRenameEditor widget.Editor
+	renameConfirmButton widget.Clickable
+	renameCancelButton  widget.Clickable
+
+	deletingSessionID        string
+	deletingSessionTitle     string
+	deleteModalScrim         widget.Clickable
+	deleteModalCancelButton  widget.Clickable
+	deleteModalConfirmButton widget.Clickable
+
+	filterDropdownOpen   bool
+	filterDropdownButton widget.Clickable
+	filterAllButton      widget.Clickable
+	filterRunningButton  widget.Clickable
+	filterPinnedButton   widget.Clickable
+
+	pinnedCollapsed bool
+	pinnedButton    widget.Clickable
+
+	onSelectSession        func(string)
+	onSelectProject        func(string)
+	onNewSession           func()
+	onDeleteSession        func(string)
+	onRenameSession        func(string, string)
+	onTogglePinSession     func(string)
+	onSetFilterMode        func(string)
+	onSendPrompt           func(string)
+	onCancelPrompt         func()
+	onResolvePermission    func(string, string)
+	onSetRuntimeModel      func(string, string)
+	onSetRuntimeReasoning  func(string)
+	onSetRuntimeLow        func(string)
+	onSaveMCPIntegration   func(string, string, string, string)
+	onRemoveMCPIntegration func(string)
+	onReconnectMCP         func()
+	onSelectAgent          func(string)
+	onSaveAgentProfile     func(string, string, string, string, string, string)
+	onRemoveAgentProfile   func(string)
 }
 
 func newShell(theme *theme) *shell {
@@ -178,6 +215,9 @@ func newShell(theme *theme) *shell {
 		projectButtons:               make(map[string]*widget.Clickable),
 		sessionButtonLive:            make(map[string]struct{}),
 		projectButtonLive:            make(map[string]struct{}),
+		sessionMenuButtons:           make(map[string]*widget.Clickable),
+		sessionMenuLive:              make(map[string]struct{}),
+		sessionRenameEditor:          widget.Editor{SingleLine: true, MaxLen: 256},
 		sidebarVisible:               true,
 		sidebarSearchEditor:          widget.Editor{SingleLine: true, MaxLen: 128},
 		projectCollapsed:             make(map[string]bool),
@@ -215,7 +255,12 @@ func newShell(theme *theme) *shell {
 		mcpIntegrationButtons:        make(map[string]*widget.Clickable),
 		mcpIntegrationLive:           make(map[string]struct{}),
 		onSelectSession:              func(string) {},
+		onSelectProject:              func(string) {},
 		onNewSession:                 func() {},
+		onDeleteSession:              func(string) {},
+		onRenameSession:              func(string, string) {},
+		onTogglePinSession:           func(string) {},
+		onSetFilterMode:              func(string) {},
 		onSendPrompt:                 func(string) {},
 		onCancelPrompt:               func() {},
 		onResolvePermission:          func(string, string) {},
@@ -225,7 +270,6 @@ func newShell(theme *theme) *shell {
 		onSaveMCPIntegration:         func(string, string, string, string) {},
 		onRemoveMCPIntegration:       func(string) {},
 		onReconnectMCP:               func() {},
-		onSelectProject:              func(string) {},
 		onSelectAgent:                func(string) {},
 		onSaveAgentProfile:           func(string, string, string, string, string, string) {},
 		onRemoveAgentProfile:         func(string) {},
@@ -268,7 +312,7 @@ func (s *shell) layout(gtx layout.Context, snapshot controllerSnapshot) layout.D
 	s.syncAgentProfileEditors(snapshot)
 	s.handleGlobalShortcuts(gtx, snapshot)
 	paint.Fill(gtx.Ops, s.theme.surface)
-	return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
+	dims := layout.Flex{Axis: layout.Vertical}.Layout(gtx,
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 			return s.layoutTopBar(gtx, snapshot)
 		}),
@@ -296,6 +340,10 @@ func (s *shell) layout(gtx layout.Context, snapshot controllerSnapshot) layout.D
 			return layout.Flex{Axis: layout.Horizontal}.Layout(gtx, children...)
 		}),
 	)
+	if s.deletingSessionID != "" {
+		s.layoutDeleteModal(gtx)
+	}
+	return dims
 }
 
 func (s *shell) layoutVerticalDivider(gtx layout.Context) layout.Dimensions {
@@ -493,12 +541,16 @@ func (s *shell) layoutSidebar(gtx layout.Context, snapshot controllerSnapshot) l
 			return s.layoutHorizontalDivider(gtx)
 		}),
 		layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-			allRows := s.sidebarRows(snapshot.State, snapshot.AgentProfiles)
-			rows := s.sidebarDisplayRows(allRows)
+			allRows := s.sidebarRows(snapshot)
+			rows := s.sidebarDisplayRows(allRows, snapshot.FilterMode)
 			if len(rows) == 0 {
 				emptyText := "No conversations yet. Start one from an existing workspace."
 				if strings.TrimSpace(s.sidebarSearchEditor.Text()) != "" {
 					emptyText = "No conversations matching \"" + s.sidebarSearchEditor.Text() + "\""
+				} else if snapshot.FilterMode == "running" {
+					emptyText = "No running conversations."
+				} else if snapshot.FilterMode == "pinned" {
+					emptyText = "No pinned conversations. Click ⋮ on a session to pin it."
 				}
 				return desktopInset{Top: 24, Bottom: 24, Left: 16, Right: 16}.Layout(gtx,
 					func(gtx layout.Context) layout.Dimensions {
@@ -516,12 +568,17 @@ func (s *shell) layoutSidebar(gtx layout.Context, snapshot controllerSnapshot) l
 func (s *shell) layoutSidebarHeader(gtx layout.Context, snapshot controllerSnapshot) layout.Dimensions {
 	return desktopInset{Top: 8, Bottom: 8, Left: 10, Right: 10}.Layout(gtx,
 		func(gtx layout.Context) layout.Dimensions {
-			return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
+			items := []layout.FlexChild{
 				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 					gtx.Constraints.Min.Y = gtx.Dp(36)
 					return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
 						layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
 							return s.layoutLabel(gtx, "Workspaces", textLabelLarge, font.SemiBold, s.theme.onSurface, 1)
+						}),
+						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+							return desktopInset{Right: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+								return s.layoutFilterDropdown(gtx, snapshot)
+							})
 						}),
 						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 							label := "+ New"
@@ -532,14 +589,102 @@ func (s *shell) layoutSidebarHeader(gtx layout.Context, snapshot controllerSnaps
 						}),
 					)
 				}),
-				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-					return desktopInset{Top: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-						return s.layoutSidebarSearch(gtx)
+			}
+			if s.filterDropdownOpen {
+				items = append(items, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+					return desktopInset{Top: 4, Bottom: 2}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+						return s.layoutFilterDropdownMenu(gtx, snapshot)
 					})
-				}),
-			)
+				}))
+			}
+			items = append(items, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+				return desktopInset{Top: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+					return s.layoutSidebarSearch(gtx)
+				})
+			}))
+			return layout.Flex{Axis: layout.Vertical}.Layout(gtx, items...)
 		},
 	)
+}
+
+func (s *shell) layoutFilterDropdown(gtx layout.Context, snapshot controllerSnapshot) layout.Dimensions {
+	currentMode := snapshot.FilterMode
+	if currentMode == "" {
+		currentMode = "all"
+	}
+	filterLabel := "All ▾"
+	switch currentMode {
+	case "running":
+		filterLabel = "Running ▾"
+	case "pinned":
+		filterLabel = "Pinned ▾"
+	}
+
+	if s.filterDropdownButton.Clicked(gtx) {
+		s.filterDropdownOpen = !s.filterDropdownOpen
+	}
+	return s.layoutButton(gtx, &s.filterDropdownButton, filterLabel, true, nil)
+}
+
+func (s *shell) layoutFilterDropdownMenu(gtx layout.Context, snapshot controllerSnapshot) layout.Dimensions {
+	if s.filterAllButton.Clicked(gtx) {
+		s.filterDropdownOpen = false
+		s.onSetFilterMode("all")
+	}
+	if s.filterRunningButton.Clicked(gtx) {
+		s.filterDropdownOpen = false
+		s.onSetFilterMode("running")
+	}
+	if s.filterPinnedButton.Clicked(gtx) {
+		s.filterDropdownOpen = false
+		s.onSetFilterMode("pinned")
+	}
+
+	currentMode := snapshot.FilterMode
+	if currentMode == "" {
+		currentMode = "all"
+	}
+
+	return s.roundedBorderSurface(gtx, shapeSmall, s.theme.surfaceContainerHigh, s.theme.outlineVariant, 1, func(gtx layout.Context) layout.Dimensions {
+		return desktopInset{Top: 4, Bottom: 4, Left: 6, Right: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+			return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle, Spacing: layout.SpaceBetween}.Layout(gtx,
+				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+					return s.layoutFilterItem(gtx, &s.filterAllButton, "All", currentMode == "all")
+				}),
+				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+					return s.layoutFilterItem(gtx, &s.filterRunningButton, "● Running", currentMode == "running")
+				}),
+				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+					return s.layoutFilterItem(gtx, &s.filterPinnedButton, "★ Pinned", currentMode == "pinned")
+				}),
+			)
+		})
+	})
+}
+
+func (s *shell) layoutFilterItem(gtx layout.Context, button *widget.Clickable, label string, active bool) layout.Dimensions {
+	background := s.theme.surfaceContainerHigh
+	foreground := s.theme.onSurfaceVariant
+	if active {
+		background = s.theme.primaryContainer
+		foreground = s.theme.onPrimaryContainer
+	} else if button.Hovered() {
+		background = s.theme.surfaceContainerHighest
+		foreground = s.theme.onSurface
+	}
+	dims := button.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+		gtx.Constraints.Min.Y = gtx.Dp(24)
+		return s.roundedSurface(gtx, shapeSmall, background, func(gtx layout.Context) layout.Dimensions {
+			return desktopInset{Top: 3, Bottom: 3, Left: 8, Right: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+				weight := font.Medium
+				if active {
+					weight = font.SemiBold
+				}
+				return s.layoutLabel(gtx, label, textLabelSmall, weight, foreground, 1)
+			})
+		})
+	})
+	return dims
 }
 
 func (s *shell) layoutSidebarSearch(gtx layout.Context) layout.Dimensions {
@@ -555,93 +700,173 @@ func (s *shell) layoutSidebarSearch(gtx layout.Context) layout.Dimensions {
 	})
 }
 
-func (s *shell) sidebarDisplayRows(rows []sidebarRow) []sidebarRow {
+func (s *shell) sidebarDisplayRows(rows []sidebarRow, filterMode string) []sidebarRow {
 	query := strings.ToLower(strings.TrimSpace(s.sidebarSearchEditor.Text()))
-	if query == "" && len(s.projectCollapsed) == 0 {
-		return rows
-	}
+	filterMode = strings.ToLower(strings.TrimSpace(filterMode))
 
 	display := make([]sidebarRow, 0, len(rows))
-	if query != "" {
-		matchingProjects := make(map[string]bool)
-		for _, row := range rows {
-			if row.Kind == sidebarSessionRow {
-				if strings.Contains(strings.ToLower(row.Title), query) ||
-					strings.Contains(strings.ToLower(row.Subtitle), query) {
-					matchingProjects[row.ProjectID] = true
-				}
-			} else if row.Kind == sidebarProjectRow {
-				if strings.Contains(strings.ToLower(row.Title), query) {
-					matchingProjects[row.ProjectID] = true
-				}
-			}
+	currentProjectCollapsed := false
+	inPinnedSection := false
+
+	matchesFilter := func(row sidebarRow) bool {
+		switch filterMode {
+		case "running":
+			statusLower := strings.ToLower(row.Status)
+			return strings.Contains(statusLower, "running") ||
+				strings.Contains(statusLower, "permission") ||
+				strings.Contains(statusLower, "approval")
+		case "pinned":
+			return row.Pinned
+		default:
+			return true
 		}
-		for _, row := range rows {
-			if row.Kind == sidebarProjectRow {
-				if matchingProjects[row.ProjectID] {
-					display = append(display, row)
-				}
-			} else if row.Kind == sidebarSessionRow {
-				if matchingProjects[row.ProjectID] && (strings.Contains(strings.ToLower(row.Title), query) ||
-					strings.Contains(strings.ToLower(row.Subtitle), query) ||
-					strings.Contains(strings.ToLower(row.ProjectID), query)) {
-					display = append(display, row)
-				}
-			}
-		}
-		return display
 	}
 
-	currentProjectCollapsed := false
+	matchesQuery := func(row sidebarRow) bool {
+		if query == "" {
+			return true
+		}
+		return strings.Contains(strings.ToLower(row.Title), query) ||
+			strings.Contains(strings.ToLower(row.Subtitle), query) ||
+			strings.Contains(strings.ToLower(row.ProjectID), query)
+	}
+
 	for _, row := range rows {
-		if row.Kind == sidebarProjectRow {
+		switch row.Kind {
+		case sidebarPinnedHeaderRow:
+			inPinnedSection = true
+			if filterMode != "running" {
+				display = append(display, row)
+			}
+		case sidebarProjectRow:
+			inPinnedSection = false
 			currentProjectCollapsed = s.projectCollapsed[row.ProjectID]
 			display = append(display, row)
-		} else if row.Kind == sidebarSessionRow {
-			if !currentProjectCollapsed {
-				display = append(display, row)
+		case sidebarSessionRow:
+			if inPinnedSection {
+				if s.pinnedCollapsed {
+					continue
+				}
+				if matchesFilter(row) && matchesQuery(row) {
+					display = append(display, row)
+				}
+			} else {
+				if currentProjectCollapsed {
+					continue
+				}
+				if matchesFilter(row) && matchesQuery(row) {
+					display = append(display, row)
+				}
 			}
 		}
 	}
+
+	if query != "" || filterMode == "running" || filterMode == "pinned" {
+		cleaned := make([]sidebarRow, 0, len(display))
+		for i, r := range display {
+			if r.Kind == sidebarProjectRow || r.Kind == sidebarPinnedHeaderRow {
+				hasSessions := false
+				for j := i + 1; j < len(display); j++ {
+					if display[j].Kind == sidebarProjectRow || display[j].Kind == sidebarPinnedHeaderRow {
+						break
+					}
+					if display[j].Kind == sidebarSessionRow {
+						hasSessions = true
+						break
+					}
+				}
+				if hasSessions {
+					cleaned = append(cleaned, r)
+				}
+			} else {
+				cleaned = append(cleaned, r)
+			}
+		}
+		return cleaned
+	}
+
 	return display
 }
 
-func (s *shell) sidebarRows(state desktopstate.State, profiles []app.ACPAgentProfile) []sidebarRow {
-	if s.sidebarRowsCache.valid && s.sidebarRowsCache.matches(state, profiles) {
+func (s *shell) sidebarRows(snapshot controllerSnapshot) []sidebarRow {
+	if s.sidebarRowsCache.valid && s.sidebarRowsCache.matchesWithOptions(snapshot.State, snapshot.AgentProfiles, snapshot.FilterMode, snapshot.PinnedSessions, snapshot.CustomTitles) {
 		return s.sidebarRowsCache.rows
 	}
-	rows, cache := buildSidebarRows(state, profiles)
+	rows, cache := buildSidebarRowsWithOptions(snapshot.State, snapshot.AgentProfiles, snapshot.PinnedSessions, snapshot.CustomTitles)
+	cache.filterMode = snapshot.FilterMode
 	s.sidebarRowsCache = cache
 	return rows
 }
 
 func buildSidebarRows(state desktopstate.State, profiles []app.ACPAgentProfile) ([]sidebarRow, sidebarRowsCache) {
-	rows := make([]sidebarRow, 0, len(state.Sessions)+len(state.Projects))
+	return buildSidebarRowsWithOptions(state, profiles, nil, nil)
+}
+
+func buildSidebarRowsWithOptions(state desktopstate.State, profiles []app.ACPAgentProfile, pinnedSessions []string, customTitles map[string]string) ([]sidebarRow, sidebarRowsCache) {
+	rows := make([]sidebarRow, 0, len(state.Sessions)+len(state.Projects)+1)
 	projects := make([]sidebarProjectCache, 0, len(state.Projects))
 	sessions := make([]sidebarSessionCache, 0, len(state.Sessions))
 	sessionsByProject := make(map[string][]sidebarRow, len(state.Sessions))
+	pinnedMap := make(map[string]bool, len(pinnedSessions))
+	for _, id := range pinnedSessions {
+		pinnedMap[id] = true
+	}
+
+	pinnedRows := make([]sidebarRow, 0, len(pinnedSessions))
+
 	for _, session := range state.Sessions {
+		title := session.Title
+		if custom, ok := customTitles[session.ID]; ok && custom != "" {
+			title = custom
+		}
+		pinned := pinnedMap[session.ID]
 		subtitle := agentDisplayName(profiles, session.AgentID)
 		sessions = append(sessions, sidebarSessionCache{
 			id:             session.ID,
 			projectID:      session.ProjectID,
 			agentID:        session.AgentID,
-			title:          session.Title,
+			title:          title,
 			subtitle:       subtitle,
 			status:         string(session.Status),
 			lastActivityAt: session.LastActivityAt,
+			pinned:         pinned,
 		})
-		sessionsByProject[session.ProjectID] = append(sessionsByProject[session.ProjectID], sidebarRow{
+		row := sidebarRow{
 			Kind:           sidebarSessionRow,
 			ProjectID:      session.ProjectID,
 			SessionID:      session.ID,
 			AgentID:        session.AgentID,
-			Title:          session.Title,
+			Title:          title,
 			Subtitle:       subtitle,
 			Status:         displayStatus(session.Status),
 			LastActivityAt: session.LastActivityAt,
-		})
+			Pinned:         pinned,
+		}
+		sessionsByProject[session.ProjectID] = append(sessionsByProject[session.ProjectID], row)
+		if pinned {
+			pinnedRows = append(pinnedRows, row)
+		}
 	}
+
+	if len(pinnedRows) > 0 {
+		sort.SliceStable(pinnedRows, func(i, j int) bool {
+			left, right := pinnedRows[i].LastActivityAt, pinnedRows[j].LastActivityAt
+			if left.IsZero() {
+				return false
+			}
+			if right.IsZero() {
+				return true
+			}
+			return left.After(right)
+		})
+		rows = append(rows, sidebarRow{
+			Kind:         sidebarPinnedHeaderRow,
+			Title:        "Pinned",
+			SessionCount: len(pinnedRows),
+		})
+		rows = append(rows, pinnedRows...)
+	}
+
 	for _, project := range state.Projects {
 		projects = append(projects, sidebarProjectCache{id: project.ID, name: project.Name})
 		projectSessions := sessionsByProject[project.ID]
@@ -663,10 +888,24 @@ func buildSidebarRows(state desktopstate.State, profiles []app.ACPAgentProfile) 
 		})
 		rows = append(rows, projectSessions...)
 	}
-	return rows, sidebarRowsCache{valid: true, rows: rows, projects: projects, sessions: sessions}
+
+	return rows, sidebarRowsCache{
+		valid:      true,
+		rows:       rows,
+		projects:   projects,
+		sessions:   sessions,
+		pinnedHash: strings.Join(pinnedSessions, ","),
+	}
 }
 
 func (cache sidebarRowsCache) matches(state desktopstate.State, profiles []app.ACPAgentProfile) bool {
+	return cache.matchesWithOptions(state, profiles, cache.filterMode, nil, nil)
+}
+
+func (cache sidebarRowsCache) matchesWithOptions(state desktopstate.State, profiles []app.ACPAgentProfile, filterMode string, pinnedSessions []string, customTitles map[string]string) bool {
+	if cache.filterMode != filterMode || cache.pinnedHash != strings.Join(pinnedSessions, ",") {
+		return false
+	}
 	if len(cache.projects) != len(state.Projects) || len(cache.sessions) != len(state.Sessions) {
 		return false
 	}
@@ -686,10 +925,14 @@ func (cache sidebarRowsCache) matches(state desktopstate.State, profiles []app.A
 	}
 	for sessionIndex, session := range state.Sessions {
 		cachedSession := cache.sessions[sessionIndex]
+		expectedTitle := session.Title
+		if custom, ok := customTitles[session.ID]; ok && custom != "" {
+			expectedTitle = custom
+		}
 		if cachedSession.id != session.ID ||
 			cachedSession.projectID != session.ProjectID ||
 			cachedSession.agentID != session.AgentID ||
-			cachedSession.title != session.Title ||
+			cachedSession.title != expectedTitle ||
 			cachedSession.subtitle != agentDisplayName(profiles, session.AgentID) ||
 			cachedSession.status != string(session.Status) ||
 			!cachedSession.lastActivityAt.Equal(session.LastActivityAt) {
@@ -700,6 +943,52 @@ func (cache sidebarRowsCache) matches(state desktopstate.State, profiles []app.A
 }
 
 func (s *shell) layoutSidebarRow(gtx layout.Context, row sidebarRow, state desktopstate.State) layout.Dimensions {
+	if row.Kind == sidebarPinnedHeaderRow {
+		button := &s.pinnedButton
+		if button.Clicked(gtx) {
+			s.pinnedCollapsed = !s.pinnedCollapsed
+		}
+		gtx.Constraints.Min.Y = gtx.Dp(36)
+		chevron := "▾ "
+		if s.pinnedCollapsed {
+			chevron = "▸ "
+		}
+		dims := button.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+			gtx.Constraints.Min.Y = gtx.Dp(36)
+			background := s.theme.surfaceContainerLow
+			foreground := s.theme.onSurface
+			if button.Hovered() {
+				background = s.theme.surfaceContainer
+			}
+			return s.roundedSurface(gtx, shapeSmall, background, func(gtx layout.Context) layout.Dimensions {
+				return desktopInset{Top: 6, Bottom: 6, Left: 10, Right: 10}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+					return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
+						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+							return s.layoutLabel(gtx, chevron, textLabelMedium, font.Bold, s.theme.onSurfaceVariant, 1)
+						}),
+						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+							return desktopInset{Right: 4}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+								return s.layoutLabel(gtx, "★", textLabelMedium, font.Bold, s.theme.primary, 1)
+							})
+						}),
+						layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+							return s.layoutLabel(gtx, "Pinned", textLabelLarge, font.SemiBold, foreground, 1)
+						}),
+						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+							if row.SessionCount > 0 {
+								return s.layoutLabel(gtx, fmt.Sprintf("%d", row.SessionCount), textLabelSmall, font.Medium, s.theme.onSurfaceVariant, 1)
+							}
+							return layout.Dimensions{}
+						}),
+					)
+				})
+			})
+		})
+		return desktopInset{Top: 6, Bottom: 2, Left: 6, Right: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+			return layout.Dimensions{Size: dims.Size}
+		})
+	}
+
 	if row.Kind == sidebarProjectRow {
 		button := s.projectButtons[row.ProjectID]
 		selected := state.ActiveProjectID == row.ProjectID && state.ActiveSessionID == ""
@@ -756,13 +1045,60 @@ func (s *shell) layoutSidebarRow(gtx layout.Context, row sidebarRow, state deskt
 	}
 
 	button := s.sessionButtons[row.SessionID]
+	menuBtn := s.sessionMenuButton(row.SessionID)
 	selected := state.ActiveSessionID == row.SessionID
-	if button.Clicked(gtx) {
+	isRenaming := s.editingSessionID == row.SessionID
+	menuOpen := s.menuSessionID == row.SessionID
+	isHovered := button != nil && button.Hovered()
+	showMenuButton := isHovered || selected || menuOpen
+
+	if button != nil && button.Clicked(gtx) {
 		s.onSelectSession(row.SessionID)
 	}
+
+	if isRenaming {
+		for {
+			evt, ok := gtx.Event(key.Filter{Focus: &s.sessionRenameEditor, Name: key.NameReturn})
+			if !ok {
+				break
+			}
+			if e, ok := evt.(key.Event); ok && e.State == key.Press {
+				newTitle := s.sessionRenameEditor.Text()
+				s.editingSessionID = ""
+				s.onRenameSession(row.SessionID, newTitle)
+			}
+		}
+		for {
+			evt, ok := gtx.Event(key.Filter{Focus: &s.sessionRenameEditor, Name: key.NameEscape})
+			if !ok {
+				break
+			}
+			if e, ok := evt.(key.Event); ok && e.State == key.Press {
+				s.editingSessionID = ""
+			}
+		}
+		if s.renameConfirmButton.Clicked(gtx) {
+			newTitle := s.sessionRenameEditor.Text()
+			s.editingSessionID = ""
+			s.onRenameSession(row.SessionID, newTitle)
+		}
+		if s.renameCancelButton.Clicked(gtx) {
+			s.editingSessionID = ""
+		}
+	}
+
+	if menuBtn.Clicked(gtx) {
+		if s.menuSessionID == row.SessionID {
+			s.menuSessionID = ""
+		} else {
+			s.menuSessionID = row.SessionID
+		}
+	}
+
 	gtx.Constraints.Min.Y = gtx.Dp(40)
 	subtitle := sidebarSessionSubtitle(row, gtx.Now)
 	statusLabel := sidebarStatusLabel(row.Status)
+
 	dims := button.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 		gtx.Constraints.Min.Y = gtx.Dp(40)
 		semantic.Button.Add(gtx.Ops)
@@ -783,54 +1119,102 @@ func (s *shell) layoutSidebarRow(gtx layout.Context, row sidebarRow, state deskt
 			background = s.theme.surfaceContainerHigh
 			borderColor = s.theme.primary
 			borderWidth = 1
-		} else if button.Hovered() {
+		} else if isHovered {
 			background = s.theme.surfaceContainer
 		}
 		return s.roundedBorderSurface(gtx, shapeSmall, background, borderColor, borderWidth, func(gtx layout.Context) layout.Dimensions {
 			return desktopInset{Top: 4, Bottom: 4, Left: 12, Right: 8}.Layout(gtx,
 				func(gtx layout.Context) layout.Dimensions {
-					return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
+					cardChildren := []layout.FlexChild{
 						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-							dotColor := s.theme.onSurfaceVariant
-							statusLower := strings.ToLower(row.Status)
-							if strings.Contains(statusLower, "running") {
-								dotColor = s.theme.onSuccessContainer
-							} else if strings.Contains(statusLower, "permission") || strings.Contains(statusLower, "approval") {
-								dotColor = s.theme.onWarningContainer
-							} else if strings.Contains(statusLower, "failed") || strings.Contains(statusLower, "error") {
-								dotColor = s.theme.onErrorContainer
-							}
-							return desktopInset{Right: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-								return s.roundedSurface(gtx, shapeFull, dotColor, func(gtx layout.Context) layout.Dimensions {
-									gtx.Constraints.Min = image.Pt(gtx.Dp(6), gtx.Dp(6))
-									gtx.Constraints.Max = image.Pt(gtx.Dp(6), gtx.Dp(6))
-									return layout.Dimensions{Size: gtx.Constraints.Min}
-								})
-							})
-						}),
-						layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-							subColor := s.theme.onSurfaceVariant
-							if subtitle == "" {
-								return s.layoutLabel(gtx, row.Title, textBodySmall, font.Medium, foreground, 1)
-							}
-							return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
+							return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
 								layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-									return s.layoutLabel(gtx, row.Title, textBodySmall, font.Medium, foreground, 1)
+									dotColor := s.theme.onSurfaceVariant
+									statusLower := strings.ToLower(row.Status)
+									if strings.Contains(statusLower, "running") {
+										dotColor = s.theme.onSuccessContainer
+									} else if strings.Contains(statusLower, "permission") || strings.Contains(statusLower, "approval") {
+										dotColor = s.theme.onWarningContainer
+									} else if strings.Contains(statusLower, "failed") || strings.Contains(statusLower, "error") {
+										dotColor = s.theme.onErrorContainer
+									}
+									return desktopInset{Right: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+										return s.roundedSurface(gtx, shapeFull, dotColor, func(gtx layout.Context) layout.Dimensions {
+											gtx.Constraints.Min = image.Pt(gtx.Dp(6), gtx.Dp(6))
+											gtx.Constraints.Max = image.Pt(gtx.Dp(6), gtx.Dp(6))
+											return layout.Dimensions{Size: gtx.Constraints.Min}
+										})
+									})
+								}),
+								layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+									if isRenaming {
+										return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
+											layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+												ed := material.Editor(s.theme.material, &s.sessionRenameEditor, "Session title…")
+												ed.TextSize = textBodySmall
+												ed.Color = foreground
+												return ed.Layout(gtx)
+											}),
+											layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+												return desktopInset{Left: 4}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+													return s.layoutMiniButton(gtx, &s.renameConfirmButton, "✓", s.theme.primary)
+												})
+											}),
+											layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+												return desktopInset{Left: 2}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+													return s.layoutMiniButton(gtx, &s.renameCancelButton, "✕", s.theme.onSurfaceVariant)
+												})
+											}),
+										)
+									}
+									return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
+										layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+											return s.layoutLabel(gtx, row.Title, textBodySmall, font.Medium, foreground, 1)
+										}),
+										layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+											if !row.Pinned {
+												return layout.Dimensions{}
+											}
+											return desktopInset{Left: 4}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+												return s.layoutLabel(gtx, "★", textLabelSmall, font.Bold, s.theme.primary, 1)
+											})
+										}),
+									)
 								}),
 								layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-									return s.layoutLabel(gtx, subtitle, textLabelSmall, font.Normal, subColor, 1)
+									if statusLabel == "" {
+										return layout.Dimensions{}
+									}
+									return desktopInset{Left: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+										return s.layoutTaskStatus(gtx, statusLabel, taskStatusFromLabel(row.Status))
+									})
+								}),
+								layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+									if !showMenuButton {
+										return layout.Dimensions{}
+									}
+									return desktopInset{Left: 4}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+										return s.layoutMiniMenuButton(gtx, menuBtn, "⋮")
+									})
 								}),
 							)
 						}),
-						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-							if statusLabel == "" {
-								return layout.Dimensions{}
-							}
-							return desktopInset{Left: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-								return s.layoutTaskStatus(gtx, statusLabel, taskStatusFromLabel(row.Status))
+					}
+					if subtitle != "" {
+						cardChildren = append(cardChildren, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+							return desktopInset{Left: 14, Top: 2}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+								return s.layoutLabel(gtx, subtitle, textLabelSmall, font.Normal, s.theme.onSurfaceVariant, 1)
 							})
-						}),
-					)
+						}))
+					}
+					if menuOpen {
+						cardChildren = append(cardChildren, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+							return desktopInset{Top: 6, Bottom: 2}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+								return s.layoutSessionMenuPopover(gtx, row)
+							})
+						}))
+					}
+					return layout.Flex{Axis: layout.Vertical}.Layout(gtx, cardChildren...)
 				},
 			)
 		})
@@ -843,6 +1227,143 @@ func (s *shell) layoutSidebarRow(gtx layout.Context, row sidebarRow, state deskt
 	return desktopInset{Top: 2, Bottom: 2, Left: 6, Right: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 		return layout.Dimensions{Size: dims.Size}
 	})
+}
+
+func (s *shell) sessionMenuButton(sessionID string) *widget.Clickable {
+	if s.sessionMenuButtons[sessionID] == nil {
+		s.sessionMenuButtons[sessionID] = new(widget.Clickable)
+	}
+	return s.sessionMenuButtons[sessionID]
+}
+
+func (s *shell) layoutMiniMenuButton(gtx layout.Context, button *widget.Clickable, label string) layout.Dimensions {
+	background := color.NRGBA{}
+	foreground := s.theme.onSurfaceVariant
+	if button.Hovered() {
+		background = s.theme.surfaceContainerHighest
+		foreground = s.theme.onSurface
+	}
+	dims := button.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+		gtx.Constraints.Min = image.Pt(gtx.Dp(22), gtx.Dp(22))
+		gtx.Constraints.Max = image.Pt(gtx.Dp(22), gtx.Dp(22))
+		return s.roundedSurface(gtx, shapeSmall, background, func(gtx layout.Context) layout.Dimensions {
+			return layout.Center.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+				return s.layoutLabel(gtx, label, textLabelMedium, font.Bold, foreground, 1)
+			})
+		})
+	})
+	return dims
+}
+
+func (s *shell) layoutMiniButton(gtx layout.Context, button *widget.Clickable, label string, fg color.NRGBA) layout.Dimensions {
+	dims := button.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+		gtx.Constraints.Min.Y = gtx.Dp(24)
+		background := s.theme.surfaceContainer
+		if button.Hovered() {
+			background = s.theme.surfaceContainerHighest
+		}
+		return s.roundedSurface(gtx, shapeSmall, background, func(gtx layout.Context) layout.Dimensions {
+			return desktopInset{Top: 3, Bottom: 3, Left: 8, Right: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+				return s.layoutLabel(gtx, label, textLabelSmall, font.Medium, fg, 1)
+			})
+		})
+	})
+	return dims
+}
+
+func (s *shell) layoutSessionMenuPopover(gtx layout.Context, row sidebarRow) layout.Dimensions {
+	pinLabel := "★ Pin to top"
+	if row.Pinned {
+		pinLabel = "☆ Unpin"
+	}
+
+	if s.menuPinButton.Clicked(gtx) {
+		s.menuSessionID = ""
+		s.onTogglePinSession(row.SessionID)
+	}
+	if s.menuRenameButton.Clicked(gtx) {
+		s.menuSessionID = ""
+		s.editingSessionID = row.SessionID
+		s.sessionRenameEditor.SetText(row.Title)
+	}
+	if s.menuDeleteButton.Clicked(gtx) {
+		s.menuSessionID = ""
+		s.deletingSessionID = row.SessionID
+		s.deletingSessionTitle = row.Title
+	}
+
+	return s.roundedBorderSurface(gtx, shapeSmall, s.theme.surfaceContainerHighest, s.theme.outlineVariant, 1, func(gtx layout.Context) layout.Dimensions {
+		return desktopInset{Top: 4, Bottom: 4, Left: 6, Right: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+			return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle, Spacing: layout.SpaceBetween}.Layout(gtx,
+				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+					return s.layoutMiniButton(gtx, &s.menuPinButton, pinLabel, s.theme.primary)
+				}),
+				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+					return s.layoutMiniButton(gtx, &s.menuRenameButton, "✎ Rename", s.theme.onSurface)
+				}),
+				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+					return s.layoutMiniButton(gtx, &s.menuDeleteButton, "✕ Delete", s.theme.onErrorContainer)
+				}),
+			)
+		})
+	})
+}
+
+func (s *shell) layoutDeleteModal(gtx layout.Context) layout.Dimensions {
+	if s.deleteModalCancelButton.Clicked(gtx) || s.deleteModalScrim.Clicked(gtx) {
+		s.deletingSessionID = ""
+		s.deletingSessionTitle = ""
+	}
+
+	return layout.Stack{Alignment: layout.Center}.Layout(gtx,
+		layout.Expanded(func(gtx layout.Context) layout.Dimensions {
+			paint.FillShape(gtx.Ops, color.NRGBA{R: 0, G: 0, B: 0, A: 160}, clip.Rect{Max: gtx.Constraints.Max}.Op())
+			return s.deleteModalScrim.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+				return layout.Dimensions{Size: gtx.Constraints.Max}
+			})
+		}),
+		layout.Stacked(func(gtx layout.Context) layout.Dimensions {
+			gtx.Constraints.Min.X = gtx.Dp(380)
+			gtx.Constraints.Max.X = gtx.Dp(440)
+			return s.roundedBorderSurface(gtx, shapeMedium, s.theme.surfaceContainerHigh, s.theme.outlineVariant, 1, func(gtx layout.Context) layout.Dimensions {
+				return desktopInset{Top: 20, Bottom: 20, Left: 20, Right: 20}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+					return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
+						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+							return s.layoutLabel(gtx, "Delete Session", textTitleMedium, font.Bold, s.theme.onSurface, 1)
+						}),
+						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+							return desktopInset{Top: 8, Bottom: 16}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+								msg := fmt.Sprintf("Are you sure you want to delete %q? This will delete all conversation turns and cannot be undone.", s.deletingSessionTitle)
+								return s.layoutLabel(gtx, msg, textBodyMedium, font.Normal, s.theme.onSurfaceVariant, 3)
+							})
+						}),
+						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+							return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle, Spacing: layout.SpaceEnd}.Layout(gtx,
+								layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+									return desktopInset{Right: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+										return s.layoutButton(gtx, &s.deleteModalCancelButton, "Cancel", true, func() {
+											s.deletingSessionID = ""
+											s.deletingSessionTitle = ""
+										})
+									})
+								}),
+								layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+									return s.layoutDangerButton(gtx, &s.deleteModalConfirmButton, "Delete", true, func() {
+										id := s.deletingSessionID
+										s.deletingSessionID = ""
+										s.deletingSessionTitle = ""
+										if s.onDeleteSession != nil && id != "" {
+											s.onDeleteSession(id)
+										}
+									})
+								}),
+							)
+						}),
+					)
+				})
+			})
+		}),
+	)
 }
 
 func (s *shell) layoutMain(gtx layout.Context, snapshot controllerSnapshot) layout.Dimensions {
@@ -1209,10 +1730,18 @@ func (s *shell) syncSessionButtons(state desktopstate.State, revision uint64) {
 		if s.sessionButtons[session.ID] == nil {
 			s.sessionButtons[session.ID] = new(widget.Clickable)
 		}
+		if s.sessionMenuButtons[session.ID] == nil {
+			s.sessionMenuButtons[session.ID] = new(widget.Clickable)
+		}
 	}
 	for sessionID := range s.sessionButtons {
 		if _, ok := live[sessionID]; !ok {
 			delete(s.sessionButtons, sessionID)
+		}
+	}
+	for sessionID := range s.sessionMenuButtons {
+		if _, ok := live[sessionID]; !ok {
+			delete(s.sessionMenuButtons, sessionID)
 		}
 	}
 	if revision != 0 {

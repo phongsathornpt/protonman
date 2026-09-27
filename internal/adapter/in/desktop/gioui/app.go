@@ -15,7 +15,7 @@ import (
 	application "github.com/phongsathornpt/protonman/internal/app"
 )
 
-func Run(ctx context.Context, agents application.ACPAgents, mcpIntegrations application.MCPIntegrations) error {
+func Run(ctx context.Context, agents application.ACPAgents, mcpIntegrations application.MCPIntegrations, preferences *application.DesktopPreferences) error {
 	windowContext, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -30,12 +30,16 @@ func Run(ctx context.Context, agents application.ACPAgents, mcpIntegrations appl
 		window.Perform(system.ActionClose)
 	}()
 
-	controller := newController(windowContext, window.Invalidate, agents, mcpIntegrations)
+	controller := newController(windowContext, window.Invalidate, agents, mcpIntegrations, preferences)
 	defer controller.close()
 	view := newShell(newTheme(normalizedThemeMode(os.Getenv("PROTONMAN_GIO_THEME"))))
 	view.onSelectSession = controller.selectSession
 	view.onSelectProject = controller.selectProject
 	view.onNewSession = controller.newSession
+	view.onDeleteSession = controller.deleteSession
+	view.onRenameSession = controller.renameSession
+	view.onTogglePinSession = controller.togglePinSession
+	view.onSetFilterMode = controller.setFilterMode
 	view.onSendPrompt = controller.sendPrompt
 	view.onCancelPrompt = controller.cancelPrompt
 	view.onResolvePermission = controller.resolvePermission
