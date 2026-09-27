@@ -148,6 +148,7 @@ func run(ctx context.Context, args []string) error {
 		runtimeState.service,
 		runtimeState.registry,
 		runtimeState.todoStore,
+		tui.WithQuestionBridge(runtimeState.questionBridge),
 		tui.WithApplicationServices(runtimeState.application),
 		tui.WithWorkDir(runtimeState.workDir),
 		tui.WithSessionID(runtimeState.sessionID),

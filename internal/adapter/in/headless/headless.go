@@ -183,7 +183,7 @@ func (r *Runner) runCommand(
 	name, argument, parts := splitCommand(line)
 	switch name {
 	case "help":
-		return writeEvent(output, format, Event{Kind: "text", Text: commandHelp()})
+		return writeEvent(output, format, Event{Kind: "text", Text: r.commandHelp()})
 	case "mode":
 		if argument == "" {
 			return writeEvent(output, format, Event{
@@ -204,6 +204,11 @@ func (r *Runner) runCommand(
 	case "skills", "skill":
 		return r.handleSkillsCommand(argument, parts, output, format)
 	default:
+		if r.skills != nil {
+			if s, ok := r.skills.Lookup(name); ok {
+				return r.handleSkillCommand(ctx, s, line, output, format)
+			}
+		}
 		return fmt.Errorf("unknown command %q; try /help", name)
 	}
 }
@@ -643,13 +648,59 @@ func splitCommand(line string) (name string, argument string, parts []string) {
 	return name, argument, parts
 }
 
-func commandHelp() string {
-	return strings.Join([]string{
+func (r *Runner) handleSkillCommand(
+	ctx context.Context,
+	s skill.Skill,
+	line string,
+	output io.Writer,
+	format Format,
+) error {
+	if !r.skills.IsActivated(s.Name) {
+		if err := r.skills.Activate(s.Name); err != nil {
+			return err
+		}
+		if err := writeEvent(output, format, Event{
+			Kind: EventKindText,
+			Text: fmt.Sprintf("[activated skill %q]", s.Name),
+		}); err != nil {
+			return err
+		}
+	}
+
+	body := strings.TrimSpace(strings.TrimLeft(strings.TrimSpace(line), "/:"))
+	parts := strings.SplitN(body, " ", 2)
+	var args string
+	if len(parts) > 1 {
+		args = strings.TrimSpace(parts[1])
+	}
+
+	var prompt string
+	if args != "" {
+		prompt = args
+	} else {
+		prompt = fmt.Sprintf("Apply %s to the current workspace.", s.Name)
+	}
+
+	return r.runTurn(ctx, prompt, output, format)
+}
+
+func (r *Runner) commandHelp() string {
+	lines := []string{
 		"/call <tool> <json>   run a registered tool",
 		"/skills [name]        browse, activate, or toggle skills (alias: /skill)",
 		"/mode [ask|always-approve|deny]",
 		"/help                 list commands",
-	}, "\n")
+	}
+	if r.skills != nil {
+		activeSkills := r.skills.ActiveSkills()
+		if len(activeSkills) > 0 {
+			lines = append(lines, "", "Active Skills:")
+			for _, s := range activeSkills {
+				lines = append(lines, fmt.Sprintf("/%-21s %s", s.Name, s.Description))
+			}
+		}
+	}
+	return strings.Join(lines, "\n")
 }
 
 // ParseFormat parses the --output value.

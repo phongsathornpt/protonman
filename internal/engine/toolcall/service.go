@@ -173,6 +173,9 @@ func (s *Service) Definitions() []tool.Definition {
 func (s *Service) lookupHandler(name string) (tool.Handler, tool.Definition, compiledToolValidators, bool, bool) {
 	if snapshots, ok := s.registry.(tool.SnapshotRegistry); ok {
 		snapshot, found := snapshots.LookupSnapshot(name)
+		if !found && name == "ask_question" {
+			snapshot, found = snapshots.LookupSnapshot(tool.NameAskQuestion)
+		}
 		if !found {
 			return nil, tool.Definition{}, compiledToolValidators{}, false, false
 		}
@@ -180,6 +183,9 @@ func (s *Service) lookupHandler(name string) (tool.Handler, tool.Definition, com
 		return snapshot.Handler, snapshot.Definition, validators, snapshot.ValidatorsCompiled, true
 	}
 	handler, found := s.registry.Lookup(name)
+	if !found && name == "ask_question" {
+		handler, found = s.registry.Lookup(tool.NameAskQuestion)
+	}
 	if !found {
 		return nil, tool.Definition{}, compiledToolValidators{}, false, false
 	}

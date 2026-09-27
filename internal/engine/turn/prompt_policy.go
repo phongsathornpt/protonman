@@ -45,6 +45,8 @@ func (l *Loop) effectivePromptSpec(definitions []tool.Definition, extras []strin
 			}
 		case tool.KindMCP:
 			spec.Capabilities.MCP = true
+		case tool.KindQuestion:
+			spec.Capabilities.Questions = true
 		}
 		if tool.EffectiveMutability(definition) == tool.MutabilityMutating {
 			switch definition.Safety.MutationDomain {

@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/projectconfig"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/questionbridge"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/app"
@@ -151,6 +152,16 @@ func WithLowConcurrencyMode(raw string) BubbleTeaOption {
 func WithCoordinator(coordinator *agent.Coordinator) BubbleTeaOption {
 	return func(ui *BubbleTeaUI) error {
 		ui.agents = app.NewAgentsForSession(coordinator, ui.sessionID)
+		return nil
+	}
+}
+
+// WithQuestionBridge configures the question bridge used for interactive askQuestion tool calls.
+func WithQuestionBridge(bridge *questionbridge.Bridge) BubbleTeaOption {
+	return func(ui *BubbleTeaUI) error {
+		if bridge != nil {
+			ui.questionBridge = bridge
+		}
 		return nil
 	}
 }

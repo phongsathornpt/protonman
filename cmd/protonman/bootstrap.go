@@ -7,12 +7,14 @@ import (
 	"os"
 	"strings"
 
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/questionbridge"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/memoryfs"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/sessionfs"
 	agenttool "github.com/phongsathornpt/protonman/internal/adapter/out/tool/agent"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/tool/builtin"
+	questiontool "github.com/phongsathornpt/protonman/internal/adapter/out/tool/question"
 	skilltool "github.com/phongsathornpt/protonman/internal/adapter/out/tool/skill"
 	todotool "github.com/phongsathornpt/protonman/internal/adapter/out/tool/todo"
 	webtool "github.com/phongsathornpt/protonman/internal/adapter/out/tool/web"
@@ -38,19 +40,20 @@ import (
 )
 
 type appRuntime struct {
-	workDir      string
-	config       config.Snapshot
-	coordinator  *agent.Coordinator
-	todoStore    tododomain.Repository
-	registry     tool.Registry
-	stateStore   session.Repository
-	sessionsRoot string
-	sessionID    string
-	state        session.State
-	service      *toolcall.Service
-	skills       *skill.Registry
-	runner       app.Conversation
-	application  app.Services
+	workDir        string
+	config         config.Snapshot
+	coordinator    *agent.Coordinator
+	todoStore      tododomain.Repository
+	registry       tool.Registry
+	stateStore     session.Repository
+	sessionsRoot   string
+	sessionID      string
+	state          session.State
+	service        *toolcall.Service
+	skills         *skill.Registry
+	runner         app.Conversation
+	application    app.Services
+	questionBridge *questionbridge.Bridge
 }
 
 func reconcileDelegatedTaskStatus(ctx context.Context, sessionsRoot, sessionID, taskID string, status tododomain.Status) error {
@@ -294,15 +297,21 @@ func buildRuntime(ctx context.Context, options cliOptions) (*appRuntime, error) 
 	if _, _, err := todoStore.BindGoal(ctx, state.ActiveGoal); err != nil {
 		return nil, fmt.Errorf("bind session todo store to active goal: %w", err)
 	}
+	var questionBridge *questionbridge.Bridge
+	additionalHandlers := []tool.Handler{
+		webtool.NewWebFetch(sandboxProfile.Network, webtool.WithWebFetchTimeout(loadedConfig.Runtime.WebFetchTimeout)),
+		todotool.NewTodoForSession(todoStore, sessionID),
+		skilltool.NewActivateSkill(skillRegistry, workspaceRoot),
+		agenttool.NewSubagent(coordinator),
+	}
+	if !options.acp && !options.headless && strings.TrimSpace(options.prompt) == "" {
+		questionBridge = questionbridge.New()
+		additionalHandlers = append(additionalHandlers, questiontool.NewAskQuestion(questionBridge))
+	}
 	baseRegistry, err := builtin.NewDefaultRegistry(workspaceRoot,
 		builtin.WithCheckpointStore(checkpointStore),
 		builtin.WithSandbox(launcher),
-		builtin.WithAdditionalHandlers(
-			webtool.NewWebFetch(sandboxProfile.Network, webtool.WithWebFetchTimeout(loadedConfig.Runtime.WebFetchTimeout)),
-			todotool.NewTodoForSession(todoStore, sessionID),
-			skilltool.NewActivateSkill(skillRegistry, workspaceRoot),
-			agenttool.NewSubagent(coordinator),
-		),
+		builtin.WithAdditionalHandlers(additionalHandlers...),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("create tool registry: %w", err)
@@ -384,7 +393,7 @@ func buildRuntime(ctx context.Context, options cliOptions) (*appRuntime, error) 
 		RequestTimeout: loadedConfig.Runtime.ModelRequestTimeout, TurnTimeout: loadedConfig.Runtime.TurnTimeout, RoundTimeout: loadedConfig.Runtime.RoundTimeout, ModelFactory: application.ModelFactory,
 	})
 	failed = false
-	return &appRuntime{workDir: workDir, config: loadedConfig, coordinator: coordinator, todoStore: todoStore, registry: registry, stateStore: stateStore, sessionsRoot: dirs.Sessions, sessionID: sessionID, state: state, service: service, skills: skillRegistry, runner: initialRunner, application: application}, nil
+	return &appRuntime{workDir: workDir, config: loadedConfig, coordinator: coordinator, todoStore: todoStore, registry: registry, stateStore: stateStore, sessionsRoot: dirs.Sessions, sessionID: sessionID, state: state, service: service, skills: skillRegistry, runner: initialRunner, application: application, questionBridge: questionBridge}, nil
 }
 
 func applyAgentProfile(loadedConfig *config.Snapshot, state *session.State, requested string) error {

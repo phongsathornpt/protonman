@@ -430,6 +430,7 @@ func (m *bubbleModel) runtimeStatusState(now time.Time) runtimeui.State {
 		Canceling:         runtimeui.IsCanceling(m.activity),
 		Streaming:         streaming,
 		Retry:             m.turnProgress.Retry,
+		Round:             m.turnProgress.Round,
 		RunningTool:       runningTool,
 		ExplicitActivity:  m.activity,
 		FallbackActivity:  m.rootActivityLabel(),

@@ -9,9 +9,10 @@ import (
 const Version = "16"
 
 type ToolCapabilities struct {
-	Tasks  bool
-	Agents bool
-	MCP    bool
+	Tasks     bool
+	Agents    bool
+	MCP       bool
+	Questions bool
 }
 
 type MutationCapabilities struct {
@@ -48,6 +49,9 @@ func Render(spec Spec) string {
 	}
 	if spec.Capabilities.Tasks {
 		sections = append(sections, Section{Name: "task-coordination", Order: orderTaskCoordination, Text: taskSection(spec)})
+	}
+	if spec.Capabilities.Questions {
+		sections = append(sections, Section{Name: "user-questions", Order: orderQuestions, Text: questionsSection()})
 	}
 	if spec.Capabilities.Agents {
 		sections = append(sections, Section{Name: "delegation", Order: orderDelegation, Text: delegationSection(spec)})
@@ -207,6 +211,9 @@ func toolDisciplineSection(spec Spec) string {
 	if has(tool.NameBash) {
 		lines = append(lines, "- Use bash for actual programs, builds, tests, package managers, language runtimes, transformations, and shell workflows not represented by an available dedicated capability; pass cwd to execute in a subdirectory.")
 	}
+	if has(tool.NameAskQuestion) {
+		lines = append(lines, "- Use askQuestion with question and optional options for interactive user clarification when requirements are ambiguous or decisions require user input; never ask questions in assistant text when askQuestion is available; do not ask questions answerable from repository evidence.")
+	}
 	lines = append(lines,
 		"- Planning, status, and orchestration metadata are not evidence about source code or runtime behavior.",
 		"- Reuse existing evidence and do not repeat equivalent reads, searches, commands, or verification without new information that justifies the retry.",
@@ -330,4 +337,14 @@ func verificationSection() string {
 - Preserve unrelated user work.
 - After the final mutation, run the narrowest meaningful verifier available.
 - Never claim verification that did not run successfully after the final change.`
+}
+
+func questionsSection() string {
+	return `# User Questions
+- When askQuestion is available, NEVER ask questions or request user preferences via plain assistant chat text. Always invoke the askQuestion tool so the user is prompted interactively.
+- Use askQuestion to ask the user a clarifying question with optional discrete choices when requirements are genuinely ambiguous, high-impact trade-offs require user direction, or missing information cannot be discovered from repository evidence.
+- For interview rounds, design frontiers, or multiple questions (such as grill-me or plan interviews), provide all questions in the questions array of askQuestion instead of writing markdown in assistant text.
+- Always explore the workspace, code, and tests first to answer questions empirically before interrupting the user.
+- Prefer discrete options with clear explanations when reasonable choices exist. Keep questions concise and focused.
+- If the user declines to answer, proceed using the most reasonable standard engineering practice.`
 }

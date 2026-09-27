@@ -12,6 +12,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/reasoningpolicy"
 	turnmsg "github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/turn"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/slashview"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/app"
@@ -1418,5 +1419,193 @@ func TestResumeCurrentSessionClosesPane(t *testing.T) {
 	}
 	if !strings.Contains(plainTranscript(m), "already in session current-sess") {
 		t.Fatalf("expected already in session message: %q", plainTranscript(m))
+	}
+}
+
+func TestSlashGrillMe(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	s := skill.Skill{Name: "grill-me", Description: "Interview to sharpen a plan", Scope: skill.ScopeUser}
+	m.skills = skill.NewRegistry(s)
+
+	_ = m.executeCommand("/grill-me refine prompt")
+	if !m.skills.IsActivated("grill-me") {
+		t.Fatal("expected grill-me skill to be activated by /grill-me")
+	}
+}
+
+func TestActiveSkillSlashCompletion(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	s1 := skill.Skill{Name: "golang-code-review", Description: "review go code", Scope: skill.ScopeProject}
+	s2 := skill.Skill{Name: "inactive-skill", Description: "inactive skill", Scope: skill.ScopeUser}
+	m.skills = skill.NewRegistry(s1, s2)
+	if err := m.skills.Activate("golang-code-review"); err != nil {
+		t.Fatal(err)
+	}
+
+	m.panes.bottom.prompt().SetValue("/")
+	matches := m.slashMatches()
+	var foundActive, foundInactive bool
+	for _, match := range matches {
+		if match.Name == "golang-code-review" {
+			foundActive = true
+			if match.PrefixTag != "[skill]" {
+				t.Fatalf("expected PrefixTag [skill], got %q", match.PrefixTag)
+			}
+			if match.Argument != slashview.ArgumentRest {
+				t.Fatalf("expected ArgumentRest, got %v", match.Argument)
+			}
+		}
+		if match.Name == "inactive-skill" {
+			foundInactive = true
+		}
+	}
+	if !foundActive {
+		t.Fatal("expected active skill to appear in slash matches")
+	}
+	if foundInactive {
+		t.Fatal("expected inactive skill to NOT appear in slash matches")
+	}
+}
+
+func TestActiveSkillCommandExecutionWithArgs(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.runner = fakeConversation{}
+	s := skill.Skill{Name: "golang-code-review", Description: "review go code", Scope: skill.ScopeProject}
+	m.skills = skill.NewRegistry(s)
+	if err := m.skills.Activate("golang-code-review"); err != nil {
+		t.Fatal(err)
+	}
+
+	_ = m.executeCommand("/golang-code-review internal/adapter")
+	if len(m.conversation.Messages()) != 1 {
+		t.Fatalf("expected 1 turn message, got %d", len(m.conversation.Messages()))
+	}
+	if m.conversation.Messages()[0].Content != "internal/adapter" {
+		t.Fatalf("turn prompt = %q, want internal/adapter", m.conversation.Messages()[0].Content)
+	}
+}
+
+func TestBareSkillCommandExecutionWithGoal(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.runner = fakeConversation{}
+	s := skill.Skill{Name: "golang-code-review", Description: "review go code", Scope: skill.ScopeProject}
+	m.skills = skill.NewRegistry(s)
+	if err := m.skills.Activate("golang-code-review"); err != nil {
+		t.Fatal(err)
+	}
+	m.activeGoal = "refactor architecture"
+
+	_ = m.executeCommand("/golang-code-review")
+	if len(m.conversation.Messages()) != 1 {
+		t.Fatalf("expected 1 turn message, got %d", len(m.conversation.Messages()))
+	}
+	want := "Apply golang-code-review to the active goal: refactor architecture"
+	if m.conversation.Messages()[0].Content != want {
+		t.Fatalf("turn prompt = %q, want %q", m.conversation.Messages()[0].Content, want)
+	}
+}
+
+func TestBareSkillCommandExecutionWithoutGoal(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.runner = fakeConversation{}
+	s := skill.Skill{Name: "golang-code-review", Description: "review go code", Scope: skill.ScopeProject}
+	m.skills = skill.NewRegistry(s)
+	if err := m.skills.Activate("golang-code-review"); err != nil {
+		t.Fatal(err)
+	}
+	m.activeGoal = ""
+
+	_ = m.executeCommand("/golang-code-review")
+	if len(m.conversation.Messages()) != 1 {
+		t.Fatalf("expected 1 turn message, got %d", len(m.conversation.Messages()))
+	}
+	want := "Apply golang-code-review to the current workspace."
+	if m.conversation.Messages()[0].Content != want {
+		t.Fatalf("turn prompt = %q, want %q", m.conversation.Messages()[0].Content, want)
+	}
+}
+
+func TestInactiveSkillAutoActivation(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.runner = fakeConversation{}
+	s := skill.Skill{Name: "golang-code-review", Description: "review go code", Scope: skill.ScopeProject}
+	m.skills = skill.NewRegistry(s)
+	if m.skills.IsActivated("golang-code-review") {
+		t.Fatal("expected skill to start inactive")
+	}
+
+	_ = m.executeCommand("/golang-code-review pkg/foo")
+	if !m.skills.IsActivated("golang-code-review") {
+		t.Fatal("expected skill to be auto-activated")
+	}
+	transcript := plainTranscript(m)
+	if !strings.Contains(transcript, "activated skill \"golang-code-review\"") {
+		t.Fatalf("transcript missing activation notice: %q", transcript)
+	}
+	if len(m.conversation.Messages()) != 1 || m.conversation.Messages()[0].Content != "pkg/foo" {
+		t.Fatalf("turn prompt = %q, want pkg/foo", m.conversation.Messages()[0].Content)
+	}
+}
+
+func TestSkillCommandQueuesWhenBusy(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.runner = fakeConversation{}
+	s := skill.Skill{Name: "golang-code-review", Description: "review go code", Scope: skill.ScopeProject}
+	m.skills = skill.NewRegistry(s)
+	m.busy = true
+
+	m.panes.bottom.prompt().SetValue("/golang-code-review pkg/bar")
+	if cmd := m.submit(); cmd != nil {
+		t.Fatalf("expected nil cmd when queued while busy, got %v", cmd)
+	}
+	if m.conversation.QueueLen() != 1 {
+		t.Fatalf("expected queue len 1, got %d", m.conversation.QueueLen())
+	}
+	queuedText := m.conversation.Queue()[0]
+	if queuedText != "/golang-code-review pkg/bar" {
+		t.Fatalf("queued text = %q, want /golang-code-review pkg/bar", queuedText)
+	}
+
+	// Drain queue once idle
+	m.busy = false
+	_ = m.drainQueue()
+	if m.conversation.QueueLen() != 0 {
+		t.Fatalf("expected empty queue after drain, got %d", m.conversation.QueueLen())
+	}
+	if !m.skills.IsActivated("golang-code-review") {
+		t.Fatal("expected skill to be auto-activated on queue drain")
+	}
+}
+
+func TestHelpIncludesActiveSkills(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	s := skill.Skill{Name: "golang-code-review", Description: "review go code", Scope: skill.ScopeProject}
+	m.skills = skill.NewRegistry(s)
+	if err := m.skills.Activate("golang-code-review"); err != nil {
+		t.Fatal(err)
+	}
+
+	_ = m.executeCommand("/help")
+	transcript := plainTranscript(m)
+	if !strings.Contains(transcript, "Active Skills:") {
+		t.Fatalf("help transcript missing Active Skills section: %q", transcript)
+	}
+	if !strings.Contains(transcript, "/golang-code-review") {
+		t.Fatalf("help transcript missing /golang-code-review: %q", transcript)
+	}
+}
+
+func TestColonPrefixSkillCommand(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.runner = fakeConversation{}
+	s := skill.Skill{Name: "golang-code-review", Description: "review go code", Scope: skill.ScopeProject}
+	m.skills = skill.NewRegistry(s)
+
+	_ = m.executeCommand(":golang-code-review internal/api")
+	if !m.skills.IsActivated("golang-code-review") {
+		t.Fatal("expected skill to be activated by colon prefix command")
+	}
+	if len(m.conversation.Messages()) != 1 || m.conversation.Messages()[0].Content != "internal/api" {
+		t.Fatalf("turn prompt = %q, want internal/api", m.conversation.Messages()[0].Content)
 	}
 }

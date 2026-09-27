@@ -57,6 +57,8 @@ const (
 	ActivityCanceling = "canceling"
 	// ActivityWaitingForPermission marks a blocking permission prompt.
 	ActivityWaitingForPermission = "waiting for permission"
+	// ActivityWaitingForQuestion marks an interactive question prompt.
+	ActivityWaitingForQuestion = "waiting for user input"
 )
 
 // IsReady reports whether a raw activity is the ready sentinel. An empty
@@ -77,14 +79,21 @@ func IsWaitingForPermission(activity string) bool {
 	return strings.TrimSpace(activity) == ActivityWaitingForPermission
 }
 
+// IsWaitingForQuestion reports whether a raw activity is the question prompt sentinel.
+func IsWaitingForQuestion(activity string) bool {
+	return strings.TrimSpace(activity) == ActivityWaitingForQuestion
+}
+
 // Input contains runtime facts already known by the TUI. The projection does
 // not mutate execution state and therefore cannot drift from the turn engine.
 type Input struct {
 	Busy              bool
 	PermissionPending bool
+	QuestionPending   bool
 	Canceling         bool
 	Streaming         bool
 	Retry             domain.RetryEvent
+	Round             int
 	RunningTool       string
 	ExplicitActivity  string
 	FallbackActivity  string
@@ -120,6 +129,10 @@ func Project(input Input) State {
 		state := State{Phase: PhaseWaitingForInput, Activity: "action required", Meta: []string{"permission"}}
 		return appendElapsed(state, input.Busy, input.StartedAt, now)
 	}
+	if input.QuestionPending {
+		state := State{Phase: PhaseWaitingForInput, Activity: "action required", Meta: []string{"question"}}
+		return appendElapsed(state, input.Busy, input.StartedAt, now)
+	}
 	if !input.Busy {
 		return State{Phase: PhaseIdle}
 	}
@@ -147,6 +160,7 @@ func Project(input Input) State {
 			activity = "delegating"
 		}
 		state := State{Phase: PhaseDelegating, Activity: activity, Meta: []string{agentCount(input.ActiveAgents)}}
+		state.Meta = appendRoundCount(state.Meta, input.Round)
 		return appendElapsed(state, true, input.StartedAt, now)
 	}
 
@@ -157,13 +171,18 @@ func Project(input Input) State {
 		if explicit != "" && explicit != ActivityReady {
 			activity = explicit
 		}
+		if !strings.HasPrefix(strings.ToLower(activity), "running ") {
+			activity = "running " + activity
+		}
 		state := State{Phase: PhaseToolRunning, Activity: activity}
+		state.Meta = appendRoundCount(state.Meta, input.Round)
 		state.Meta = appendToolCount(state.Meta, input.ToolCalls)
 		return appendElapsed(state, true, input.StartedAt, now)
 	}
 
 	if input.Streaming {
-		state := State{Phase: PhaseStreaming, Activity: "streaming response"}
+		state := State{Phase: PhaseStreaming, Activity: "responding"}
+		state.Meta = appendRoundCount(state.Meta, input.Round)
 		state.Meta = appendToolCount(state.Meta, input.ToolCalls)
 		return appendElapsed(state, true, input.StartedAt, now)
 	}
@@ -173,11 +192,19 @@ func Project(input Input) State {
 		activity = strings.TrimSpace(input.FallbackActivity)
 	}
 	if activity == "" {
-		activity = "working"
+		activity = "thinking"
 	}
 	state := State{Phase: PhaseWorking, Activity: activity}
+	state.Meta = appendRoundCount(state.Meta, input.Round)
 	state.Meta = appendToolCount(state.Meta, input.ToolCalls)
 	return appendElapsed(state, true, input.StartedAt, now)
+}
+
+func appendRoundCount(meta []string, round int) []string {
+	if round >= 2 {
+		return append(meta, fmt.Sprintf("round %d", round))
+	}
+	return meta
 }
 
 func appendToolCount(meta []string, count int) []string {

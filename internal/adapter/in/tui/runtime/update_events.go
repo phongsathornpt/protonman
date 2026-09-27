@@ -7,6 +7,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	tuihistory "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/history"
+	questiontool "github.com/phongsathornpt/protonman/internal/adapter/out/tool/question"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 	"github.com/phongsathornpt/protonman/internal/feature/agent"
 )
@@ -69,6 +70,22 @@ func (m *bubbleModel) updatePermissionRequest(message permissionRequestMsg) tea.
 	m.openPermission(message.Request)
 	m.requestRelayout()
 	return m.bridge.Next()
+}
+
+func (m *bubbleModel) updateQuestionRequest(message questionRequestMsg) tea.Cmd {
+	if !m.busy {
+		message.Request.Respond(questiontool.Response{Status: questiontool.StatusDeclined, Answer: "turn is no longer active"}, context.Canceled)
+		if m.questionBridge != nil {
+			return m.questionBridge.Next()
+		}
+		return nil
+	}
+	m.openQuestion(message.Request)
+	m.requestRelayout()
+	if m.questionBridge != nil {
+		return m.questionBridge.Next()
+	}
+	return nil
 }
 
 func (m *bubbleModel) updateToolResult(message toolResultMsg) tea.Cmd {

@@ -6,6 +6,7 @@ import (
 	"errors"
 
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/permissionbridge"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/questionbridge"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/app"
@@ -27,6 +28,7 @@ type BubbleTeaUI struct {
 	runner                  app.Conversation
 	application             app.Services
 	bridge                  *permissionbridge.Bridge
+	questionBridge          *questionbridge.Bridge
 	agents                  app.Agents
 	workDir                 string
 	initialMessages         []model.Message
@@ -64,10 +66,11 @@ func NewBubbleTea(
 		return nil, errors.New("Bubble Tea UI registry is required")
 	}
 	ui := &BubbleTeaUI{
-		service:   service,
-		registry:  registry,
-		todoStore: todoStore,
-		bridge:    permissionbridge.New(),
+		service:        service,
+		registry:       registry,
+		todoStore:      todoStore,
+		bridge:         permissionbridge.New(),
+		questionBridge: questionbridge.New(),
 	}
 	for _, option := range options {
 		if option == nil {
@@ -82,6 +85,11 @@ func NewBubbleTea(
 	ui.finalAgentProfile = ui.agentConfig.Profile
 	ui.finalReasoningEffort = ui.agentConfig.ReasoningEffort
 	return ui, nil
+}
+
+// QuestionBridge returns the question bridge that satisfies questiontool.Prompter.
+func (ui *BubbleTeaUI) QuestionBridge() *questionbridge.Bridge {
+	return ui.questionBridge
 }
 
 // PermissionPrompt adapts a synchronous service permission request into a

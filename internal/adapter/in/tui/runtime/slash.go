@@ -211,6 +211,24 @@ func (v *slashPaneView) HandlePaneKey(ctx paneRenderContext, message tea.KeyPres
 	}
 }
 
+func (m *bubbleModel) isCommandLine(line string) bool {
+	if !slashview.IsCommandLine(line) {
+		return false
+	}
+	trimmed := strings.TrimSpace(line)
+	if _, err := os.Stat(trimmed); err == nil {
+		parsed := slashview.ParseCommand(trimmed)
+		if _, ok := slashview.LookupCommand(parsed.Name); ok {
+			return true
+		}
+		if m != nil && m.isSkillCommand(parsed.Name) {
+			return true
+		}
+		return false
+	}
+	return true
+}
+
 func isCommandLine(line string) bool {
 	if !slashview.IsCommandLine(line) {
 		return false
@@ -253,16 +271,18 @@ func (m *bubbleModel) slashMatches() []slashCommand {
 	if !ok {
 		return nil
 	}
-	if context.Kind != slashKindSkill {
-		return slashview.Matches(context, slashCatalog, nil)
-	}
-	if m.skills == nil {
-		return nil
-	}
-	skills := m.skills.List()
-	items := make([]slashview.Skill, 0, len(skills))
-	for _, skill := range skills {
-		items = append(items, slashview.Skill{Name: skill.Name, Description: skill.Description, Scope: string(skill.Scope), Active: m.skills.IsActivated(skill.Name)})
+	var items []slashview.Skill
+	if m.skills != nil {
+		skills := m.skills.List()
+		items = make([]slashview.Skill, 0, len(skills))
+		for _, skill := range skills {
+			items = append(items, slashview.Skill{
+				Name:        skill.Name,
+				Description: skill.Description,
+				Scope:       string(skill.Scope),
+				Active:      m.skills.IsActivated(skill.Name),
+			})
+		}
 	}
 	return slashview.Matches(context, slashCatalog, items)
 }

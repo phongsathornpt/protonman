@@ -21,12 +21,13 @@ func TestAdapterToolDirectoryStructure(t *testing.T) {
 		t.Fatalf("read internal/adapter/out/tool: %v", err)
 	}
 	expected := map[string]bool{
-		"agent":   true,
-		"builtin": true,
-		"mcp":     true,
-		"skill":   true,
-		"todo":    true,
-		"web":     true,
+		"agent":    true,
+		"builtin":  true,
+		"mcp":      true,
+		"question": true,
+		"skill":    true,
+		"todo":     true,
+		"web":      true,
 	}
 	for _, entry := range entries {
 		if !expected[entry.Name()] {

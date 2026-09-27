@@ -50,6 +50,7 @@ func TestFilterRegistryForCanonicalProfiles(t *testing.T) {
 		"bash":        dummyHandler{def: tool.Definition{Name: "bash", Kind: tool.KindBash}},
 		"subagent":    dummyHandler{def: tool.Definition{Name: "subagent", Kind: tool.KindAgent}},
 		"todo":        dummyHandler{def: tool.Definition{Name: "todo", Kind: tool.KindTask}},
+		"askQuestion": dummyHandler{def: tool.Definition{Name: "askQuestion", Kind: tool.KindQuestion}},
 		"mcp.read":    dummyHandler{def: tool.Definition{Name: "mcp.read", Kind: tool.KindMCP, Mutability: tool.MutabilityReadOnly}},
 		"mcp.write":   dummyHandler{def: tool.Definition{Name: "mcp.write", Kind: tool.KindMCP, Mutability: tool.MutabilityMutating}},
 		"mcp.unknown": dummyHandler{def: tool.Definition{Name: "mcp.unknown", Kind: tool.KindMCP}},
@@ -62,7 +63,7 @@ func TestFilterRegistryForCanonicalProfiles(t *testing.T) {
 				t.Errorf("%s missing tool %s", profile, name)
 			}
 		}
-		for _, name := range []string{"subagent", "todo"} {
+		for _, name := range []string{"subagent", "todo", "askQuestion"} {
 			if _, ok := scoped.Lookup(name); ok {
 				t.Errorf("%s must not expose %s", profile, name)
 			}

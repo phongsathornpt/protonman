@@ -517,6 +517,126 @@ func TestHeadlessSkillsCommands(t *testing.T) {
 	})
 }
 
+func TestHeadlessSkillInvocation(t *testing.T) {
+	registry, _ := newTestRegistry()
+	service := newTestService(t, registry, permission.ModeAlwaysApprove)
+	s := skill.Skill{
+		Name:        "pdf-processing",
+		Description: "Extract PDF text",
+		Scope:       skill.ScopeUser,
+	}
+
+	t.Run("help lists active skills when activated", func(t *testing.T) {
+		skillsReg := skill.NewRegistry(s)
+		if err := skillsReg.Activate("pdf-processing"); err != nil {
+			t.Fatal(err)
+		}
+		runner, err := New(service, registry, nil, WithSkills(skillsReg))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out bytes.Buffer
+		if err := runner.Run(context.Background(), "/help", &out, FormatText); err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(out.String(), "Active Skills:") || !strings.Contains(out.String(), "/pdf-processing") {
+			t.Fatalf("expected /help to contain Active Skills section: %q", out.String())
+		}
+	})
+
+	t.Run("invoke active skill with arguments", func(t *testing.T) {
+		skillsReg := skill.NewRegistry(s)
+		if err := skillsReg.Activate("pdf-processing"); err != nil {
+			t.Fatal(err)
+		}
+		loop := &scriptedTurn{
+			events: []applicationturn.Event{{Kind: applicationturn.EventTextDelta, Text: "extracted"}},
+			result: applicationturn.Result{Message: model.Message{Role: model.RoleAssistant, Content: "extracted"}},
+		}
+		runner, err := New(service, registry, loop, WithSkills(skillsReg))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out bytes.Buffer
+		if err := runner.Run(context.Background(), "/pdf-processing my-file.pdf", &out, FormatText); err != nil {
+			t.Fatal(err)
+		}
+		if len(runner.Messages()) < 2 || runner.Messages()[0].Content != "my-file.pdf" {
+			t.Fatalf("expected prompt 'my-file.pdf', got %#v", runner.Messages())
+		}
+	})
+
+	t.Run("invoke bare active skill uses default workspace prompt", func(t *testing.T) {
+		skillsReg := skill.NewRegistry(s)
+		if err := skillsReg.Activate("pdf-processing"); err != nil {
+			t.Fatal(err)
+		}
+		loop := &scriptedTurn{
+			events: []applicationturn.Event{{Kind: applicationturn.EventTextDelta, Text: "done"}},
+			result: applicationturn.Result{Message: model.Message{Role: model.RoleAssistant, Content: "done"}},
+		}
+		runner, err := New(service, registry, loop, WithSkills(skillsReg))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out bytes.Buffer
+		if err := runner.Run(context.Background(), "/pdf-processing", &out, FormatText); err != nil {
+			t.Fatal(err)
+		}
+		want := "Apply pdf-processing to the current workspace."
+		if len(runner.Messages()) < 2 || runner.Messages()[0].Content != want {
+			t.Fatalf("expected prompt %q, got %#v", want, runner.Messages())
+		}
+	})
+
+	t.Run("invoke inactive skill auto-activates and starts turn", func(t *testing.T) {
+		skillsReg := skill.NewRegistry(s)
+		loop := &scriptedTurn{
+			events: []applicationturn.Event{{Kind: applicationturn.EventTextDelta, Text: "done"}},
+			result: applicationturn.Result{Message: model.Message{Role: model.RoleAssistant, Content: "done"}},
+		}
+		runner, err := New(service, registry, loop, WithSkills(skillsReg))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out bytes.Buffer
+		if err := runner.Run(context.Background(), "/pdf-processing doc.pdf", &out, FormatText); err != nil {
+			t.Fatal(err)
+		}
+		if !skillsReg.IsActivated("pdf-processing") {
+			t.Fatal("expected skill to be auto-activated")
+		}
+		if !strings.Contains(out.String(), "[activated skill \"pdf-processing\"]") {
+			t.Fatalf("expected output to contain activation notice: %q", out.String())
+		}
+		if len(runner.Messages()) < 2 || runner.Messages()[0].Content != "doc.pdf" {
+			t.Fatalf("expected prompt 'doc.pdf', got %#v", runner.Messages())
+		}
+	})
+
+	t.Run("invoke skill with colon prefix", func(t *testing.T) {
+		skillsReg := skill.NewRegistry(s)
+		loop := &scriptedTurn{
+			events: []applicationturn.Event{{Kind: applicationturn.EventTextDelta, Text: "done"}},
+			result: applicationturn.Result{Message: model.Message{Role: model.RoleAssistant, Content: "done"}},
+		}
+		runner, err := New(service, registry, loop, WithSkills(skillsReg))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out bytes.Buffer
+		if err := runner.Run(context.Background(), ":pdf-processing file.pdf", &out, FormatText); err != nil {
+			t.Fatal(err)
+		}
+		if !skillsReg.IsActivated("pdf-processing") {
+			t.Fatal("expected skill to be auto-activated with colon prefix")
+		}
+		if len(runner.Messages()) < 2 || runner.Messages()[0].Content != "file.pdf" {
+			t.Fatalf("expected prompt 'file.pdf', got %#v", runner.Messages())
+		}
+	})
+}
+
 func TestHeadlessCancellationCancelsOwnedSubagents(t *testing.T) {
 	childStarted := make(chan struct{})
 	coord := agent.NewCoordinator(nil, nil, nil, nil, agent.WithRunnerFactory(func(agent.Profile, *toolcall.Service) (applicationturn.Runner, error) {

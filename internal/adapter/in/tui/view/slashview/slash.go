@@ -256,11 +256,26 @@ func Matches(context Context, catalog []Command, skills []Skill) []Command {
 		}
 		return matches
 	}
-	matches := make([]Command, 0, len(catalog))
+	matches := make([]Command, 0, len(catalog)+len(skills))
 	for _, command := range catalog {
 		if command.Matches(context.Query) {
 			matches = append(matches, command)
 		}
+	}
+	for _, skill := range skills {
+		if !skill.Active {
+			continue
+		}
+		if context.Query != "" && !FuzzyContains(skill.Name, context.Query) && !FuzzyContains(skill.Description, context.Query) {
+			continue
+		}
+		matches = append(matches, Command{
+			Name:        skill.Name,
+			Description: skill.Description,
+			PrefixTag:   "[skill]",
+			Argument:    ArgumentRest,
+			EchoUser:    true,
+		})
 	}
 	return matches
 }
