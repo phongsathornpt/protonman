@@ -144,6 +144,19 @@ func (c *Client) withStderr(cause error) error {
 	return fmt.Errorf("%w: %s", cause, tail)
 }
 
+// waitForStderrDrain gives the stderr reader a chance to record the final
+// diagnostics after the subprocess has closed its output pipes. Both stdout EOF
+// and cmd.Wait can observe process exit, so either shutdown path may win.
+func (c *Client) waitForStderrDrain() {
+	if c.stderrDone == nil {
+		return
+	}
+	select {
+	case <-c.stderrDone:
+	case <-time.After(500 * time.Millisecond):
+	}
+}
+
 type response struct {
 	result json.RawMessage
 	err    error
@@ -212,10 +225,7 @@ func StartCommand(ctx context.Context, spec CommandSpec, onEvent func(Event)) (*
 		err := cmd.Wait()
 		// Wait() closes the stderr pipe, but the drain may not have consumed the
 		// final chunk yet. Block briefly so the reported tail is complete.
-		select {
-		case <-client.stderrDone:
-		case <-time.After(500 * time.Millisecond):
-		}
+		client.waitForStderrDrain()
 		client.shutdown(err)
 	}()
 	return client, nil
@@ -368,8 +378,10 @@ func (c *Client) readLoop(r io.Reader) {
 		}
 	}
 	if err := scanner.Err(); err != nil {
+		c.waitForStderrDrain()
 		c.shutdown(fmt.Errorf("read ACP stream: %w", err))
 	} else {
+		c.waitForStderrDrain()
 		c.shutdown(io.EOF)
 	}
 }
