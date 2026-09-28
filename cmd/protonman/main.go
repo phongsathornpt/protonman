@@ -109,10 +109,12 @@ func run(ctx context.Context, args []string) error {
 			acp.WithMemories(memories),
 			acp.WithAgents(app.NewAgents(runtimeState.coordinator)),
 			acpSessionRuntimeOption(runtimeState),
+			acp.WithSessionConfigModelOptions(acpSessionModelOptionsProvider(runtimeState)),
 			acp.WithSessionRegistryFactory(func(sessionID, cwd string, additionalDirectories []string) (tool.Registry, error) {
 				return runtimeState.registryForACPSession(sessionID, cwd, additionalDirectories)
 			}),
 			acp.WithMCPRegistryConfigurer(configureACPMCP),
+			acp.WithSkills(runtimeState.skills, runtimeState.application.SaveActiveSkills),
 		)
 		if serverErr != nil {
 			return fmt.Errorf("create ACP server: %w", serverErr)

@@ -9,6 +9,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/paneutil"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/questionbridge"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/state/runtimeui"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/mentionview"
 	panecommon "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane/common"
 	questionpane "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane/question"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
@@ -25,6 +26,7 @@ const (
 	paneActionNone paneActionKind = iota
 	paneActionClose
 	paneActionAcceptSlash
+	paneActionAcceptMention
 	paneActionToggleSkill
 	paneActionReloadModels
 	paneActionApplyModelSetup
@@ -90,6 +92,9 @@ func (m *bubbleModel) applyPaneAction(action paneAction) tea.Cmd {
 		m.panes.bottom.remove(action.paneID)
 	case paneActionAcceptSlash:
 		_, cmd := m.acceptSlash(action.runSlash)
+		return cmd
+	case paneActionAcceptMention:
+		_, cmd := m.acceptMention()
 		return cmd
 	case paneActionToggleSkill:
 		if m.skills == nil {
@@ -211,6 +216,7 @@ type paneRenderContext struct {
 	skillItems         []skillListItem
 	todos              []tododomain.Item
 	slashMatches       []slashCommand
+	mentionMatches     []mentionview.Item
 	agentSnapshot      []agent.AgentStatus
 	agentActivity      map[string]string
 	subagentsEnabled   bool
@@ -232,6 +238,7 @@ func newPaneRenderContext(m *bubbleModel) paneRenderContext {
 	ctx.workDir = m.workDir
 	ctx.todos = tododomain.CloneItems(m.todo)
 	ctx.slashMatches = append([]slashCommand(nil), m.slashMatches()...)
+	ctx.mentionMatches = append([]mentionview.Item(nil), m.mentionMatches()...)
 	ctx.agentSnapshot = append([]agent.AgentStatus(nil), m.agentSnapshot...)
 	ctx.subagentsEnabled = m.subagentsEnabled
 	ctx.keyboardCapability = m.keyboardCapability

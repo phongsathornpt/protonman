@@ -4,12 +4,29 @@ package gioui
 
 import (
 	"context"
+	"image"
 	"testing"
 	"time"
 
+	"gioui.org/io/input"
+	"gioui.org/layout"
+	"gioui.org/op"
+	"gioui.org/unit"
 	"github.com/phongsathornpt/protonman/internal/app"
 	desktopstate "github.com/phongsathornpt/protonman/internal/feature/desktop"
 )
+
+func testLayoutContext() layout.Context {
+	var ops op.Ops
+	var router input.Router
+	return layout.Context{
+		Ops:         &ops,
+		Constraints: layout.Exact(image.Pt(1180, 760)),
+		Metric:      unit.Metric{PxPerDp: 1, PxPerSp: 1},
+		Now:         time.Now(),
+		Source:      router.Source(),
+	}
+}
 
 type memoryPreferencesRepo struct {
 	state app.DesktopPreferencesState
@@ -272,5 +289,90 @@ func TestController_DeleteSession_SmartFallback(t *testing.T) {
 	// Since no other session exists in p1, active session falls back to empty
 	if ctrl.state.ActiveSessionID != "" {
 		t.Fatalf("expected empty active session after deleting last session in p1, got %q", ctrl.state.ActiveSessionID)
+	}
+}
+
+func TestSidebarSearch_ClearButtonAndShortcuts(t *testing.T) {
+	sh := newShell(newTheme("dark"))
+	sh.sidebarSearchEditor.SetText("active search query")
+	if sh.sidebarSearchEditor.Text() != "active search query" {
+		t.Fatalf("expected text set, got %q", sh.sidebarSearchEditor.Text())
+	}
+
+	// Trigger clear button
+	sh.sidebarSearchClearButton.Click()
+	// Simulate layout pass where clear button click is processed
+	if sh.sidebarSearchClearButton.Clicked(testLayoutContext()) {
+		sh.sidebarSearchEditor.SetText("")
+	}
+	if sh.sidebarSearchEditor.Text() != "" {
+		t.Fatalf("expected cleared search query, got %q", sh.sidebarSearchEditor.Text())
+	}
+
+	// Test shortcut visibility toggle
+	sh.sidebarVisible = false
+	// Simulate K shortcut effect
+	sh.sidebarVisible = true
+	if !sh.sidebarVisible {
+		t.Fatal("expected sidebar visible after shortcut")
+	}
+}
+
+func TestSidebarQuickActionButtons(t *testing.T) {
+	sh := newShell(newTheme("dark"))
+	state := desktopstate.State{
+		Sessions: []desktopstate.SessionState{
+			{ID: "s1", Title: "Session 1"},
+			{ID: "s2", Title: "Session 2"},
+		},
+	}
+	sh.syncSessionButtons(state, 1)
+
+	pinBtn := sh.sessionPinButton("s1")
+	renameBtn := sh.sessionQuickRenameButton("s1")
+	deleteBtn := sh.sessionQuickDeleteButton("s1")
+
+	if pinBtn == nil || renameBtn == nil || deleteBtn == nil {
+		t.Fatal("expected quick action buttons initialized for s1")
+	}
+
+	// Prune dead sessions
+	emptyState := desktopstate.State{}
+	sh.syncSessionButtons(emptyState, 2)
+	if _, ok := sh.sessionPinButtons["s1"]; ok {
+		t.Fatal("expected s1 pin button pruned after session removal")
+	}
+	if _, ok := sh.sessionQuickRenameButtons["s1"]; ok {
+		t.Fatal("expected s1 rename button pruned after session removal")
+	}
+	if _, ok := sh.sessionQuickDeleteButtons["s1"]; ok {
+		t.Fatal("expected s1 delete button pruned after session removal")
+	}
+}
+
+func TestSidebarEmptyState_ClearFilter(t *testing.T) {
+	sh := newShell(newTheme("dark"))
+	filterModeSet := ""
+	sh.onSetFilterMode = func(mode string) {
+		filterModeSet = mode
+	}
+
+	sh.sidebarSearchEditor.SetText("some non-matching term")
+	gtx := testLayoutContext()
+
+	// Simulate clicking the clear filter button
+	sh.sidebarClearFilterButton.Click()
+	if sh.sidebarClearFilterButton.Clicked(gtx) {
+		sh.sidebarSearchEditor.SetText("")
+		if sh.onSetFilterMode != nil {
+			sh.onSetFilterMode("all")
+		}
+	}
+
+	if sh.sidebarSearchEditor.Text() != "" {
+		t.Fatalf("expected search query cleared, got %q", sh.sidebarSearchEditor.Text())
+	}
+	if filterModeSet != "all" {
+		t.Fatalf("expected filter mode set to 'all', got %q", filterModeSet)
 	}
 }

@@ -330,6 +330,8 @@ func (m *bubbleModel) resetPrompt() {
 	m.panes.bottom.composer.historyPos = len(m.panes.bottom.composer.history)
 	m.panes.bottom.composer.draft = ""
 	m.panes.bottom.composer.historyDrafts = nil
+	m.panes.bottom.remove(slashViewID)
+	m.panes.bottom.remove(mentionViewID)
 	m.panes.bottom.syncPromptChrome()
 	m.requestRelayout()
 }
@@ -526,6 +528,20 @@ func stripAttachmentPlaceholders(text string, attachments []tuiconv.Attachment) 
 }
 
 func submissionDisplayText(input tuiconv.QueuedInput) string {
+	if strings.TrimSpace(input.DisplayText) != "" {
+		if len(input.Attachments) == 0 {
+			return strings.TrimSpace(input.DisplayText)
+		}
+		parts := []string{strings.TrimSpace(input.DisplayText)}
+		for i, attachment := range input.Attachments {
+			label := attachment.Placeholder
+			if strings.TrimSpace(label) == "" {
+				label = localImageLabel(i + 1)
+			}
+			parts = append(parts, label)
+		}
+		return strings.Join(parts, " ")
+	}
 	parts := make([]string, 0, len(input.Attachments)+1)
 	if strings.TrimSpace(input.Text) != "" {
 		parts = append(parts, strings.TrimSpace(input.Text))

@@ -39,13 +39,18 @@ func Run(ctx context.Context, agents application.ACPAgents, mcpIntegrations appl
 	view.onDeleteSession = controller.deleteSession
 	view.onRenameSession = controller.renameSession
 	view.onTogglePinSession = controller.togglePinSession
+	view.onToggleSkill = controller.toggleSkill
 	view.onSetFilterMode = controller.setFilterMode
-	view.onSendPrompt = controller.sendPrompt
+	view.onSendPrompt = controller.sendExpandedPrompt
 	view.onCancelPrompt = controller.cancelPrompt
 	view.onResolvePermission = controller.resolvePermission
+	view.onResolveQuestion = controller.resolveQuestion
 	view.onSetRuntimeModel = controller.setRuntimeModel
 	view.onSetRuntimeReasoning = controller.setRuntimeReasoning
 	view.onSetRuntimeLow = controller.setRuntimeLowConcurrency
+	view.onRefreshRuntime = func() {
+		controller.refreshActiveSession(true)
+	}
 	view.onSaveMCPIntegration = controller.saveMCPIntegration
 	view.onRemoveMCPIntegration = controller.removeMCPIntegration
 	view.onReconnectMCP = controller.reconnectMCP

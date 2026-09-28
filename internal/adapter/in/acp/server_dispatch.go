@@ -63,7 +63,7 @@ func (s *Server) dispatch(ctx context.Context, request RPCRequest, output io.Wri
 		s.sessionDirectories[sessionID] = cloneDirectories(directories)
 		s.mu.Unlock()
 		notify := &RPCNotification{JSONRPC: "2.0", Method: "session/update", Params: map[string]any{"sessionId": sessionID, "update": map[string]any{"sessionUpdate": "available_commands_update", "availableCommands": DefaultAvailableCommands()}}}
-		return SessionNewResult{SessionID: sessionID, Modes: DefaultSessionModes(sess.service.Mode().String())}, notify, nil
+		return SessionNewResult{SessionID: sessionID, Modes: DefaultSessionModes(sess.service.Mode().String()), ConfigOptions: s.sessionConfigOptions(ctx, sess)}, notify, nil
 	case "session/load":
 		var params SessionLoadParams
 		if err := json.Unmarshal(request.Params, &params); err != nil {
@@ -87,7 +87,7 @@ func (s *Server) dispatch(ctx context.Context, request RPCRequest, output io.Wri
 		if err := sess.ReplayHistory(func(notification RPCNotification) error { return WriteJSON(output, &s.writeMu, notification) }); err != nil {
 			return nil, nil, err
 		}
-		return nil, nil, nil
+		return SessionLoadResult{Modes: DefaultSessionModes(sess.service.Mode().String()), ConfigOptions: s.sessionConfigOptions(ctx, sess)}, nil, nil
 	case "session/resume":
 		var params SessionResumeParams
 		if err := json.Unmarshal(request.Params, &params); err != nil {
@@ -104,8 +104,11 @@ func (s *Server) dispatch(ctx context.Context, request RPCRequest, output io.Wri
 		if err := validateMCPServerConfigs(params.MCPServers); err != nil {
 			return nil, nil, fmt.Errorf("session/resume MCP servers: %w", err)
 		}
-		_, err = s.loadOrCreateSession(ctx, params.SessionID, cwd, directories, params.MCPServers)
-		return nil, nil, err
+		sess, err := s.loadOrCreateSession(ctx, params.SessionID, cwd, directories, params.MCPServers)
+		if err != nil {
+			return nil, nil, err
+		}
+		return SessionResumeResult{Modes: DefaultSessionModes(sess.service.Mode().String()), ConfigOptions: s.sessionConfigOptions(ctx, sess)}, nil, nil
 	case "session/set_mode":
 		var params SessionSetModeParams
 		if err := json.Unmarshal(request.Params, &params); err != nil {
@@ -191,6 +194,20 @@ func (s *Server) dispatch(ctx context.Context, request RPCRequest, output io.Wri
 			return nil, nil, fmt.Errorf("decode %s: %w", methodSessionMemoryForget, err)
 		}
 		result, err := s.sessionMemoryForget(ctx, params)
+		return result, nil, err
+	case methodSessionSkills:
+		var params ProtonmanSessionSkillsParams
+		if err := json.Unmarshal(request.Params, &params); err != nil {
+			return nil, nil, fmt.Errorf("decode %s: %w", methodSessionSkills, err)
+		}
+		result, err := s.sessionSkills(ctx, params.SessionID)
+		return result, nil, err
+	case methodSessionSkillsToggle:
+		var params ProtonmanSessionSkillToggleParams
+		if err := json.Unmarshal(request.Params, &params); err != nil {
+			return nil, nil, fmt.Errorf("decode %s: %w", methodSessionSkillsToggle, err)
+		}
+		result, err := s.sessionSkillToggle(ctx, params)
 		return result, nil, err
 	case "session/delete":
 		var params SessionDeleteParams

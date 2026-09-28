@@ -11,6 +11,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/cmdpolicy"
 	tuiconv "github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/conversation"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/mentionview"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/slashview"
 )
 
@@ -147,6 +148,22 @@ func (m *bubbleModel) submit() tea.Cmd {
 		}
 		return m.dispatch(input.Text)
 	}
+	if !m.isCommandLine(input.Text) {
+		expanded, err := mentionview.ExpandMentions(input.Text, m.workDir)
+		if err != nil {
+			m.appendError(err.Error())
+			m.refreshViewport()
+			return nil
+		}
+		if len(expanded.ImagePaths) > 0 {
+			for _, imgPath := range expanded.ImagePaths {
+				m.panes.bottom.composer.attachments.attachImage(&m.panes.bottom.composer.input, imgPath)
+			}
+			input = m.composerInput()
+		}
+		input.Text = expanded.TurnPrompt
+		input.DisplayText = expanded.DisplayText
+	}
 	if len(input.Attachments) > 0 && !m.currentModelAcceptsImageInput() {
 		m.appendError(m.imageInputsNotSupportedMessage())
 		m.refreshViewport()
@@ -161,6 +178,7 @@ func (m *bubbleModel) submit() tea.Cmd {
 		}
 		m.resetPrompt()
 		m.panes.bottom.remove(slashViewID)
+		m.panes.bottom.remove(mentionViewID)
 		m.refreshViewport()
 		return nil
 	}
@@ -169,6 +187,7 @@ func (m *bubbleModel) submit() tea.Cmd {
 	}
 	m.resetPrompt()
 	m.panes.bottom.remove(slashViewID)
+	m.panes.bottom.remove(mentionViewID)
 	return m.dispatchInput(input)
 }
 

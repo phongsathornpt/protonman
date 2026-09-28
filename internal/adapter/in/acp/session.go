@@ -22,6 +22,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/engine/toolcall"
 	"github.com/phongsathornpt/protonman/internal/feature/agent"
+	"github.com/phongsathornpt/protonman/internal/feature/skill"
 	"github.com/phongsathornpt/protonman/internal/platform/appdirs"
 	"github.com/phongsathornpt/protonman/proton-sdk/domain"
 )
@@ -44,6 +45,7 @@ type Session struct {
 	retention       conversation.RetentionPolicy
 	mcpServers      []MCPServerConfig
 	resource        io.Closer
+	skillRegistry   *skill.Registry
 
 	mu           sync.Mutex
 	messages     []model.Message
@@ -777,6 +779,10 @@ func (s *Session) saveState(ctx context.Context) error {
 		reasoningSetting = string(reasoningEffort)
 	}
 	runtimeSettings := sessionRuntimeFor(s)
+	var activeSkills []string
+	if s.skillRegistry != nil {
+		activeSkills = s.skillRegistry.ActivatedList()
+	}
 
 	err := s.sessionService.Save(ctx, s.id, session.State{
 		SessionID:          s.id,
@@ -784,6 +790,7 @@ func (s *Session) saveState(ctx context.Context) error {
 		WorkspaceKey:       s.workspaceKey,
 		WorkspaceName:      s.workspaceName,
 		PermissionMode:     s.service.Mode().String(),
+		ActiveSkills:       activeSkills,
 		ModelProvider:      runtimeSettings.Provider,
 		ModelID:            runtimeSettings.Model,
 		ReasoningEffort:    reasoningSetting,

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 
+	questiontool "github.com/phongsathornpt/protonman/internal/adapter/out/tool/question"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 )
 
@@ -119,6 +120,13 @@ func (b *permissionBroker) unregister(id uint64) {
 	b.mu.Lock()
 	delete(b.waiters, id)
 	b.mu.Unlock()
+}
+
+func (b *permissionBroker) hasWaiter(id uint64) bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	_, ok := b.waiters[id]
+	return ok
 }
 
 // resolve routes a client response to its waiter. Unknown IDs are ignored
@@ -233,7 +241,7 @@ func (b *permissionBroker) nextPermissionID() uint64 {
 	return b.server.permissionSeq
 }
 
-// handleServerResponse routes an inbound frame to a blocked permission request.
+// handleServerResponse routes an inbound frame to a blocked permission or question request.
 // It reports whether the frame was consumed; anything else belongs to the normal
 // request path.
 func (s *Server) handleServerResponse(broker *permissionBroker, line []byte) bool {
@@ -249,23 +257,58 @@ func (s *Server) handleServerResponse(broker *permissionBroker, line []byte) boo
 	if err != nil {
 		return false
 	}
-	decision := permissionDecision{err: errors.New("client returned an empty permission outcome")}
-	switch {
-	case response.Error != nil:
-		decision.err = fmt.Errorf("client rejected the permission request: %s", response.Error.Message)
-	case response.Result != nil:
-		encoded, err := json.Marshal(response.Result)
-		if err != nil {
-			decision.err = fmt.Errorf("encode permission response: %w", err)
-			break
+	if broker != nil && broker.hasWaiter(id) {
+		decision := permissionDecision{err: errors.New("client returned an empty permission outcome")}
+		switch {
+		case response.Error != nil:
+			decision.err = fmt.Errorf("client rejected the permission request: %s", response.Error.Message)
+		case response.Result != nil:
+			encoded, err := json.Marshal(response.Result)
+			if err != nil {
+				decision.err = fmt.Errorf("encode permission response: %w", err)
+				break
+			}
+			var result RequestPermissionResult
+			if err := json.Unmarshal(encoded, &result); err != nil {
+				decision.err = fmt.Errorf("decode permission response: %w", err)
+				break
+			}
+			decision = permissionDecision{optionID: strings.TrimSpace(result.Outcome.OptionID)}
 		}
-		var result RequestPermissionResult
-		if err := json.Unmarshal(encoded, &result); err != nil {
-			decision.err = fmt.Errorf("decode permission response: %w", err)
-			break
-		}
-		decision = permissionDecision{optionID: strings.TrimSpace(result.Outcome.OptionID)}
+		broker.resolve(id, decision)
+		return true
 	}
-	broker.resolve(id, decision)
-	return true
+	if s != nil && s.questions != nil && s.questions.hasWaiter(id) {
+		decision := questionDecision{err: errors.New("client returned an empty question outcome")}
+		switch {
+		case response.Error != nil:
+			decision.err = fmt.Errorf("client rejected the question request: %s", response.Error.Message)
+		case response.Result != nil:
+			encoded, err := json.Marshal(response.Result)
+			if err != nil {
+				decision.err = fmt.Errorf("encode question response: %w", err)
+				break
+			}
+			var result RequestQuestionResult
+			if err := json.Unmarshal(encoded, &result); err != nil {
+				decision.err = fmt.Errorf("decode question response: %w", err)
+				break
+			}
+			status := result.Status
+			if status == "" {
+				status = questiontool.StatusAnswered
+			}
+			decision = questionDecision{
+				response: questiontool.Response{
+					Status:          status,
+					Answer:          result.Answer,
+					SelectedOptions: result.SelectedOptions,
+					Answers:         result.Answers,
+				},
+			}
+		}
+		s.questions.resolve(id, decision)
+		return true
+	}
+	return false
 }

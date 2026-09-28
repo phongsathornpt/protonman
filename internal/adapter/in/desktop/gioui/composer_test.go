@@ -41,7 +41,7 @@ func TestSubmitComposerTrimsAndClearsDraft(t *testing.T) {
 	view := newShell(newTheme("light"))
 	view.activeSessionID = "session"
 	var submitted []string
-	view.onSendPrompt = func(text string) { submitted = append(submitted, text) }
+	view.onSendPrompt = func(p ExpandedPrompt) { submitted = append(submitted, p.DisplayText) }
 	view.composer.SetText("saved draft")
 	view.rememberComposerDraft("session", "older draft")
 

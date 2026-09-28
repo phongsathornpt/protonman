@@ -28,6 +28,7 @@ type Attachment struct {
 // image preparation step owns execution.
 type QueuedInput struct {
 	Text        string
+	DisplayText string
 	Attachments []Attachment
 }
 

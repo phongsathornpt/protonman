@@ -9,7 +9,7 @@ import (
 )
 
 func TestThemeTextContrast(t *testing.T) {
-	for _, mode := range []string{"light", "dark"} {
+	for _, mode := range []string{"light", "dark", "macos-light", "macos-dark", "slate-light", "slate-dark"} {
 		t.Run(mode, func(t *testing.T) {
 			theme := newTheme(mode)
 			pairs := []struct {

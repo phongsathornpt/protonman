@@ -108,29 +108,30 @@ shaper and uses developer-oriented typographic hierarchy:
 Long workspace paths and titles use deterministic truncation rather than
 forcing horizontal overflow.
 
-## Workbench Structure & Layout
+## Workbench Structure & Layout (macOS Split-View Paradigm)
 
-The desktop application is structured as a 3-column docked edge-to-edge workbench:
+The desktop application is structured as a native macOS 3-column split-view workbench adhering to Apple Human Interface Guidelines:
 
-1. **Unified Top Bar (44dp)**: Single cohesive title bar combining branding ("Protonman"), left sidebar toggle button, project/session breadcrumbs, active agent selector, connection status pill, and inspector toggle.
-2. **Left Sidebar (260dp, collapsible)**:
-   - Top action row with "New Session" (`Ctrl/Cmd+N`) and search filter input.
+1. **Unified Top Toolbar (52dp)**: Aligned across panes with standard macOS window titlebar height. Contains icon-driven sidebar toggle (`◧`), project/session breadcrumb context, prominent active session title, pop-up capsule button for active agent selector (`▾`), connection status pill, and inspector toggle (`◨`). When the sidebar is collapsed, window traffic lights sit on the far left of this toolbar.
+2. **Left Sidebar (260dp, full-height, collapsible)**:
+   - Extends the full window height in a quiet `surfaceDim` background.
+   - 52dp header row housing window traffic lights (close, minimize, zoom) at the top-left, "Protonman" brand title, filter mode dropdown, and a clean `+` icon button for creating sessions.
+   - Embedded macOS pill search capsule with `⌕` search glyph.
    - Collapsible project directory groups with toggle chevrons (`▾`/`▸`).
-   - Compact 40dp session rows with colored status dots (green = running, grey = idle, red = error) and relative timestamps.
+   - Inset capsule session selection: 8dp rounded selection pills (`primaryContainer` / `surfaceContainerHigh`) with 8dp horizontal gutter, compact 36dp row height, colored status dots, and relative timestamps.
 3. **Center Conversation Pane (Flexible width, max 840dp text constraint)**:
-   - Edge-to-edge conversation stream with natural flow.
+   - Clean canvas stream: AI assistant messages flow directly onto the canvas (`surface`) without enclosing card borders.
+   - User prompts rendered as refined rounded speech bubbles (`shapeLarge` / 12-14dp radius) in elevated `secondaryContainer`.
    - Collapsible thinking blocks with 1-click expand/collapse.
    - Color-coded unified git diff cards with `+adds` / `-dels` badges and syntax-colored lines.
    - Non-diff tool executions rendered as compact step pills.
    - Dota-style attribute cards for delegated subagents (STR, AGI, INT) with 3dp left accent stripes.
-   - Floating composer card docked at the bottom with full-width multiline input and a bottom utility bar (model pill, keyboard hints, Send/Stop action).
-4. **Right Inspector Drawer (320dp, collapsible)**:
-   - 3 docked tabs: `[Plan]`, `[Memory]`, `[Settings]`.
-   - `[Plan]` tab: Active goal, session tasks (TODO checklist with status markers and linear progress bar).
-   - `[Memory]` tab: Workspace-local facts and global preferences with confidence ratings.
-   - `[Settings]` tab: Session runtime controls (model, reasoning effort), MCP server integrations, and ACP agent profile configurations.
-   - Automatically switches to `[Settings]` when an MCP or Agent Profile editor is opened.
-5. **Hairline Dividers**: 1px solid dividers (`outlineVariant`) separate columns edge-to-edge.
+   - Floating composer card: elevated container with 16dp corner radius (`shapeExtraLarge`) floating above the bottom, circular Apple-style action button (`↑` send / `■` stop), capsule context chips (Goal, Model), and multiline editor.
+4. **Right Inspector Drawer (336dp, collapsible)**:
+   - Recessed capsule segmented control tab bar (macOS `NSSegmentedControl` style) in `surfaceContainerLow` with an elevated active tab pill (`surface`).
+   - Docked tabs: `[Plan]`, `[Memory]`, `[Skills]`, `[Settings]`.
+   - Grouped cards: 8dp rounded containers (`shapeMedium`) in `surfaceContainer` for Goal, session tasks (TODO checklist), Memory facts, and runtime settings.
+5. **Hairline Dividers**: 1px subtle dividers (`outlineVariant`) separate columns cleanly.
 
 ## Global Keyboard Shortcuts
 

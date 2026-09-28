@@ -153,6 +153,7 @@ type presentationModelState struct {
 	reducedMotion        bool
 	icons                tuistyle.IconSet
 	panes                paneState
+	mentionCache         workspaceFileCache
 	nextID               uint64
 	layout               layoutState
 	viewportViewCache    viewportViewCache

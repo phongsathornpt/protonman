@@ -18,6 +18,7 @@ import (
 
 const (
 	methodSessionRuntime           = "protonman/session/runtime"
+	methodSessionModels            = "protonman/session/models"
 	methodSessionSetModel          = "protonman/session/set_model"
 	methodSessionSetReasoning      = "protonman/session/set_reasoning"
 	methodSessionSetLowConcurrency = "protonman/session/set_low_concurrency"
@@ -65,9 +66,16 @@ type ProtonmanSessionRuntimeParams struct {
 	SessionID string `json:"sessionId"`
 }
 
+type SessionModelOption struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
+}
+
 type ProtonmanSessionRuntimeResult struct {
 	SessionID string `json:"sessionId"`
 	SessionRuntimeSettings
+	AvailableModels []SessionModelOption `json:"availableModels,omitempty"`
 }
 
 type ProtonmanSessionSetModelParams struct {
@@ -88,16 +96,16 @@ type ProtonmanSessionSetLowConcurrencyParams struct {
 
 func (s *Server) dispatchSessionRuntime(ctx context.Context, request RPCRequest) (any, bool, error) {
 	switch request.Method {
-	case methodSessionRuntime:
+	case methodSessionRuntime, methodSessionModels:
 		var params ProtonmanSessionRuntimeParams
 		if err := json.Unmarshal(request.Params, &params); err != nil {
-			return nil, true, fmt.Errorf("decode %s: %w", methodSessionRuntime, err)
+			return nil, true, fmt.Errorf("decode %s: %w", request.Method, err)
 		}
 		sess, err := s.runtimeSession(params.SessionID)
 		if err != nil {
 			return nil, true, err
 		}
-		return runtimeResult(sess), true, nil
+		return s.runtimeResult(ctx, sess), true, nil
 
 	case methodSessionSetReasoning:
 		var params ProtonmanSessionSetReasoningParams
@@ -115,7 +123,7 @@ func (s *Server) dispatchSessionRuntime(ctx context.Context, request RPCRequest)
 		if err := s.setSessionReasoning(ctx, sess, effort); err != nil {
 			return nil, true, err
 		}
-		return runtimeResult(sess), true, nil
+		return s.runtimeResult(ctx, sess), true, nil
 
 	case methodSessionSetLowConcurrency:
 		var params ProtonmanSessionSetLowConcurrencyParams
@@ -135,7 +143,7 @@ func (s *Server) dispatchSessionRuntime(ctx context.Context, request RPCRequest)
 		}); err != nil {
 			return nil, true, err
 		}
-		return runtimeResult(sess), true, nil
+		return s.runtimeResult(ctx, sess), true, nil
 
 	case methodSessionSetModel:
 		var params ProtonmanSessionSetModelParams
@@ -157,7 +165,7 @@ func (s *Server) dispatchSessionRuntime(ctx context.Context, request RPCRequest)
 		}); err != nil {
 			return nil, true, err
 		}
-		return runtimeResult(sess), true, nil
+		return s.runtimeResult(ctx, sess), true, nil
 	default:
 		return nil, false, nil
 	}
@@ -316,8 +324,26 @@ func storeSessionRuntime(sess *Session, settings SessionRuntimeSettings) {
 	sessionRuntimeSelections.Store(weak.Make(sess), normalizeSessionRuntime(settings))
 }
 
-func runtimeResult(sess *Session) ProtonmanSessionRuntimeResult {
-	return ProtonmanSessionRuntimeResult{SessionID: sess.id, SessionRuntimeSettings: sessionRuntimeFor(sess)}
+func (s *Server) runtimeResult(ctx context.Context, sess *Session) ProtonmanSessionRuntimeResult {
+	settings := sessionRuntimeFor(sess)
+	result := ProtonmanSessionRuntimeResult{
+		SessionID:              sess.id,
+		SessionRuntimeSettings: settings,
+	}
+	if provider, ok := sessionModelOptionsProviderFor(s); ok {
+		if discovered, err := provider(ctx, settings); err == nil && len(discovered) > 0 {
+			models := make([]SessionModelOption, 0, len(discovered))
+			for _, item := range discovered {
+				models = append(models, SessionModelOption{
+					ID:          item.Value,
+					Name:        item.Name,
+					Description: item.Description,
+				})
+			}
+			result.AvailableModels = models
+		}
+	}
+	return result
 }
 
 func normalizeSessionRuntime(settings SessionRuntimeSettings) SessionRuntimeSettings {

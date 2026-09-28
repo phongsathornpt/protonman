@@ -4,6 +4,7 @@ package gioui
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"sync"
 	"time"
@@ -16,6 +17,7 @@ const (
 	contextRefreshInterval  = 750 * time.Millisecond
 	memoryRefreshInterval   = 3 * time.Second
 	runtimeRefreshInterval  = time.Second
+	skillsRefreshInterval   = 3 * time.Second
 	inspectorRequestTimeout = 15 * time.Second
 )
 
@@ -136,11 +138,25 @@ type sessionMemoryResult struct {
 }
 
 type sessionRuntimeResult struct {
-	SessionID      string `json:"sessionId"`
-	Provider       string `json:"provider"`
-	Model          string `json:"model"`
-	Reasoning      string `json:"reasoning"`
-	LowConcurrency string `json:"lowConcurrency"`
+	SessionID       string          `json:"sessionId"`
+	Provider        string          `json:"provider"`
+	Model           string          `json:"model"`
+	Reasoning       string          `json:"reasoning"`
+	LowConcurrency  string          `json:"lowConcurrency"`
+	AvailableModels json.RawMessage `json:"availableModels,omitempty"`
+}
+
+type sessionSkillsResult struct {
+	SessionID string `json:"sessionId"`
+	Skills    []struct {
+		Name        string   `json:"name"`
+		Description string   `json:"description"`
+		Scope       string   `json:"scope"`
+		Active      bool     `json:"active"`
+		Locked      bool     `json:"locked"`
+		LockStatus  string   `json:"lockStatus"`
+		Resources   []string `json:"resources"`
+	} `json:"skills"`
 }
 
 type sessionRefreshKind uint8
@@ -149,6 +165,7 @@ const (
 	contextRefreshKind sessionRefreshKind = iota
 	memoryRefreshKind
 	runtimeRefreshKind
+	skillsRefreshKind
 )
 
 func refreshIntervalFor(kind sessionRefreshKind) time.Duration {
@@ -157,6 +174,8 @@ func refreshIntervalFor(kind sessionRefreshKind) time.Duration {
 		return contextRefreshInterval
 	case memoryRefreshKind:
 		return memoryRefreshInterval
+	case skillsRefreshKind:
+		return skillsRefreshInterval
 	default:
 		return runtimeRefreshInterval
 	}
@@ -190,6 +209,12 @@ func (c *controller) beginSessionRefresh(sessionID string, force bool, kind sess
 		if tracker == nil {
 			tracker = newSessionRefreshTracker(refreshIntervalFor(kind))
 			c.memoryRefresh = tracker
+		}
+	case skillsRefreshKind:
+		tracker = c.skillsRefresh
+		if tracker == nil {
+			tracker = newSessionRefreshTracker(refreshIntervalFor(kind))
+			c.skillsRefresh = tracker
 		}
 	default:
 		tracker = c.runtimeRefresh
@@ -260,6 +285,26 @@ func (c *controller) refreshSessionRuntime(sessionID string, force bool) {
 	}()
 }
 
+func (c *controller) refreshSessionSkills(sessionID string, force bool) {
+	c.refreshSessionSkillsFrom(nil, sessionID, force)
+}
+
+func (c *controller) refreshSessionSkillsFrom(source *acpclient.Client, sessionID string, force bool) {
+	sessionID = strings.TrimSpace(sessionID)
+	client, tracker, ok := c.beginSessionRefresh(sessionID, force, skillsRefreshKind, source)
+	if !ok {
+		return
+	}
+	go func() {
+		defer tracker.finish(sessionID, time.Now())
+		var result sessionSkillsResult
+		if err := c.callInspector(client, "protonman/session/skills", map[string]any{"sessionId": sessionID}, &result); err != nil {
+			return
+		}
+		c.applySessionSkills(client, result)
+	}()
+}
+
 func (c *controller) refreshActiveSession(force bool) {
 	c.mu.RLock()
 	sessionID := c.state.ActiveSessionID
@@ -267,6 +312,7 @@ func (c *controller) refreshActiveSession(force bool) {
 	c.refreshSessionContext(sessionID, force)
 	c.refreshSessionMemory(sessionID, force)
 	c.refreshSessionRuntime(sessionID, force)
+	c.refreshSessionSkills(sessionID, force)
 }
 
 func (c *controller) callInspector(client *acpclient.Client, method string, params any, result any) error {
@@ -383,15 +429,97 @@ func (c *controller) applySessionRuntime(client *acpclient.Client, result sessio
 		c.mu.Unlock()
 		return false
 	}
+	models := decodeAvailableModels(result.AvailableModels)
 	desktopstate.Apply(&c.state, desktopstate.Event{
-		Kind:      desktopstate.EventSessionRuntimeUpdated,
-		SessionID: sessionID,
-		Runtime:   projectSessionRuntime(result),
+		Kind:            desktopstate.EventSessionRuntimeUpdated,
+		SessionID:       sessionID,
+		Runtime:         projectSessionRuntime(result),
+		AvailableModels: models,
 	})
 	c.revision++
 	c.mu.Unlock()
 	c.notify()
 	return true
+}
+
+func decodeAvailableModels(raw json.RawMessage) []string {
+	if len(raw) == 0 {
+		return nil
+	}
+	var stringsList []string
+	if err := json.Unmarshal(raw, &stringsList); err == nil && len(stringsList) > 0 {
+		return cleanModelList(stringsList)
+	}
+	var objectsList []struct {
+		ID    string `json:"id"`
+		Name  string `json:"name"`
+		Value string `json:"value"`
+	}
+	if err := json.Unmarshal(raw, &objectsList); err == nil {
+		out := make([]string, 0, len(objectsList))
+		for _, item := range objectsList {
+			id := strings.TrimSpace(item.ID)
+			if id == "" {
+				id = strings.TrimSpace(item.Value)
+			}
+			if id != "" {
+				out = append(out, id)
+			}
+		}
+		return cleanModelList(out)
+	}
+	return nil
+}
+
+func cleanModelList(models []string) []string {
+	out := make([]string, 0, len(models))
+	seen := make(map[string]bool, len(models))
+	for _, m := range models {
+		m = strings.TrimSpace(m)
+		if m != "" && !seen[m] {
+			seen[m] = true
+			out = append(out, m)
+		}
+	}
+	return out
+}
+
+func (c *controller) applySessionSkills(client *acpclient.Client, result sessionSkillsResult) bool {
+	sessionID := strings.TrimSpace(result.SessionID)
+	if client == nil || sessionID == "" {
+		return false
+	}
+	c.mu.Lock()
+	session, ok := desktopSessionByID(c.state, sessionID)
+	if !ok || sessionID != c.state.ActiveSessionID || !c.clientCurrentLocked(session.AgentID, client) {
+		c.mu.Unlock()
+		return false
+	}
+	desktopstate.Apply(&c.state, desktopstate.Event{
+		Kind:      desktopstate.EventSessionSkillsUpdated,
+		SessionID: sessionID,
+		Skills:    projectSessionSkills(result),
+	})
+	c.revision++
+	c.mu.Unlock()
+	c.notify()
+	return true
+}
+
+func projectSessionSkills(result sessionSkillsResult) []desktopstate.SkillState {
+	skills := make([]desktopstate.SkillState, 0, len(result.Skills))
+	for _, item := range result.Skills {
+		skills = append(skills, desktopstate.SkillState{
+			Name:        strings.TrimSpace(item.Name),
+			Description: strings.TrimSpace(item.Description),
+			Scope:       strings.TrimSpace(item.Scope),
+			Active:      item.Active,
+			Locked:      item.Locked,
+			LockStatus:  strings.TrimSpace(item.LockStatus),
+			Resources:   item.Resources,
+		})
+	}
+	return skills
 }
 
 func (c *controller) pruneSessionRefreshersLocked() {
@@ -402,6 +530,7 @@ func (c *controller) pruneSessionRefreshersLocked() {
 	c.contextRefresh.prune(live)
 	c.memoryRefresh.prune(live)
 	c.runtimeRefresh.prune(live)
+	c.skillsRefresh.prune(live)
 }
 
 func terminalToolStatus(status string) bool {

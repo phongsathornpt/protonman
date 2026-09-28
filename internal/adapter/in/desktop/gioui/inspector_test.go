@@ -99,6 +99,21 @@ func TestProjectSessionInspectorPayloads(t *testing.T) {
 	if runtime.Provider != "openai" || runtime.Model != "gpt" || runtime.Reasoning != "high" || runtime.LowConcurrency != "on" {
 		t.Fatalf("runtime projection = %+v", runtime)
 	}
+
+	skillsResult := sessionSkillsResult{SessionID: "session-1"}
+	skillsResult.Skills = append(skillsResult.Skills, struct {
+		Name        string   `json:"name"`
+		Description string   `json:"description"`
+		Scope       string   `json:"scope"`
+		Active      bool     `json:"active"`
+		Locked      bool     `json:"locked"`
+		LockStatus  string   `json:"lockStatus"`
+		Resources   []string `json:"resources"`
+	}{Name: " pdf ", Description: " parse pdfs ", Scope: " project ", Active: true, Locked: true, LockStatus: " verified ", Resources: []string{"doc.pdf"}})
+	skills := projectSessionSkills(skillsResult)
+	if len(skills) != 1 || skills[0].Name != "pdf" || !skills[0].Active || !skills[0].Locked || skills[0].LockStatus != "verified" || len(skills[0].Resources) != 1 {
+		t.Fatalf("skills projection = %+v", skills)
+	}
 }
 
 func TestInspectorResultsRejectStaleClient(t *testing.T) {
@@ -118,11 +133,30 @@ func TestInspectorResultsRejectStaleClient(t *testing.T) {
 	if controller.applySessionRuntime(stale, sessionRuntimeResult{SessionID: "session-1", Model: "stale"}) {
 		t.Fatal("stale runtime result was applied")
 	}
+	if controller.applySessionSkills(stale, sessionSkillsResult{SessionID: "session-1"}) {
+		t.Fatal("stale skills result was applied")
+	}
 	if !controller.applySessionRuntime(current, sessionRuntimeResult{SessionID: "session-1", Provider: "openai", Model: "gpt", Reasoning: "high", LowConcurrency: "on"}) {
 		t.Fatal("current runtime result was rejected")
 	}
 	if !controller.applySessionContext(current, sessionContextResult{SessionID: "session-1", Goal: "current"}) {
 		t.Fatal("current context result was rejected")
+	}
+	skillsResult := sessionSkillsResult{SessionID: "session-1"}
+	skillsResult.Skills = append(skillsResult.Skills, struct {
+		Name        string   `json:"name"`
+		Description string   `json:"description"`
+		Scope       string   `json:"scope"`
+		Active      bool     `json:"active"`
+		Locked      bool     `json:"locked"`
+		LockStatus  string   `json:"lockStatus"`
+		Resources   []string `json:"resources"`
+	}{Name: "pdf", Description: "parse pdfs", Scope: "project", Active: true})
+	if !controller.applySessionSkills(current, skillsResult) {
+		t.Fatal("current skills result was rejected")
+	}
+	if got := controller.state.Sessions[0].Skills; len(got) != 1 || got[0].Name != "pdf" || !got[0].Active {
+		t.Fatalf("skills update = %+v", got)
 	}
 	if got := controller.state.Sessions[0].Context.Memory.Global; len(got) != 1 || got[0].ID != "keep" {
 		t.Fatalf("context update replaced memory: %+v", got)
@@ -133,6 +167,9 @@ func TestInspectorResultsRejectStaleClient(t *testing.T) {
 	controller.state.ActiveSessionID = "another-session"
 	if controller.applySessionMemory(current, sessionMemoryResult{SessionID: "session-1", WorkspaceKey: "inactive"}) {
 		t.Fatal("inactive session memory result was retained")
+	}
+	if controller.applySessionSkills(current, sessionSkillsResult{SessionID: "session-1"}) {
+		t.Fatal("inactive session skills result was retained")
 	}
 }
 

@@ -7,9 +7,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/phongsathornpt/protonman/internal/adapter/out/tool/question"
 	"github.com/phongsathornpt/protonman/internal/app"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 	"github.com/phongsathornpt/protonman/internal/core/session"
+	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/proton-sdk/domain"
 )
 
@@ -94,6 +96,11 @@ func (s *Server) loadOrCreateSession(ctx context.Context, sessionID string, cwd 
 			if err := restoreSessionRuntime(ctx, s, sess, state); err != nil {
 				return nil, fmt.Errorf("restore session runtime %q: %w", sessionID, err)
 			}
+			if s.skillRegistry != nil && len(state.ActiveSkills) > 0 {
+				for _, name := range state.ActiveSkills {
+					_ = s.skillRegistry.Activate(name)
+				}
+			}
 		}
 	}
 	s.mu.Lock()
@@ -131,6 +138,11 @@ func (s *Server) newSession(ctx context.Context, sessionID string, cwd string, a
 		}
 		mcpResource = resource
 	}
+	if s.questions != nil {
+		if registrar, ok := registry.(tool.Registrar); ok {
+			_ = registrar.Register(questiontool.NewAskQuestion(s.questions.prompter(sessionID)))
+		}
+	}
 	service, err := s.service.CloneWithRegistry(registry)
 	if err != nil {
 		if mcpResource != nil {
@@ -150,6 +162,7 @@ func (s *Server) newSession(ctx context.Context, sessionID string, cwd string, a
 		runner = created
 	}
 	sess := NewSession(sessionID, cwd, service, registry, runner, s.sessionService, s.agents.ForSession(sessionID))
+	sess.skillRegistry = s.skillRegistry
 	bindSessionRuntime(s, sess)
 	// Without a prompt, ask/auto mode denies every non-statically-allowed call
 	// with "no permission prompt is configured". Install the ACP reverse request

@@ -120,6 +120,47 @@ type PermissionRequest struct {
 	Options   []PermissionOption
 }
 
+// QuestionItemState defines a single question in an interactive question request.
+type QuestionItemState struct {
+	Question    string
+	Options     []string
+	Multiple    bool
+	Recommended string
+}
+
+// QuestionRequest is the desktop projection of an ACP server-to-client question request.
+type QuestionRequest struct {
+	RequestID string
+	SessionID string
+	Questions []QuestionItemState
+}
+
+// QuestionAnswerItem represents the answer to a single question.
+type QuestionAnswerItem struct {
+	Question        string   `json:"question"`
+	Answer          string   `json:"answer"`
+	SelectedOptions []string `json:"selectedOptions,omitempty"`
+}
+
+// QuestionResponse represents the user's answer or decline to a question request.
+type QuestionResponse struct {
+	Status          string               `json:"status"` // "answered" | "declined"
+	Answer          string               `json:"answer,omitempty"`
+	SelectedOptions []string             `json:"selectedOptions,omitempty"`
+	Answers         []QuestionAnswerItem `json:"answers,omitempty"`
+}
+
+// SkillState is the desktop projection of an Agent Skill.
+type SkillState struct {
+	Name        string
+	Description string
+	Scope       string
+	Active      bool
+	Locked      bool
+	LockStatus  string
+	Resources   []string
+}
+
 // SessionState is the desktop projection of one ACP session.
 type SessionState struct {
 	ID                    string
@@ -137,6 +178,8 @@ type SessionState struct {
 	Subagents             []SubagentState
 	Context               SessionContextState
 	Runtime               RuntimeSettingsState
+	Skills                []SkillState
+	AvailableModels       []string
 }
 
 // State owns desktop project and session state independently from UI widgets.
@@ -146,6 +189,7 @@ type State struct {
 	Projects        []ProjectState
 	Sessions        []SessionState
 	PermissionInbox []PermissionRequest
+	QuestionInbox   []QuestionRequest
 	Integrations    []MCPIntegrationState
 }
 
@@ -161,6 +205,8 @@ const (
 	EventPromptFailed
 	EventPermissionRequested
 	EventPermissionResolved
+	EventQuestionRequested
+	EventQuestionResolved
 	EventTimelineAppended
 	EventTimelineUpserted
 	EventSubagentUpserted
@@ -168,21 +214,25 @@ const (
 	EventSessionMemoryUpdated
 	EventSessionRuntimeUpdated
 	EventIntegrationsReplaced
+	EventSessionSkillsUpdated
 )
 
 // Event is a typed reducer input. Only fields relevant to Kind are consumed.
 type Event struct {
-	Kind         EventKind
-	SessionID    string
-	Sessions     []SessionState
-	Item         TimelineItem
-	Subagent     SubagentState
-	Context      SessionContextState
-	Memory       MemoryState
-	Runtime      RuntimeSettingsState
-	Integrations []MCPIntegrationState
-	Permission   PermissionRequest
-	RequestID    string
+	Kind            EventKind
+	SessionID       string
+	Sessions        []SessionState
+	Item            TimelineItem
+	Subagent        SubagentState
+	Context         SessionContextState
+	Memory          MemoryState
+	Runtime         RuntimeSettingsState
+	Skills          []SkillState
+	Integrations    []MCPIntegrationState
+	Permission      PermissionRequest
+	Question        QuestionRequest
+	RequestID       string
+	AvailableModels []string
 }
 
 // Reduce applies one event and returns a new state without aliasing caller-owned slices.
@@ -229,6 +279,14 @@ func applyEvent(state *State, event Event) {
 	case EventPermissionResolved:
 		setStatus(state, event.SessionID, TaskRunning)
 		state.PermissionInbox = removePermission(state.PermissionInbox, event.RequestID)
+	case EventQuestionRequested:
+		setStatus(state, event.SessionID, TaskWaitingUser)
+		if event.Question.RequestID != "" && !hasQuestion(state.QuestionInbox, event.Question.RequestID) {
+			state.QuestionInbox = append(state.QuestionInbox, cloneQuestion(event.Question))
+		}
+	case EventQuestionResolved:
+		setStatus(state, event.SessionID, TaskRunning)
+		state.QuestionInbox = removeQuestion(state.QuestionInbox, event.RequestID)
 	case EventTimelineAppended:
 		if session := sessionByID(state, event.SessionID); session != nil {
 			session.Timeline = append(session.Timeline, event.Item)
@@ -253,9 +311,16 @@ func applyEvent(state *State, event Event) {
 	case EventSessionRuntimeUpdated:
 		if session := sessionByID(state, event.SessionID); session != nil {
 			session.Runtime = event.Runtime
+			if len(event.AvailableModels) > 0 {
+				session.AvailableModels = slices.Clone(event.AvailableModels)
+			}
 		}
 	case EventIntegrationsReplaced:
 		state.Integrations = cloneIntegrations(event.Integrations)
+	case EventSessionSkillsUpdated:
+		if session := sessionByID(state, event.SessionID); session != nil {
+			session.Skills = cloneSkillStates(event.Skills)
+		}
 	}
 }
 
@@ -263,6 +328,7 @@ func cloneState(state State) State {
 	state.Projects = cloneProjects(state.Projects)
 	state.Sessions = cloneSessions(state.Sessions)
 	state.PermissionInbox = clonePermissions(state.PermissionInbox)
+	state.QuestionInbox = cloneQuestions(state.QuestionInbox)
 	state.Integrations = cloneIntegrations(state.Integrations)
 	return state
 }
@@ -280,6 +346,7 @@ func ClonePresentationState(state State) State {
 	next.Projects = cloneProjects(state.Projects)
 	next.Sessions = cloneSessionMetadata(state.Sessions, state.ActiveSessionID)
 	next.PermissionInbox = clonePermissions(state.PermissionInbox)
+	next.QuestionInbox = cloneQuestions(state.QuestionInbox)
 	next.Integrations = cloneIntegrations(state.Integrations)
 	return next
 }
@@ -319,7 +386,20 @@ func cloneSession(session SessionState) SessionState {
 	session.Subagents = slices.Clone(session.Subagents)
 	session.AdditionalDirectories = slices.Clone(session.AdditionalDirectories)
 	session.Context = cloneSessionContext(session.Context)
+	session.Skills = cloneSkillStates(session.Skills)
+	session.AvailableModels = slices.Clone(session.AvailableModels)
 	return session
+}
+
+func cloneSkillStates(skills []SkillState) []SkillState {
+	if skills == nil {
+		return nil
+	}
+	out := slices.Clone(skills)
+	for i := range out {
+		out[i].Resources = slices.Clone(out[i].Resources)
+	}
+	return out
 }
 
 func cloneSessionMetadata(sessions []SessionState, activeSessionID string) []SessionState {
@@ -463,4 +543,51 @@ func upsertSubagent(session *SessionState, next SubagentState) {
 		}
 	}
 	session.Subagents = append(session.Subagents, next)
+}
+
+func hasQuestion(items []QuestionRequest, id string) bool {
+	for i := range items {
+		if items[i].RequestID == id {
+			return true
+		}
+	}
+	return false
+}
+
+func removeQuestion(items []QuestionRequest, id string) []QuestionRequest {
+	for i := range items {
+		if items[i].RequestID == id {
+			copy(items[i:], items[i+1:])
+			items[len(items)-1] = QuestionRequest{}
+			return items[:len(items)-1]
+		}
+	}
+	return items
+}
+
+func cloneQuestions(items []QuestionRequest) []QuestionRequest {
+	if len(items) == 0 {
+		return nil
+	}
+	out := make([]QuestionRequest, len(items))
+	for i, q := range items {
+		out[i] = cloneQuestion(q)
+	}
+	return out
+}
+
+func cloneQuestion(q QuestionRequest) QuestionRequest {
+	clone := q
+	if len(q.Questions) > 0 {
+		clone.Questions = make([]QuestionItemState, len(q.Questions))
+		for i, item := range q.Questions {
+			clone.Questions[i] = QuestionItemState{
+				Question:    item.Question,
+				Options:     append([]string(nil), item.Options...),
+				Multiple:    item.Multiple,
+				Recommended: item.Recommended,
+			}
+		}
+	}
+	return clone
 }

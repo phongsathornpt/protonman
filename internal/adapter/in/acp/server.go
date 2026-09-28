@@ -15,6 +15,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/app"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/engine/toolcall"
+	"github.com/phongsathornpt/protonman/internal/feature/skill"
 )
 
 var ErrInvalidServer = errors.New("invalid ACP server")
@@ -51,6 +52,8 @@ type Server struct {
 	sessionService         *app.Sessions
 	memories               *app.Memories
 	agents                 app.Agents
+	skillRegistry          *skill.Registry
+	skillSaver             SkillSaver
 	mu                     sync.Mutex
 	writeMu                sync.Mutex
 	sessions               map[string]*Session
@@ -63,6 +66,9 @@ type Server struct {
 	// permissions routes client answers to blocked tool calls. It is non-nil
 	// only while Serve is running.
 	permissions *permissionBroker
+	// questions routes client answers to interactive clarifying questions. It is non-nil
+	// only while Serve is running.
+	questions *questionBroker
 }
 
 func New(service *toolcall.Service, registry tool.Registry, runner app.Conversation, opts ...Option) (*Server, error) {
@@ -109,15 +115,19 @@ func (s *Server) Serve(ctx context.Context, input io.Reader, output io.Writer) e
 	// client-to-server traffic, so tool calls blocked in ask mode are resolved
 	// by matching inbound responses to the requests this server emitted.
 	broker := newPermissionBroker(s)
+	qBroker := newQuestionBroker(s)
 	s.mu.Lock()
 	s.output = output
 	s.permissions = broker
+	s.questions = qBroker
 	s.mu.Unlock()
 	defer func() {
 		broker.close()
+		qBroker.close()
 		s.mu.Lock()
 		s.output = nil
 		s.permissions = nil
+		s.questions = nil
 		s.mu.Unlock()
 	}()
 
@@ -230,6 +240,9 @@ func decodeRequest(line []byte) (RPCRequest, *RPCResponse) {
 }
 
 func (s *Server) handleRequest(ctx context.Context, request RPCRequest, output io.Writer) error {
+	if result, handled, err := s.dispatchSessionConfig(ctx, request); handled {
+		return s.writeResponse(output, request.ID, result, nil, err)
+	}
 	if result, handled, err := s.dispatchSessionRuntime(ctx, request); handled {
 		return s.writeResponse(output, request.ID, result, nil, err)
 	}

@@ -104,9 +104,11 @@ type controller struct {
 	messageStreamBuffers    map[messageStreamKey]*messageStreamBuffer
 	messageSequence         map[string]uint64
 	permissionWait          map[string]chan string
+	questionWait            map[string]chan desktopstate.QuestionResponse
 	contextRefresh          *sessionRefreshTracker
 	memoryRefresh           *sessionRefreshTracker
 	runtimeRefresh          *sessionRefreshTracker
+	skillsRefresh           *sessionRefreshTracker
 	runtimeMutation         string
 
 	agentProfiles         app.ACPAgents
@@ -154,6 +156,7 @@ func newController(parent context.Context, onChange func(), agents app.ACPAgents
 		contextRefresh:          newSessionRefreshTracker(contextRefreshInterval),
 		memoryRefresh:           newSessionRefreshTracker(memoryRefreshInterval),
 		runtimeRefresh:          newSessionRefreshTracker(runtimeRefreshInterval),
+		skillsRefresh:           newSessionRefreshTracker(skillsRefreshInterval),
 		agentProfiles:           agents,
 		agentConfigOverridden:   strings.TrimSpace(os.Getenv(acpAgentsEnvironment)) != "",
 		agentError:              agentError,
@@ -427,6 +430,36 @@ func (c *controller) renameSession(sessionID, newTitle string) {
 	c.notify()
 }
 
+func (c *controller) toggleSkill(sessionID string, skillName string) {
+	sessionID = strings.TrimSpace(sessionID)
+	skillName = strings.TrimSpace(skillName)
+	if sessionID == "" || skillName == "" {
+		return
+	}
+	c.mu.Lock()
+	client, agentID := c.clientForSessionLocked(sessionID)
+	if client == nil || c.connections[agentID] != connectionConnected {
+		c.mu.Unlock()
+		return
+	}
+	c.mu.Unlock()
+
+	go func() {
+		var result struct {
+			SessionID string `json:"sessionId"`
+			Name      string `json:"name"`
+			Active    bool   `json:"active"`
+		}
+		if err := c.callInspector(client, "protonman/session/skills/toggle", map[string]any{
+			"sessionId": sessionID,
+			"name":      skillName,
+		}, &result); err != nil {
+			return
+		}
+		c.refreshSessionSkills(sessionID, true)
+	}()
+}
+
 func (c *controller) togglePinSession(sessionID string) {
 	sessionID = strings.TrimSpace(sessionID)
 	if sessionID == "" {
@@ -578,7 +611,14 @@ func (c *controller) superviseAgent(profile app.ACPAgentProfile) {
 			continue
 		}
 		client.SetRequestHandler(func(requestCtx context.Context, request acpclient.Request) (any, error) {
-			return c.handlePermissionRequestForAgent(profile.ID, client, requestCtx, request)
+			switch request.Method {
+			case requestPermissionMethod:
+				return c.handlePermissionRequestForAgent(profile.ID, client, requestCtx, request)
+			case requestQuestionMethod:
+				return c.handleQuestionRequestForAgent(profile.ID, client, requestCtx, request)
+			default:
+				return nil, fmt.Errorf("%w: %s", acpclient.ErrMethodNotHandled, request.Method)
+			}
 		})
 
 		c.setClient(profile.ID, client)

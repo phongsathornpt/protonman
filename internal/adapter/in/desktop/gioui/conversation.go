@@ -5,9 +5,11 @@ package gioui
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -780,7 +782,11 @@ func (c *controller) resumeKnownSessions(agentID string, client *acpclient.Clien
 }
 
 func (c *controller) sendPrompt(text string) {
-	text = strings.TrimSpace(text)
+	c.sendExpandedPrompt(ExpandedPrompt{DisplayText: text, TurnPrompt: text})
+}
+
+func (c *controller) sendExpandedPrompt(prompt ExpandedPrompt) {
+	text := strings.TrimSpace(prompt.DisplayText)
 	if text == "" {
 		return
 	}
@@ -804,7 +810,7 @@ func (c *controller) sendPrompt(text string) {
 		Item: desktopstate.TimelineItem{
 			Kind: desktopstate.TimelineUser,
 			ID:   c.nextTimelineIDLocked(sessionID, "prompt"),
-			Text: text,
+			Text: prompt.DisplayText,
 		},
 	})
 	c.statuses[agentID] = "Running · " + session.Title
@@ -812,10 +818,10 @@ func (c *controller) sendPrompt(text string) {
 	c.mu.Unlock()
 	c.notify()
 
-	go c.runPrompt(client, session, text, mcpServers)
+	go c.runPrompt(client, session, prompt, mcpServers)
 }
 
-func (c *controller) runPrompt(client *acpclient.Client, session desktopstate.SessionState, text string, mcpServers []map[string]any) {
+func (c *controller) runPrompt(client *acpclient.Client, session desktopstate.SessionState, prompt ExpandedPrompt, mcpServers []map[string]any) {
 	defer c.lockAgentSession(session.AgentID)()
 	params := map[string]any{"sessionId": session.ID, "cwd": session.Workspace}
 	if len(session.AdditionalDirectories) > 0 {
@@ -832,9 +838,23 @@ func (c *controller) runPrompt(client *acpclient.Client, session desktopstate.Se
 		StopReason string `json:"stopReason"`
 	}
 	if err == nil {
+		promptBlocks := []map[string]any{
+			{"type": "text", "text": prompt.TurnPrompt},
+		}
+		for _, imgPath := range prompt.ImagePaths {
+			imgBytes, readErr := os.ReadFile(imgPath)
+			if readErr != nil {
+				continue
+			}
+			promptBlocks = append(promptBlocks, map[string]any{
+				"type":     "image",
+				"mimeType": detectImageMIME(imgPath),
+				"data":     base64.StdEncoding.EncodeToString(imgBytes),
+			})
+		}
 		err = client.Call(c.ctx, "session/prompt", map[string]any{
 			"sessionId": session.ID,
-			"prompt":    []map[string]any{{"type": "text", "text": text}},
+			"prompt":    promptBlocks,
 		}, &result)
 	}
 

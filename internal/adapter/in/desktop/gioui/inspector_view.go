@@ -4,6 +4,7 @@ package gioui
 
 import (
 	"fmt"
+	"image/color"
 	"strings"
 	"unicode/utf8"
 
@@ -14,6 +15,7 @@ import (
 	"gioui.org/op/paint"
 	"gioui.org/unit"
 	"gioui.org/widget"
+	"gioui.org/widget/material"
 
 	desktopstate "github.com/phongsathornpt/protonman/internal/feature/desktop"
 )
@@ -64,16 +66,20 @@ func (s *shell) layoutInspector(gtx layout.Context, session desktopstate.Session
 
 	if s.mcpFormVisible {
 		if protonmanSession(session) {
-			s.activeInspectorTab = 2
+			s.activeInspectorTab = 3
 		} else {
 			s.activeInspectorTab = 1
 		}
 	} else if s.agentEditorVisible {
-		s.activeInspectorTab = 2
+		if protonmanSession(session) {
+			s.activeInspectorTab = 3
+		} else {
+			s.activeInspectorTab = 2
+		}
 	}
 
 	panelCount := s.inspectorPanelCount(session)
-	return s.roundedSurface(gtx, shapeNone, s.theme.surfaceContainerLow, func(gtx layout.Context) layout.Dimensions {
+	return s.roundedSurface(gtx, shapeNone, s.theme.surfaceDim, func(gtx layout.Context) layout.Dimensions {
 		return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 				return s.layoutInspectorHeader(gtx, session, snapshot)
@@ -100,6 +106,8 @@ func (s *shell) inspectorPanelCount(session desktopstate.SessionState) int {
 	case 1:
 		return 1
 	case 2:
+		return 1
+	case 3:
 		return 3
 	default:
 		return 2
@@ -107,7 +115,7 @@ func (s *shell) inspectorPanelCount(session desktopstate.SessionState) int {
 }
 
 func (s *shell) layoutInspectorHeader(gtx layout.Context, session desktopstate.SessionState, snapshot controllerSnapshot) layout.Dimensions {
-	return desktopInset{Top: 8, Bottom: 8, Left: 14, Right: 14}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+	return desktopInset{Top: 10, Bottom: 10, Left: 14, Right: 14}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 		return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 				status := "Agent connected"
@@ -116,7 +124,7 @@ func (s *shell) layoutInspectorHeader(gtx layout.Context, session desktopstate.S
 				}
 				return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
 					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-						return s.layoutLabel(gtx, "INSPECTOR", textLabelMedium, font.SemiBold, s.theme.onSurfaceVariant, 1)
+						return s.layoutLabel(gtx, "INSPECTOR", textLabelSmall, font.Bold, s.theme.onSurfaceVariant, 1)
 					}),
 					layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
 						return layout.Spacer{}.Layout(gtx)
@@ -136,43 +144,50 @@ func (s *shell) layoutInspectorHeader(gtx layout.Context, session desktopstate.S
 }
 
 func (s *shell) layoutInspectorTabBar(gtx layout.Context, session desktopstate.SessionState) layout.Dimensions {
-	tabs := []string{"Plan", "Memory", "Settings"}
+	tabs := []string{"Plan", "Memory", "Skills", "Settings"}
 	if !protonmanSession(session) {
 		tabs = []string{"Agent", "MCP", "Profiles"}
 	}
-	children := make([]layout.FlexChild, 0, len(tabs))
-	for i, tab := range tabs {
-		tabIdx := i
-		tabLabel := tab
-		active := s.activeInspectorTab == tabIdx
-		children = append(children, layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-			btn := &s.inspectorTabButtons[tabIdx]
-			if btn.Clicked(gtx) {
-				s.activeInspectorTab = tabIdx
-			}
-			bg := s.theme.surfaceContainerLow
-			fg := s.theme.onSurfaceVariant
-			if active {
-				bg = s.theme.primaryContainer
-				fg = s.theme.onPrimaryContainer
-			} else if btn.Hovered() {
-				bg = s.theme.surfaceContainer
-			}
-			gtx.Constraints.Min.Y = gtx.Dp(28)
-			return desktopUniformInset(2).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-				return btn.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-					return s.roundedSurface(gtx, shapeSmall, bg, func(gtx layout.Context) layout.Dimensions {
-						return desktopInset{Top: 4, Bottom: 4, Left: 6, Right: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-							return layout.Stack{Alignment: layout.Center}.Layout(gtx, layout.Stacked(func(gtx layout.Context) layout.Dimensions {
-								return s.layoutLabel(gtx, tabLabel, textLabelSmall, font.SemiBold, fg, 1)
-							}))
+	return s.roundedSurface(gtx, shapeMedium, s.theme.surfaceContainerLow, func(gtx layout.Context) layout.Dimensions {
+		return desktopUniformInset(2).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+			children := make([]layout.FlexChild, 0, len(tabs))
+			for i, tab := range tabs {
+				tabIdx := i
+				tabLabel := tab
+				active := s.activeInspectorTab == tabIdx
+				children = append(children, layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+					btn := &s.inspectorTabButtons[tabIdx]
+					if btn.Clicked(gtx) {
+						s.activeInspectorTab = tabIdx
+					}
+					bg := color.NRGBA{}
+					fg := s.theme.onSurfaceVariant
+					if active {
+						bg = s.theme.surface
+						fg = s.theme.onSurface
+					} else if btn.Hovered() {
+						bg = s.theme.surfaceContainerHigh
+						fg = s.theme.onSurface
+					}
+					gtx.Constraints.Min.Y = gtx.Dp(26)
+					return btn.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+						return s.roundedSurface(gtx, shapeSmall, bg, func(gtx layout.Context) layout.Dimensions {
+							return desktopInset{Top: 3, Bottom: 3, Left: 4, Right: 4}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+								return layout.Stack{Alignment: layout.Center}.Layout(gtx, layout.Stacked(func(gtx layout.Context) layout.Dimensions {
+									weight := font.Medium
+									if active {
+										weight = font.SemiBold
+									}
+									return s.layoutLabel(gtx, tabLabel, textLabelSmall, weight, fg, 1)
+								}))
+							})
 						})
 					})
-				})
-			})
-		}))
-	}
-	return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx, children...)
+				}))
+			}
+			return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx, children...)
+		})
+	})
 }
 
 func (s *shell) layoutInspectorPanel(gtx layout.Context, session desktopstate.SessionState, snapshot controllerSnapshot, index int) layout.Dimensions {
@@ -210,6 +225,10 @@ func (s *shell) layoutInspectorPanel(gtx layout.Context, session desktopstate.Se
 		content = func(gtx layout.Context) layout.Dimensions {
 			return s.layoutMemoryPanel(gtx, session)
 		}
+	case 2:
+		content = func(gtx layout.Context) layout.Dimensions {
+			return s.layoutSkillsPanel(gtx, session)
+		}
 	default:
 		switch index {
 		case 0:
@@ -231,9 +250,9 @@ func (s *shell) layoutInspectorPanel(gtx layout.Context, session desktopstate.Se
 
 func (s *shell) layoutInspectorPanelSurface(gtx layout.Context, content layout.Widget) layout.Dimensions {
 	return desktopUniformInset(6).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-		return s.roundedBorderSurface(gtx, shapeLarge, s.theme.surfaceContainerHigh, s.theme.outlineVariant, 1, func(gtx layout.Context) layout.Dimensions {
+		return s.roundedBorderSurface(gtx, shapeMedium, s.theme.surfaceContainer, s.theme.outlineVariant, 1, func(gtx layout.Context) layout.Dimensions {
 			semantic.DescriptionOp("Session inspector panel").Add(gtx.Ops)
-			return desktopInset{Top: 16, Bottom: 16, Left: 16, Right: 16}.Layout(gtx, content)
+			return desktopInset{Top: 14, Bottom: 14, Left: 14, Right: 14}.Layout(gtx, content)
 		})
 	})
 }
@@ -807,4 +826,167 @@ func compactInspectorText(value string, maxRunes int) string {
 		}
 	}
 	return value
+}
+
+func (s *shell) layoutSkillsPanel(gtx layout.Context, session desktopstate.SessionState) layout.Dimensions {
+	totalCount := len(session.Skills)
+	activeCount := 0
+	for _, sk := range session.Skills {
+		if sk.Active {
+			activeCount++
+		}
+	}
+	countLabel := fmt.Sprintf("%d/%d active", activeCount, totalCount)
+
+	children := []layout.FlexChild{
+		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
+				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+					return s.layoutPanelTitle(gtx, "Agent Skills")
+				}),
+				layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+					return layout.Spacer{}.Layout(gtx)
+				}),
+				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+					return s.roundedSurface(gtx, shapeSmall, s.theme.surfaceContainerLow, func(gtx layout.Context) layout.Dimensions {
+						return desktopInset{Top: 2, Bottom: 2, Left: 8, Right: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+							return s.layoutLabel(gtx, countLabel, textLabelSmall, font.Normal, s.theme.onSurfaceVariant, 1)
+						})
+					})
+				}),
+			)
+		}),
+		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			return desktopInset{Top: 8, Bottom: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+				return s.layoutSkillSearch(gtx)
+			})
+		}),
+	}
+
+	filter := strings.ToLower(strings.TrimSpace(s.skillFilterEditor.Text()))
+	var filtered []desktopstate.SkillState
+	for _, sk := range session.Skills {
+		if filter == "" || strings.Contains(strings.ToLower(sk.Name), filter) || strings.Contains(strings.ToLower(sk.Description), filter) {
+			filtered = append(filtered, sk)
+		}
+	}
+
+	if totalCount == 0 {
+		children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			return desktopInset{Top: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+				return s.roundedBorderSurface(gtx, shapeMedium, s.theme.surfaceContainerLowest, s.theme.outlineVariant, 1, func(gtx layout.Context) layout.Dimensions {
+					return desktopInset{Top: 10, Bottom: 10, Left: 12, Right: 12}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+						return s.layoutLabel(gtx, "No agent skills discovered. Add skills to ~/.protonman/skills/ or .protonman/skills/ in your workspace.", textBodyMedium, font.Normal, s.theme.onSurfaceVariant, 3)
+					})
+				})
+			})
+		}))
+	} else if len(filtered) == 0 {
+		children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			return desktopInset{Top: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+				return s.roundedBorderSurface(gtx, shapeMedium, s.theme.surfaceContainerLowest, s.theme.outlineVariant, 1, func(gtx layout.Context) layout.Dimensions {
+					return desktopInset{Top: 10, Bottom: 10, Left: 12, Right: 12}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+						return s.layoutLabel(gtx, "No skills match the current filter.", textBodyMedium, font.Normal, s.theme.onSurfaceVariant, 2)
+					})
+				})
+			})
+		}))
+	} else {
+		for _, sk := range filtered {
+			skillItem := sk
+			children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+				return s.layoutSkillCard(gtx, session.ID, skillItem)
+			}))
+		}
+	}
+
+	return layout.Flex{Axis: layout.Vertical}.Layout(gtx, children...)
+}
+
+func (s *shell) layoutSkillSearch(gtx layout.Context) layout.Dimensions {
+	gtx.Constraints.Min.Y = gtx.Dp(28)
+	return s.roundedBorderSurface(gtx, shapeSmall, s.theme.surfaceContainerHighest, s.theme.outlineVariant, 1, func(gtx layout.Context) layout.Dimensions {
+		return desktopInset{Top: 4, Bottom: 4, Left: 8, Right: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+			ed := material.Editor(s.theme.material, &s.skillFilterEditor, "Filter skills…")
+			ed.TextSize = textBodySmall
+			ed.Color = s.theme.onSurface
+			ed.HintColor = s.theme.onSurfaceVariant
+			return ed.Layout(gtx)
+		})
+	})
+}
+
+func (s *shell) layoutSkillCard(gtx layout.Context, sessionID string, skillItem desktopstate.SkillState) layout.Dimensions {
+	btn := s.skillToggleButtons[skillItem.Name]
+	if btn == nil {
+		btn = new(widget.Clickable)
+		s.skillToggleButtons[skillItem.Name] = btn
+	}
+	if btn.Clicked(gtx) {
+		s.onToggleSkill(sessionID, skillItem.Name)
+	}
+
+	toggleLabel := "Enable"
+	toggleBg := s.theme.surfaceContainerHigh
+	toggleFg := s.theme.onSurfaceVariant
+	if skillItem.Active {
+		toggleLabel = "Active"
+		toggleBg = s.theme.primaryContainer
+		toggleFg = s.theme.onPrimaryContainer
+	}
+
+	return desktopInset{Top: 3, Bottom: 3}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+		return s.roundedBorderSurface(gtx, shapeSmall, s.theme.surfaceContainerLowest, s.theme.outlineVariant, 1, func(gtx layout.Context) layout.Dimensions {
+			return desktopInset{Top: 8, Bottom: 8, Left: 10, Right: 10}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+				return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
+					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+						return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
+							layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+								return s.layoutLabel(gtx, skillItem.Name, textLabelMedium, font.SemiBold, s.theme.onSurface, 1)
+							}),
+							layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+								return desktopInset{Left: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+									return s.roundedSurface(gtx, shapeSmall, s.theme.surfaceContainerLow, func(gtx layout.Context) layout.Dimensions {
+										return desktopInset{Top: 1, Bottom: 1, Left: 6, Right: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+											return s.layoutLabel(gtx, strings.ToUpper(skillItem.Scope), textLabelSmall, font.Normal, s.theme.onSurfaceVariant, 1)
+										})
+									})
+								})
+							}),
+							layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+								return layout.Spacer{}.Layout(gtx)
+							}),
+							layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+								return btn.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+									return s.roundedSurface(gtx, shapeSmall, toggleBg, func(gtx layout.Context) layout.Dimensions {
+										return desktopInset{Top: 2, Bottom: 2, Left: 8, Right: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+											return s.layoutLabel(gtx, toggleLabel, textLabelSmall, font.SemiBold, toggleFg, 1)
+										})
+									})
+								})
+							}),
+						)
+					}),
+					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+						desc := strings.TrimSpace(skillItem.Description)
+						if desc == "" {
+							desc = "No description provided."
+						}
+						return desktopInset{Top: 4}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+							return s.layoutLabel(gtx, desc, textBodySmall, font.Normal, s.theme.onSurfaceVariant, 3)
+						})
+					}),
+					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+						if len(skillItem.Resources) == 0 {
+							return layout.Dimensions{}
+						}
+						resText := fmt.Sprintf("%d bundled resources", len(skillItem.Resources))
+						return desktopInset{Top: 4}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+							return s.layoutLabel(gtx, resText, textLabelSmall, font.Normal, s.theme.outline, 1)
+						})
+					}),
+				)
+			})
+		})
+	})
 }
