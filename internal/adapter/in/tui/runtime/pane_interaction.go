@@ -17,7 +17,7 @@ import (
 	questiontool "github.com/phongsathornpt/protonman/internal/adapter/out/tool/question"
 	"github.com/phongsathornpt/protonman/internal/feature/agent"
 	tododomain "github.com/phongsathornpt/protonman/internal/feature/todo"
-	"github.com/phongsathornpt/protonman/proton-sdk/domain"
+	"github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
 )
 
 type paneActionKind uint8

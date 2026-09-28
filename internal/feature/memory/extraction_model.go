@@ -7,8 +7,8 @@ import (
 	"io"
 	"strings"
 
-	"github.com/phongsathornpt/protonman/proton-sdk/domain"
-	"github.com/phongsathornpt/protonman/proton-sdk/port"
+	"github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
+	"github.com/phongsathornpt/protonman/pkg/proton-sdk/port"
 )
 
 const maxExtractionOutputBytes = 64 * 1024

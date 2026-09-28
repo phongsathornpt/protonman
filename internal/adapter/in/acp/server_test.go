@@ -21,7 +21,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/engine/toolcall"
 	applicationturn "github.com/phongsathornpt/protonman/internal/engine/turn"
 	"github.com/phongsathornpt/protonman/internal/feature/agent"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	domain "github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
 )
 
 func TestACPInitializeAndPrompt(t *testing.T) {
@@ -809,7 +809,7 @@ func TestACPReasoningSlashPersistsAndValidatesModelProfile(t *testing.T) {
 	if handled, _, err := sess.handleSlashCommand(context.Background(), model.Message{}, "/reasoning high", notify); !handled || err != nil {
 		t.Fatalf("/reasoning high = handled %v, err %v", handled, err)
 	}
-	if got := sess.ReasoningEffort(); got != sdk.ReasoningHigh {
+	if got := sess.ReasoningEffort(); got != domain.ReasoningHigh {
 		t.Fatalf("reasoning effort = %q, want high", got)
 	}
 	loaded, found, err := store.Load(context.Background(), "reasoning-session")
@@ -819,13 +819,13 @@ func TestACPReasoningSlashPersistsAndValidatesModelProfile(t *testing.T) {
 	if handled, _, err := sess.handleSlashCommand(context.Background(), model.Message{}, "/reasoning xhigh", notify); !handled || err == nil {
 		t.Fatalf("/reasoning xhigh = handled %v, err %v", handled, err)
 	}
-	if got := sess.ReasoningEffort(); got != sdk.ReasoningHigh {
+	if got := sess.ReasoningEffort(); got != domain.ReasoningHigh {
 		t.Fatalf("unsupported override changed effort to %q", got)
 	}
 	if handled, _, err := sess.handleSlashCommand(context.Background(), model.Message{}, "/reasoning auto", notify); !handled || err != nil {
 		t.Fatalf("/reasoning auto = handled %v, err %v", handled, err)
 	}
-	if got := sess.ReasoningEffort(); got != sdk.ReasoningDefault {
+	if got := sess.ReasoningEffort(); got != domain.ReasoningDefault {
 		t.Fatalf("reasoning effort = %q, want auto", got)
 	}
 }
@@ -845,7 +845,7 @@ func TestACPSessionLoadRestoresReasoningEffort(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := sess.ReasoningEffort(); got != sdk.ReasoningHigh {
+	if got := sess.ReasoningEffort(); got != domain.ReasoningHigh {
 		t.Fatalf("restored reasoning = %q, want high", got)
 	}
 }

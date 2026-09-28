@@ -4,12 +4,12 @@ import (
 	"testing"
 
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	domain "github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
 )
 
 func TestCompatibleReasoningFallsBackToDefault(t *testing.T) {
 	md := model.RemoteModel{ID: "plain-model"}
-	if got := CompatibleReasoning("custom", md, sdk.ReasoningHigh); got != sdk.ReasoningDefault {
+	if got := CompatibleReasoning("custom", md, domain.ReasoningHigh); got != domain.ReasoningDefault {
 		t.Fatalf("reasoning = %q, want default", got)
 	}
 }

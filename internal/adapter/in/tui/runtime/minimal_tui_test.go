@@ -8,7 +8,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	domain "github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
 )
 
 func TestMinimalIdleChromeUsesContextFooter(t *testing.T) {
@@ -40,7 +40,7 @@ func TestIdleFooterExposesComposerActions(t *testing.T) {
 func TestCompactWideFooterShowsModelContext(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	m.activeModel = "gemini-3.8-flash"
-	m.reasoningEffort = sdk.ReasoningHigh
+	m.reasoningEffort = domain.ReasoningHigh
 	m.resize(110, 9)
 
 	footer := ansi.Strip(m.footerView())
@@ -54,7 +54,7 @@ func TestCompactWideFooterShowsModelContext(t *testing.T) {
 func TestPlanModeKeepsIdleContextFooter(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	m.activeModel = "glm-5.3-flash"
-	m.reasoningEffort = sdk.ReasoningDefault
+	m.reasoningEffort = domain.ReasoningDefault
 	m.resize(80, 24)
 	m.setPlanEnabled(true)
 
@@ -206,7 +206,7 @@ func TestMinimalComposerKeepsContextInFooter(t *testing.T) {
 	m.runner = fakeConversation{}
 	m.panes.bottom.setHasRunner(true)
 	m.activeModel = "glm-5.3-flash"
-	m.reasoningEffort = sdk.ReasoningHigh
+	m.reasoningEffort = domain.ReasoningHigh
 	m.resize(80, 24)
 	prompt := ansi.Strip(m.promptView())
 	if !strings.Contains(prompt, "> ") || strings.Contains(prompt, "Message Protonman") || strings.Contains(prompt, "glm-5.3-flash") {
@@ -223,7 +223,7 @@ func TestMinimalComposerKeepsContextInFooter(t *testing.T) {
 func TestMinimalContextFooterFitsNarrowTerminal(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	m.activeModel = "provider/a-very-long-model-name"
-	m.reasoningEffort = sdk.ReasoningMedium
+	m.reasoningEffort = domain.ReasoningMedium
 	m.resize(24, 12)
 	if got := lipgloss.Width(m.footerView()); got > 22 {
 		t.Fatalf("footer width=%d exceeds available width: %q", got, m.footerView())

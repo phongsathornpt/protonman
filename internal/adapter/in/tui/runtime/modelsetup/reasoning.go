@@ -3,7 +3,7 @@ package modelsetup
 import (
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/reasoningpolicy"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
-	"github.com/phongsathornpt/protonman/proton-sdk/domain"
+	"github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
 )
 
 func ReasoningChoices(providerName string, md model.RemoteModel) []domain.ReasoningEffort {

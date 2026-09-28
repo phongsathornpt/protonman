@@ -70,6 +70,12 @@ func Run(ctx context.Context, agents application.ACPAgents, mcpIntegrations appl
 	}
 }
 
+// Main hands over control of the main thread to the platform event loop.
+// On macOS and mobile platforms, it must be called from the main goroutine.
+func Main() {
+	app.Main()
+}
+
 func normalizedThemeMode(value string) string {
 	value = strings.ToLower(strings.TrimSpace(value))
 	if value == "dark" {

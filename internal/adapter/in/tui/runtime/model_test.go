@@ -22,7 +22,7 @@ import (
 	applicationturn "github.com/phongsathornpt/protonman/internal/engine/turn"
 	"github.com/phongsathornpt/protonman/internal/feature/agent"
 	tododomain "github.com/phongsathornpt/protonman/internal/feature/todo"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	domain "github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
 	"strings"
 	"testing"
 	"time"
@@ -970,7 +970,7 @@ func TestModelSetupReconcilesIncompatibleReasoningEffort(t *testing.T) {
 	bModel := newTestSkillsModel(t, 1)
 	bModel.activeProvider = "openai"
 	bModel.activeModel = "o3-mini"
-	bModel.reasoningEffort = sdk.ReasoningHigh
+	bModel.reasoningEffort = domain.ReasoningHigh
 	bModel.providers = map[string]config.ProviderConfig{
 		"openai": {Name: "openai", BaseURL: "https://api.openai.com/v1", APIKey: "test-key"},
 	}
@@ -991,7 +991,7 @@ func TestModelSetupReconcilesIncompatibleReasoningEffort(t *testing.T) {
 	if bModel.activeModel != "gpt-4o" {
 		t.Fatalf("activeModel = %q, want gpt-4o", bModel.activeModel)
 	}
-	if bModel.reasoningEffort != sdk.ReasoningDefault {
+	if bModel.reasoningEffort != domain.ReasoningDefault {
 		t.Fatalf("reasoningEffort was not reset to auto: got %q", bModel.reasoningEffort)
 	}
 }
@@ -1365,7 +1365,7 @@ func TestReasoningCompatibilityFallbackPreservesAndRestoresPreference(t *testing
 	m := newTestSkillsModel(t, 1)
 	m.activeProvider = "custom"
 	m.projectConfigProvenance = map[string]config.ValueSource{config.FieldAgentReasoningEffort: config.SourceUser}
-	m.applyReasoningPreference(sdk.ReasoningHigh, reasoningPreferenceConfig)
+	m.applyReasoningPreference(domain.ReasoningHigh, reasoningPreferenceConfig)
 
 	no := false
 	m.activeModel = "plain-model"
@@ -1373,17 +1373,17 @@ func TestReasoningCompatibilityFallbackPreservesAndRestoresPreference(t *testing
 	if !m.reconcileReasoningForActiveModel() {
 		t.Fatal("unsupported model did not trigger compatibility fallback")
 	}
-	if m.reasoningEffort != sdk.ReasoningDefault || m.reasoningPreference != sdk.ReasoningHigh {
+	if m.reasoningEffort != domain.ReasoningDefault || m.reasoningPreference != domain.ReasoningHigh {
 		t.Fatalf("fallback effective=%q preference=%q, want auto/high", m.reasoningEffort, m.reasoningPreference)
 	}
 
 	yes := true
 	m.activeModel = "reasoning-model"
-	m.modelCatalogs.Set("custom", []model.RemoteModel{{ID: "reasoning-model", Reasoning: &modelprofile.CatalogReasoning{Supported: &yes, Levels: []sdk.ReasoningEffort{sdk.ReasoningHigh}}}})
+	m.modelCatalogs.Set("custom", []model.RemoteModel{{ID: "reasoning-model", Reasoning: &modelprofile.CatalogReasoning{Supported: &yes, Levels: []domain.ReasoningEffort{domain.ReasoningHigh}}}})
 	if !m.reconcileReasoningForActiveModel() {
 		t.Fatal("compatible model did not restore requested reasoning")
 	}
-	if m.reasoningEffort != sdk.ReasoningHigh || m.reasoningCompatibilityFallback {
+	if m.reasoningEffort != domain.ReasoningHigh || m.reasoningCompatibilityFallback {
 		t.Fatalf("restored effective=%q fallback=%v, want high/false", m.reasoningEffort, m.reasoningCompatibilityFallback)
 	}
 }
@@ -1436,12 +1436,12 @@ func TestUnifiedModelSetupAppliesModelAndThinkingTogether(t *testing.T) {
 	if !ok {
 		t.Fatalf("apply message = %T, want modelSetupAppliedMsg", cmd())
 	}
-	if msg.modelID != "gemini-3.8-flash" || msg.reasoning != sdk.ReasoningHigh {
+	if msg.modelID != "gemini-3.8-flash" || msg.reasoning != domain.ReasoningHigh {
 		t.Fatalf("selection = %q/%q, want gemini-3.8-flash/high", msg.modelID, msg.reasoning)
 	}
 	updated, _ = m.Update(msg)
 	m = updated.(*bubbleModel)
-	if m.activeModel != "gemini-3.8-flash" || m.reasoningEffort != sdk.ReasoningHigh {
+	if m.activeModel != "gemini-3.8-flash" || m.reasoningEffort != domain.ReasoningHigh {
 		t.Fatalf("effective selection = %q/%q", m.activeModel, m.reasoningEffort)
 	}
 }
@@ -1487,7 +1487,7 @@ func TestModelSetupMuseSparkUsesFamilyReasoningLevels(t *testing.T) {
 	m.activeModel = "muse-spark-1.3-contributor-free"
 	m.modelCatalogs.Set("opencode", []domainmodel.RemoteModel{{ID: m.activeModel, Name: "Muse Spark 1.3 Contributor"}})
 	view := newModelSetupPaneView(m)
-	want := []sdk.ReasoningEffort{sdk.ReasoningDefault, sdk.ReasoningMinimal, sdk.ReasoningLow, sdk.ReasoningMedium, sdk.ReasoningHigh, sdk.ReasoningXHigh, sdk.ReasoningMax}
+	want := []domain.ReasoningEffort{domain.ReasoningDefault, domain.ReasoningMinimal, domain.ReasoningLow, domain.ReasoningMedium, domain.ReasoningHigh, domain.ReasoningXHigh, domain.ReasoningMax}
 	if len(view.reasoningChoices) != len(want) {
 		t.Fatalf("muse reasoning choices = %v, want %v", view.reasoningChoices, want)
 	}
@@ -1497,7 +1497,7 @@ func TestModelSetupMuseSparkUsesFamilyReasoningLevels(t *testing.T) {
 		}
 	}
 	profile := domainmodel.ResolveModelProfile("opencode", m.activeModel, nil)
-	if profile.Reasoning.Default != sdk.ReasoningHigh {
+	if profile.Reasoning.Default != domain.ReasoningHigh {
 		t.Fatalf("muse default reasoning = %q, want high", profile.Reasoning.Default)
 	}
 	rendered := testPlain(view.Render(newPaneRenderContext(m)))
@@ -1594,7 +1594,7 @@ func TestModelSetupGLM53FamilyExposesNativeEffortLevels(t *testing.T) {
 	m.activeModel = "glm-5.3-flash"
 	m.modelCatalogs.Set("protonman", []domainmodel.RemoteModel{{ID: m.activeModel}})
 	view := newModelSetupPaneView(m)
-	want := []sdk.ReasoningEffort{sdk.ReasoningDefault, sdk.ReasoningLow, sdk.ReasoningHigh, sdk.ReasoningMax}
+	want := []domain.ReasoningEffort{domain.ReasoningDefault, domain.ReasoningLow, domain.ReasoningHigh, domain.ReasoningMax}
 	if got := view.reasoningChoices; len(got) != len(want) {
 		t.Fatalf("GLM-5.3 choices = %#v, want %#v", got, want)
 	} else {
@@ -1622,7 +1622,7 @@ func TestModelSetupQwen38FlashExposesNativeEffortLevels(t *testing.T) {
 	m.activeModel = "qwen3.8-flash"
 	m.modelCatalogs.Set("protonman", []domainmodel.RemoteModel{{ID: m.activeModel}})
 	view := newModelSetupPaneView(m)
-	want := []sdk.ReasoningEffort{sdk.ReasoningDefault, sdk.ReasoningNone, sdk.ReasoningLow, sdk.ReasoningMedium, sdk.ReasoningXHigh}
+	want := []domain.ReasoningEffort{domain.ReasoningDefault, domain.ReasoningNone, domain.ReasoningLow, domain.ReasoningMedium, domain.ReasoningXHigh}
 	if got := view.reasoningChoices; len(got) != len(want) {
 		t.Fatalf("Qwen3.8 Flash choices = %#v, want %#v", got, want)
 	} else {
@@ -1641,7 +1641,7 @@ func TestModelSetupMiniMaxM3ExposesThinkingToggle(t *testing.T) {
 	m.activeModel = "minimax-m3"
 	m.modelCatalogs.Set("protonman", []domainmodel.RemoteModel{{ID: m.activeModel}})
 	view := newModelSetupPaneView(m)
-	if got := view.reasoningChoices; len(got) != 2 || got[0] != sdk.ReasoningDefault || got[1] != sdk.ReasoningNone {
+	if got := view.reasoningChoices; len(got) != 2 || got[0] != domain.ReasoningDefault || got[1] != domain.ReasoningNone {
 		t.Fatalf("MiniMax M3 choices = %#v, want auto/none", got)
 	}
 }
@@ -1653,7 +1653,7 @@ func TestModelSetupDeepSeekV4FamilyExposesNativeEffortLevels(t *testing.T) {
 	m.activeModel = "deepseek-v4-flash-free"
 	m.modelCatalogs.Set("protonman", []domainmodel.RemoteModel{{ID: m.activeModel}})
 	view := newModelSetupPaneView(m)
-	want := []sdk.ReasoningEffort{sdk.ReasoningDefault, sdk.ReasoningNone, sdk.ReasoningLow, sdk.ReasoningHigh, sdk.ReasoningMax}
+	want := []domain.ReasoningEffort{domain.ReasoningDefault, domain.ReasoningNone, domain.ReasoningLow, domain.ReasoningHigh, domain.ReasoningMax}
 	if got := view.reasoningChoices; len(got) != len(want) {
 		t.Fatalf("DeepSeek V4 choices = %#v, want %#v", got, want)
 	} else {
@@ -1678,7 +1678,7 @@ func TestModelSetupUnknownFamilyExposesAutoOnly(t *testing.T) {
 	m.activeModel = "future-unknown-model"
 	m.modelCatalogs.Set("opencode", []domainmodel.RemoteModel{{ID: m.activeModel}})
 	view := newModelSetupPaneView(m)
-	if len(view.reasoningChoices) != 1 || view.reasoningChoices[0] != sdk.ReasoningDefault {
+	if len(view.reasoningChoices) != 1 || view.reasoningChoices[0] != domain.ReasoningDefault {
 		t.Fatalf("unknown family choices = %#v, want auto only", view.reasoningChoices)
 	}
 	plain := testPlain(view.Render(newPaneRenderContext(m)))
@@ -1693,9 +1693,9 @@ func TestModelSetupCatalogReasoningOverridesUnknownFamily(t *testing.T) {
 	m.activeProvider = "opencode"
 	m.activeModel = "future-reasoner"
 	yes := true
-	m.modelCatalogs.Set("opencode", []domainmodel.RemoteModel{{ID: m.activeModel, Reasoning: &modelprofile.CatalogReasoning{Supported: &yes, Levels: []sdk.ReasoningEffort{sdk.ReasoningLow, sdk.ReasoningHigh}}}})
+	m.modelCatalogs.Set("opencode", []domainmodel.RemoteModel{{ID: m.activeModel, Reasoning: &modelprofile.CatalogReasoning{Supported: &yes, Levels: []domain.ReasoningEffort{domain.ReasoningLow, domain.ReasoningHigh}}}})
 	view := newModelSetupPaneView(m)
-	if got := view.reasoningChoices; len(got) != 3 || got[0] != sdk.ReasoningDefault || got[1] != sdk.ReasoningLow || got[2] != sdk.ReasoningHigh {
+	if got := view.reasoningChoices; len(got) != 3 || got[0] != domain.ReasoningDefault || got[1] != domain.ReasoningLow || got[2] != domain.ReasoningHigh {
 		t.Fatalf("catalog reasoning choices = %#v", got)
 	}
 	plain := testPlain(view.Render(newPaneRenderContext(m)))
@@ -1718,9 +1718,9 @@ func TestModelSetupHelpUsesWholeResponsiveLabels(t *testing.T) {
 
 func TestEffortLayoutAlignsLabelsWithTrackSlots(t *testing.T) {
 	view := &modelSetupPaneView{
-		reasoningChoices: []sdk.ReasoningEffort{
-			sdk.ReasoningDefault, sdk.ReasoningMinimal, sdk.ReasoningLow,
-			sdk.ReasoningMedium, sdk.ReasoningHigh, sdk.ReasoningXHigh,
+		reasoningChoices: []domain.ReasoningEffort{
+			domain.ReasoningDefault, domain.ReasoningMinimal, domain.ReasoningLow,
+			domain.ReasoningMedium, domain.ReasoningHigh, domain.ReasoningXHigh,
 		},
 		reasoningIndex: 5,
 	}

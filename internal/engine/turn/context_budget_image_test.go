@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/phongsathornpt/protonman/internal/core/modelprofile"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	domain "github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
 )
 
 func TestEstimateRequestTokensDoesNotChargeImageBase64AsText(t *testing.T) {
@@ -24,10 +24,10 @@ func TestEstimateRequestTokensDoesNotChargeImageBase64AsText(t *testing.T) {
 	encoded.Write(make([]byte, 1024*1024))
 	data := base64.StdEncoding.EncodeToString(encoded.Bytes())
 
-	request := sdk.Request{Messages: []sdk.Message{{
-		Role: sdk.RoleUser,
-		Parts: []sdk.ContentPart{{
-			Type:     sdk.ContentPartImage,
+	request := domain.Request{Messages: []domain.Message{{
+		Role: domain.RoleUser,
+		Parts: []domain.ContentPart{{
+			Type:     domain.ContentPartImage,
 			MIMEType: "image/png",
 			Data:     data,
 		}},

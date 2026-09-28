@@ -9,7 +9,8 @@ import (
 	"testing"
 
 	"github.com/phongsathornpt/protonman/internal/core/tool"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	domain "github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
+	usecase "github.com/phongsathornpt/protonman/pkg/proton-sdk/usecase"
 )
 
 func TestEditFacadeDispatchesActions(t *testing.T) {
@@ -65,7 +66,7 @@ func TestEditFacadeDispatchesActions(t *testing.T) {
 
 func TestEditSchemaRequiresActionSpecificArguments(t *testing.T) {
 	definition := NewEdit(nil, nil).Definition()
-	validator, err := sdk.CompileToolInputValidator(sdk.Tool{
+	validator, err := usecase.CompileToolInputValidator(domain.Tool{
 		Name: definition.Name, Description: definition.Description, InputSchema: definition.InputSchema,
 	})
 	if err != nil {
@@ -101,7 +102,7 @@ func TestEditAliasesNormalizeBeforeActionDispatch(t *testing.T) {
 	definition := handler.Definition()
 	call := newJSONCall(t, "edit-alias", "edit", map[string]any{"action": "write", "path": "alias.txt", "content": "ok"})
 	call.Arguments = tool.NormalizeArgumentsForHandler(handler, definition, call.Arguments)
-	validator, err := sdk.CompileToolInputValidator(sdk.Tool{Name: definition.Name, Description: definition.Description, InputSchema: definition.InputSchema})
+	validator, err := usecase.CompileToolInputValidator(domain.Tool{Name: definition.Name, Description: definition.Description, InputSchema: definition.InputSchema})
 	if err != nil {
 		t.Fatal(err)
 	}

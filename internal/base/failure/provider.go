@@ -4,7 +4,7 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/phongsathornpt/protonman/proton-sdk/domain"
+	"github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
 )
 
 // Classified describes a normalized application failure without exposing provider-specific enums.

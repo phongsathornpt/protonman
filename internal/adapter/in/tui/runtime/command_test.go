@@ -19,7 +19,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/feature/skill"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	domain "github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
 )
 
 func TestSlashDropdownFiltersAndTabAccepts(t *testing.T) {
@@ -84,7 +84,7 @@ func TestClearCommandResetsConversationButPreservesSessionControls(t *testing.T)
 	m.activeGoal = "finish compaction"
 	m.activeProvider = "opencode"
 	m.activeModel = "model-x"
-	m.reasoningEffort = sdk.ReasoningHigh
+	m.reasoningEffort = domain.ReasoningHigh
 	m.conversation.SetMessages([]model.Message{{Role: model.RoleUser, Content: "old context"}})
 	m.conversation.Enqueue("queued prompt")
 	m.conversationViewport.tailOnly = true
@@ -97,7 +97,7 @@ func TestClearCommandResetsConversationButPreservesSessionControls(t *testing.T)
 	if len(m.conversation.Messages()) != 0 || m.conversation.QueueLen() != 0 {
 		t.Fatalf("conversation state not cleared: messages=%d queue=%d", len(m.conversation.Messages()), m.conversation.QueueLen())
 	}
-	if m.activeGoal != "finish compaction" || m.activeProvider != "opencode" || m.activeModel != "model-x" || m.reasoningEffort != sdk.ReasoningHigh {
+	if m.activeGoal != "finish compaction" || m.activeProvider != "opencode" || m.activeModel != "model-x" || m.reasoningEffort != domain.ReasoningHigh {
 		t.Fatalf("session controls changed: goal=%q provider=%q model=%q reasoning=%q", m.activeGoal, m.activeProvider, m.activeModel, m.reasoningEffort)
 	}
 	if m.conversationViewport.tailOnly || m.conversationViewport.staleTail || len(m.conversationViewport.lineAnchors) != 0 || !m.conversationViewport.following() {
@@ -153,14 +153,14 @@ func TestUnifiedModelSetupAdjustsThinkingBeforeApply(t *testing.T) {
 	m.modelCatalogs.Set("protonman", []model.RemoteModel{{ID: "gemini-3.8-flash", Name: "Gemini 3.8 Flash"}})
 	m.executeCommand("/model")
 	view := m.panes.bottom.find(modelSetupViewID).(*modelSetupPaneView)
-	if got := view.selectedReasoning(); got != sdk.ReasoningDefault {
+	if got := view.selectedReasoning(); got != domain.ReasoningDefault {
 		t.Fatalf("initial thinking = %q, want auto", got)
 	}
 	handled, _ := m.handlePaneKey(testKey(tea.KeyRight))
-	if !handled || view.selectedReasoning() != sdk.ReasoningLow {
+	if !handled || view.selectedReasoning() != domain.ReasoningLow {
 		t.Fatalf("right did not move thinking to low: %q", view.selectedReasoning())
 	}
-	if m.reasoningEffort != sdk.ReasoningDefault {
+	if m.reasoningEffort != domain.ReasoningDefault {
 		t.Fatalf("pending setup mutated runtime before apply: %q", m.reasoningEffort)
 	}
 }
@@ -191,7 +191,7 @@ func TestInfoViewKeepsIdleChromeEmpty(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, nil)
 	m.resize(100, 30)
 	m.activeModel = "claude-3-7-sonnet"
-	m.reasoningEffort = sdk.ReasoningHigh
+	m.reasoningEffort = domain.ReasoningHigh
 	if got := m.infoView(); got != "" {
 		t.Fatalf("idle infoView = %q, want empty minimal chrome", got)
 	}
@@ -891,8 +891,8 @@ func TestMultilineTextareaDynamicExpansion(t *testing.T) {
 	model.panes.bottom.prompt().SetValue("1\n2\n3\n4\n5\n6\n7\n8")
 	model.requestRelayout()
 	model.reconcileLayout()
-	if model.panes.bottom.prompt().Height() != 6 {
-		t.Fatalf("expected height 6 for 8 lines capped at max height, got %d", model.panes.bottom.prompt().Height())
+	if model.panes.bottom.prompt().Height() != 8 {
+		t.Fatalf("expected height 8 for 8 lines, got %d", model.panes.bottom.prompt().Height())
 	}
 }
 

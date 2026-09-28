@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/phongsathornpt/protonman/internal/core/tool"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	domain "github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
 )
 
 func TestToolMessagesForExecutionsVisionGating(t *testing.T) {
@@ -36,10 +36,10 @@ func TestToolMessagesForExecutionsVisionGating(t *testing.T) {
 	if len(withVision[0].Parts) != 2 {
 		t.Fatalf("expected 2 parts (text + image), got %#v", withVision[0].Parts)
 	}
-	if withVision[0].Parts[0].Type != sdk.ContentPartText {
+	if withVision[0].Parts[0].Type != domain.ContentPartText {
 		t.Fatalf("expected part 0 to be text, got %#v", withVision[0].Parts[0])
 	}
-	if withVision[0].Parts[1].Type != sdk.ContentPartImage || withVision[0].Parts[1].MIMEType != "image/png" || withVision[0].Parts[1].Data != "iVBORw0KGgo=" {
+	if withVision[0].Parts[1].Type != domain.ContentPartImage || withVision[0].Parts[1].MIMEType != "image/png" || withVision[0].Parts[1].Data != "iVBORw0KGgo=" {
 		t.Fatalf("expected part 1 to be image, got %#v", withVision[0].Parts[1])
 	}
 

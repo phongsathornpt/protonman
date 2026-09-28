@@ -3,7 +3,7 @@ package modelconfig
 import (
 	"testing"
 
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	domain "github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
 )
 
 func TestModelConfigTypes(t *testing.T) {
@@ -17,8 +17,8 @@ func TestModelConfigTypes(t *testing.T) {
 		t.Errorf("Selection struct fields mismatch: %+v", selection)
 	}
 
-	route := SubagentRoute{Provider: "openrouter", Model: "openai/gpt-4o", ReasoningEffort: sdk.ReasoningHigh}
-	if route.Model != "openai/gpt-4o" || route.ReasoningEffort != sdk.ReasoningHigh {
+	route := SubagentRoute{Provider: "openrouter", Model: "openai/gpt-4o", ReasoningEffort: domain.ReasoningHigh}
+	if route.Model != "openai/gpt-4o" || route.ReasoningEffort != domain.ReasoningHigh {
 		t.Errorf("SubagentRoute struct fields mismatch: %+v", route)
 	}
 }

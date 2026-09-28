@@ -3,7 +3,7 @@ package modelsetup
 import (
 	"testing"
 
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	domain "github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
 )
 
 func TestActiveProviderNameFallsBackToOpenCode(t *testing.T) {
@@ -13,16 +13,16 @@ func TestActiveProviderNameFallsBackToOpenCode(t *testing.T) {
 }
 
 func TestReasoningIndexMatchesDesiredEffort(t *testing.T) {
-	choices := []sdk.ReasoningEffort{sdk.ReasoningDefault, sdk.ReasoningLow, sdk.ReasoningHigh}
-	if got := ReasoningIndex(choices, sdk.ReasoningHigh); got != 2 {
+	choices := []domain.ReasoningEffort{domain.ReasoningDefault, domain.ReasoningLow, domain.ReasoningHigh}
+	if got := ReasoningIndex(choices, domain.ReasoningHigh); got != 2 {
 		t.Fatalf("reasoning index = %d, want 2", got)
 	}
 }
 
 func TestMoveReasoningWrapsSelection(t *testing.T) {
-	choices := []sdk.ReasoningEffort{sdk.ReasoningDefault, sdk.ReasoningLow, sdk.ReasoningHigh}
+	choices := []domain.ReasoningEffort{domain.ReasoningDefault, domain.ReasoningLow, domain.ReasoningHigh}
 	index, effort := MoveReasoning(choices, 0, -1)
-	if index != 2 || effort != sdk.ReasoningHigh {
+	if index != 2 || effort != domain.ReasoningHigh {
 		t.Fatalf("move = %d/%q, want 2/high", index, effort)
 	}
 }

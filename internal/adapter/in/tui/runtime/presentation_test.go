@@ -19,7 +19,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	applicationturn "github.com/phongsathornpt/protonman/internal/engine/turn"
 	tododomain "github.com/phongsathornpt/protonman/internal/feature/todo"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	domain "github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
 	"os"
 	"path/filepath"
 	"strings"
@@ -1504,7 +1504,7 @@ func TestPromptPlaceholderReflectsRunnerState(t *testing.T) {
 func TestIdleFooterShowsInteractionContextOnly(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	m.activeModel = "nemotron-3.5-lightning-free"
-	m.reasoningEffort = sdk.ReasoningDefault
+	m.reasoningEffort = domain.ReasoningDefault
 	m.resize(80, 24)
 	footer := ansi.Strip(m.idleContextFooter())
 	for _, want := range []string{"? for shortcuts", "auto", "ask"} {
@@ -1519,7 +1519,7 @@ func TestIdleFooterShowsInteractionContextOnly(t *testing.T) {
 
 func TestIdleFooterKeepsShortcutHintInAlwaysApprove(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAlwaysApprove, emptyTodoItems())
-	m.reasoningEffort = sdk.ReasoningDefault
+	m.reasoningEffort = domain.ReasoningDefault
 	m.resize(72, 24)
 	footer := ansi.Strip(m.idleContextFooter())
 	if !strings.Contains(footer, "? for shortcuts") || !strings.Contains(footer, "auto") {
@@ -1539,7 +1539,7 @@ func TestPaneKeyboardHelpStaysSingleLine(t *testing.T) {
 	}
 }
 
-func modelRetryStatus(retry sdk.RetryEvent, now time.Time) (string, string, bool) {
+func modelRetryStatus(retry domain.RetryEvent, now time.Time) (string, string, bool) {
 	activity, metaParts, ok := runtimeui.RetryStatus(retry, now)
 	if !ok {
 		return "", "", false
@@ -1553,7 +1553,7 @@ func modelRetryStatus(retry sdk.RetryEvent, now time.Time) (string, string, bool
 
 func TestModelRetryStatusCountsDownFromRetryDeadline(t *testing.T) {
 	now := time.Now()
-	retry := sdk.RetryEvent{Phase: sdk.RetryPhaseWaiting, Reason: "incomplete_stream", Attempt: 1, MaxRetries: 2, RetryAt: now.Add(2500 * time.Millisecond)}
+	retry := domain.RetryEvent{Phase: domain.RetryPhaseWaiting, Reason: "incomplete_stream", Attempt: 1, MaxRetries: 2, RetryAt: now.Add(2500 * time.Millisecond)}
 	activity, meta, ok := modelRetryStatus(retry, now)
 	if !ok || activity != "retrying in 3s" {
 		t.Fatalf("activity=%q ok=%v, want countdown", activity, ok)
@@ -1569,7 +1569,7 @@ func TestModelRetryStatusCountsDownFromRetryDeadline(t *testing.T) {
 
 func TestModelRetryStatusShowsCooldownAfterFirstRetry(t *testing.T) {
 	now := time.Now()
-	retry := sdk.RetryEvent{Phase: sdk.RetryPhaseCooldown, Reason: "first_event_timeout", Attempt: 2, MaxRetries: 2, RetryAt: now.Add(2 * time.Second)}
+	retry := domain.RetryEvent{Phase: domain.RetryPhaseCooldown, Reason: "first_event_timeout", Attempt: 2, MaxRetries: 2, RetryAt: now.Add(2 * time.Second)}
 	activity, meta, ok := modelRetryStatus(retry, now)
 	if !ok || activity != "cooling down 2s" {
 		t.Fatalf("activity=%q ok=%v, want cooldown countdown", activity, ok)

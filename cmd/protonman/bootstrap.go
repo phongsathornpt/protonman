@@ -36,7 +36,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/platform/appdirs"
 	"github.com/phongsathornpt/protonman/internal/platform/checkpoint"
 	"github.com/phongsathornpt/protonman/internal/platform/sandbox"
-	"github.com/phongsathornpt/protonman/proton-sdk/domain"
+	"github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
 )
 
 type appRuntime struct {

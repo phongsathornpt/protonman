@@ -9,7 +9,8 @@ import (
 	"time"
 
 	"github.com/phongsathornpt/protonman/internal/base/runtimepolicy"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	domain "github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
+	port "github.com/phongsathornpt/protonman/pkg/proton-sdk/port"
 )
 
 type lowConcurrencyBlockingModel struct {
@@ -21,10 +22,10 @@ type lowConcurrencyBlockingModel struct {
 
 func (*lowConcurrencyBlockingModel) Provider() string { return DefaultOpenCodeName }
 func (*lowConcurrencyBlockingModel) ModelID() string  { return "test-free" }
-func (*lowConcurrencyBlockingModel) Capabilities() sdk.ModelCapabilities {
-	return sdk.ModelCapabilities{Streaming: true}
+func (*lowConcurrencyBlockingModel) Capabilities() domain.ModelCapabilities {
+	return domain.ModelCapabilities{Streaming: true}
 }
-func (m *lowConcurrencyBlockingModel) Stream(context.Context, sdk.Request) (sdk.Stream, error) {
+func (m *lowConcurrencyBlockingModel) Stream(context.Context, domain.Request) (port.Stream, error) {
 	stream := &lowConcurrencyBlockingStream{owner: m, done: make(chan struct{})}
 	m.mu.Lock()
 	m.active++
@@ -42,12 +43,12 @@ type lowConcurrencyBlockingStream struct {
 	once  sync.Once
 }
 
-func (s *lowConcurrencyBlockingStream) Next(ctx context.Context) (sdk.Event, error) {
+func (s *lowConcurrencyBlockingStream) Next(ctx context.Context) (domain.Event, error) {
 	select {
 	case <-s.done:
-		return sdk.Event{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop}, nil
+		return domain.Event{Kind: domain.EventFinish, FinishReason: domain.FinishStop}, nil
 	case <-ctx.Done():
-		return sdk.Event{}, ctx.Err()
+		return domain.Event{}, ctx.Err()
 	}
 }
 func (s *lowConcurrencyBlockingStream) Close() error {
@@ -81,11 +82,11 @@ func TestLowConcurrencyModeStartsAtOneConcurrentGeneration(t *testing.T) {
 	policy.QueueCapacity = 2
 	controller := newLowConcurrencyController("test", policy)
 	model := &lowConcurrencyModel{base: base, controller: controller}
-	streams := make(chan sdk.Stream, 2)
+	streams := make(chan port.Stream, 2)
 
 	for range 2 {
 		go func() {
-			stream, err := model.Stream(context.Background(), sdk.Request{})
+			stream, err := model.Stream(context.Background(), domain.Request{})
 			if err != nil {
 				t.Errorf("Stream: %v", err)
 				return
@@ -118,14 +119,14 @@ func TestLowConcurrencyModeBoundsWaitingQueue(t *testing.T) {
 	base := &lowConcurrencyBlockingModel{started: make(chan *lowConcurrencyBlockingStream, 2)}
 	controller := newLowConcurrencyController("test", testLowConcurrencyPolicy())
 	model := &lowConcurrencyModel{base: base, controller: controller}
-	first, err := model.Stream(context.Background(), sdk.Request{})
+	first, err := model.Stream(context.Background(), domain.Request{})
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	secondDone := make(chan error, 1)
 	go func() {
-		stream, streamErr := model.Stream(context.Background(), sdk.Request{})
+		stream, streamErr := model.Stream(context.Background(), domain.Request{})
 		if streamErr == nil {
 			_ = stream.Close()
 		}
@@ -139,8 +140,8 @@ func TestLowConcurrencyModeBoundsWaitingQueue(t *testing.T) {
 		time.Sleep(time.Millisecond)
 	}
 
-	_, err = model.Stream(context.Background(), sdk.Request{})
-	var providerErr *sdk.ProviderError
+	_, err = model.Stream(context.Background(), domain.Request{})
+	var providerErr *domain.ProviderError
 	if !errors.As(err, &providerErr) || providerErr.Code != "low_concurrency_queue_full" || providerErr.Retryable {
 		t.Fatalf("queue-full error = %#v", err)
 	}
@@ -158,10 +159,10 @@ type lowConcurrencySequenceModel struct {
 
 func (*lowConcurrencySequenceModel) Provider() string { return DefaultOpenCodeName }
 func (*lowConcurrencySequenceModel) ModelID() string  { return "test-free" }
-func (*lowConcurrencySequenceModel) Capabilities() sdk.ModelCapabilities {
-	return sdk.ModelCapabilities{Streaming: true}
+func (*lowConcurrencySequenceModel) Capabilities() domain.ModelCapabilities {
+	return domain.ModelCapabilities{Streaming: true}
 }
-func (m *lowConcurrencySequenceModel) Stream(context.Context, sdk.Request) (sdk.Stream, error) {
+func (m *lowConcurrencySequenceModel) Stream(context.Context, domain.Request) (port.Stream, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.starts = append(m.starts, time.Now())
@@ -182,14 +183,14 @@ func TestLowConcurrencyModeBacksOffAfterRateLimit(t *testing.T) {
 	policy.MaxInterval = 40 * time.Millisecond
 	policy.BackoffPercent = 200
 	base := &lowConcurrencySequenceModel{errors: []error{
-		sdk.NewProviderError(DefaultOpenCodeName, 429, "rate_limit", "slow down"), nil,
+		domain.NewProviderError(DefaultOpenCodeName, 429, "rate_limit", "slow down"), nil,
 	}}
 	model := &lowConcurrencyModel{base: base, controller: newLowConcurrencyController("test", policy)}
 
-	if _, err := model.Stream(context.Background(), sdk.Request{}); err == nil {
+	if _, err := model.Stream(context.Background(), domain.Request{}); err == nil {
 		t.Fatal("first request should be rate limited")
 	}
-	stream, err := model.Stream(context.Background(), sdk.Request{})
+	stream, err := model.Stream(context.Background(), domain.Request{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -237,15 +238,15 @@ func TestLowConcurrencyModeHonorsRetryAfterBeyondPacingMax(t *testing.T) {
 	policy.InitialInterval = 5 * time.Millisecond
 	policy.MinInterval = 5 * time.Millisecond
 	policy.MaxInterval = 10 * time.Millisecond
-	providerErr := sdk.NewProviderError(DefaultOpenCodeName, 429, "rate_limit", "slow down")
-	providerErr.RateLimit = &sdk.RateLimitInfo{RetryAfter: 35 * time.Millisecond}
+	providerErr := domain.NewProviderError(DefaultOpenCodeName, 429, "rate_limit", "slow down")
+	providerErr.RateLimit = &domain.RateLimitInfo{RetryAfter: 35 * time.Millisecond}
 	base := &lowConcurrencySequenceModel{errors: []error{providerErr, nil}}
 	model := &lowConcurrencyModel{base: base, controller: newLowConcurrencyController("test", policy)}
 
-	if _, err := model.Stream(context.Background(), sdk.Request{}); err == nil {
+	if _, err := model.Stream(context.Background(), domain.Request{}); err == nil {
 		t.Fatal("first request should be rate limited")
 	}
-	stream, err := model.Stream(context.Background(), sdk.Request{})
+	stream, err := model.Stream(context.Background(), domain.Request{})
 	if err != nil {
 		t.Fatal(err)
 	}

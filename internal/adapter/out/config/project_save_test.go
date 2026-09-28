@@ -11,7 +11,7 @@ import (
 
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 	"github.com/phongsathornpt/protonman/internal/platform/appdirs"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	domain "github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
 )
 
 func TestSaveProjectSettingsRoundTrip(t *testing.T) {
@@ -19,7 +19,7 @@ func TestSaveProjectSettingsRoundTrip(t *testing.T) {
 	if err := SaveProjectAgentProfile(workDir, "intelligence"); err != nil {
 		t.Fatal(err)
 	}
-	if err := SaveProjectReasoningEffort(workDir, sdk.ReasoningHigh); err != nil {
+	if err := SaveProjectReasoningEffort(workDir, domain.ReasoningHigh); err != nil {
 		t.Fatal(err)
 	}
 	if err := SaveProjectMaxToolCalls(workDir, 44); err != nil {
@@ -32,7 +32,7 @@ func TestSaveProjectSettingsRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if snapshot.Agent.Profile != "intelligence" || snapshot.Agent.ReasoningEffort != sdk.ReasoningHigh || snapshot.Agent.MaxToolCalls != 44 || snapshot.Mode != permission.ModeAlwaysApprove {
+	if snapshot.Agent.Profile != "intelligence" || snapshot.Agent.ReasoningEffort != domain.ReasoningHigh || snapshot.Agent.MaxToolCalls != 44 || snapshot.Mode != permission.ModeAlwaysApprove {
 		t.Fatalf("project settings did not round trip: %#v", snapshot)
 	}
 	for _, field := range []string{FieldAgentProfile, FieldAgentReasoningEffort, FieldAgentMaxToolCalls, FieldUIPermissionMode} {
@@ -164,7 +164,7 @@ func TestConcurrentProjectConfigMutationsDoNotLoseFields(t *testing.T) {
 		wg.Add(2)
 		go func() {
 			defer wg.Done()
-			if err := SaveProjectReasoningEffort(workDir, sdk.ReasoningHigh); err != nil {
+			if err := SaveProjectReasoningEffort(workDir, domain.ReasoningHigh); err != nil {
 				t.Errorf("save project reasoning: %v", err)
 			}
 		}()
@@ -180,7 +180,7 @@ func TestConcurrentProjectConfigMutationsDoNotLoseFields(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if snapshot.Agent.ReasoningEffort != sdk.ReasoningHigh {
+	if snapshot.Agent.ReasoningEffort != domain.ReasoningHigh {
 		t.Fatalf("reasoning = %q, want high", snapshot.Agent.ReasoningEffort)
 	}
 	if snapshot.Agent.MaxToolCalls < 60 {

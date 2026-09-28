@@ -12,7 +12,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/app"
 	"github.com/phongsathornpt/protonman/internal/core/modelcatalog"
 	"github.com/phongsathornpt/protonman/internal/engine/toolcall"
-	"github.com/phongsathornpt/protonman/proton-sdk/domain"
+	"github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
 )
 
 func acpSessionRuntimeOption(runtimeState *appRuntime) acp.Option {

@@ -21,8 +21,8 @@ import (
 )
 
 const (
-	inspectorWideBreakpoint unit.Dp = 820
-	inspectorPanelWidth     unit.Dp = 336
+	inspectorWideBreakpoint unit.Dp = 960
+	inspectorPanelWidth     unit.Dp = 300
 )
 
 var (

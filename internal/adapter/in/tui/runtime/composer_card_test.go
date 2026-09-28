@@ -156,8 +156,8 @@ func TestComposerCardMultilineExpansionAndLineCounter(t *testing.T) {
 
 	view6 := m.promptView()
 	lines6 := strings.Split(view6, "\n")
-	if len(lines6) != 8 { // top + 6 middle + bottom = 8
-		t.Fatalf("6 line prompt card should have 8 lines, got %d", len(lines6))
+	if len(lines6) != 8 { // top + 6 prompt rows + bottom = 8
+		t.Fatalf("6 line prompt card should show 6 prompt rows, got %d total rows", len(lines6))
 	}
 	if !strings.Contains(lines6[0], "6 lines") {
 		t.Fatalf("6 line prompt card missing line count indicator: %q", lines6[0])

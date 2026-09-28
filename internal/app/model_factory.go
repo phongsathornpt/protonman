@@ -5,7 +5,7 @@ import (
 
 	corememory "github.com/phongsathornpt/protonman/internal/core/memory"
 	"github.com/phongsathornpt/protonman/internal/core/modelclient"
-	"github.com/phongsathornpt/protonman/proton-sdk/port"
+	"github.com/phongsathornpt/protonman/pkg/proton-sdk/port"
 )
 
 // LanguageModelRequest is the application alias for the core model-client request.

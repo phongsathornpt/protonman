@@ -560,14 +560,14 @@ func TestClearTranscriptPreservesProviderHistory(t *testing.T) {
 
 func TestPromptDynamicHeightAccountsForSoftWrap(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
-	m.resize(28, 14)
+	m.resize(28, 24)
 	prompt := m.panes.bottom.prompt()
 	prompt.SetValue(strings.Repeat("wrapped text ", 8))
 	if prompt.Height() <= 1 {
 		t.Fatalf("soft-wrapped prompt height = %d, want > 1", prompt.Height())
 	}
-	if prompt.Height() > 6 {
-		t.Fatalf("soft-wrapped prompt height = %d, want <= 6", prompt.Height())
+	if prompt.Height() > maxComposerVisibleRows {
+		t.Fatalf("soft-wrapped prompt height = %d, want <= %d", prompt.Height(), maxComposerVisibleRows)
 	}
 	m.requestRelayout()
 	m.reconcileLayout()

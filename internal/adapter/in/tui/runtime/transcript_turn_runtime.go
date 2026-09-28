@@ -13,7 +13,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/app"
 	corememory "github.com/phongsathornpt/protonman/internal/core/memory"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
-	"github.com/phongsathornpt/protonman/proton-sdk/domain"
+	"github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
 )
 
 func (m *bubbleModel) applyTurnEvents(events []app.Event) {

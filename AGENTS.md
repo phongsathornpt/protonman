@@ -65,8 +65,8 @@ internal/core/                  pure domain contracts and policies (including me
 internal/engine/                prompt, tool-call, and turn orchestration
 internal/feature/               agent, desktop, imageprep, memory, project, skill, and todo features
 internal/platform/              checkpoint, sandbox, and telemetry infrastructure
-proton-sdk/                     provider-neutral model SDK
-proton-sdk/provider/            OpenAI-compatible and Anthropic protocol implementations
+pkg/proton-sdk/                     provider-neutral model SDK
+pkg/proton-sdk/provider/            OpenAI-compatible and Anthropic protocol implementations
 test/architecture/              dependency and structure guards
 test/e2e/                       binary/provider/TUI integration tests
 test/unit/                      application/domain unit tests
@@ -553,7 +553,7 @@ failure. First determine whether the remote side may already have changed state.
 - middleware composition
 - stream collection and history helpers
 
-Provider protocol implementations live under `proton-sdk/provider/*`.
+Provider protocol implementations live under `pkg/proton-sdk/provider/*`.
 
 `internal/adapter/out/model` adapts configured providers and remote model
 catalog metadata into the SDK interface. Keep provider-specific wire behavior in
@@ -793,7 +793,7 @@ When implementing a change, place it according to ownership:
 | desktop presentation state | `internal/feature/desktop` |
 | ACP client for the desktop frontend | `internal/adapter/out/acpclient` |
 | provider model discovery/adaptation | `internal/adapter/out/model` |
-| provider wire protocol | `proton-sdk/provider/*` |
+| provider wire protocol | `pkg/proton-sdk/provider/*` |
 | session persistence | `internal/adapter/out/sessionfs` |
 | memory persistence and use cases | `internal/adapter/out/memoryfs` + `internal/feature/memory`, exposed via `internal/app.Memories` |
 | reusable low-level defaults/helpers | `internal/base/*` only if truly dependency-free |
@@ -915,7 +915,7 @@ For common investigations, begin here:
 - tasks: `internal/feature/todo/`, `internal/adapter/out/tool/todo/`
 - MCP: `internal/adapter/out/tool/mcp/`
 - model adaptation: `internal/adapter/out/model/`
-- provider SDK: `proton-sdk/`, `proton-sdk/provider/`
+- provider SDK: `pkg/proton-sdk/`, `pkg/proton-sdk/provider/`
 
 When uncertain, follow evidence from these ownership points outward instead of
 adding a shortcut across layers.

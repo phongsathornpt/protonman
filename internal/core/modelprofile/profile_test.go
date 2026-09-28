@@ -3,38 +3,38 @@ package modelprofile
 import (
 	"testing"
 
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	domain "github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
 )
 
 func TestResolveBuiltinKnownFamilies(t *testing.T) {
 	tests := []struct {
 		model       string
 		profile     string
-		wantDefault sdk.ReasoningEffort
+		wantDefault domain.ReasoningEffort
 		wantLevels  int
 		wantContext int
 	}{
-		{model: "gemini-3.8-flash", profile: "gemini-3.8-flash", wantDefault: sdk.ReasoningMedium, wantLevels: 3, wantContext: 1_048_576},
-		{model: "muse-spark-1.3-contributor-free", profile: "muse-spark-1.3-family", wantDefault: sdk.ReasoningHigh, wantLevels: 6},
-		{model: "qwen3.8-max", profile: "qwen3.8-max-family", wantDefault: sdk.ReasoningMedium, wantLevels: 3},
-		{model: "qwen3.8-max-latest", profile: "qwen3.8-max-family", wantDefault: sdk.ReasoningMedium, wantLevels: 3},
-		{model: "qwen3.8-flash", profile: "qwen3.8-flash-family", wantDefault: sdk.ReasoningXHigh, wantLevels: 4},
-		{model: "proton/qwen3.8-flash", profile: "qwen3.8-flash-family", wantDefault: sdk.ReasoningXHigh, wantLevels: 4},
+		{model: "gemini-3.8-flash", profile: "gemini-3.8-flash", wantDefault: domain.ReasoningMedium, wantLevels: 3, wantContext: 1_048_576},
+		{model: "muse-spark-1.3-contributor-free", profile: "muse-spark-1.3-family", wantDefault: domain.ReasoningHigh, wantLevels: 6},
+		{model: "qwen3.8-max", profile: "qwen3.8-max-family", wantDefault: domain.ReasoningMedium, wantLevels: 3},
+		{model: "qwen3.8-max-latest", profile: "qwen3.8-max-family", wantDefault: domain.ReasoningMedium, wantLevels: 3},
+		{model: "qwen3.8-flash", profile: "qwen3.8-flash-family", wantDefault: domain.ReasoningXHigh, wantLevels: 4},
+		{model: "proton/qwen3.8-flash", profile: "qwen3.8-flash-family", wantDefault: domain.ReasoningXHigh, wantLevels: 4},
 		{model: "minimax-m3", profile: "minimax-m3-family", wantLevels: 1},
 		{model: "qwen3.6-plus", profile: "qwen3-hybrid-thinking", wantLevels: 1},
 		{model: "qwen3.6-flash", profile: "qwen3-hybrid-thinking", wantLevels: 1},
 		{model: "qwen3.7-max", profile: "qwen3-hybrid-thinking", wantLevels: 1},
-		{model: "deepseek-flash", profile: "deepseek-v4.1-flash-family", wantDefault: sdk.ReasoningHigh, wantLevels: 4},
-		{model: "deepseek-v4.1-flash", profile: "deepseek-v4.1-flash-family", wantDefault: sdk.ReasoningHigh, wantLevels: 4},
-		{model: "deepseek-v4-flash-free", profile: "deepseek-v4.1-flash-family", wantDefault: sdk.ReasoningHigh, wantLevels: 4},
-		{model: "router/deepseek-v4-flash-vision-exp", profile: "deepseek-v4.1-flash-family", wantDefault: sdk.ReasoningHigh, wantLevels: 4},
-		{model: "deepseek-v4-pro", profile: "deepseek-v4-family", wantDefault: sdk.ReasoningHigh, wantLevels: 4},
-		{model: "glm-5.3-flash", profile: "zai-glm-5.3-flash", wantDefault: sdk.ReasoningMax, wantLevels: 3, wantContext: 1_048_576},
+		{model: "deepseek-flash", profile: "deepseek-v4.1-flash-family", wantDefault: domain.ReasoningHigh, wantLevels: 4},
+		{model: "deepseek-v4.1-flash", profile: "deepseek-v4.1-flash-family", wantDefault: domain.ReasoningHigh, wantLevels: 4},
+		{model: "deepseek-v4-flash-free", profile: "deepseek-v4.1-flash-family", wantDefault: domain.ReasoningHigh, wantLevels: 4},
+		{model: "router/deepseek-v4-flash-vision-exp", profile: "deepseek-v4.1-flash-family", wantDefault: domain.ReasoningHigh, wantLevels: 4},
+		{model: "deepseek-v4-pro", profile: "deepseek-v4-family", wantDefault: domain.ReasoningHigh, wantLevels: 4},
+		{model: "glm-5.3-flash", profile: "zai-glm-5.3-flash", wantDefault: domain.ReasoningMax, wantLevels: 3, wantContext: 1_048_576},
 		{model: "glm-4.7", profile: "zai-glm-thinking", wantLevels: 1},
-		{model: "gpt-5.6-sol", profile: "gpt-5.6-sol", wantDefault: sdk.ReasoningMedium, wantLevels: 6, wantContext: 1_050_000},
-		{model: "gpt-5.6-terra", profile: "gpt-5.6-terra", wantDefault: sdk.ReasoningMedium, wantLevels: 6, wantContext: 1_050_000},
-		{model: "gpt-5.6-luna", profile: "gpt-5.6-luna", wantDefault: sdk.ReasoningMedium, wantLevels: 6, wantContext: 1_050_000},
-		{model: "grok-4.6-fast", profile: "grok-4.6", wantDefault: sdk.ReasoningHigh, wantLevels: 4},
+		{model: "gpt-5.6-sol", profile: "gpt-5.6-sol", wantDefault: domain.ReasoningMedium, wantLevels: 6, wantContext: 1_050_000},
+		{model: "gpt-5.6-terra", profile: "gpt-5.6-terra", wantDefault: domain.ReasoningMedium, wantLevels: 6, wantContext: 1_050_000},
+		{model: "gpt-5.6-luna", profile: "gpt-5.6-luna", wantDefault: domain.ReasoningMedium, wantLevels: 6, wantContext: 1_050_000},
+		{model: "grok-4.6-fast", profile: "grok-4.6", wantDefault: domain.ReasoningHigh, wantLevels: 4},
 		{model: "claude-opus-5", profile: "claude-adaptive-thinking", wantLevels: 0},
 	}
 	for _, tt := range tests {
@@ -63,7 +63,7 @@ func TestGeminiFlashProfileCapabilitiesAndReasoningLevels(t *testing.T) {
 		if resolved.Capabilities.Tools != SupportYes || resolved.Capabilities.Vision != SupportYes {
 			t.Errorf("%s capabilities = %+v", modelID, resolved.Capabilities)
 		}
-		want := []sdk.ReasoningEffort{sdk.ReasoningLow, sdk.ReasoningMedium, sdk.ReasoningHigh}
+		want := []domain.ReasoningEffort{domain.ReasoningLow, domain.ReasoningMedium, domain.ReasoningHigh}
 		if len(resolved.Reasoning.Levels) != len(want) {
 			t.Fatalf("%s reasoning levels = %v, want %v", modelID, resolved.Reasoning.Levels, want)
 		}
@@ -184,7 +184,7 @@ func TestGLM53BaseProfileDoesNotInheritFlashCapabilities(t *testing.T) {
 }
 
 func TestCapabilitiesApplyPreservesUnknownAdapterValues(t *testing.T) {
-	base := sdk.ModelCapabilities{Streaming: true, Tools: true, Vision: true}
+	base := domain.ModelCapabilities{Streaming: true, Tools: true, Vision: true}
 	got := (Capabilities{Tools: SupportUnknown, Vision: SupportUnknown}).Apply(base)
 	if got != base {
 		t.Fatalf("unknown capability overlay = %+v, want %+v", got, base)
@@ -192,7 +192,7 @@ func TestCapabilitiesApplyPreservesUnknownAdapterValues(t *testing.T) {
 }
 
 func TestCapabilitiesApplyHonorsExplicitModelValues(t *testing.T) {
-	base := sdk.ModelCapabilities{Streaming: true, Tools: true, Vision: true}
+	base := domain.ModelCapabilities{Streaming: true, Tools: true, Vision: true}
 	got := (Capabilities{Tools: SupportNo, Vision: SupportYes}).Apply(base)
 	if !got.Vision || got.Tools {
 		t.Fatalf("explicit capability overlay = %+v", got)
@@ -231,14 +231,14 @@ func TestCatalogExplicitMetadataOverridesBuiltin(t *testing.T) {
 		ContextWindow:      1234,
 		Reasoning: &CatalogReasoning{
 			Supported: &yes,
-			Levels:    []sdk.ReasoningEffort{sdk.ReasoningLow},
-			Default:   sdk.ReasoningLow,
+			Levels:    []domain.ReasoningEffort{domain.ReasoningLow},
+			Default:   domain.ReasoningLow,
 		},
 	})
 	if got.Capabilities.Tools != SupportNo || got.Capabilities.Vision != SupportNo || got.Capabilities.ToolChoiceRequired != SupportYes || got.ContextWindow != 1234 {
 		t.Fatalf("catalog capability override = %+v", got)
 	}
-	if len(got.Reasoning.Levels) != 1 || got.Reasoning.Levels[0] != sdk.ReasoningLow || got.Reasoning.Default != sdk.ReasoningLow {
+	if len(got.Reasoning.Levels) != 1 || got.Reasoning.Levels[0] != domain.ReasoningLow || got.Reasoning.Default != domain.ReasoningLow {
 		t.Fatalf("catalog reasoning override = %+v", got.Reasoning)
 	}
 }
@@ -259,7 +259,7 @@ func TestCatalogReasoningDisabledClearsInheritedLevels(t *testing.T) {
 	if got.Reasoning.Support != SupportNo || got.Capabilities.Reasoning != SupportNo {
 		t.Fatalf("reasoning support = %+v", got)
 	}
-	if len(got.Reasoning.Levels) != 0 || got.Reasoning.Default != sdk.ReasoningDefault {
+	if len(got.Reasoning.Levels) != 0 || got.Reasoning.Default != domain.ReasoningDefault {
 		t.Fatalf("disabled reasoning retained stale metadata = %+v", got.Reasoning)
 	}
 }
@@ -269,7 +269,7 @@ func TestCatalogOmissionPreservesBuiltinKnowledge(t *testing.T) {
 	if got.Capabilities.Tools != SupportYes || got.Capabilities.Vision != SupportYes || got.ContextWindow != 1_048_576 {
 		t.Fatalf("omitted catalog erased builtin metadata: %+v", got)
 	}
-	if got.Reasoning.Default != sdk.ReasoningMedium || len(got.Reasoning.Levels) != 3 {
+	if got.Reasoning.Default != domain.ReasoningMedium || len(got.Reasoning.Levels) != 3 {
 		t.Fatalf("omitted catalog erased reasoning metadata: %+v", got.Reasoning)
 	}
 }
@@ -317,19 +317,19 @@ func TestUnknownModelRemainsUnknown(t *testing.T) {
 func TestResolveProfileReasoningClampsPortablePreference(t *testing.T) {
 	profile := Resolved{Reasoning: Reasoning{
 		Support: SupportYes,
-		Levels:  []sdk.ReasoningEffort{sdk.ReasoningLow, sdk.ReasoningMedium},
+		Levels:  []domain.ReasoningEffort{domain.ReasoningLow, domain.ReasoningMedium},
 	}}
-	if got, ok := profile.ResolveProfileReasoning(sdk.ReasoningHigh); !ok || got != sdk.ReasoningMedium {
+	if got, ok := profile.ResolveProfileReasoning(domain.ReasoningHigh); !ok || got != domain.ReasoningMedium {
 		t.Fatalf("ResolveProfileReasoning(high) = %q, %v", got, ok)
 	}
-	if got, ok := profile.ResolveProfileReasoning(sdk.ReasoningLow); !ok || got != sdk.ReasoningLow {
+	if got, ok := profile.ResolveProfileReasoning(domain.ReasoningLow); !ok || got != domain.ReasoningLow {
 		t.Fatalf("ResolveProfileReasoning(low) = %q, %v", got, ok)
 	}
 }
 
 func TestResolveProfileReasoningPreservesUnknownProviderDefault(t *testing.T) {
 	profile := Resolved{Reasoning: Reasoning{Support: SupportUnknown}}
-	if got, ok := profile.ResolveProfileReasoning(sdk.ReasoningHigh); ok || got != sdk.ReasoningDefault {
+	if got, ok := profile.ResolveProfileReasoning(domain.ReasoningHigh); ok || got != domain.ReasoningDefault {
 		t.Fatalf("ResolveProfileReasoning() = %q, %v", got, ok)
 	}
 }
@@ -337,43 +337,43 @@ func TestResolveProfileReasoningPreservesUnknownProviderDefault(t *testing.T) {
 func TestResolveExplicitReasoningNeverClamps(t *testing.T) {
 	profile := Resolved{ModelID: "limited", Reasoning: Reasoning{
 		Support: SupportYes,
-		Levels:  []sdk.ReasoningEffort{sdk.ReasoningLow, sdk.ReasoningMedium},
+		Levels:  []domain.ReasoningEffort{domain.ReasoningLow, domain.ReasoningMedium},
 	}}
-	if _, err := profile.ResolveExplicitReasoning(sdk.ReasoningHigh); err == nil {
+	if _, err := profile.ResolveExplicitReasoning(domain.ReasoningHigh); err == nil {
 		t.Fatal("ResolveExplicitReasoning(high) error = nil")
 	}
-	if got, err := profile.ResolveExplicitReasoning(sdk.ReasoningMedium); err != nil || got != sdk.ReasoningMedium {
+	if got, err := profile.ResolveExplicitReasoning(domain.ReasoningMedium); err != nil || got != domain.ReasoningMedium {
 		t.Fatalf("ResolveExplicitReasoning(medium) = %q, %v", got, err)
 	}
 }
 
 func TestResolveExplicitReasoningAllowsUnknownMetadata(t *testing.T) {
 	profile := Resolved{ModelID: "future", Reasoning: Reasoning{Support: SupportUnknown}}
-	if got, err := profile.ResolveExplicitReasoning(sdk.ReasoningXHigh); err != nil || got != sdk.ReasoningXHigh {
+	if got, err := profile.ResolveExplicitReasoning(domain.ReasoningXHigh); err != nil || got != domain.ReasoningXHigh {
 		t.Fatalf("ResolveExplicitReasoning(xhigh) = %q, %v", got, err)
 	}
 }
 
 func TestResolveReasoningRecordsPortableClampProvenance(t *testing.T) {
 	profile := Resolved{Reasoning: Reasoning{
-		Support: SupportYes, Levels: []sdk.ReasoningEffort{sdk.ReasoningLow, sdk.ReasoningMedium},
+		Support: SupportYes, Levels: []domain.ReasoningEffort{domain.ReasoningLow, domain.ReasoningMedium},
 	}}
-	got, err := profile.ResolveReasoning(sdk.ReasoningHigh, false)
+	got, err := profile.ResolveReasoning(domain.ReasoningHigh, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Requested != sdk.ReasoningHigh || got.Effective != sdk.ReasoningMedium || got.Source != ReasoningSourceAgentProfile || !got.Clamped {
+	if got.Requested != domain.ReasoningHigh || got.Effective != domain.ReasoningMedium || got.Source != ReasoningSourceAgentProfile || !got.Clamped {
 		t.Fatalf("resolution = %+v", got)
 	}
 }
 
 func TestResolveReasoningRecordsExplicitProvenance(t *testing.T) {
 	profile := Resolved{Reasoning: Reasoning{Support: SupportUnknown}}
-	got, err := profile.ResolveReasoning(sdk.ReasoningXHigh, true)
+	got, err := profile.ResolveReasoning(domain.ReasoningXHigh, true)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Effective != sdk.ReasoningXHigh || got.Source != ReasoningSourceExplicit || got.Clamped {
+	if got.Effective != domain.ReasoningXHigh || got.Source != ReasoningSourceExplicit || got.Clamped {
 		t.Fatalf("resolution = %+v", got)
 	}
 }
@@ -425,7 +425,7 @@ func TestResolvedProfileTracksFieldProvenance(t *testing.T) {
 func TestCatalogReasoningProvenanceOverridesOnlyPublishedFields(t *testing.T) {
 	yes := true
 	got := ResolveBuiltin("gateway", "gemini-3.8-flash", CatalogMetadata{
-		Reasoning: &CatalogReasoning{Supported: &yes, Levels: []sdk.ReasoningEffort{sdk.ReasoningLow}},
+		Reasoning: &CatalogReasoning{Supported: &yes, Levels: []domain.ReasoningEffort{domain.ReasoningLow}},
 	})
 	if got.Provenance.ReasoningSupport != MetadataSourceCatalog || got.Provenance.ReasoningLevels != MetadataSourceCatalog {
 		t.Fatalf("reasoning provenance = %+v", got.Provenance)

@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/phongsathornpt/protonman/internal/core/modelprofile"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	domain "github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
 )
 
 func TestFetchProviderModelsOpenAIFormat(t *testing.T) {
@@ -401,7 +401,7 @@ func TestFetchProviderModelsNormalizesInvalidReasoningMetadata(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := models[0].Reasoning
-	if got == nil || len(got.Levels) != 2 || got.Levels[0] != "low" || got.Levels[1] != "high" || got.Default != sdk.ReasoningDefault {
+	if got == nil || len(got.Levels) != 2 || got.Levels[0] != "low" || got.Levels[1] != "high" || got.Default != domain.ReasoningDefault {
 		t.Fatalf("normalized reasoning = %+v", got)
 	}
 }

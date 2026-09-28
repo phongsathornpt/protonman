@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
@@ -70,6 +71,49 @@ func TestRuntimeTinyLayoutFitsWithMultilineComposer(t *testing.T) {
 	m.reconcileLayout()
 
 	assertRenderedFrameFits(t, m.View().Content, 24, 8)
+}
+
+func TestComposerExpandsScrollsAndClampsToTranscriptSpace(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.resize(80, 24)
+	lines := make([]string, 12)
+	for index := range lines {
+		lines[index] = fmt.Sprintf("line %02d", index+1)
+	}
+	updated, _ := m.Update(tea.PasteMsg{Content: strings.Join(lines, "\n")})
+	m = updated.(*bubbleModel)
+	prompt := m.panes.bottom.prompt()
+	if prompt.LineCount() != len(lines) {
+		t.Fatalf("pasted line count = %d, want %d", prompt.LineCount(), len(lines))
+	}
+	if prompt.Height() != maxComposerVisibleRows {
+		t.Fatalf("prompt height = %d, want visible cap %d", prompt.Height(), maxComposerVisibleRows)
+	}
+	if !strings.Contains(prompt.View(), lines[len(lines)-1]) {
+		t.Fatalf("scrolled prompt view omits final pasted line: %q", prompt.View())
+	}
+	if m.viewport.Height() < minTranscriptViewportRows {
+		t.Fatalf("transcript viewport = %d, want at least %d rows", m.viewport.Height(), minTranscriptViewportRows)
+	}
+
+	m.resize(24, 8)
+	prompt = m.panes.bottom.prompt()
+	if prompt.MaxHeight >= maxComposerVisibleRows {
+		t.Fatalf("tiny terminal composer cap = %d, want a reduced cap", prompt.MaxHeight)
+	}
+	if prompt.LineCount() != len(lines) {
+		t.Fatalf("resize changed draft line count = %d, want %d", prompt.LineCount(), len(lines))
+	}
+	assertRenderedFrameFits(t, m.View().Content, 24, 8)
+
+	m.resize(80, 24)
+	prompt = m.panes.bottom.prompt()
+	if prompt.Height() != maxComposerVisibleRows {
+		t.Fatalf("expanded prompt height after resize = %d, want %d", prompt.Height(), maxComposerVisibleRows)
+	}
+	if m.viewport.Height() < minTranscriptViewportRows {
+		t.Fatalf("transcript viewport after resize = %d, want at least %d rows", m.viewport.Height(), minTranscriptViewportRows)
+	}
 }
 
 func TestRuntimeBottomViewHeaderVisibilityBoundary(t *testing.T) {

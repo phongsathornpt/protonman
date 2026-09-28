@@ -12,7 +12,7 @@ import (
 	"strings"
 
 	"github.com/phongsathornpt/protonman/internal/core/session"
-	"github.com/phongsathornpt/protonman/proton-sdk/domain"
+	"github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
 )
 
 const maxSessionAttachmentBytes = 32 * 1024 * 1024

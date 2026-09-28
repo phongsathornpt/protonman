@@ -5,13 +5,13 @@ import (
 	"testing"
 	"time"
 
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	domain "github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
 )
 
 func TestProjectRuntimeStatePriority(t *testing.T) {
 	now := time.Date(2026, 9, 13, 1, 0, 0, 0, time.UTC)
 	started := now.Add(-5 * time.Second)
-	retry := sdk.RetryEvent{Attempt: 2, MaxRetries: 4, Reason: "idle_event_timeout", RetryAt: now.Add(3 * time.Second)}
+	retry := domain.RetryEvent{Attempt: 2, MaxRetries: 4, Reason: "idle_event_timeout", RetryAt: now.Add(3 * time.Second)}
 
 	tests := []struct {
 		name     string
@@ -55,12 +55,12 @@ func TestProjectRetryCooldownCopy(t *testing.T) {
 	now := time.Date(2026, 9, 13, 1, 0, 0, 0, time.UTC)
 	state := Project(Input{
 		Busy: true,
-		Retry: sdk.RetryEvent{
+		Retry: domain.RetryEvent{
 			Attempt:    1,
 			MaxRetries: 3,
 			Reason:     "overloaded",
 			RetryAt:    now.Add(1500 * time.Millisecond),
-			Phase:      sdk.RetryPhaseCooldown,
+			Phase:      domain.RetryPhaseCooldown,
 		},
 		Now: now,
 	})

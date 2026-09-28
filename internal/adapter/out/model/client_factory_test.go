@@ -3,7 +3,7 @@ package model
 import (
 	"testing"
 
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	usecase "github.com/phongsathornpt/protonman/pkg/proton-sdk/usecase"
 )
 
 func TestResolveProviderBaseURL(t *testing.T) {
@@ -72,7 +72,7 @@ func TestNewProviderLanguageModelOverridesToolsCapability(t *testing.T) {
 func TestNewProviderLanguageModelPreservesContextWindowMetadata(t *testing.T) {
 	m := NewProviderLanguageModel(DefaultOpenAIName, string(ProviderProtocolOpenAI), DefaultOpenAIEndpoint, "key", "catalog-model",
 		WithVisionSupport(false), WithToolsSupport(false), WithContextWindow(12345))
-	if got := sdk.ModelContextWindow(m); got != 12345 {
+	if got := usecase.ModelContextWindow(m); got != 12345 {
 		t.Fatalf("ModelContextWindow() = %d, want 12345", got)
 	}
 	if m.Capabilities().Vision || m.Capabilities().Tools {
@@ -82,7 +82,7 @@ func TestNewProviderLanguageModelPreservesContextWindowMetadata(t *testing.T) {
 
 func TestNewProviderLanguageModelAppliesBuiltinModelProfile(t *testing.T) {
 	m := NewProviderLanguageModel(DefaultOpenAIName, string(ProviderProtocolOpenAI), DefaultOpenAIEndpoint, "key", "gemini-3.8-flash")
-	if got := sdk.ModelContextWindow(m); got != 1_048_576 {
+	if got := usecase.ModelContextWindow(m); got != 1_048_576 {
 		t.Fatalf("ModelContextWindow() = %d, want 1048576", got)
 	}
 	profile, ok := ResolvedModelProfile(m)
@@ -103,7 +103,7 @@ func TestRemoteModelProfileOverridesBuiltinMetadata(t *testing.T) {
 	if m.Capabilities().Tools || m.Capabilities().Vision {
 		t.Fatalf("catalog capability overrides were lost: %+v", m.Capabilities())
 	}
-	if got := sdk.ModelContextWindow(m); got != 2048 {
+	if got := usecase.ModelContextWindow(m); got != 2048 {
 		t.Fatalf("ModelContextWindow() = %d, want 2048", got)
 	}
 	profile, ok := ResolvedModelProfile(m)
@@ -132,7 +132,7 @@ func TestResolveRemoteMetadataUsesResolvedCapabilitiesForDisplay(t *testing.T) {
 func TestRemoteModelProfilePreservesIndependentTokenLimits(t *testing.T) {
 	remote := RemoteModel{ID: "future-model", MaxInputTokens: 200000, MaxOutputTokens: 8192}
 	m := NewProviderLanguageModel(DefaultAnthropicName, string(ProviderProtocolAnthropic), DefaultAnthropicEndpoint, "key", remote.ID, WithRemoteModelProfile(DefaultAnthropicName, remote))
-	limits := sdk.ModelTokenLimits(m)
+	limits := usecase.ModelTokenLimits(m)
 	if limits.ContextWindow != 0 || limits.MaxInputTokens != 200000 || limits.MaxOutputTokens != 8192 {
 		t.Fatalf("token limits = %+v", limits)
 	}

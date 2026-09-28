@@ -3,7 +3,7 @@ package agentui
 import (
 	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
 	"github.com/phongsathornpt/protonman/internal/base/runtimepolicy"
-	"github.com/phongsathornpt/protonman/proton-sdk/domain"
+	"github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
 )
 
 // RuntimeState owns TUI-local agent controls across Bubble Tea program restarts.

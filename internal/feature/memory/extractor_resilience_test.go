@@ -9,7 +9,8 @@ import (
 
 	"github.com/phongsathornpt/protonman/internal/base/runtimepolicy"
 	"github.com/phongsathornpt/protonman/internal/core/session"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	domain "github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
+	port "github.com/phongsathornpt/protonman/pkg/proton-sdk/port"
 )
 
 type failFirstExtractionModel struct {
@@ -18,28 +19,28 @@ type failFirstExtractionModel struct {
 
 func (*failFirstExtractionModel) Provider() string { return "test" }
 func (*failFirstExtractionModel) ModelID() string  { return "memory-test" }
-func (*failFirstExtractionModel) Capabilities() sdk.ModelCapabilities {
-	return sdk.ModelCapabilities{Streaming: true}
+func (*failFirstExtractionModel) Capabilities() domain.ModelCapabilities {
+	return domain.ModelCapabilities{Streaming: true}
 }
-func (m *failFirstExtractionModel) Stream(context.Context, sdk.Request) (sdk.Stream, error) {
+func (m *failFirstExtractionModel) Stream(context.Context, domain.Request) (port.Stream, error) {
 	m.calls++
 	if m.calls == 1 {
 		return nil, errors.New("temporary provider failure")
 	}
-	return &resilienceExtractionStream{events: []sdk.Event{
-		{Kind: sdk.EventTextDelta, Text: `{"memories":[{"scope":"workspace","kind":"procedure","key":"verification command","value":"Run go test ./...","confidence":0.95,"message_ids":["m2"]}]}`},
-		{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
+	return &resilienceExtractionStream{events: []domain.Event{
+		{Kind: domain.EventTextDelta, Text: `{"memories":[{"scope":"workspace","kind":"procedure","key":"verification command","value":"Run go test ./...","confidence":0.95,"message_ids":["m2"]}]}`},
+		{Kind: domain.EventFinish, FinishReason: domain.FinishStop},
 	}}, nil
 }
 
 type resilienceExtractionStream struct {
-	events []sdk.Event
+	events []domain.Event
 	index  int
 }
 
-func (s *resilienceExtractionStream) Next(context.Context) (sdk.Event, error) {
+func (s *resilienceExtractionStream) Next(context.Context) (domain.Event, error) {
 	if s.index >= len(s.events) {
-		return sdk.Event{}, io.EOF
+		return domain.Event{}, io.EOF
 	}
 	event := s.events[s.index]
 	s.index++
@@ -51,11 +52,11 @@ func TestExtractorContinuesAfterSessionModelFailure(t *testing.T) {
 	now := time.Date(2026, 9, 13, 4, 0, 0, 0, time.UTC)
 	failedState := session.State{
 		SessionID: "failed", Revision: 1, WorkspaceKey: "ws", UpdatedAt: now.Add(-2 * time.Hour),
-		Messages: []session.Message{{ID: "m1", Role: sdk.RoleUser, Content: "temporary session"}},
+		Messages: []session.Message{{ID: "m1", Role: domain.RoleUser, Content: "temporary session"}},
 	}
 	goodState := session.State{
 		SessionID: "good", Revision: 2, WorkspaceKey: "ws", UpdatedAt: now.Add(-3 * time.Hour),
-		Messages: []session.Message{{ID: "m2", Role: sdk.RoleUser, Content: "Run go test ./... before finishing."}},
+		Messages: []session.Message{{ID: "m2", Role: domain.RoleUser, Content: "Run go test ./... before finishing."}},
 	}
 	sessions := &extractionSessionRepo{
 		states: map[string]session.State{"failed": failedState, "good": goodState},

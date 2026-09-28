@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"github.com/phongsathornpt/protonman/internal/core/modelprofile"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	domain "github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
 )
 
 func imagePayloadWithTransportPadding(t *testing.T, padding int) string {
@@ -32,18 +32,18 @@ func TestCompactionIgnoresImageTransportPayloadSize(t *testing.T) {
 		MinRecentMessages:        2,
 	}
 	vision := modelprofile.DefaultVisionPolicy()
-	limits := sdk.TokenLimits{MaxInputTokens: 4_000}
+	limits := domain.TokenLimits{MaxInputTokens: 4_000}
 
-	build := func(imageData string) sdk.Request {
-		messages := []sdk.Message{{Role: sdk.RoleSystem, Content: "system"}}
+	build := func(imageData string) domain.Request {
+		messages := []domain.Message{{Role: domain.RoleSystem, Content: "system"}}
 		for i := 0; i < 10; i++ {
-			messages = append(messages, sdk.Message{Role: sdk.RoleUser, Content: strings.Repeat("historical context ", 60)})
+			messages = append(messages, domain.Message{Role: domain.RoleUser, Content: strings.Repeat("historical context ", 60)})
 		}
 		messages = append(messages,
-			sdk.Message{Role: sdk.RoleUser, Content: "inspect this", Parts: []sdk.ContentPart{{Type: sdk.ContentPartImage, MIMEType: "image/png", Data: imageData}}},
-			sdk.Message{Role: sdk.RoleAssistant, Content: "CURRENT-ASSISTANT"},
+			domain.Message{Role: domain.RoleUser, Content: "inspect this", Parts: []domain.ContentPart{{Type: domain.ContentPartImage, MIMEType: "image/png", Data: imageData}}},
+			domain.Message{Role: domain.RoleAssistant, Content: "CURRENT-ASSISTANT"},
 		)
-		return sdk.Request{Messages: messages}
+		return domain.Request{Messages: messages}
 	}
 
 	small := build(imagePayloadWithTransportPadding(t, 0))

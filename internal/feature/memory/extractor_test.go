@@ -10,7 +10,8 @@ import (
 	"github.com/phongsathornpt/protonman/internal/base/runtimepolicy"
 	corememory "github.com/phongsathornpt/protonman/internal/core/memory"
 	"github.com/phongsathornpt/protonman/internal/core/session"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	domain "github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
+	port "github.com/phongsathornpt/protonman/pkg/proton-sdk/port"
 )
 
 type extractionSessionRepo struct {
@@ -44,30 +45,30 @@ func (r *extractionSessionRepo) ListSummaries(_ context.Context, options session
 
 type extractionModel struct {
 	output   string
-	requests []sdk.Request
+	requests []domain.Request
 }
 
 func (m *extractionModel) Provider() string { return "test" }
 func (m *extractionModel) ModelID() string  { return "memory-test" }
-func (m *extractionModel) Capabilities() sdk.ModelCapabilities {
-	return sdk.ModelCapabilities{Streaming: true}
+func (m *extractionModel) Capabilities() domain.ModelCapabilities {
+	return domain.ModelCapabilities{Streaming: true}
 }
-func (m *extractionModel) Stream(_ context.Context, request sdk.Request) (sdk.Stream, error) {
+func (m *extractionModel) Stream(_ context.Context, request domain.Request) (port.Stream, error) {
 	m.requests = append(m.requests, request)
-	return &extractionStream{events: []sdk.Event{
-		{Kind: sdk.EventTextDelta, Text: m.output},
-		{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
+	return &extractionStream{events: []domain.Event{
+		{Kind: domain.EventTextDelta, Text: m.output},
+		{Kind: domain.EventFinish, FinishReason: domain.FinishStop},
 	}}, nil
 }
 
 type extractionStream struct {
-	events []sdk.Event
+	events []domain.Event
 	index  int
 }
 
-func (s *extractionStream) Next(context.Context) (sdk.Event, error) {
+func (s *extractionStream) Next(context.Context) (domain.Event, error) {
 	if s.index >= len(s.events) {
-		return sdk.Event{}, io.EOF
+		return domain.Event{}, io.EOF
 	}
 	event := s.events[s.index]
 	s.index++
@@ -79,7 +80,7 @@ func TestExtractorPersistsWorkspaceMemoryAndRevision(t *testing.T) {
 	now := time.Date(2026, 9, 13, 4, 0, 0, 0, time.UTC)
 	state := session.State{
 		SessionID: "previous", Revision: 3, WorkspaceKey: "ws", UpdatedAt: now.Add(-time.Hour),
-		Messages: []session.Message{{ID: "m1", Role: sdk.RoleUser, Content: "Run go test ./... before finishing."}},
+		Messages: []session.Message{{ID: "m1", Role: domain.RoleUser, Content: "Run go test ./... before finishing."}},
 	}
 	sessions := &extractionSessionRepo{
 		states:    map[string]session.State{"previous": state},
@@ -107,7 +108,7 @@ func TestExtractorPersistsWorkspaceMemoryAndRevision(t *testing.T) {
 
 func TestExtractorNoOpStillMarksRevisionProcessed(t *testing.T) {
 	now := time.Date(2026, 9, 13, 4, 0, 0, 0, time.UTC)
-	state := session.State{SessionID: "previous", Revision: 2, WorkspaceKey: "ws", UpdatedAt: now.Add(-time.Hour), Messages: []session.Message{{ID: "m1", Role: sdk.RoleUser, Content: "hello"}}}
+	state := session.State{SessionID: "previous", Revision: 2, WorkspaceKey: "ws", UpdatedAt: now.Add(-time.Hour), Messages: []session.Message{{ID: "m1", Role: domain.RoleUser, Content: "hello"}}}
 	sessions := &extractionSessionRepo{states: map[string]session.State{"previous": state}, summaries: []session.Summary{{ID: "previous", WorkspaceKey: "ws", UpdatedAt: state.UpdatedAt}}}
 	memories := &fakeRepository{}
 	model := &extractionModel{output: `{"memories":[]}`}
@@ -132,7 +133,7 @@ func TestExtractorNoOpStillMarksRevisionProcessed(t *testing.T) {
 
 func TestExtractorRedactsSecretsBeforeModelAndPersistence(t *testing.T) {
 	now := time.Date(2026, 9, 13, 4, 0, 0, 0, time.UTC)
-	state := session.State{SessionID: "previous", Revision: 1, WorkspaceKey: "ws", UpdatedAt: now.Add(-time.Hour), Messages: []session.Message{{ID: "m1", Role: sdk.RoleUser, Content: "api_key=super-secret-token use headers"}}}
+	state := session.State{SessionID: "previous", Revision: 1, WorkspaceKey: "ws", UpdatedAt: now.Add(-time.Hour), Messages: []session.Message{{ID: "m1", Role: domain.RoleUser, Content: "api_key=super-secret-token use headers"}}}
 	sessions := &extractionSessionRepo{states: map[string]session.State{"previous": state}, summaries: []session.Summary{{ID: "previous", WorkspaceKey: "ws", UpdatedAt: state.UpdatedAt}}}
 	memories := &fakeRepository{}
 	model := &extractionModel{output: `{"memories":[{"scope":"workspace","kind":"repo_fact","key":"auth header","value":"api_key=another-secret-token","confidence":0.9,"message_ids":["m1"]}]}`}
@@ -151,7 +152,7 @@ func TestExtractorRedactsSecretsBeforeModelAndPersistence(t *testing.T) {
 
 func TestExtractorSkipsCurrentSession(t *testing.T) {
 	now := time.Date(2026, 9, 13, 4, 0, 0, 0, time.UTC)
-	state := session.State{SessionID: "current", Revision: 1, WorkspaceKey: "ws", UpdatedAt: now.Add(-time.Hour), Messages: []session.Message{{ID: "m1", Role: sdk.RoleUser, Content: "remember this"}}}
+	state := session.State{SessionID: "current", Revision: 1, WorkspaceKey: "ws", UpdatedAt: now.Add(-time.Hour), Messages: []session.Message{{ID: "m1", Role: domain.RoleUser, Content: "remember this"}}}
 	sessions := &extractionSessionRepo{states: map[string]session.State{"current": state}, summaries: []session.Summary{{ID: "current", WorkspaceKey: "ws", UpdatedAt: state.UpdatedAt}}}
 	model := &extractionModel{output: `{"memories":[]}`}
 	extractor := NewExtractor(sessions, &fakeRepository{}, model, "current", "ws", runtimepolicy.DurableMemory())

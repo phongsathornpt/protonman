@@ -9,7 +9,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 	"github.com/phongsathornpt/protonman/internal/platform/appdirs"
 	"github.com/phongsathornpt/protonman/internal/platform/sandbox"
-	"github.com/phongsathornpt/protonman/proton-sdk/domain"
+	"github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
 )
 
 // Options controls which configuration layers are considered.

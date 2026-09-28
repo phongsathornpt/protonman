@@ -135,7 +135,9 @@ func (s *shell) layoutConversation(gtx layout.Context, session desktopstate.Sess
 		children := make([]layout.FlexChild, 0, 2)
 		if history == historyStateLoading || session.HistoryTruncated {
 			children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				return s.layoutHistoryBanner(gtx, session.HistoryTruncated)
+				return desktopInset{Top: 8, Bottom: 8, Left: 16, Right: 16}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+					return s.layoutHistoryBanner(gtx, session.HistoryTruncated)
+				})
 			}))
 		}
 		children = append(children, layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
@@ -317,7 +319,7 @@ func (s *shell) layoutActiveThinkingIndicator(gtx layout.Context, session deskto
 		label = "Thinking and working (reasoning: " + session.Runtime.Reasoning + ")…"
 	}
 
-	return desktopInset{Top: 6, Bottom: 10, Left: 12, Right: 12}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+	return desktopInset{Top: 6, Bottom: 10, Left: 16, Right: 16}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 		return s.roundedSurface(gtx, shapeFull, s.theme.surfaceContainerHigh, func(gtx layout.Context) layout.Dimensions {
 			return desktopInset{Top: 6, Bottom: 6, Left: 14, Right: 14}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 				return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
@@ -337,22 +339,30 @@ func (s *shell) layoutTimelineItem(gtx layout.Context, sessionID string, index i
 	}
 
 	if item.Kind == desktopstate.TimelineUser {
-		return desktopInset{Top: 8, Bottom: 8, Left: 64, Right: 12}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-			return s.roundedSurface(gtx, shapeLarge, s.theme.secondaryContainer, func(gtx layout.Context) layout.Dimensions {
-				semantic.DescriptionOp(conversationItemDescription(descriptionItem)).Add(gtx.Ops)
-				return desktopInset{Top: 10, Bottom: 10, Left: 14, Right: 14}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-					return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
-						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-							return s.layoutLabel(gtx, "You", textLabelSmall, font.SemiBold, s.theme.onSecondaryContainer, 1)
-						}),
-						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-							return desktopInset{Top: 2}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-								return s.layoutLabel(gtx, item.Text, textBodyMedium, font.Normal, s.theme.onSecondaryContainer, 0)
-							})
-						}),
-					)
-				})
-			})
+		return desktopInset{Top: 8, Bottom: 8, Left: 16, Right: 16}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+			semantic.DescriptionOp(conversationItemDescription(descriptionItem)).Add(gtx.Ops)
+			return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Start}.Layout(gtx,
+				layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+					return layout.Spacer{}.Layout(gtx)
+				}),
+				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+					gtx.Constraints.Max.X = min(gtx.Constraints.Max.X, gtx.Dp(680))
+					return s.roundedSurface(gtx, shapeLarge, s.theme.secondaryContainer, func(gtx layout.Context) layout.Dimensions {
+						return desktopInset{Top: 10, Bottom: 10, Left: 14, Right: 14}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+							return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
+								layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+									return s.layoutLabel(gtx, "You", textLabelSmall, font.SemiBold, s.theme.onSecondaryContainer, 1)
+								}),
+								layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+									return desktopInset{Top: 2}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+										return s.layoutLabel(gtx, item.Text, textBodyMedium, font.Normal, s.theme.onSecondaryContainer, 0)
+									})
+								}),
+							)
+						})
+					})
+				}),
+			)
 		})
 	}
 
@@ -361,7 +371,7 @@ func (s *shell) layoutTimelineItem(gtx layout.Context, sessionID string, index i
 	}
 
 	if item.Kind == desktopstate.TimelineStatus {
-		return desktopUniformInset(6).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+		return desktopInset{Top: 6, Bottom: 6, Left: 16, Right: 16}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 			return s.roundedSurface(gtx, shapeMedium, s.theme.errorContainer, func(gtx layout.Context) layout.Dimensions {
 				semantic.DescriptionOp(conversationItemDescription(descriptionItem)).Add(gtx.Ops)
 				return desktopInset{Top: 10, Bottom: 10, Left: 14, Right: 14}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
@@ -376,7 +386,7 @@ func (s *shell) layoutTimelineItem(gtx layout.Context, sessionID string, index i
 	parsed := parseAssistantThinking(item.Text)
 	foreground := s.theme.onSurface
 
-	return desktopInset{Top: 8, Bottom: 12, Left: 12, Right: 32}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+	return desktopInset{Top: 8, Bottom: 12, Left: 16, Right: 16}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 		semantic.DescriptionOp(conversationItemDescription(descriptionItem)).Add(gtx.Ops)
 		children := []layout.FlexChild{
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
@@ -623,7 +633,7 @@ func (s *shell) layoutToolItem(gtx layout.Context, item desktopstate.TimelineIte
 		return s.layoutDiffToolItem(gtx, item, statusLabel, statusBg, statusFg)
 	}
 
-	return desktopUniformInset(6).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+	return desktopInset{Top: 6, Bottom: 6, Left: 16, Right: 16}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 		return s.roundedBorderSurface(gtx, shapeMedium, s.theme.surfaceContainerHigh, s.theme.outlineVariant, 1, func(gtx layout.Context) layout.Dimensions {
 			semantic.DescriptionOp(conversationItemDescription(item)).Add(gtx.Ops)
 			return desktopInset{Top: 8, Bottom: 8, Left: 12, Right: 12}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
@@ -669,7 +679,7 @@ func (s *shell) layoutDiffToolItem(gtx layout.Context, item desktopstate.Timelin
 
 	previewLines, omitted := diffutil.ExtractPreview(item.Text, 24)
 
-	return desktopUniformInset(6).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+	return desktopInset{Top: 6, Bottom: 6, Left: 16, Right: 16}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 		return s.roundedBorderSurface(gtx, shapeMedium, s.theme.surfaceContainerHigh, s.theme.outlineVariant, 1, func(gtx layout.Context) layout.Dimensions {
 			semantic.DescriptionOp(conversationItemDescription(item)).Add(gtx.Ops)
 			return desktopInset{Top: 10, Bottom: 10, Left: 14, Right: 14}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
@@ -816,7 +826,7 @@ func (s *shell) layoutSubagentItem(gtx layout.Context, subagent desktopstate.Sub
 		statusFg = s.theme.onErrorContainer
 	}
 
-	return desktopUniformInset(6).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+	return desktopInset{Top: 6, Bottom: 6, Left: 16, Right: 16}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 		return s.roundedBorderSurface(gtx, shapeLarge, s.theme.surfaceContainerHigh, s.theme.outlineVariant, 1, func(gtx layout.Context) layout.Dimensions {
 			semantic.DescriptionOp("Delegated agent " + subagent.Profile + ", " + subagent.Status + ", " + subagent.Task).Add(gtx.Ops)
 			return layout.Stack{Alignment: layout.W}.Layout(gtx,
@@ -1296,7 +1306,7 @@ func (s *shell) layoutComposer(gtx layout.Context, session desktopstate.SessionS
 	connected := sessionConnection(snapshot, session.AgentID) == connectionConnected
 	loading := snapshot.HistoryState == historyStateLoading
 	canSend := connected && !busy && !loading
-	compact := gtx.Constraints.Max.X < gtx.Dp(420)
+	compact := gtx.Constraints.Max.X < gtx.Dp(480)
 	helper := composerHelper(compact, busy, loading, connected)
 	s.activeWorkspace = session.Workspace
 	s.composer.ReadOnly = !canSend
@@ -1386,62 +1396,76 @@ func (s *shell) layoutComposer(gtx layout.Context, session desktopstate.SessionS
 		helperColor = s.theme.onErrorContainer
 	}
 
-	return outerInset.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-		return s.roundedBorderSurface(gtx, shapeExtraLarge, s.theme.surfaceContainer, s.theme.outlineVariant, 1, func(gtx layout.Context) layout.Dimensions {
-			innerInset := desktopInset{Top: 8, Bottom: 8, Left: 12, Right: 12}
-			if compact {
-				innerInset = desktopInset{Top: 6, Bottom: 6, Left: 10, Right: 10}
-			}
-			return innerInset.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-				children := make([]layout.FlexChild, 0, 5)
-				if s.mentionActive && len(s.mentionItems) > 0 {
-					children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-						return s.layoutMentionPopup(gtx)
-					}))
+	borderColor := s.theme.outlineVariant
+	borderWidth := 1
+	if gtx.Focused(&s.composer) {
+		borderColor = s.theme.primary
+		borderWidth = 2
+	}
+
+	return layout.Stack{Alignment: layout.Center}.Layout(gtx, layout.Stacked(func(gtx layout.Context) layout.Dimensions {
+		gtx.Constraints.Max.X = min(gtx.Constraints.Max.X, gtx.Dp(840))
+		return outerInset.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+			return s.roundedBorderSurface(gtx, shapeExtraLarge, s.theme.surfaceContainer, borderColor, borderWidth, func(gtx layout.Context) layout.Dimensions {
+				innerInset := desktopInset{Top: 8, Bottom: 8, Left: 12, Right: 12}
+				if compact {
+					innerInset = desktopInset{Top: 6, Bottom: 6, Left: 10, Right: 10}
 				}
-				if s.modelPopoverVisible {
-					children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-						return s.layoutModelPopover(gtx, session, canSend)
-					}))
-				} else if s.reasoningPopoverVisible {
-					children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-						return s.layoutReasoningPopover(gtx, session, canSend)
-					}))
-				}
-				children = append(children,
-					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-						return s.layoutComposerEditor(gtx, canSend, compact)
-					}),
-					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-						return desktopInset{Top: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-							return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
-								layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-									return s.layoutComposerContextChips(gtx, session, canSend)
-								}),
-								layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-									if helper == "" {
-										return layout.Spacer{}.Layout(gtx)
-									}
-									return desktopInset{Left: 8, Right: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-										return s.layoutLabel(gtx, helper, textLabelSmall, font.Normal, helperColor, 1)
-									})
-								}),
-								layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-									if busy {
-										return s.layoutComposerActionButton(gtx, &s.stopButton, "■", "Stop prompt", connected, true, s.onCancelPrompt)
-									}
-									return s.layoutComposerActionButton(gtx, &s.sendButton, "↑", "Send prompt", canSend && strings.TrimSpace(s.composer.Text()) != "", false, func() {
-										s.submitComposer(s.composer.Text())
-									})
-								}),
-							)
-						})
-					}),
-				)
-				return layout.Flex{Axis: layout.Vertical}.Layout(gtx, children...)
+				return innerInset.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+					children := make([]layout.FlexChild, 0, 5)
+					if s.mentionActive && len(s.mentionItems) > 0 {
+						children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+							return s.layoutMentionPopup(gtx)
+						}))
+					}
+					if s.modelPopoverVisible {
+						children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+							return s.layoutModelPopover(gtx, session, canSend)
+						}))
+					} else if s.reasoningPopoverVisible {
+						children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+							return s.layoutReasoningPopover(gtx, session, canSend)
+						}))
+					}
+					children = append(children,
+						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+							return s.layoutComposerEditor(gtx, canSend, compact)
+						}),
+						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+							return desktopInset{Top: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+								return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
+									layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+										return s.layoutComposerContextChips(gtx, session, canSend)
+									}),
+									layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+										if helper == "" {
+											return layout.Spacer{}.Layout(gtx)
+										}
+										return desktopInset{Left: 8, Right: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+											return s.layoutLabel(gtx, helper, textLabelSmall, font.Normal, helperColor, 1)
+										})
+									}),
+									layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+										if busy {
+											return s.layoutComposerActionButton(gtx, &s.stopButton, "Stop", "Stop prompt", connected, true, s.onCancelPrompt)
+										}
+										label := "↑"
+										if !compact {
+											label = "Send"
+										}
+										return s.layoutComposerActionButton(gtx, &s.sendButton, label, "Send prompt", canSend && strings.TrimSpace(s.composer.Text()) != "", false, func() {
+											s.submitComposer(s.composer.Text())
+										})
+									}),
+								)
+							})
+						}),
+					)
+					return layout.Flex{Axis: layout.Vertical}.Layout(gtx, children...)
+				})
 			})
 		})
-	})
+	}))
 }
 
 func (s *shell) layoutComposerActionButton(gtx layout.Context, button *widget.Clickable, icon, tooltip string, enabled, danger bool, action func()) layout.Dimensions {
@@ -1452,8 +1476,12 @@ func (s *shell) layoutComposerActionButton(gtx layout.Context, button *widget.Cl
 		gtx = gtx.Disabled()
 	}
 	size := gtx.Dp(32)
-	gtx.Constraints.Min = image.Pt(size, size)
-	gtx.Constraints.Max = image.Pt(size, size)
+	width := size
+	if icon == "Send" {
+		width = gtx.Dp(76)
+	}
+	gtx.Constraints.Min = image.Pt(width, size)
+	gtx.Constraints.Max = image.Pt(width, size)
 	semantic.Button.Add(gtx.Ops)
 	semantic.EnabledOp(gtx.Enabled()).Add(gtx.Ops)
 	semantic.DescriptionOp(tooltip).Add(gtx.Ops)
@@ -1473,7 +1501,21 @@ func (s *shell) layoutComposerActionButton(gtx layout.Context, button *widget.Cl
 	dims := button.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 		return s.roundedSurface(gtx, shapeFull, bg, func(gtx layout.Context) layout.Dimensions {
 			return layout.Stack{Alignment: layout.Center}.Layout(gtx, layout.Stacked(func(gtx layout.Context) layout.Dimensions {
-				return s.layoutLabel(gtx, icon, textTitleMedium, font.Bold, fg, 1)
+				kind := iconSend
+				if icon == "Stop" {
+					kind = iconStop
+				}
+				if icon == "↑" || icon == "Stop" {
+					return s.layoutActionIcon(gtx, kind, 16, fg)
+				}
+				return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
+					layout.Rigid(func(gtx layout.Context) layout.Dimensions { return s.layoutActionIcon(gtx, kind, 16, fg) }),
+					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+						return desktopInset{Left: 5}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+							return s.layoutLabel(gtx, icon, textTitleMedium, font.Bold, fg, 1)
+						})
+					}),
+				)
 			}))
 		})
 	})
@@ -1579,9 +1621,9 @@ func (s *shell) layoutComposerContextChips(gtx layout.Context, session desktopst
 		if !enabled {
 			chipGtx = chipGtx.Disabled()
 		}
-		chevron := "▾"
+		chevronKind := iconChevronDown
 		if s.modelPopoverVisible {
-			chevron = "▴"
+			chevronKind = iconChevronUp
 		}
 		return desktopInset{Right: 6}.Layout(chipGtx, func(gtx layout.Context) layout.Dimensions {
 			return s.modelChipButton.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
@@ -1593,7 +1635,7 @@ func (s *shell) layoutComposerContextChips(gtx layout.Context, session desktopst
 							}),
 							layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 								return desktopInset{Left: 4}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-									return s.layoutLabel(gtx, chevron, textLabelSmall, font.Normal, fg, 1)
+									return s.layoutActionIcon(gtx, chevronKind, 10, fg)
 								})
 							}),
 						)
@@ -1629,9 +1671,9 @@ func (s *shell) layoutComposerContextChips(gtx layout.Context, session desktopst
 		if !enabled {
 			chipGtx = chipGtx.Disabled()
 		}
-		chevron := "▾"
+		chevronKind := iconChevronDown
 		if s.reasoningPopoverVisible {
-			chevron = "▴"
+			chevronKind = iconChevronUp
 		}
 		return desktopInset{Right: 6}.Layout(chipGtx, func(gtx layout.Context) layout.Dimensions {
 			return s.reasoningChipButton.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
@@ -1643,7 +1685,7 @@ func (s *shell) layoutComposerContextChips(gtx layout.Context, session desktopst
 							}),
 							layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 								return desktopInset{Left: 4}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-									return s.layoutLabel(gtx, chevron, textLabelSmall, font.Normal, fg, 1)
+									return s.layoutActionIcon(gtx, chevronKind, 10, fg)
 								})
 							}),
 						)
@@ -1663,12 +1705,13 @@ func (s *shell) layoutComposerContextChips(gtx layout.Context, session desktopst
 }
 
 func (s *shell) layoutComposerEditor(gtx layout.Context, enabled, compact bool) layout.Dimensions {
-	minHeight, maxHeight, verticalInset := gtx.Dp(64), gtx.Dp(96), unit.Dp(8)
+	minHeight, maxHeight, verticalInset := gtx.Dp(44), gtx.Dp(180), unit.Dp(8)
 	if compact {
-		minHeight, maxHeight, verticalInset = gtx.Dp(56), gtx.Dp(80), unit.Dp(6)
+		minHeight, maxHeight, verticalInset = gtx.Dp(40), gtx.Dp(140), unit.Dp(6)
 	}
 	gtx.Constraints.Min.Y = minHeight
 	gtx.Constraints.Max.Y = min(gtx.Constraints.Max.Y, maxHeight)
+	gtx.Constraints.Min.X = gtx.Constraints.Max.X
 	textColor := s.theme.onSurface
 	if !enabled {
 		textColor = s.theme.onSurfaceVariant
@@ -1679,34 +1722,21 @@ func (s *shell) layoutComposerEditor(gtx layout.Context, enabled, compact bool) 
 	selectionMaterial := op.Record(gtx.Ops)
 	paint.ColorOp{Color: s.theme.primaryContainer}.Add(gtx.Ops)
 	selectionCall := selectionMaterial.Stop()
-	dims := s.roundedSurface(gtx, shapeSmall, s.theme.surface, func(gtx layout.Context) layout.Dimensions {
-		gtx.Constraints.Min.Y = minHeight
-		gtx.Constraints.Max.Y = min(gtx.Constraints.Max.Y, maxHeight)
-		return desktopInset{Top: verticalInset, Bottom: verticalInset, Left: 12, Right: 12}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-			children := []layout.StackChild{
-				layout.Expanded(func(gtx layout.Context) layout.Dimensions {
-					semantic.DescriptionOp("Message Protonman. Press Enter to send; Shift+Enter to insert a new line.").Add(gtx.Ops)
-					return s.composer.Layout(gtx, s.theme.material.Shaper, s.theme.textFont(font.Normal), textBodyMedium, textCall, selectionCall)
-				}),
-			}
-			if strings.TrimSpace(s.composer.Text()) == "" && !gtx.Focused(&s.composer) {
-				children = append(children, layout.Stacked(func(gtx layout.Context) layout.Dimensions {
-					return s.layoutLabel(gtx, "Message Protonman…", textBodyMedium, font.Normal, s.theme.onSurfaceVariant, 1)
-				}))
-			}
-			return layout.Stack{Alignment: layout.NW}.Layout(gtx, children...)
-		})
+	return desktopInset{Top: verticalInset, Bottom: verticalInset, Left: 12, Right: 12}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+		children := []layout.StackChild{
+			layout.Stacked(func(gtx layout.Context) layout.Dimensions {
+				gtx.Constraints.Min.X = gtx.Constraints.Max.X
+				semantic.DescriptionOp("Message Protonman. Press Enter to send; Shift+Enter to insert a new line.").Add(gtx.Ops)
+				return s.composer.Layout(gtx, s.theme.material.Shaper, s.theme.textFont(font.Normal), textBodyMedium, textCall, selectionCall)
+			}),
+		}
+		if strings.TrimSpace(s.composer.Text()) == "" && !gtx.Focused(&s.composer) {
+			children = append(children, layout.Stacked(func(gtx layout.Context) layout.Dimensions {
+				return s.layoutLabel(gtx, "Message Protonman…", textBodyMedium, font.Normal, s.theme.onSurfaceVariant, 1)
+			}))
+		}
+		return layout.Stack{Alignment: layout.NW}.Layout(gtx, children...)
 	})
-	if gtx.Focused(&s.composer) {
-		widget.Border{Color: s.theme.primary, CornerRadius: shapeSmall, Width: 2}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-			return layout.Dimensions{Size: dims.Size}
-		})
-	} else {
-		widget.Border{Color: s.theme.outlineVariant, CornerRadius: shapeSmall, Width: 1}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-			return layout.Dimensions{Size: dims.Size}
-		})
-	}
-	return dims
 }
 
 func (s *shell) submitComposer(text string) {

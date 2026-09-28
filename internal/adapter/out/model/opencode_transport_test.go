@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	domain "github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
 )
 
 func TestResolveOpenCodeTransport(t *testing.T) {
@@ -66,8 +66,8 @@ func TestOpenCodeZenUsesDocumentedRequestEndpoint(t *testing.T) {
 				"zen-key",
 				test.modelID,
 			)
-			_, err := languageModel.Stream(context.Background(), sdk.Request{
-				Messages: []sdk.Message{{Role: sdk.RoleUser, Content: "hello"}},
+			_, err := languageModel.Stream(context.Background(), domain.Request{
+				Messages: []domain.Message{{Role: domain.RoleUser, Content: "hello"}},
 			})
 			if err == nil {
 				t.Fatal("expected endpoint fixture to return an error")
@@ -92,8 +92,8 @@ func TestOpenCodeZenRejectsUnsupportedModelBeforeRequest(t *testing.T) {
 		"zen-key",
 		"gemini-3.8-flash",
 	)
-	_, err := languageModel.Stream(context.Background(), sdk.Request{
-		Messages: []sdk.Message{{Role: sdk.RoleUser, Content: "hello"}},
+	_, err := languageModel.Stream(context.Background(), domain.Request{
+		Messages: []domain.Message{{Role: domain.RoleUser, Content: "hello"}},
 	})
 	if err == nil || !strings.Contains(err.Error(), "unsupported OpenCode model transport") {
 		t.Fatalf("error = %v, want unsupported transport error", err)
@@ -118,8 +118,8 @@ func TestOpenCodeRouteLeavesNineRouterModelIDUntouched(t *testing.T) {
 		"router-key",
 		"oc/gpt-5.5",
 	)
-	_, err := languageModel.Stream(context.Background(), sdk.Request{
-		Messages: []sdk.Message{{Role: sdk.RoleUser, Content: "hello"}},
+	_, err := languageModel.Stream(context.Background(), domain.Request{
+		Messages: []domain.Message{{Role: domain.RoleUser, Content: "hello"}},
 	})
 	if err == nil {
 		t.Fatal("expected endpoint fixture to return an error")

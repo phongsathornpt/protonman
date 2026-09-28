@@ -6,44 +6,44 @@ import (
 
 	"github.com/phongsathornpt/protonman/internal/engine/toolcall"
 	"github.com/phongsathornpt/protonman/internal/engine/turn"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	domain "github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
 )
 
 func TestReasoningResolverSnapshotsOverrides(t *testing.T) {
-	overrides := map[Profile]sdk.ReasoningEffort{ProfileIntelligence: sdk.ReasoningHigh}
+	overrides := map[Profile]domain.ReasoningEffort{ProfileIntelligence: domain.ReasoningHigh}
 	resolver, err := NewReasoningResolver(overrides)
 	if err != nil {
 		t.Fatal(err)
 	}
-	overrides[ProfileIntelligence] = sdk.ReasoningLow
-	if got := resolver.Resolve(ProfileIntelligence, sdk.ReasoningMedium); got != sdk.ReasoningHigh {
+	overrides[ProfileIntelligence] = domain.ReasoningLow
+	if got := resolver.Resolve(ProfileIntelligence, domain.ReasoningMedium); got != domain.ReasoningHigh {
 		t.Fatalf("resolved reasoning = %q, want high", got)
 	}
-	if got := resolver.Resolve(ProfileAgility, sdk.ReasoningLow); got != sdk.ReasoningLow {
+	if got := resolver.Resolve(ProfileAgility, domain.ReasoningLow); got != domain.ReasoningLow {
 		t.Fatalf("fallback reasoning = %q, want low", got)
 	}
 }
 
 func TestReasoningResolverTreatsAutoAsFallback(t *testing.T) {
-	resolver, err := NewReasoningResolver(map[Profile]sdk.ReasoningEffort{
-		ProfileAgility: sdk.ReasoningDefault,
+	resolver, err := NewReasoningResolver(map[Profile]domain.ReasoningEffort{
+		ProfileAgility: domain.ReasoningDefault,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := resolver.Resolve(ProfileAgility, sdk.ReasoningMedium); got != sdk.ReasoningMedium {
+	if got := resolver.Resolve(ProfileAgility, domain.ReasoningMedium); got != domain.ReasoningMedium {
 		t.Fatalf("auto reasoning = %q, want global fallback medium", got)
 	}
 }
 
 func TestReasoningResolverRejectsInvalidOverrides(t *testing.T) {
-	if _, err := NewReasoningResolver(map[Profile]sdk.ReasoningEffort{
-		ProfileUniversal: sdk.ReasoningHigh,
+	if _, err := NewReasoningResolver(map[Profile]domain.ReasoningEffort{
+		ProfileUniversal: domain.ReasoningHigh,
 	}); err == nil {
 		t.Fatal("expected Universal reasoning override rejection")
 	}
-	if _, err := NewReasoningResolver(map[Profile]sdk.ReasoningEffort{
-		ProfileStrength: sdk.ReasoningEffort("turbo"),
+	if _, err := NewReasoningResolver(map[Profile]domain.ReasoningEffort{
+		ProfileStrength: domain.ReasoningEffort("turbo"),
 	}); err == nil {
 		t.Fatal("expected invalid reasoning rejection")
 	}
@@ -51,7 +51,7 @@ func TestReasoningResolverRejectsInvalidOverrides(t *testing.T) {
 
 func TestCoordinatorBindsReasoningAtAdmission(t *testing.T) {
 	coord := NewCoordinator(nil, emptyRegistry{}, nil, nil,
-		WithReasoningEffort(sdk.ReasoningLow),
+		WithReasoningEffort(domain.ReasoningLow),
 		WithRunnerFactory(func(Profile, *toolcall.Service) (turn.Runner, error) {
 			return &mockRunner{}, nil
 		}),
@@ -61,9 +61,9 @@ func TestCoordinatorBindsReasoningAtAdmission(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	coord.SetReasoningEffort(sdk.ReasoningMedium)
-	resolver, err := NewReasoningResolver(map[Profile]sdk.ReasoningEffort{
-		ProfileIntelligence: sdk.ReasoningHigh,
+	coord.SetReasoningEffort(domain.ReasoningMedium)
+	resolver, err := NewReasoningResolver(map[Profile]domain.ReasoningEffort{
+		ProfileIntelligence: domain.ReasoningHigh,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -83,7 +83,7 @@ func TestCoordinatorBindsReasoningAtAdmission(t *testing.T) {
 	secondEffort := coord.agents[second.ID].reasoningEffort
 	thirdEffort := coord.agents[third.ID].reasoningEffort
 	coord.agentsMu.RUnlock()
-	if firstEffort != sdk.ReasoningLow || secondEffort != sdk.ReasoningMedium || thirdEffort != sdk.ReasoningHigh {
+	if firstEffort != domain.ReasoningLow || secondEffort != domain.ReasoningMedium || thirdEffort != domain.ReasoningHigh {
 		t.Fatalf("bound reasoning = %q, %q, %q; want low, medium, high", firstEffort, secondEffort, thirdEffort)
 	}
 }

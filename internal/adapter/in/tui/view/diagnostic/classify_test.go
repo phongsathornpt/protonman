@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	applicationturn "github.com/phongsathornpt/protonman/internal/engine/turn"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	domain "github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
 )
 
 func TestClassifyRuntimeDeadlineIsNotNetworkTimeout(t *testing.T) {
@@ -47,7 +47,7 @@ func TestClassifyEmptyModelResponseIsActionable(t *testing.T) {
 }
 
 func TestClassifyIncompleteModelStreamIsDistinctFromTimeout(t *testing.T) {
-	err := fmt.Errorf("read model stream: %w", sdk.ErrIncompleteStream)
+	err := fmt.Errorf("read model stream: %w", domain.ErrIncompleteStream)
 	got := Classify(err, "opencode", "nemotron-3.5-lightning-free")
 	if got.Kind != KindStreamIncomplete || !got.Retryable {
 		t.Fatalf("classification = %+v, want retryable incomplete stream", got)
@@ -58,7 +58,7 @@ func TestClassifyIncompleteModelStreamIsDistinctFromTimeout(t *testing.T) {
 }
 
 func TestClassifyBoundedIncompleteStreamTimeoutRemainsTimeout(t *testing.T) {
-	err := fmt.Errorf("read model stream: %w: opencode free model stream became idle before completion", sdk.ErrIncompleteStream)
+	err := fmt.Errorf("read model stream: %w: opencode free model stream became idle before completion", domain.ErrIncompleteStream)
 	got := Classify(err, "opencode", "nemotron-3.5-lightning-free")
 	if got.Kind != KindStreamTimeout || !got.Retryable {
 		t.Fatalf("classification = %+v, want retryable stream timeout", got)

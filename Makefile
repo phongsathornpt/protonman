@@ -9,7 +9,7 @@ BINARY := $(BIN_DIR)/$(BIN_NAME)
 DESKTOP_GIO_BINARY := $(BIN_DIR)/protonman-desktop-gio
 INSTALL_DIR ?= $(HOME)/.local/bin
 INSTALL_BINARY := $(INSTALL_DIR)/$(BIN_NAME)
-GO_SOURCES := $(shell find cmd internal proton-sdk -type f -name '*.go' ! -name '*_test.go')
+GO_SOURCES := $(shell find cmd internal pkg -type f -name '*.go' ! -name '*_test.go')
 VERSION ?= $(shell git describe --tags --always --dirty --match 'v[0-9]*' 2>/dev/null || echo dev)
 VERSION_LDFLAGS := -X github.com/phongsathornpt/protonman/internal/base/buildinfo.version=$(VERSION)
 DEFAULT_LDFLAGS ?= -s -w
@@ -80,7 +80,7 @@ test:
 ## test-architecture: Run architecture and SDK ownership regression guards
 test-architecture:
 	go test ./test/architecture/...
-	go test ./proton-sdk/... -run 'Ownership|Architecture|Contract'
+	go test ./pkg/proton-sdk/...
 
 ## test-architecture-desktop: Run architecture guards with the Gio desktop client visible
 test-architecture-desktop:

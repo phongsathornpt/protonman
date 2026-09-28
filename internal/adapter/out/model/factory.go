@@ -4,7 +4,7 @@ import (
 	"strings"
 
 	"github.com/phongsathornpt/protonman/internal/core/modelclient"
-	"github.com/phongsathornpt/protonman/proton-sdk/port"
+	"github.com/phongsathornpt/protonman/pkg/proton-sdk/port"
 )
 
 // Factory constructs concrete provider language models for the core model-client port.

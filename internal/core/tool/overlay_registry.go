@@ -3,8 +3,8 @@ package tool
 import (
 	"fmt"
 
-	"github.com/phongsathornpt/protonman/proton-sdk/domain"
-	"github.com/phongsathornpt/protonman/proton-sdk/usecase"
+	"github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
+	"github.com/phongsathornpt/protonman/pkg/proton-sdk/usecase"
 )
 
 // OverlayRegistry replaces selected handlers while preserving the base

@@ -1,6 +1,6 @@
 package modelprofile
 
-import "github.com/phongsathornpt/protonman/proton-sdk/domain"
+import "github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
 
 var builtinRegistry = mustRegistry(
 	Profile{

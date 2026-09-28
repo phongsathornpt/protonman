@@ -22,6 +22,36 @@ import (
 	desktopstate "github.com/phongsathornpt/protonman/internal/feature/desktop"
 )
 
+func TestMainEmptyStateCopy(t *testing.T) {
+	tests := []struct {
+		name      string
+		state     desktopstate.State
+		wantTitle string
+		wantReady bool
+	}{
+		{name: "no projects", wantTitle: "Start with a project"},
+		{name: "project not selected", state: desktopstate.State{Projects: []desktopstate.ProjectState{{ID: "p1"}}}, wantTitle: "Select a project"},
+		{name: "project selected", state: desktopstate.State{ActiveProjectID: "p1", Projects: []desktopstate.ProjectState{{ID: "p1"}}}, wantTitle: "Your workspace is ready", wantReady: true},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			title, body, ready := mainEmptyStateCopy(test.state)
+			if title != test.wantTitle {
+				t.Fatalf("title = %q, want %q", title, test.wantTitle)
+			}
+			if ready != test.wantReady {
+				t.Fatalf("ready = %t, want %t", ready, test.wantReady)
+			}
+			if body == "" {
+				t.Fatal("empty-state body must explain the next step")
+			}
+			if test.name == "no projects" && !strings.Contains(body, "adding a new project or folder isn’t available") {
+				t.Fatalf("no-project guidance omits setup limitation: %q", body)
+			}
+		})
+	}
+}
+
 func TestDesktopStreamingRenderRetentionSoak(t *testing.T) {
 	view := newShell(newTheme("light"))
 	snapshot := benchmarkShellSnapshot()

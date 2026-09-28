@@ -24,37 +24,23 @@ termination behavior should live with the runtime/turn engine that actually uses
 
 ## Package Shape
 
-`proton-sdk` is structured into Clean Architecture layers with grouping folders while keeping the root package `protonsdk` as a 100% backward-compatible facade so all existing callers continue to work seamlessly without nested import paths.
+`proton-sdk` is structured into Clean Architecture layers with grouping folders. Callers import the layer package that owns the symbol they need (`domain`, `port`, `usecase`, or a concrete `provider`).
 
-- **`domain/`** (`package domain`): Pure domain entities, value objects, domain errors, and self-contained validation logic. Zero internal dependencies.
+- **`domain/`** (`package domain`): Pure domain entities, value objects, domain errors, self-contained validation logic, and rate-limit header parsing. Zero internal dependencies.
 - **`port/`** (`package port`): Boundary interfaces and extension points (`LanguageModel`, `MetadataModel`, `Stream`, `Middleware`, `SchemaValidator`). Imports `domain`.
 - **`usecase/`** (`package usecase`): Application services and use cases (`collector`, `history`, `schemavalidator`, `registry`, `metadata`). Imports `domain` and `port`.
-- **Root `proton-sdk/`** (`package protonsdk`): Unified facade re-exporting types, constants, variables, and forwarding functions.
-- **`internal/providerutil/`**: Shared provider utilities, configuration normalization, headers parsing, and stream transport runner.
+- **`internal/providerutil/`**: Shared provider utilities, configuration normalization, and stream transport runner.
 - **`provider/`**: Protocol provider implementations (`openai`, `anthropic`).
 
 ```text
-proton-sdk/
-  types.go                 # facade: unified type aliases for domain, port, and usecase
-  model.go                 # facade: model metadata and token limit functions
-  message.go               # facade: message roles, reasoning, and history functions
-  request.go               # facade: request choices and schema validation functions
-  stream.go                # facade: stream events, constructors, and collect functions
-  error.go                 # facade: sentinel errors, retry policy, and rate limit parsing
-  registry.go              # facade: registry and middleware constructors
-  model_test.go
-  message_test.go
-  request_test.go
-  stream_test.go
-  error_test.go
-  registry_test.go
-  ownership_test.go
+pkg/proton-sdk/
   domain/
     model.go               # ModelCapabilities, RequestRequirements, ModelMetadata, TokenLimits
     message.go             # Role, ContentPart, Message, ReasoningEffort
     request.go             # ToolChoice, ModelOptions, Request, Tool, ToolCall, ToolResult
     stream.go              # FinishReason, EventKind, Event, Usage, Response
     error.go               # Sentinel errors, ErrorKind, ProviderError, RateLimitInfo, RetryPolicy
+    ratelimit.go           # ParseRateLimitHeaders and HTTP header helpers
   port/
     model.go               # LanguageModel, MetadataModel, TokenLimitsModel, ContextWindowModel
     stream.go              # Stream interface
@@ -70,7 +56,6 @@ proton-sdk/
     providerutil/
       config.go
       config_test.go
-      headers.go
       options.go
       options_test.go
       transport.go
@@ -91,7 +76,7 @@ proton-sdk/
 ```
 
 Provider wire request/response types remain private to their provider package.
-The root SDK must not depend on concrete provider packages or agent-loop policy.
+The SDK layers must not depend on concrete provider packages or agent-loop policy.
 
 ## Agent Model Contract
 
@@ -191,10 +176,10 @@ anthropic.NewProvider(anthropic.Config{...})
 ```
 
 `openai.ProviderOptions` and `anthropic.ProviderOptions` are deprecated
-compatibility aliases for existing callers. The root `protonsdk.ProviderOptions`
+compatibility aliases for existing callers. The `domain.ProviderOptions`
 type is different: it is the per-request provider escape hatch carried in
 canonical requests and tools. New provider code should use `Config` for
-long-lived construction settings and `protonsdk.ProviderOptions` only for
+long-lived construction settings and `domain.ProviderOptions` only for
 request-scoped wire extensions.
 
 ## Tool Results and Errors
@@ -231,8 +216,8 @@ the primary error.
 
 ## Providers
 
-- `proton-sdk/provider/openai`: Chat Completions, Responses API, OpenAI-compatible gateways, streaming tools, images, usage, and retries.
-- `proton-sdk/provider/anthropic`: Messages API, system mapping, images, `tool_use` / `tool_result`, streaming tool input, usage, and retries.
+- `pkg/proton-sdk/provider/openai`: Chat Completions, Responses API, OpenAI-compatible gateways, streaming tools, images, usage, and retries.
+- `pkg/proton-sdk/provider/anthropic`: Messages API, system mapping, images, `tool_use` / `tool_result`, streaming tool input, usage, and retries.
 
 The CLI provider registry selects the protocol from provider configuration.
 Model discovery is protocol-aware and does not embed fallback model catalogs.

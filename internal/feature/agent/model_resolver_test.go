@@ -6,23 +6,24 @@ import (
 
 	"github.com/phongsathornpt/protonman/internal/engine/toolcall"
 	"github.com/phongsathornpt/protonman/internal/engine/turn"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	domain "github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
+	port "github.com/phongsathornpt/protonman/pkg/proton-sdk/port"
 )
 
 type resolverTestModel struct{ id string }
 
 func (m resolverTestModel) Provider() string { return "test" }
 func (m resolverTestModel) ModelID() string  { return m.id }
-func (resolverTestModel) Capabilities() sdk.ModelCapabilities {
-	return sdk.ModelCapabilities{Tools: true}
+func (resolverTestModel) Capabilities() domain.ModelCapabilities {
+	return domain.ModelCapabilities{Tools: true}
 }
-func (resolverTestModel) Stream(context.Context, sdk.Request) (sdk.Stream, error) {
+func (resolverTestModel) Stream(context.Context, domain.Request) (port.Stream, error) {
 	return nil, nil
 }
 
 func TestModelResolverSnapshotsOverrides(t *testing.T) {
 	original := resolverTestModel{id: "strength-a"}
-	overrides := map[Profile]sdk.LanguageModel{ProfileStrength: original}
+	overrides := map[Profile]port.LanguageModel{ProfileStrength: original}
 	resolver, err := NewModelResolver(overrides)
 	if err != nil {
 		t.Fatal(err)
@@ -39,12 +40,12 @@ func TestModelResolverSnapshotsOverrides(t *testing.T) {
 }
 
 func TestModelResolverRejectsInvalidOverrides(t *testing.T) {
-	if _, err := NewModelResolver(map[Profile]sdk.LanguageModel{
+	if _, err := NewModelResolver(map[Profile]port.LanguageModel{
 		ProfileUniversal: resolverTestModel{id: "main"},
 	}); err == nil {
 		t.Fatal("expected Universal override rejection")
 	}
-	if _, err := NewModelResolver(map[Profile]sdk.LanguageModel{
+	if _, err := NewModelResolver(map[Profile]port.LanguageModel{
 		ProfileAgility: nil,
 	}); err == nil {
 		t.Fatal("expected nil model rejection")
@@ -55,7 +56,7 @@ func TestCoordinatorBindsModelAtAdmission(t *testing.T) {
 	fallbackA := resolverTestModel{id: "universal-a"}
 	fallbackB := resolverTestModel{id: "universal-b"}
 	strength := resolverTestModel{id: "strength-model"}
-	resolver, err := NewModelResolver(map[Profile]sdk.LanguageModel{
+	resolver, err := NewModelResolver(map[Profile]port.LanguageModel{
 		ProfileStrength: strength,
 	})
 	if err != nil {
@@ -117,7 +118,7 @@ func TestCoordinatorModelResolverUpdateAffectsFutureAdmissionsOnly(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	resolver, err := NewModelResolver(map[Profile]sdk.LanguageModel{ProfileAgility: override})
+	resolver, err := NewModelResolver(map[Profile]port.LanguageModel{ProfileAgility: override})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -138,7 +139,7 @@ func TestCoordinatorModelResolverUpdateAffectsFutureAdmissionsOnly(t *testing.T)
 
 func TestCoordinatorReportsBoundModelIdentity(t *testing.T) {
 	model := resolverTestModel{id: "agility-fast"}
-	resolver, err := NewModelResolver(map[Profile]sdk.LanguageModel{ProfileAgility: model})
+	resolver, err := NewModelResolver(map[Profile]port.LanguageModel{ProfileAgility: model})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -19,7 +19,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/feature/skill"
 	tododomain "github.com/phongsathornpt/protonman/internal/feature/todo"
 	"github.com/phongsathornpt/protonman/internal/platform/appdirs"
-	"github.com/phongsathornpt/protonman/proton-sdk/domain"
+	"github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
 )
 
 func (m *bubbleModel) executeCommand(line string) tea.Cmd {

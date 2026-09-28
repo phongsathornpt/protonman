@@ -11,7 +11,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/engine/toolcall"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	domain "github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
 )
 
 func TestLoopForcesSynthesisAfterSustainedNoProgressRead(t *testing.T) {
@@ -20,9 +20,9 @@ func TestLoopForcesSynthesisAfterSustainedNoProgressRead(t *testing.T) {
 		{events: repeatedReadEvents("read-2")},
 		{events: repeatedReadEvents("read-3")},
 		{events: repeatedReadEvents("read-4")},
-		{events: []sdk.Event{
-			{Kind: sdk.EventTextDelta, Text: "I already have the file contents."},
-			{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
+		{events: []domain.Event{
+			{Kind: domain.EventTextDelta, Text: "I already have the file contents."},
+			{Kind: domain.EventFinish, FinishReason: domain.FinishStop},
 		}},
 	}}
 	loop, handler := newTestLoop(t, client, permission.ActionAllow)
@@ -238,12 +238,12 @@ func TestProgressGuardChangedResultIsProgress(t *testing.T) {
 	}
 }
 
-func repeatedReadEvents(id string) []sdk.Event {
-	return []sdk.Event{
-		{Kind: sdk.EventToolCall, ToolCall: model.ToolCall{
+func repeatedReadEvents(id string) []domain.Event {
+	return []domain.Event{
+		{Kind: domain.EventToolCall, ToolCall: model.ToolCall{
 			ID: id, Name: "read", Arguments: json.RawMessage(`{"path":"README.md"}`),
 		}},
-		{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
+		{Kind: domain.EventFinish, FinishReason: domain.FinishStop},
 	}
 }
 
@@ -380,9 +380,9 @@ func TestLoopForcesSynthesisAfterSustainedRetryableFailureBudget(t *testing.T) {
 		{events: repeatedReadEvents("retry-3")},
 		{events: repeatedReadEvents("retry-4")},
 		{events: repeatedReadEvents("retry-5")},
-		{events: []sdk.Event{
-			{Kind: sdk.EventTextDelta, Text: "The repeated read timed out, so I stopped retrying."},
-			{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
+		{events: []domain.Event{
+			{Kind: domain.EventTextDelta, Text: "The repeated read timed out, so I stopped retrying."},
+			{Kind: domain.EventFinish, FinishReason: domain.FinishStop},
 		}},
 	}}
 	handler := &retryableFailureHandler{definition: readFileDefinition()}
@@ -445,7 +445,7 @@ func TestLoopSuppressesRepeatedPermissionPrompt(t *testing.T) {
 		{events: repeatedReadEvents("deny-2")},
 		{events: repeatedReadEvents("deny-3")},
 		{events: repeatedReadEvents("deny-4")},
-		{events: []sdk.Event{{Kind: sdk.EventTextDelta, Text: "The read was denied."}, {Kind: sdk.EventFinish, FinishReason: sdk.FinishStop}}},
+		{events: []domain.Event{{Kind: domain.EventTextDelta, Text: "The read was denied."}, {Kind: domain.EventFinish, FinishReason: domain.FinishStop}}},
 	}}
 	handler := &recordingHandler{definition: readFileDefinition()}
 	policy, err := permission.NewPolicy(permission.Config{Default: permission.ActionAsk})
@@ -597,7 +597,7 @@ func TestLoopEmitsPermissionRetrySuppressionTelemetry(t *testing.T) {
 	client := &scriptedClient{streams: []scriptedStreamSpec{
 		{events: repeatedReadEvents("deny-1")},
 		{events: repeatedReadEvents("deny-2")},
-		{events: []sdk.Event{{Kind: sdk.EventTextDelta, Text: "permission remained denied"}, {Kind: sdk.EventFinish, FinishReason: sdk.FinishStop}}},
+		{events: []domain.Event{{Kind: domain.EventTextDelta, Text: "permission remained denied"}, {Kind: domain.EventFinish, FinishReason: domain.FinishStop}}},
 	}}
 	handler := &recordingHandler{definition: readFileDefinition()}
 	policy, err := permission.NewPolicy(permission.Config{})

@@ -122,6 +122,13 @@ func TestResolveACPBinaryFor(t *testing.T) {
 	if got != candidate {
 		t.Fatalf("bundled binary = %q, want %q", got, candidate)
 	}
+	sibling := filepath.Join(string(filepath.Separator), "app", "protonman")
+	got = resolveACPBinaryFor("", filepath.Join(string(filepath.Separator), "app", "protonman-desktop-gio"), func(path string) bool {
+		return path == sibling
+	})
+	if got != sibling {
+		t.Fatalf("sibling binary = %q, want %q", got, sibling)
+	}
 	if got := resolveACPBinaryFor("", "", nil); got != "protonman" {
 		t.Fatalf("fallback binary = %q", got)
 	}

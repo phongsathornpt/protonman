@@ -10,7 +10,7 @@ import (
 	corememory "github.com/phongsathornpt/protonman/internal/core/memory"
 	"github.com/phongsathornpt/protonman/internal/core/modelclient"
 	"github.com/phongsathornpt/protonman/internal/core/session"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	domain "github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
 )
 
 // TestSessionBoundFactoryExposesUndecoratedBaseForSubagents locks the invariant
@@ -40,8 +40,8 @@ func TestSessionBoundFactoryExposesUndecoratedBaseForSubagents(t *testing.T) {
 
 	// The root model decorates the current user turn.
 	rootModel := factory.Build(modelclient.Request{ModelID: "m"})
-	stream, err := rootModel.Stream(context.Background(), sdk.Request{Messages: []sdk.Message{
-		{ID: "u", Role: sdk.RoleUser, Content: "please run test verification"},
+	stream, err := rootModel.Stream(context.Background(), domain.Request{Messages: []domain.Message{
+		{ID: "u", Role: domain.RoleUser, Content: "please run test verification"},
 	}})
 	if err != nil {
 		t.Fatal(err)
@@ -62,8 +62,8 @@ func TestSessionBoundFactoryExposesUndecoratedBaseForSubagents(t *testing.T) {
 	if _, decorated := childModel.(*memoryLanguageModel); decorated {
 		t.Fatal("BaseFactory must not return a memory-decorated model")
 	}
-	childStream, err := childModel.Stream(context.Background(), sdk.Request{Messages: []sdk.Message{
-		{ID: "u", Role: sdk.RoleUser, Content: "please run test verification"},
+	childStream, err := childModel.Stream(context.Background(), domain.Request{Messages: []domain.Message{
+		{ID: "u", Role: domain.RoleUser, Content: "please run test verification"},
 	}})
 	if err != nil {
 		t.Fatal(err)
@@ -84,8 +84,8 @@ func TestSessionBoundFactoryWithoutBindingDoesNotRetrieve(t *testing.T) {
 	}}}
 	base := &captureModel{}
 	model := NewSessionBoundModelFactory(captureFactory{model: base}, repo, nil, runtimepolicy.DurableMemory()).Build(modelclient.Request{ModelID: "m"})
-	stream, err := model.Stream(context.Background(), sdk.Request{Messages: []sdk.Message{
-		{ID: "u", Role: sdk.RoleUser, Content: "please run test verification"},
+	stream, err := model.Stream(context.Background(), domain.Request{Messages: []domain.Message{
+		{ID: "u", Role: domain.RoleUser, Content: "please run test verification"},
 	}})
 	if err != nil {
 		t.Fatal(err)
@@ -137,7 +137,7 @@ func TestSessionBoundFactoryRebindInvalidatesRetrievalCache(t *testing.T) {
 	})
 	binder.BindSession("session-a", "ws")
 	model := factory.Build(modelclient.Request{ModelID: "m"})
-	request := sdk.Request{Messages: []sdk.Message{{ID: "u", Role: sdk.RoleUser, Content: "please run test verification"}}}
+	request := domain.Request{Messages: []domain.Message{{ID: "u", Role: domain.RoleUser, Content: "please run test verification"}}}
 	for range 2 {
 		stream, err := model.Stream(context.Background(), request)
 		if err != nil {

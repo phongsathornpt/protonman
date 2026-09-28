@@ -9,8 +9,8 @@ import (
 	"github.com/phongsathornpt/protonman/internal/base/runtimepolicy"
 	"github.com/phongsathornpt/protonman/internal/core/agentidentity"
 	"github.com/phongsathornpt/protonman/internal/core/modelprofile"
-	"github.com/phongsathornpt/protonman/proton-sdk/domain"
-	"github.com/phongsathornpt/protonman/proton-sdk/port"
+	"github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
+	"github.com/phongsathornpt/protonman/pkg/proton-sdk/port"
 )
 
 // clientConfig contains CLI-owned settings used to construct proton-sdk provider models.

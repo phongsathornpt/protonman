@@ -11,48 +11,49 @@ import (
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/engine/toolcall"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	domain "github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
+	port "github.com/phongsathornpt/protonman/pkg/proton-sdk/port"
 )
 
 type sdkTestModel struct {
-	requests      []sdk.Request
-	capabilities  sdk.ModelCapabilities
+	requests      []domain.Request
+	capabilities  domain.ModelCapabilities
 	contextWindow int
-	tokenLimits   sdk.TokenLimits
+	tokenLimits   domain.TokenLimits
 }
 
 func (*sdkTestModel) Provider() string     { return "test" }
 func (*sdkTestModel) ModelID() string      { return "test-model" }
 func (m *sdkTestModel) ContextWindow() int { return m.contextWindow }
-func (m *sdkTestModel) TokenLimits() sdk.TokenLimits {
+func (m *sdkTestModel) TokenLimits() domain.TokenLimits {
 	limits := m.tokenLimits
 	if limits.ContextWindow == 0 {
 		limits.ContextWindow = m.contextWindow
 	}
 	return limits
 }
-func (m *sdkTestModel) Capabilities() sdk.ModelCapabilities {
-	if m.capabilities == (sdk.ModelCapabilities{}) {
-		return sdk.ModelCapabilities{Streaming: true, Tools: true}
+func (m *sdkTestModel) Capabilities() domain.ModelCapabilities {
+	if m.capabilities == (domain.ModelCapabilities{}) {
+		return domain.ModelCapabilities{Streaming: true, Tools: true}
 	}
 	return m.capabilities
 }
-func (m *sdkTestModel) Stream(_ context.Context, request sdk.Request) (sdk.Stream, error) {
+func (m *sdkTestModel) Stream(_ context.Context, request domain.Request) (port.Stream, error) {
 	m.requests = append(m.requests, request)
-	return &sdkTestStream{events: []sdk.Event{
-		{Kind: sdk.EventTextDelta, Text: "sdk-native"},
-		{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
+	return &sdkTestStream{events: []domain.Event{
+		{Kind: domain.EventTextDelta, Text: "sdk-native"},
+		{Kind: domain.EventFinish, FinishReason: domain.FinishStop},
 	}}, nil
 }
 
 type sdkTestStream struct {
-	events []sdk.Event
+	events []domain.Event
 	index  int
 }
 
-func (s *sdkTestStream) Next(context.Context) (sdk.Event, error) {
+func (s *sdkTestStream) Next(context.Context) (domain.Event, error) {
 	if s.index >= len(s.events) {
-		return sdk.Event{}, io.EOF
+		return domain.Event{}, io.EOF
 	}
 	event := s.events[s.index]
 	s.index++
@@ -95,7 +96,7 @@ func TestNewLoopRejectsNonStreamingModel(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = NewLoop(&sdkTestModel{capabilities: sdk.ModelCapabilities{Tools: true}}, service)
+	_, err = NewLoop(&sdkTestModel{capabilities: domain.ModelCapabilities{Tools: true}}, service)
 	if !errors.Is(err, ErrUnsupportedModelCapability) {
 		t.Fatalf("NewLoop() error = %v, want ErrUnsupportedModelCapability", err)
 	}
@@ -110,7 +111,7 @@ func TestLoopRejectsVisionInputWhenUnsupported(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	languageModel := &sdkTestModel{capabilities: sdk.ModelCapabilities{Streaming: true}}
+	languageModel := &sdkTestModel{capabilities: domain.ModelCapabilities{Streaming: true}}
 	loop, err := NewLoop(languageModel, service)
 	if err != nil {
 		t.Fatal(err)
@@ -134,7 +135,7 @@ func TestLoopOmitsToolsWhenModelDoesNotSupportThem(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	languageModel := &sdkTestModel{capabilities: sdk.ModelCapabilities{Streaming: true}}
+	languageModel := &sdkTestModel{capabilities: domain.ModelCapabilities{Streaming: true}}
 	loop, err := NewLoop(languageModel, service)
 	if err != nil {
 		t.Fatal(err)
@@ -229,7 +230,7 @@ func TestLoopRejectsInputBeyondPublishedMaxInputTokens(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	languageModel := &sdkTestModel{tokenLimits: sdk.TokenLimits{MaxInputTokens: 512}}
+	languageModel := &sdkTestModel{tokenLimits: domain.TokenLimits{MaxInputTokens: 512}}
 	loop, err := NewLoop(languageModel, service)
 	if err != nil {
 		t.Fatal(err)
@@ -252,7 +253,7 @@ func TestLoopDoesNotTreatMaxInputTokensAsTotalContext(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	languageModel := &sdkTestModel{tokenLimits: sdk.TokenLimits{MaxInputTokens: 2048}}
+	languageModel := &sdkTestModel{tokenLimits: domain.TokenLimits{MaxInputTokens: 2048}}
 	loop, err := NewLoop(languageModel, service)
 	if err != nil {
 		t.Fatal(err)
@@ -267,8 +268,8 @@ func TestLoopDoesNotTreatMaxInputTokensAsTotalContext(t *testing.T) {
 }
 
 func TestLoopRejectsRequestedOutputBeyondPublishedLimit(t *testing.T) {
-	request := sdk.Request{Messages: []sdk.Message{{Role: sdk.RoleUser, Content: "hello"}}, Options: sdk.ModelOptions{MaxOutputTokens: 1024}}
-	languageModel := &sdkTestModel{tokenLimits: sdk.TokenLimits{MaxOutputTokens: 512}}
+	request := domain.Request{Messages: []domain.Message{{Role: domain.RoleUser, Content: "hello"}}, Options: domain.ModelOptions{MaxOutputTokens: 1024}}
+	languageModel := &sdkTestModel{tokenLimits: domain.TokenLimits{MaxOutputTokens: 512}}
 	if err := validateContextBudget(languageModel, request); !errors.Is(err, ErrContextBudgetExceeded) {
 		t.Fatalf("validateContextBudget() error = %v", err)
 	}

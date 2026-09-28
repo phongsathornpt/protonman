@@ -41,6 +41,7 @@ func TestDesktopComponentCaptures(t *testing.T) {
 					view.inspectorOverride = true
 					view.inspectorVisible = scene == "inspector"
 					view.agentSelectorVisible = scene == "selector"
+					view.sidebarVisible = scene != "inspector"
 					view.conversationList.ScrollToEnd = false
 					session := &snapshot.State.Sessions[0]
 					switch scene {

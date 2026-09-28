@@ -13,7 +13,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/app"
 	"github.com/phongsathornpt/protonman/internal/core/modelconfig"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	domain "github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
 )
 
 type testProviderRepository struct{ fallbackHome string }
@@ -62,7 +62,7 @@ func (s testUserSettingsStore) home() string {
 func (s testUserSettingsStore) SaveSubagentsEnabled(enabled bool) error {
 	return config.SaveUserSubagentsEnabled(s.home(), enabled)
 }
-func (s testUserSettingsStore) SaveReasoningEffort(effort sdk.ReasoningEffort) error {
+func (s testUserSettingsStore) SaveReasoningEffort(effort domain.ReasoningEffort) error {
 	return config.SaveUserReasoningEffort(s.home(), effort)
 }
 func (s testUserSettingsStore) SaveMaxToolCalls(maxToolCalls int) error {

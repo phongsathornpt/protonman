@@ -8,7 +8,7 @@ import (
 	"sync"
 
 	"github.com/phongsathornpt/protonman/internal/core/modelconfig"
-	"github.com/phongsathornpt/protonman/proton-sdk/domain"
+	"github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
 )
 
 const (

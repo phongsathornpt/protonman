@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/phongsathornpt/protonman/proton-sdk/domain"
+	"github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
 )
 
 // Phase is the user-visible lifecycle state of the active TUI operation.

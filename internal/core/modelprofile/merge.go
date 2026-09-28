@@ -1,6 +1,6 @@
 package modelprofile
 
-import "github.com/phongsathornpt/protonman/proton-sdk/domain"
+import "github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
 
 func mergeProfile(dst *Resolved, src Profile) {
 	if src.Name != "" {

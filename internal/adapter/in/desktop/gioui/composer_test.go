@@ -129,3 +129,28 @@ func composerTestLayout(t *testing.T, width, height int, session desktopstate.Se
 	router.Frame(gtx.Ops)
 	return dims.Size
 }
+
+func TestComposerEditorAutoExpandsWithLines(t *testing.T) {
+	snapshot := desktopCaptureSnapshot()
+	session := snapshot.State.Sessions[0]
+
+	view := newShell(newTheme("light"))
+	var ops op.Ops
+	var router input.Router
+	gtx := layout.Context{
+		Ops:         &ops,
+		Constraints: layout.Constraints{Min: image.Pt(700, 0), Max: image.Pt(700, 600)},
+		Metric:      unit.Metric{PxPerDp: 1, PxPerSp: 1},
+		Now:         time.Unix(1, 0),
+		Source:      router.Source(),
+	}
+
+	emptyDims := view.layoutComposer(gtx, session, snapshot)
+
+	view.composer.SetText("Line 1\nLine 2\nLine 3\nLine 4\nLine 5\nLine 6")
+	multiLineDims := view.layoutComposer(gtx, session, snapshot)
+
+	if multiLineDims.Size.Y <= emptyDims.Size.Y {
+		t.Fatalf("multi-line composer height = %d, want > empty height %d", multiLineDims.Size.Y, emptyDims.Size.Y)
+	}
+}

@@ -13,7 +13,7 @@ func TestLayerDependencyContract(t *testing.T) {
 	contracts := []layerContract{
 		{
 			name:          "proton-sdk is independent from CLI internals",
-			packagePrefix: modulePath + "/proton-sdk",
+			packagePrefix: modulePath + "/pkg/proton-sdk",
 			forbiddenPrefixes: []string{
 				modulePath + "/internal",
 				modulePath + "/cmd",
@@ -47,17 +47,17 @@ func TestLayerDependencyContract(t *testing.T) {
 			},
 		},
 		{
-			name:          "OpenAI provider depends on SDK contracts, not the facade or use cases",
-			packagePrefix: modulePath + "/proton-sdk/provider/openai",
+			name:          "OpenAI provider depends on SDK contracts, not the use cases",
+			packagePrefix: modulePath + "/pkg/proton-sdk/provider/openai",
 			forbiddenPrefixes: []string{
-				modulePath + "/proton-sdk/usecase",
+				modulePath + "/pkg/proton-sdk/usecase",
 			},
 		},
 		{
-			name:          "Anthropic provider depends on SDK contracts, not the facade or use cases",
-			packagePrefix: modulePath + "/proton-sdk/provider/anthropic",
+			name:          "Anthropic provider depends on SDK contracts, not the use cases",
+			packagePrefix: modulePath + "/pkg/proton-sdk/provider/anthropic",
 			forbiddenPrefixes: []string{
-				modulePath + "/proton-sdk/usecase",
+				modulePath + "/pkg/proton-sdk/usecase",
 			},
 		},
 	}
@@ -70,66 +70,18 @@ func TestLayerDependencyContract(t *testing.T) {
 	}
 }
 
-func TestProviderAdaptersDoNotImportRootFacade(t *testing.T) {
-	packages := listPackages(t)
-	for _, provider := range []string{"openai", "anthropic"} {
-		assertNoImports(t, packages, modulePath+"/proton-sdk/provider/"+provider, []string{
-			modulePath + "/proton-sdk",
-		})
-	}
-}
-
-func TestCoreDoesNotImportSDKFacade(t *testing.T) {
+// TestSDKHasNoFacadePackage pins the facade removal: no package may import the
+// former root facade, and the facade package itself must not exist.
+func TestSDKHasNoFacadePackage(t *testing.T) {
 	packages := listPackages(t)
 	for importPath, pkg := range packages {
-		if !packageWithin(importPath, modulePath+"/internal/core") {
+		if importPath == modulePath+"/pkg/proton-sdk" {
+			t.Errorf("facade package %s must not exist; depend on domain, port, or usecase directly", importPath)
 			continue
 		}
 		for _, imported := range pkg.Imports {
-			if imported == modulePath+"/proton-sdk" {
-				t.Errorf("package %s imports the public SDK facade; use domain or port directly", importPath)
-			}
-		}
-	}
-}
-
-func TestApplicationDoesNotImportSDKFacade(t *testing.T) {
-	packages := listPackages(t)
-	for importPath, pkg := range packages {
-		if !packageWithin(importPath, modulePath+"/internal/app") {
-			continue
-		}
-		for _, imported := range pkg.Imports {
-			if imported == modulePath+"/proton-sdk" {
-				t.Errorf("package %s imports the public SDK facade; use domain or port directly", importPath)
-			}
-		}
-	}
-}
-
-func TestEngineDoesNotImportSDKFacade(t *testing.T) {
-	packages := listPackages(t)
-	for importPath, pkg := range packages {
-		if !packageWithin(importPath, modulePath+"/internal/engine") {
-			continue
-		}
-		for _, imported := range pkg.Imports {
-			if imported == modulePath+"/proton-sdk" {
-				t.Errorf("package %s imports the public SDK facade; use domain, port, or usecase directly", importPath)
-			}
-		}
-	}
-}
-
-func TestProductionCodeDoesNotImportSDKFacade(t *testing.T) {
-	packages := listPackages(t)
-	for importPath, pkg := range packages {
-		if packageWithin(importPath, modulePath+"/proton-sdk") {
-			continue
-		}
-		for _, imported := range pkg.Imports {
-			if imported == modulePath+"/proton-sdk" {
-				t.Errorf("package %s imports the public SDK facade; depend on domain, port, or usecase directly", importPath)
+			if imported == modulePath+"/pkg/proton-sdk" {
+				t.Errorf("package %s imports the removed SDK facade; depend on domain, port, or usecase directly", importPath)
 			}
 		}
 	}
@@ -137,15 +89,19 @@ func TestProductionCodeDoesNotImportSDKFacade(t *testing.T) {
 
 func TestSDKLayerDependencyDirection(t *testing.T) {
 	packages := listPackages(t)
-	assertNoImportPrefixes(t, packages, modulePath+"/proton-sdk/domain", []string{
-		modulePath + "/proton-sdk",
+	assertNoImportPrefixes(t, packages, modulePath+"/pkg/proton-sdk/domain", []string{
+		modulePath + "/pkg/proton-sdk/port",
+		modulePath + "/pkg/proton-sdk/usecase",
+		modulePath + "/pkg/proton-sdk/provider",
+		modulePath + "/pkg/proton-sdk/internal",
 	})
-	assertNoImportPrefixes(t, packages, modulePath+"/proton-sdk/port", []string{
-		modulePath + "/proton-sdk/usecase",
-		modulePath + "/proton-sdk/provider",
+	assertNoImportPrefixes(t, packages, modulePath+"/pkg/proton-sdk/port", []string{
+		modulePath + "/pkg/proton-sdk/usecase",
+		modulePath + "/pkg/proton-sdk/provider",
+		modulePath + "/pkg/proton-sdk/internal",
 	})
-	assertNoImportPrefixes(t, packages, modulePath+"/proton-sdk/usecase", []string{
-		modulePath + "/proton-sdk/provider",
-		modulePath + "/proton-sdk/internal/providerutil",
+	assertNoImportPrefixes(t, packages, modulePath+"/pkg/proton-sdk/usecase", []string{
+		modulePath + "/pkg/proton-sdk/provider",
+		modulePath + "/pkg/proton-sdk/internal/providerutil",
 	})
 }

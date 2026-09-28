@@ -8,7 +8,7 @@ import (
 
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/engine/prompt"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	domain "github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
 )
 
 type dummyHandler struct {
@@ -148,11 +148,11 @@ func TestProfilePromptsIncludeSharedToolContract(t *testing.T) {
 }
 
 func TestProfileSpecsDeclarePortableReasoningEffort(t *testing.T) {
-	want := map[Profile]sdk.ReasoningEffort{
-		ProfileUniversal:    sdk.ReasoningMedium,
-		ProfileStrength:     sdk.ReasoningMedium,
-		ProfileAgility:      sdk.ReasoningMedium,
-		ProfileIntelligence: sdk.ReasoningHigh,
+	want := map[Profile]domain.ReasoningEffort{
+		ProfileUniversal:    domain.ReasoningMedium,
+		ProfileStrength:     domain.ReasoningMedium,
+		ProfileAgility:      domain.ReasoningMedium,
+		ProfileIntelligence: domain.ReasoningHigh,
 	}
 	for profile, effort := range want {
 		spec, ok := SpecForProfile(profile)

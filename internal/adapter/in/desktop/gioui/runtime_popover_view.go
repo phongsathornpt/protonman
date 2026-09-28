@@ -190,7 +190,7 @@ func (s *shell) layoutModelPopoverHeader(gtx layout.Context, provider string) la
 					fg = s.theme.onSurface
 				}
 				return desktopInset{Left: 4, Right: 4}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-					return s.layoutLabel(gtx, "✕", textLabelMedium, font.Bold, fg, 1)
+					return s.layoutActionIcon(gtx, iconClose, 12, fg)
 				})
 			})
 		}),
@@ -485,7 +485,7 @@ func (s *shell) layoutReasoningPopover(gtx layout.Context, session desktopstate.
 										fg = s.theme.onSurface
 									}
 									return desktopInset{Left: 4, Right: 4}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-										return s.layoutLabel(gtx, "✕", textLabelMedium, font.Bold, fg, 1)
+										return s.layoutActionIcon(gtx, iconClose, 12, fg)
 									})
 								})
 							}),

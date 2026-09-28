@@ -7,15 +7,16 @@ import (
 
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	tododomain "github.com/phongsathornpt/protonman/internal/feature/todo"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	domain "github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
+	usecase "github.com/phongsathornpt/protonman/pkg/proton-sdk/usecase"
 )
 
 // capabilityValidator compiles the exact schema the model is shown, so these
 // tests exercise the published contract rather than a hand-built copy.
-func capabilityValidator(t *testing.T) *sdk.ToolSchemaValidator {
+func capabilityValidator(t *testing.T) *usecase.ToolSchemaValidator {
 	t.Helper()
 	definition := NewTodo(nil).Definition()
-	validator, err := sdk.CompileToolInputValidator(sdk.Tool{
+	validator, err := usecase.CompileToolInputValidator(domain.Tool{
 		Name:        definition.Name,
 		Description: definition.Description,
 		InputSchema: definition.InputSchema,

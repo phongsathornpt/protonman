@@ -35,7 +35,12 @@ type bottomPaneView interface {
 // the composer. Permission prompts and slash completion are the first users;
 // pickers and MCP elicitation can implement the same contract later.
 
-const maxCommandHistory = 500
+const (
+	maxCommandHistory         = 500
+	maxComposerVisibleRows    = 8
+	maxComposerContentRows    = 10_000 // Keep the draft budget above the visible viewport cap.
+	minTranscriptViewportRows = 5
+)
 
 type localImageAttachment struct {
 	placeholder string
@@ -278,7 +283,8 @@ func newPrompt(hasRunner bool, reducedMotion bool) textarea.Model {
 	prompt.CharLimit = 0
 	prompt.DynamicHeight = true
 	prompt.MinHeight = 1
-	prompt.MaxHeight = 6
+	prompt.MaxHeight = maxComposerVisibleRows
+	prompt.MaxContentHeight = maxComposerContentRows
 	prompt.ShowLineNumbers = false
 	prompt.EndOfBufferCharacter = ' '
 	configureComposerNewline(&prompt, nil, keyboardCapabilityUnknown)

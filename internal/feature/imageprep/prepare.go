@@ -13,7 +13,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/phongsathornpt/protonman/proton-sdk/domain"
+	"github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
 	xdraw "golang.org/x/image/draw"
 )
 

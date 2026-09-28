@@ -349,8 +349,30 @@ func (m *bubbleModel) reconcileLayout() {
 	}
 	m.layout.dirty = false
 	m.preparePaneViews()
+	m.updateComposerHeightLimit()
 	scroll := m.captureViewportScroll()
 	m.applyFrameLayout(scroll, m.buildFrameLayout())
+}
+
+func (m *bubbleModel) updateComposerHeightLimit() {
+	if m == nil || m.layout.width <= 0 || m.layout.height <= 0 || m.panes.bottom == nil || !m.panes.bottom.composerVisible() {
+		return
+	}
+	prompt := m.panes.bottom.prompt()
+	if prompt == nil {
+		return
+	}
+
+	frame := m.buildFrameLayout()
+	fixedHeight := frame.height - prompt.Height()
+	availableRows := m.layout.height - minTranscriptViewportRows - fixedHeight
+	maxRows := min(maxComposerVisibleRows, max(1, availableRows))
+	if prompt.MaxHeight == maxRows {
+		return
+	}
+
+	prompt.MaxHeight = maxRows
+	prompt.SetWidth(composerUsableWidth(m.layout.width))
 }
 
 func (m *bubbleModel) preparePaneViews() {

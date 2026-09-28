@@ -8,21 +8,21 @@ import (
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 	"github.com/phongsathornpt/protonman/internal/engine/prompt"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	domain "github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
 )
 
 type visionScriptedClient struct {
 	*scriptedClient
 }
 
-func (*visionScriptedClient) Capabilities() sdk.ModelCapabilities {
-	return sdk.ModelCapabilities{Streaming: true, Tools: true, Vision: true}
+func (*visionScriptedClient) Capabilities() domain.ModelCapabilities {
+	return domain.ModelCapabilities{Streaming: true, Tools: true, Vision: true}
 }
 
 func TestLoopRoutesAttachedImageAsNativeMultimodalInput(t *testing.T) {
-	base := &scriptedClient{streams: []scriptedStreamSpec{{events: []sdk.Event{
-		{Kind: sdk.EventTextDelta, Text: "done"},
-		{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
+	base := &scriptedClient{streams: []scriptedStreamSpec{{events: []domain.Event{
+		{Kind: domain.EventTextDelta, Text: "done"},
+		{Kind: domain.EventFinish, FinishReason: domain.FinishStop},
 	}}}}
 	client := &visionScriptedClient{scriptedClient: base}
 	loop, _ := newTestLoop(t, client, permission.ActionAllow, WithSystemPromptSpec(prompt.Spec{}))
@@ -72,9 +72,9 @@ func TestLoopRoutesAttachedImageAsNativeMultimodalInput(t *testing.T) {
 }
 
 func TestTextOnlyTurnDoesNotInjectAttachedImagePolicy(t *testing.T) {
-	base := &scriptedClient{streams: []scriptedStreamSpec{{events: []sdk.Event{
-		{Kind: sdk.EventTextDelta, Text: "done"},
-		{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
+	base := &scriptedClient{streams: []scriptedStreamSpec{{events: []domain.Event{
+		{Kind: domain.EventTextDelta, Text: "done"},
+		{Kind: domain.EventFinish, FinishReason: domain.FinishStop},
 	}}}}
 	client := &visionScriptedClient{scriptedClient: base}
 	loop, _ := newTestLoop(t, client, permission.ActionAllow, WithSystemPromptSpec(prompt.Spec{}))
@@ -92,9 +92,9 @@ func TestTextOnlyTurnDoesNotInjectAttachedImagePolicy(t *testing.T) {
 }
 
 func TestHistoricalImageDoesNotInjectAttachedImagePolicyIntoCurrentTextTurn(t *testing.T) {
-	base := &scriptedClient{streams: []scriptedStreamSpec{{events: []sdk.Event{
-		{Kind: sdk.EventTextDelta, Text: "done"},
-		{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
+	base := &scriptedClient{streams: []scriptedStreamSpec{{events: []domain.Event{
+		{Kind: domain.EventTextDelta, Text: "done"},
+		{Kind: domain.EventFinish, FinishReason: domain.FinishStop},
 	}}}}
 	client := &visionScriptedClient{scriptedClient: base}
 	loop, _ := newTestLoop(t, client, permission.ActionAllow, WithSystemPromptSpec(prompt.Spec{}))

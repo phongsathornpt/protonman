@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/phongsathornpt/protonman/proton-sdk/domain"
-	"github.com/phongsathornpt/protonman/proton-sdk/port"
+	"github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
+	"github.com/phongsathornpt/protonman/pkg/proton-sdk/port"
 )
 
 // openCodeTransport describes the wire endpoint selected by a direct OpenCode

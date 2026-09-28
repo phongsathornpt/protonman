@@ -9,17 +9,18 @@ import (
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/app"
 	"github.com/phongsathornpt/protonman/internal/feature/agent"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	domain "github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
+	port "github.com/phongsathornpt/protonman/pkg/proton-sdk/port"
 )
 
 type subagentFallbackModel struct{ id string }
 
 func (m subagentFallbackModel) Provider() string { return "fallback" }
 func (m subagentFallbackModel) ModelID() string  { return m.id }
-func (subagentFallbackModel) Capabilities() sdk.ModelCapabilities {
-	return sdk.ModelCapabilities{Tools: true}
+func (subagentFallbackModel) Capabilities() domain.ModelCapabilities {
+	return domain.ModelCapabilities{Tools: true}
 }
-func (subagentFallbackModel) Stream(context.Context, sdk.Request) (sdk.Stream, error) {
+func (subagentFallbackModel) Stream(context.Context, domain.Request) (port.Stream, error) {
 	return nil, nil
 }
 
@@ -90,7 +91,7 @@ func TestBuildSubagentModelResolverRejectsMissingCredentials(t *testing.T) {
 func TestBuildSubagentModelResolverSkipsReasoningOnlyConfig(t *testing.T) {
 	resolver, err := app.BuildSubagentModelResolver(app.SubagentModelResolverSpec{
 		Overrides: map[string]config.SubagentModelConfig{
-			"intelligence": {ReasoningEffort: sdk.ReasoningHigh},
+			"intelligence": {ReasoningEffort: domain.ReasoningHigh},
 		},
 	})
 	if err != nil {
@@ -103,9 +104,9 @@ func TestBuildSubagentModelResolverSkipsReasoningOnlyConfig(t *testing.T) {
 
 func TestBuildSubagentReasoningResolver(t *testing.T) {
 	resolver, err := app.BuildSubagentReasoningResolver(map[string]config.SubagentModelConfig{
-		"strength":     {ReasoningEffort: sdk.ReasoningMedium},
-		"agility":      {ReasoningEffort: sdk.ReasoningDefault},
-		"intelligence": {ReasoningEffort: sdk.ReasoningHigh},
+		"strength":     {ReasoningEffort: domain.ReasoningMedium},
+		"agility":      {ReasoningEffort: domain.ReasoningDefault},
+		"intelligence": {ReasoningEffort: domain.ReasoningHigh},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -113,20 +114,20 @@ func TestBuildSubagentReasoningResolver(t *testing.T) {
 	if resolver == nil {
 		t.Fatal("reasoning resolver is nil")
 	}
-	if got := resolver.Resolve(agent.ProfileStrength, sdk.ReasoningLow); got != sdk.ReasoningMedium {
+	if got := resolver.Resolve(agent.ProfileStrength, domain.ReasoningLow); got != domain.ReasoningMedium {
 		t.Fatalf("strength reasoning = %q, want medium", got)
 	}
-	if got := resolver.Resolve(agent.ProfileAgility, sdk.ReasoningLow); got != sdk.ReasoningLow {
+	if got := resolver.Resolve(agent.ProfileAgility, domain.ReasoningLow); got != domain.ReasoningLow {
 		t.Fatalf("agility auto reasoning = %q, want fallback low", got)
 	}
-	if got := resolver.Resolve(agent.ProfileIntelligence, sdk.ReasoningMedium); got != sdk.ReasoningHigh {
+	if got := resolver.Resolve(agent.ProfileIntelligence, domain.ReasoningMedium); got != domain.ReasoningHigh {
 		t.Fatalf("intelligence reasoning = %q, want high", got)
 	}
 }
 
 func TestBuildSubagentReasoningResolverReturnsNilForAutoOnly(t *testing.T) {
 	resolver, err := app.BuildSubagentReasoningResolver(map[string]config.SubagentModelConfig{
-		"agility": {ReasoningEffort: sdk.ReasoningDefault},
+		"agility": {ReasoningEffort: domain.ReasoningDefault},
 	})
 	if err != nil {
 		t.Fatal(err)

@@ -1059,6 +1059,10 @@ func resolveACPBinaryFor(override, executable string, isFile func(string) bool) 
 		if isFile(candidate) {
 			return candidate
 		}
+		sibling := filepath.Join(filepath.Dir(executable), "protonman")
+		if isFile(sibling) {
+			return sibling
+		}
 	}
 	return "protonman"
 }

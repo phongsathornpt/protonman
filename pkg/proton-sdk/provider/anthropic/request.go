@@ -1,0 +1,238 @@
+package anthropic
+
+import (
+	"encoding/json"
+	"fmt"
+	"strings"
+
+	"github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
+	"github.com/phongsathornpt/protonman/pkg/proton-sdk/internal/providerutil"
+)
+
+type requestBody struct {
+	Model        string        `json:"model"`
+	MaxTokens    int           `json:"max_tokens"`
+	System       string        `json:"system,omitempty"`
+	Messages     []message     `json:"messages"`
+	Tools        []toolDef     `json:"tools,omitempty"`
+	ToolChoice   *toolChoice   `json:"tool_choice,omitempty"`
+	Thinking     *thinking     `json:"thinking,omitempty"`
+	OutputConfig *outputConfig `json:"output_config,omitempty"`
+	Stream       bool          `json:"stream"`
+}
+
+type thinking struct {
+	Type string `json:"type"`
+}
+
+type outputConfig struct {
+	Effort domain.ReasoningEffort `json:"effort"`
+}
+
+type toolChoice struct {
+	Type string `json:"type"`
+}
+
+type message struct {
+	Role    string         `json:"role"`
+	Content []contentBlock `json:"content"`
+}
+
+type contentBlock struct {
+	Type      string          `json:"type"`
+	Text      string          `json:"text,omitempty"`
+	ID        string          `json:"id,omitempty"`
+	Name      string          `json:"name,omitempty"`
+	Input     json.RawMessage `json:"input,omitempty"`
+	ToolUseID string          `json:"tool_use_id,omitempty"`
+	Content   any             `json:"content,omitempty"`
+	IsError   bool            `json:"is_error,omitempty"`
+	Source    *imageSource    `json:"source,omitempty"`
+}
+
+type imageSource struct {
+	Type      string `json:"type"`
+	MediaType string `json:"media_type"`
+	Data      string `json:"data"`
+}
+
+type toolDef struct {
+	Name            string          `json:"name"`
+	Description     string          `json:"description,omitempty"`
+	InputSchema     map[string]any  `json:"input_schema"`
+	ProviderOptions json.RawMessage `json:"-"`
+}
+
+func (t toolDef) MarshalJSON() ([]byte, error) {
+	base := struct {
+		Name        string         `json:"name"`
+		Description string         `json:"description,omitempty"`
+		InputSchema map[string]any `json:"input_schema"`
+	}{t.Name, t.Description, t.InputSchema}
+	return providerutil.MarshalWithOptions(base, t.ProviderOptions, "name", "description", "input_schema")
+}
+
+func buildRequest(modelID string, request domain.Request, defaultMaxTokens int) (requestBody, error) {
+	if err := request.Validate(); err != nil {
+		return requestBody{}, err
+	}
+	if strings.TrimSpace(modelID) == "" {
+		return requestBody{}, fmt.Errorf("%w: model id is required", domain.ErrInvalidRequest)
+	}
+
+	maxTokens := request.Options.MaxOutputTokens
+	if maxTokens <= 0 {
+		maxTokens = defaultMaxTokens
+	}
+	body := requestBody{Model: modelID, MaxTokens: maxTokens, Stream: true}
+	if effort := request.Options.ReasoningEffort; effort != domain.ReasoningDefault {
+		if effort == domain.ReasoningNone {
+			return requestBody{}, fmt.Errorf("%w: anthropic adaptive thinking does not support reasoning effort %q", domain.ErrInvalidRequest, effort)
+		}
+		if !supportsAdaptiveThinking(modelID) {
+			return requestBody{}, fmt.Errorf("%w: model %q does not support adaptive thinking; use provider-native extended thinking options for older models", domain.ErrInvalidRequest, modelID)
+		}
+		body.Thinking = &thinking{Type: "adaptive"}
+		body.OutputConfig = &outputConfig{Effort: effort}
+	}
+	systems := []string{}
+	for _, source := range request.Messages {
+		switch source.Role {
+		case domain.RoleSystem:
+			if text := strings.TrimSpace(source.TextContent()); text != "" {
+				systems = append(systems, text)
+			}
+		case domain.RoleUser:
+			body.Messages = append(body.Messages, message{Role: "user", Content: userContent(source)})
+		case domain.RoleAssistant:
+			body.Messages = append(body.Messages, message{Role: "assistant", Content: assistantContent(source)})
+		case domain.RoleTool:
+			body.Messages = append(body.Messages, message{Role: "user", Content: []contentBlock{{
+				Type: "tool_result", ToolUseID: source.ToolCallID, Content: toolResultContent(source), IsError: source.ToolResultIsError,
+			}}})
+		}
+	}
+	body.System = strings.Join(systems, "\n\n")
+	if len(request.Tools) > 0 && request.Options.ToolChoice == domain.ToolChoiceRequired {
+		if !supportsForcedToolChoice(modelID) {
+			return requestBody{}, fmt.Errorf("%w: model %q does not support forced tool choice", domain.ErrInvalidRequest, modelID)
+		}
+		body.ToolChoice = &toolChoice{Type: "any"}
+	}
+	for _, tool := range request.Tools {
+		schema := tool.InputSchema
+		if schema == nil {
+			schema = map[string]any{"type": "object", "properties": map[string]any{}}
+		}
+		body.Tools = append(body.Tools, toolDef{Name: tool.Name, Description: tool.Description, InputSchema: schema, ProviderOptions: tool.ProviderOptions["anthropic"]})
+	}
+	return body, nil
+}
+
+func userContent(source domain.Message) []contentBlock {
+	if len(source.Parts) == 0 {
+		return []contentBlock{{Type: "text", Text: source.Content}}
+	}
+	blocks := make([]contentBlock, 0, len(source.Parts))
+	for _, part := range source.Parts {
+		switch part.Type {
+		case domain.ContentPartText:
+			if part.Text != "" {
+				blocks = append(blocks, contentBlock{Type: "text", Text: part.Text})
+			}
+		case domain.ContentPartImage:
+			mediaType := strings.TrimSpace(part.MIMEType)
+			if mediaType == "" {
+				mediaType = "image/png"
+			}
+			blocks = append(blocks, contentBlock{Type: "image", Source: &imageSource{Type: "base64", MediaType: mediaType, Data: part.Data}})
+		}
+	}
+	return blocks
+}
+
+func toolResultContent(source domain.Message) any {
+	if len(source.Parts) == 0 {
+		return source.TextContent()
+	}
+	hasImage := false
+	for _, part := range source.Parts {
+		if part.Type == domain.ContentPartImage {
+			hasImage = true
+			break
+		}
+	}
+	if !hasImage {
+		return source.TextContent()
+	}
+	blocks := make([]contentBlock, 0, len(source.Parts))
+	for _, part := range source.Parts {
+		switch part.Type {
+		case domain.ContentPartText:
+			if part.Text != "" {
+				blocks = append(blocks, contentBlock{Type: "text", Text: part.Text})
+			}
+		case domain.ContentPartImage:
+			mediaType := strings.TrimSpace(part.MIMEType)
+			if mediaType == "" {
+				mediaType = "image/png"
+			}
+			blocks = append(blocks, contentBlock{
+				Type: "image",
+				Source: &imageSource{
+					Type:      "base64",
+					MediaType: mediaType,
+					Data:      part.Data,
+				},
+			})
+		}
+	}
+	if len(blocks) == 0 {
+		return source.TextContent()
+	}
+	return blocks
+}
+
+func assistantContent(source domain.Message) []contentBlock {
+	blocks := make([]contentBlock, 0, 1+len(source.ToolCalls))
+	if text := source.TextContent(); text != "" {
+		blocks = append(blocks, contentBlock{Type: "text", Text: text})
+	}
+	for _, call := range source.ToolCalls {
+		input := call.Arguments
+		if len(input) == 0 {
+			input = json.RawMessage(`{}`)
+		}
+		blocks = append(blocks, contentBlock{Type: "tool_use", ID: call.ID, Name: call.Name, Input: input})
+	}
+	return blocks
+}
+
+func normalizedModelID(modelID string) string {
+	id := strings.ToLower(strings.TrimSpace(modelID))
+	if slash := strings.LastIndexByte(id, '/'); slash >= 0 {
+		id = id[slash+1:]
+	}
+	return id
+}
+
+func supportsAdaptiveThinking(modelID string) bool {
+	id := normalizedModelID(modelID)
+	if strings.Contains(id, "mythos-preview") {
+		return true
+	}
+	for _, marker := range []string{
+		"claude-opus-5", "claude-sonnet-5", "claude-fable-5", "claude-mythos-5",
+		"-4-6", "-4.6", "-4-7", "-4.7", "-4-8", "-4.8",
+	} {
+		if strings.Contains(id, marker) {
+			return true
+		}
+	}
+	return false
+}
+
+func supportsForcedToolChoice(modelID string) bool {
+	id := normalizedModelID(modelID)
+	return !strings.HasPrefix(id, "claude-fable-5-1") && !strings.HasPrefix(id, "claude-mythos-5-1")
+}

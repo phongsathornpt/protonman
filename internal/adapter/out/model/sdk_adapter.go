@@ -11,11 +11,11 @@ import (
 
 	"github.com/phongsathornpt/protonman/internal/base/buildinfo"
 	"github.com/phongsathornpt/protonman/internal/base/runtimepolicy"
-	"github.com/phongsathornpt/protonman/proton-sdk/domain"
-	"github.com/phongsathornpt/protonman/proton-sdk/port"
-	sdkanthropic "github.com/phongsathornpt/protonman/proton-sdk/provider/anthropic"
-	sdkopenai "github.com/phongsathornpt/protonman/proton-sdk/provider/openai"
-	"github.com/phongsathornpt/protonman/proton-sdk/usecase"
+	"github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
+	"github.com/phongsathornpt/protonman/pkg/proton-sdk/port"
+	sdkanthropic "github.com/phongsathornpt/protonman/pkg/proton-sdk/provider/anthropic"
+	sdkopenai "github.com/phongsathornpt/protonman/pkg/proton-sdk/provider/openai"
+	"github.com/phongsathornpt/protonman/pkg/proton-sdk/usecase"
 )
 
 type sessionBoundModel struct {

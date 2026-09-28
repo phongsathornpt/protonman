@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/phongsathornpt/protonman/proton-sdk/domain"
+	"github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
 )
 
 // ProviderName identifies a configured model provider. It is distinct from

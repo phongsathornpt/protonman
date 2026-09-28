@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	domain "github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
 )
 
 func TestNormalizeSessionRuntime(t *testing.T) {
@@ -27,10 +27,10 @@ func TestNormalizeSessionRuntime(t *testing.T) {
 }
 
 func TestReasoningSettingUsesAutoForDefault(t *testing.T) {
-	if got := reasoningSetting(sdk.ReasoningDefault); got != "auto" {
+	if got := reasoningSetting(domain.ReasoningDefault); got != "auto" {
 		t.Fatalf("reasoning default = %q, want auto", got)
 	}
-	if got := reasoningSetting(sdk.ReasoningHigh); got != "high" {
+	if got := reasoningSetting(domain.ReasoningHigh); got != "high" {
 		t.Fatalf("reasoning high = %q, want high", got)
 	}
 }
@@ -39,7 +39,7 @@ func TestSetSessionReasoningRejectsActivePrompt(t *testing.T) {
 	server := &Server{}
 	sess := &Session{id: "s1", active: true}
 
-	err := server.setSessionReasoning(context.Background(), sess, sdk.ReasoningHigh)
+	err := server.setSessionReasoning(context.Background(), sess, domain.ReasoningHigh)
 	if err == nil || !strings.Contains(err.Error(), "active prompt") {
 		t.Fatalf("setSessionReasoning error = %v, want active prompt rejection", err)
 	}
