@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"image"
 	"image/color"
+	"os/exec"
+	"runtime"
 	"sort"
 	"strings"
 	"time"
@@ -205,6 +207,8 @@ type shell struct {
 	pinnedButton    widget.Clickable
 
 	sidebarInspectorButton widget.Clickable
+	sidebarArchiveButton   widget.Clickable
+	sidebarCommunityButton widget.Clickable
 
 	modelChipButton          widget.Clickable
 	reasoningChipButton      widget.Clickable
@@ -625,9 +629,6 @@ func (s *shell) layoutSidebar(gtx layout.Context, snapshot controllerSnapshot) l
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 			return s.layoutSidebarHeader(gtx, snapshot)
 		}),
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return s.layoutHorizontalDivider(gtx)
-		}),
 		layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
 			allRows := s.sidebarRows(snapshot)
 			rows := s.sidebarDisplayRows(allRows, snapshot.FilterMode)
@@ -681,12 +682,39 @@ func (s *shell) layoutSidebar(gtx layout.Context, snapshot controllerSnapshot) l
 	)
 }
 
+func openBrowserURL(targetURL string) {
+	var cmd *exec.Cmd
+	switch runtime.GOOS {
+	case "darwin":
+		cmd = exec.Command("open", targetURL)
+	case "windows":
+		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", targetURL)
+	default:
+		cmd = exec.Command("xdg-open", targetURL)
+	}
+	if cmd != nil {
+		_ = cmd.Start()
+	}
+}
+
 func (s *shell) layoutSidebarFooter(gtx layout.Context, snapshot controllerSnapshot) layout.Dimensions {
 	wideInspector := gtx.Constraints.Max.X >= gtx.Dp(inspectorWideBreakpoint)
 	showInspector := s.shouldShowInspector(wideInspector)
 	if s.sidebarInspectorButton.Clicked(gtx) {
 		s.inspectorOverride = true
 		s.inspectorVisible = !showInspector
+	}
+
+	if s.sidebarArchiveButton.Clicked(gtx) && s.onSetFilterMode != nil {
+		if snapshot.FilterMode == "pinned" {
+			s.onSetFilterMode("all")
+		} else {
+			s.onSetFilterMode("pinned")
+		}
+	}
+
+	if s.sidebarCommunityButton.Clicked(gtx) {
+		openBrowserURL("https://github.com/phongsathornpt/protonman")
 	}
 
 	statusColor := s.theme.onSuccessContainer
@@ -708,37 +736,75 @@ func (s *shell) layoutSidebarFooter(gtx layout.Context, snapshot controllerSnaps
 		statusLabel = "Offline"
 	}
 
-	return desktopInset{Top: 6, Bottom: 6, Left: 10, Right: 10}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+	return desktopInset{Top: 8, Bottom: 8, Left: 10, Right: 10}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 		return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle, Spacing: layout.SpaceBetween}.Layout(gtx,
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				btnGtx := gtx
-				bg := color.NRGBA{}
-				fg := s.theme.onSurfaceVariant
-				if showInspector {
-					bg = s.theme.primaryContainer
-					fg = s.theme.onPrimaryContainer
-				} else if s.sidebarInspectorButton.Hovered() {
-					bg = s.theme.surfaceContainerHigh
-					fg = s.theme.onSurface
-				}
-				semantic.Button.Add(btnGtx.Ops)
-				semantic.DescriptionOp("Open Settings and Inspector (⌘I)").Add(btnGtx.Ops)
-				return s.sidebarInspectorButton.Layout(btnGtx, func(gtx layout.Context) layout.Dimensions {
-					return s.roundedSurface(gtx, shapeSmall, bg, func(gtx layout.Context) layout.Dimensions {
-						return desktopInset{Top: 4, Bottom: 4, Left: 8, Right: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-							return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
-								layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-									return s.layoutActionIcon(gtx, iconSettings, 14, fg)
-								}),
-								layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-									return desktopInset{Left: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-										return s.layoutLabel(gtx, "Settings", textLabelSmall, font.Medium, fg, 1)
-									})
-								}),
-							)
+				return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
+					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+						btnGtx := gtx
+						bg := color.NRGBA{}
+						fg := s.theme.onSurfaceVariant
+						if showInspector {
+							bg = s.theme.primaryContainer
+							fg = s.theme.onPrimaryContainer
+						} else if s.sidebarInspectorButton.Hovered() {
+							bg = s.theme.surfaceContainerHigh
+							fg = s.theme.onSurface
+						}
+						semantic.Button.Add(btnGtx.Ops)
+						semantic.DescriptionOp("Open Settings and Inspector (⌘I)").Add(btnGtx.Ops)
+						return s.sidebarInspectorButton.Layout(btnGtx, func(gtx layout.Context) layout.Dimensions {
+							return s.roundedSurface(gtx, shapeSmall, bg, func(gtx layout.Context) layout.Dimensions {
+								return desktopUniformInset(6).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+									return s.layoutActionIcon(gtx, iconSettings, 16, fg)
+								})
+							})
 						})
-					})
-				})
+					}),
+					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+						return desktopInset{Left: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+							btnGtx := gtx
+							bg := color.NRGBA{}
+							fg := s.theme.onSurfaceVariant
+							if snapshot.FilterMode == "pinned" {
+								bg = s.theme.primaryContainer
+								fg = s.theme.onPrimaryContainer
+							} else if s.sidebarArchiveButton.Hovered() {
+								bg = s.theme.surfaceContainerHigh
+								fg = s.theme.onSurface
+							}
+							semantic.Button.Add(btnGtx.Ops)
+							semantic.DescriptionOp("Toggle Starred Filter").Add(btnGtx.Ops)
+							return s.sidebarArchiveButton.Layout(btnGtx, func(gtx layout.Context) layout.Dimensions {
+								return s.roundedSurface(gtx, shapeSmall, bg, func(gtx layout.Context) layout.Dimensions {
+									return desktopUniformInset(6).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+										return s.layoutActionIcon(gtx, iconArchive, 16, fg)
+									})
+								})
+							})
+						})
+					}),
+					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+						return desktopInset{Left: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+							btnGtx := gtx
+							bg := color.NRGBA{}
+							fg := s.theme.onSurfaceVariant
+							if s.sidebarCommunityButton.Hovered() {
+								bg = s.theme.surfaceContainerHigh
+								fg = s.theme.onSurface
+							}
+							semantic.Button.Add(btnGtx.Ops)
+							semantic.DescriptionOp("Open Protonman Community").Add(btnGtx.Ops)
+							return s.sidebarCommunityButton.Layout(btnGtx, func(gtx layout.Context) layout.Dimensions {
+								return s.roundedSurface(gtx, shapeSmall, bg, func(gtx layout.Context) layout.Dimensions {
+									return desktopUniformInset(6).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+										return s.layoutActionIcon(gtx, iconDiscord, 16, fg)
+									})
+								})
+							})
+						})
+					}),
+				)
 			}),
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 				return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
@@ -761,57 +827,72 @@ func (s *shell) layoutSidebarFooter(gtx layout.Context, snapshot controllerSnaps
 }
 
 func (s *shell) layoutSidebarHeader(gtx layout.Context, snapshot controllerSnapshot) layout.Dimensions {
-	return desktopInset{Top: 10, Bottom: 8, Left: 12, Right: 12}.Layout(gtx,
+	return desktopInset{Top: 14, Bottom: 4, Left: 12, Right: 12}.Layout(gtx,
 		func(gtx layout.Context) layout.Dimensions {
-			workspaceName := "Workspaces"
-			for _, project := range snapshot.State.Projects {
-				if project.ID == snapshot.State.ActiveProjectID {
-					workspaceName = project.Name
-					break
-				}
-			}
-			newLabel := "+ New session"
-			if gtx.Constraints.Max.X < gtx.Dp(240) {
-				newLabel = "+ New"
-			}
+			newLabel := "New chat"
 			if snapshot.CreatingSession {
 				newLabel = "Starting…"
 			}
+			canCreate := snapshot.Connection == connectionConnected && !snapshot.CreatingSession
 
 			items := []layout.FlexChild{
+				// Brand Header: [P] Protonman
 				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-					return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle, Spacing: layout.SpaceBetween}.Layout(gtx,
-						layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-							return s.layoutLabel(gtx, compactInspectorText(workspaceName, 20), textTitleSmall, font.Bold, s.theme.onSurface, 1)
-						}),
-						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-							return desktopInset{Left: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-								return s.layoutButton(gtx, &s.sidebarNewSessionButton, newLabel, snapshot.Connection == connectionConnected && !snapshot.CreatingSession, s.onNewSession)
-							})
-						}),
-					)
-				}),
-				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-					return desktopInset{Top: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+					return desktopInset{Bottom: 14, Left: 4, Right: 4}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 						return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
-							layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-								return s.layoutSidebarSearch(gtx)
+							layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+								return desktopInset{Right: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+									return s.layoutActionIcon(gtx, iconBrandLogo, 20, s.theme.onSurface)
+								})
 							}),
 							layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-								return desktopInset{Left: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-									return s.layoutFilterDropdown(gtx, snapshot)
-								})
+								return s.layoutLabel(gtx, "Protonman", textTitleMedium, font.Bold, s.theme.onSurface, 1)
 							}),
 						)
 					})
 				}),
-			}
-			if s.filterDropdownOpen {
-				items = append(items, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-					return desktopInset{Top: 4, Bottom: 2}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-						return s.layoutFilterDropdownMenu(gtx, snapshot)
+				// "New chat" dedicated action row
+				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+					btn := &s.sidebarNewSessionButton
+					if btn.Clicked(gtx) && canCreate && s.onNewSession != nil {
+						s.onNewSession()
+					}
+					bg := color.NRGBA{}
+					fg := s.theme.onSurface
+					if btn.Hovered() && canCreate {
+						bg = s.theme.surfaceContainerHigh
+					}
+					semantic.Button.Add(gtx.Ops)
+					semantic.DescriptionOp("Start a new chat session").Add(gtx.Ops)
+					return btn.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+						return s.roundedSurface(gtx, shapeSmall, bg, func(gtx layout.Context) layout.Dimensions {
+							return desktopInset{Top: 7, Bottom: 7, Left: 8, Right: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+								return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
+									layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+										return desktopInset{Right: 10}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+											return s.layoutActionIcon(gtx, iconCompose, 16, fg)
+										})
+									}),
+									layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+										return s.layoutLabel(gtx, newLabel, textBodyMedium, font.Medium, fg, 1)
+									}),
+								)
+							})
+						})
 					})
-				}))
+				}),
+				// Full-width search bar: Search threads
+				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+					return desktopInset{Top: 6, Bottom: 14}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+						return s.layoutSidebarSearch(gtx)
+					})
+				}),
+				// "Projects" section label
+				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+					return desktopInset{Bottom: 6, Left: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+						return s.layoutLabel(gtx, "Projects", textLabelSmall, font.Medium, s.theme.onSurfaceVariant, 1)
+					})
+				}),
 			}
 			return layout.Flex{Axis: layout.Vertical}.Layout(gtx, items...)
 		},
@@ -954,7 +1035,7 @@ func (s *shell) layoutSidebarSearch(gtx layout.Context) layout.Dimensions {
 					})
 				}),
 				layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-					ed := material.Editor(s.theme.material, &s.sidebarSearchEditor, "Filter sessions…")
+					ed := material.Editor(s.theme.material, &s.sidebarSearchEditor, "Search threads…")
 					ed.TextSize = textBodySmall
 					ed.Color = s.theme.onSurface
 					ed.HintColor = s.theme.onSurfaceVariant
@@ -1300,6 +1381,11 @@ func (s *shell) layoutSidebarRow(gtx layout.Context, row sidebarRow, state deskt
 								return s.layoutActionIcon(gtx, chevronKind, 11, s.theme.onSurfaceVariant)
 							})
 						}),
+						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+							return desktopInset{Right: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+								return s.layoutActionIcon(gtx, iconFolder, 14, s.theme.onSurfaceVariant)
+							})
+						}),
 						layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
 							return s.layoutLabel(gtx, row.Title, textLabelSmall, font.SemiBold, foreground, 1)
 						}),
@@ -1415,114 +1501,94 @@ func (s *shell) layoutSidebarRow(gtx layout.Context, row sidebarRow, state deskt
 			foreground = s.theme.onSurface
 		}
 		return s.roundedSurface(gtx, shapeMedium, background, func(gtx layout.Context) layout.Dimensions {
-			return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
-				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-					if !selected {
-						return layout.Dimensions{}
-					}
-					return desktopInset{Left: 4}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-						return s.roundedSurface(gtx, shapeFull, s.theme.primary, func(gtx layout.Context) layout.Dimensions {
-							gtx.Constraints.Min = image.Pt(gtx.Dp(3), gtx.Dp(20))
-							gtx.Constraints.Max = image.Pt(gtx.Dp(3), gtx.Dp(20))
-							return layout.Dimensions{Size: gtx.Constraints.Min}
-						})
-					})
-				}),
-				layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-					leftInset := unit.Dp(10)
-					if selected {
-						leftInset = unit.Dp(8)
-					}
-					return desktopInset{Top: 6, Bottom: 6, Left: leftInset, Right: 8}.Layout(gtx,
-						func(gtx layout.Context) layout.Dimensions {
-							cardChildren := []layout.FlexChild{
-								layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-									if isRenaming {
-										return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
-											layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-												ed := material.Editor(s.theme.material, &s.sessionRenameEditor, "Session title…")
-												ed.TextSize = textBodySmall
-												ed.Color = foreground
-												return ed.Layout(gtx)
-											}),
-											layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-												return desktopInset{Left: 4}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-													return s.layoutMiniButton(gtx, &s.renameConfirmButton, "✓", s.theme.primary)
-												})
-											}),
-											layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-												return desktopInset{Left: 2}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-													return s.layoutMiniButton(gtx, &s.renameCancelButton, "✕", s.theme.onSurfaceVariant)
-												})
-											}),
-										)
-									}
-									weight := font.Medium
-									if selected {
-										weight = font.SemiBold
-									}
-									return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
-										layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-											return s.layoutLabel(gtx, row.Title, textBodySmall, weight, foreground, 1)
-										}),
-										layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-											if row.Pinned && !showActions {
-												return desktopInset{Left: 4}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-													return s.layoutActionIcon(gtx, iconStar, 12, s.theme.primary)
-												})
-											}
-											if !showActions {
-												return layout.Dimensions{}
-											}
-											var items []layout.FlexChild
-											if row.Pinned {
-												items = append(items, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-													return desktopInset{Right: 4}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-														return s.layoutActionIcon(gtx, iconStar, 12, s.theme.primary)
-													})
-												}))
-											}
-											items = append(items, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-												return s.layoutMiniMenuButton(gtx, menuBtn, "⋮")
-											}))
-											return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx, items...)
-										}),
-									)
+			return desktopInset{Top: 6, Bottom: 6, Left: 12, Right: 8}.Layout(gtx,
+				func(gtx layout.Context) layout.Dimensions {
+					cardChildren := []layout.FlexChild{
+						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+							if isRenaming {
+								return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
+									layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+										ed := material.Editor(s.theme.material, &s.sessionRenameEditor, "Session title…")
+										ed.TextSize = textBodySmall
+										ed.Color = foreground
+										return ed.Layout(gtx)
+									}),
+									layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+										return desktopInset{Left: 4}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+											return s.layoutMiniButton(gtx, &s.renameConfirmButton, "✓", s.theme.primary)
+										})
+									}),
+									layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+										return desktopInset{Left: 2}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+											return s.layoutMiniButton(gtx, &s.renameCancelButton, "✕", s.theme.onSurfaceVariant)
+										})
+									}),
+								)
+							}
+							weight := font.Normal
+							if selected {
+								weight = font.Medium
+							}
+							return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
+								layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+									return s.layoutLabel(gtx, row.Title, textBodySmall, weight, foreground, 1)
 								}),
-							}
-							if subtitle != "" || statusLabel != "" {
-								cardChildren = append(cardChildren, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-									return desktopInset{Top: 3}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-										return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle, Spacing: layout.SpaceBetween}.Layout(gtx,
-											layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-												if subtitle == "" {
-													return layout.Dimensions{}
-												}
-												return s.layoutLabel(gtx, subtitle, textLabelSmall, font.Normal, s.theme.onSurfaceVariant, 1)
-											}),
-											layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-												if statusLabel == "" {
-													return layout.Dimensions{}
-												}
-												return desktopInset{Left: 4}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-													return s.layoutSidebarTaskStatus(gtx, statusLabel, taskStatusFromLabel(row.Status))
-												})
-											}),
-										)
-									})
-								}))
-							}
-							if menuOpen {
-								cardChildren = append(cardChildren, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-									return desktopInset{Top: 6, Bottom: 2}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-										return s.layoutSessionMenuPopover(gtx, row)
-									})
-								}))
-							}
-							return layout.Flex{Axis: layout.Vertical}.Layout(gtx, cardChildren...)
-						},
-					)
-				}),
+								layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+									if row.Pinned && !showActions {
+										return desktopInset{Left: 4}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+											return s.layoutActionIcon(gtx, iconStar, 12, s.theme.primary)
+										})
+									}
+									if !showActions {
+										return layout.Dimensions{}
+									}
+									var items []layout.FlexChild
+									if row.Pinned {
+										items = append(items, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+											return desktopInset{Right: 4}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+												return s.layoutActionIcon(gtx, iconStar, 12, s.theme.primary)
+											})
+										}))
+									}
+									items = append(items, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+										return s.layoutMiniMenuButton(gtx, menuBtn, "⋮")
+									}))
+									return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx, items...)
+								}),
+							)
+						}),
+					}
+					if subtitle != "" || statusLabel != "" {
+						cardChildren = append(cardChildren, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+							return desktopInset{Top: 3}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+								return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle, Spacing: layout.SpaceBetween}.Layout(gtx,
+									layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+										if subtitle == "" {
+											return layout.Dimensions{}
+										}
+										return s.layoutLabel(gtx, subtitle, textLabelSmall, font.Normal, s.theme.onSurfaceVariant, 1)
+									}),
+									layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+										if statusLabel == "" {
+											return layout.Dimensions{}
+										}
+										return desktopInset{Left: 4}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+											return s.layoutSidebarTaskStatus(gtx, statusLabel, taskStatusFromLabel(row.Status))
+										})
+									}),
+								)
+							})
+						}))
+					}
+					if menuOpen {
+						cardChildren = append(cardChildren, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+							return desktopInset{Top: 6, Bottom: 2}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+								return s.layoutSessionMenuPopover(gtx, row)
+							})
+						}))
+					}
+					return layout.Flex{Axis: layout.Vertical}.Layout(gtx, cardChildren...)
+				},
 			)
 		})
 	})
@@ -1531,7 +1597,11 @@ func (s *shell) layoutSidebarRow(gtx layout.Context, row sidebarRow, state deskt
 			return layout.Dimensions{Size: dims.Size}
 		})
 	}
-	return desktopInset{Top: 2, Bottom: 2, Left: 8, Right: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+	leftPad := unit.Dp(22)
+	if row.Pinned {
+		leftPad = unit.Dp(8)
+	}
+	return desktopInset{Top: 2, Bottom: 2, Left: leftPad, Right: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 		return layout.Dimensions{Size: dims.Size}
 	})
 }

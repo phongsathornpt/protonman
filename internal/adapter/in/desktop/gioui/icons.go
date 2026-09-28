@@ -32,6 +32,11 @@ const (
 	iconKebab
 	iconStar
 	iconSettings
+	iconCompose
+	iconFolder
+	iconArchive
+	iconDiscord
+	iconBrandLogo
 )
 
 func (s *shell) layoutActionIcon(gtx layout.Context, kind iconKind, size unit.Dp, color color.NRGBA) layout.Dimensions {
@@ -119,6 +124,53 @@ func desktopIconPath(ops *op.Ops, kind iconKind, size float32) clip.PathSpec {
 		line(.38, .24, .38, .46)
 		line(.18, .65, .82, .65)
 		line(.62, .54, .62, .76)
+	case iconCompose:
+		path.MoveTo(p(.52, .2))
+		path.LineTo(p(.2, .2))
+		path.LineTo(p(.2, .8))
+		path.LineTo(p(.8, .8))
+		path.LineTo(p(.8, .48))
+		line(.42, .58, .78, .22)
+		line(.68, .22, .78, .32)
+	case iconFolder:
+		path.MoveTo(p(.18, .32))
+		path.LineTo(p(.42, .32))
+		path.LineTo(p(.50, .42))
+		path.LineTo(p(.82, .42))
+		path.LineTo(p(.82, .76))
+		path.LineTo(p(.18, .76))
+		path.Close()
+	case iconArchive:
+		path.MoveTo(p(.18, .30))
+		path.LineTo(p(.82, .30))
+		path.LineTo(p(.82, .45))
+		path.LineTo(p(.18, .45))
+		path.Close()
+		path.MoveTo(p(.24, .45))
+		path.LineTo(p(.24, .76))
+		path.LineTo(p(.76, .76))
+		path.LineTo(p(.76, .45))
+		line(.40, .58, .60, .58)
+	case iconDiscord:
+		path.MoveTo(p(.25, .35))
+		path.LineTo(p(.75, .35))
+		path.LineTo(p(.80, .68))
+		path.LineTo(p(.68, .62))
+		path.LineTo(p(.58, .68))
+		path.LineTo(p(.50, .62))
+		path.LineTo(p(.42, .68))
+		path.LineTo(p(.32, .62))
+		path.LineTo(p(.20, .68))
+		path.Close()
+		line(.36, .46, .38, .48)
+		line(.64, .46, .62, .48)
+	case iconBrandLogo:
+		path.MoveTo(p(.22, .80))
+		path.LineTo(p(.22, .20))
+		path.LineTo(p(.68, .20))
+		path.LineTo(p(.68, .52))
+		path.LineTo(p(.22, .52))
+		line(.38, .36, .52, .36)
 	}
 	return path.End()
 }
