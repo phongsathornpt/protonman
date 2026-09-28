@@ -6,18 +6,59 @@ import (
 	"strings"
 
 	"github.com/phongsathornpt/protonman/internal/adapter/out/acpclient"
+	desktopstate "github.com/phongsathornpt/protonman/internal/feature/desktop"
 )
 
 func (c *controller) setRuntimeModel(provider, model string) {
 	provider = strings.TrimSpace(provider)
 	model = strings.TrimSpace(model)
-	if provider == "" || model == "" {
+	if model == "" {
 		return
 	}
-	c.startRuntimeMutation("protonman/session/set_model", map[string]any{
-		"provider": provider,
-		"model":    model,
-	})
+	c.mu.Lock()
+	sessionID := strings.TrimSpace(c.state.ActiveSessionID)
+	session, ok := desktopSessionByID(c.state, sessionID)
+	agentID := controllerAgentID
+	if ok && strings.TrimSpace(session.AgentID) != "" {
+		agentID = strings.TrimSpace(session.AgentID)
+	}
+	if c.agentDefaultModels == nil {
+		c.agentDefaultModels = make(map[string]string)
+	}
+	c.agentDefaultModels[agentID] = model
+	if c.preferences != nil {
+		go func(aID, m string) {
+			_ = c.preferences.SetAgentDefaultModel(c.ctx, aID, m)
+		}(agentID, model)
+	}
+	if ok && session.AgentID != "" && session.AgentID != controllerAgentID {
+		desktopstate.Apply(&c.state, desktopstate.Event{
+			Kind:      desktopstate.EventSessionRuntimeUpdated,
+			SessionID: sessionID,
+			Runtime: desktopstate.RuntimeSettingsState{
+				Provider:       provider,
+				Model:          model,
+				Reasoning:      session.Runtime.Reasoning,
+				LowConcurrency: session.Runtime.LowConcurrency,
+			},
+		})
+		c.revision++
+		c.mu.Unlock()
+		c.notify()
+		return
+	}
+	if provider == "" && ok {
+		provider = session.Runtime.Provider
+	}
+	c.mu.Unlock()
+
+	params := map[string]any{
+		"model": model,
+	}
+	if provider != "" {
+		params["provider"] = provider
+	}
+	c.startRuntimeMutation("protonman/session/set_model", params)
 }
 
 func (c *controller) setRuntimeReasoning(value string) {
@@ -41,7 +82,7 @@ func (c *controller) startRuntimeMutation(method string, values map[string]any) 
 	sessionID := strings.TrimSpace(c.state.ActiveSessionID)
 	session, ok := desktopSessionByID(c.state, sessionID)
 	client, agentID := c.clientForSessionLocked(sessionID)
-	if !ok || session.AgentID != controllerAgentID || sessionBusy(session.Status) || client == nil || c.connections[agentID] != connectionConnected || c.runtimeMutation != "" {
+	if !ok || (session.AgentID != "" && session.AgentID != controllerAgentID) || sessionBusy(session.Status) || client == nil || c.connections[agentID] != connectionConnected || c.runtimeMutation != "" {
 		c.mu.Unlock()
 		return
 	}
@@ -76,13 +117,10 @@ func (c *controller) startRuntimeMutation(method string, values map[string]any) 
 
 func (c *controller) finishRuntimeMutation(client *acpclient.Client, sessionID string) {
 	c.mu.Lock()
-	session, ok := desktopSessionByID(c.state, sessionID)
-	if !ok || !c.clientCurrentLocked(session.AgentID, client) || c.runtimeMutation != sessionID {
-		c.mu.Unlock()
-		return
+	if c.runtimeMutation == sessionID {
+		c.runtimeMutation = ""
+		c.revision++
 	}
-	c.runtimeMutation = ""
-	c.revision++
 	c.mu.Unlock()
 	c.notify()
 }
@@ -94,7 +132,14 @@ func (c *controller) setRuntimeStatus(client *acpclient.Client, sessionID, statu
 		c.mu.Unlock()
 		return
 	}
-	c.statuses[session.AgentID] = status
+	agentID := session.AgentID
+	if agentID == "" {
+		agentID = c.activeAgentID
+	}
+	if agentID == "" {
+		agentID = controllerAgentID
+	}
+	c.statuses[agentID] = status
 	c.revision++
 	c.mu.Unlock()
 	c.notify()

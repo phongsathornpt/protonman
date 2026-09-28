@@ -106,13 +106,16 @@ func TestRuntimePopoverAgentModelSelection(t *testing.T) {
 			Model:    "claude-3-5-sonnet",
 		},
 	}
+	snapshot := controllerSnapshot{
+		ActiveAgentID: "protonman",
+	}
 
 	sh.openModelPopover()
 	gtx := testLayoutContext()
 
 	// Simulate clicking the agent model button
 	sh.agentModelButton("claude-3-7-sonnet").Click()
-	sh.layoutModelPopover(gtx, session, true)
+	sh.layoutModelPopover(gtx, session, snapshot, true)
 
 	if selectedModel != "claude-3-7-sonnet" || selectedProvider != "protonman" {
 		t.Fatalf("expected provider 'protonman' and model 'claude-3-7-sonnet', got provider=%q model=%q", selectedProvider, selectedModel)
@@ -120,72 +123,82 @@ func TestRuntimePopoverAgentModelSelection(t *testing.T) {
 	if sh.modelPopoverVisible {
 		t.Fatal("expected model popover closed after selecting model")
 	}
-	if len(sh.recentModels) == 0 || sh.recentModels[0].Model != "claude-3-7-sonnet" {
-		t.Fatalf("expected model added to recentModels, got %#v", sh.recentModels)
-	}
 }
 
-func TestRuntimePopoverCuratedPresetSelection(t *testing.T) {
+func TestRuntimePopoverActiveAgentSearchFilter(t *testing.T) {
 	sh := newShell(newTheme("light"))
-	var selectedProvider, selectedModel string
-	sh.onSetRuntimeModel = func(p, m string) {
-		selectedProvider = p
+	var selectedModel string
+	sh.onSetRuntimeModel = func(_, m string) {
 		selectedModel = m
 	}
 
 	session := desktopstate.SessionState{
-		ID: "sess-1",
+		ID:              "sess-1",
+		AvailableModels: []string{"claude-3-7-sonnet", "gpt-4o", "gemini-2.5-pro"},
 		Runtime: desktopstate.RuntimeSettingsState{
 			Provider: "protonman",
+			Model:    "claude-3-7-sonnet",
+		},
+	}
+	snapshot := controllerSnapshot{
+		ActiveAgentID: "protonman",
+	}
+
+	sh.openModelPopover()
+
+	// 1. Search for "gemini"
+	sh.modelSearchEditor.SetText("gemini")
+	gtx := testLayoutContext()
+	sh.layoutModelPopover(gtx, session, snapshot, true)
+
+	// Click filtered gemini model
+	sh.agentModelButton("gemini-2.5-pro").Click()
+	sh.layoutModelPopover(gtx, session, snapshot, true)
+
+	if selectedModel != "gemini-2.5-pro" {
+		t.Fatalf("expected 'gemini-2.5-pro' selected, got %q", selectedModel)
+	}
+
+	// 2. Test search clear button
+	sh.openModelPopover()
+	sh.modelSearchEditor.SetText("nomatch")
+	sh.modelSearchClearBtn.Click()
+	sh.layoutModelPopover(gtx, session, snapshot, true)
+
+	if sh.modelSearchEditor.Text() != "" {
+		t.Fatalf("expected search editor text cleared, got %q", sh.modelSearchEditor.Text())
+	}
+}
+
+func TestRuntimePopoverActiveAgentEmptyState(t *testing.T) {
+	sh := newShell(newTheme("light"))
+	refreshCalled := false
+	sh.onRefreshRuntime = func() {
+		refreshCalled = true
+	}
+
+	// Agent advertising no models (e.g. cline or opencode)
+	session := desktopstate.SessionState{
+		ID:              "sess-1",
+		AvailableModels: nil,
+		Runtime: desktopstate.RuntimeSettingsState{
+			Provider: "cline",
 			Model:    "default",
 		},
+	}
+	snapshot := controllerSnapshot{
+		ActiveAgentID: "cline",
 	}
 
 	sh.openModelPopover()
 	gtx := testLayoutContext()
 
-	// Click first curated preset
-	preset := curatedModelPresets[0]
-	sh.modelPresetButton(preset.Model).Click()
-	sh.layoutModelPopover(gtx, session, true)
+	// Click the refresh button in empty state
+	sh.modelRefreshButton.Click()
+	sh.layoutModelPopover(gtx, session, snapshot, true)
 
-	if selectedModel != preset.Model || selectedProvider != preset.Provider {
-		t.Fatalf("expected provider %q and model %q, got provider=%q model=%q", preset.Provider, preset.Model, selectedProvider, selectedModel)
-	}
-	if sh.modelPopoverVisible {
-		t.Fatal("expected model popover closed after selecting preset")
-	}
-}
-
-func TestRuntimePopoverCustomModelApply(t *testing.T) {
-	sh := newShell(newTheme("light"))
-	var selectedProvider, selectedModel string
-	sh.onSetRuntimeModel = func(p, m string) {
-		selectedProvider = p
-		selectedModel = m
-	}
-
-	session := desktopstate.SessionState{
-		ID: "sess-1",
-		Runtime: desktopstate.RuntimeSettingsState{
-			Provider: "protonman",
-			Model:    "default",
-		},
-	}
-
-	sh.openModelPopover()
-	sh.popoverProviderEditor.SetText("openai")
-	sh.popoverModelEditor.SetText("o3-mini")
-
-	gtx := testLayoutContext()
-	sh.popoverApplyModelButton.Click()
-	sh.layoutModelPopover(gtx, session, true)
-
-	if selectedModel != "o3-mini" || selectedProvider != "openai" {
-		t.Fatalf("expected provider 'openai' and model 'o3-mini', got provider=%q model=%q", selectedProvider, selectedModel)
-	}
-	if sh.modelPopoverVisible {
-		t.Fatal("expected model popover closed after applying custom model")
+	if !refreshCalled {
+		t.Fatal("expected onRefreshRuntime to be called from empty state refresh button")
 	}
 }
 
@@ -232,12 +245,15 @@ func TestRuntimePopoverDisabledWhenBusy(t *testing.T) {
 			Reasoning: "auto",
 		},
 	}
+	snapshot := controllerSnapshot{
+		ActiveAgentID: "protonman",
+	}
 
 	gtx := testLayoutContext()
 
 	// Try clicking model button when enabled is false
 	sh.agentModelButton("claude-3-7-sonnet").Click()
-	sh.layoutModelPopover(gtx, session, false)
+	sh.layoutModelPopover(gtx, session, snapshot, false)
 	if modelChanged {
 		t.Fatal("model should not change when popover is disabled")
 	}

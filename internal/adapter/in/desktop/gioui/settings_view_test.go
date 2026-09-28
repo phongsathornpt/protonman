@@ -7,11 +7,15 @@ import (
 	"testing"
 	"time"
 
+	"gioui.org/f32"
+	"gioui.org/gpu/headless"
 	"gioui.org/io/input"
+	"gioui.org/io/pointer"
 	"gioui.org/layout"
 	"gioui.org/op"
 	"gioui.org/unit"
 
+	"github.com/phongsathornpt/protonman/internal/app"
 	desktopstate "github.com/phongsathornpt/protonman/internal/feature/desktop"
 )
 
@@ -238,5 +242,214 @@ func TestInspectorProtonmanStreamlinedTabs(t *testing.T) {
 		if dims.Size.X == 0 {
 			t.Fatalf("panel %d rendered with 0 width", i)
 		}
+	}
+}
+
+func TestSettingsModalPointerRouting(t *testing.T) {
+	view := newShell(newTheme("dark"))
+	view.openSettingsModal()
+	view.settingsActiveTab = 2 // ACP tab
+
+	snapshot := controllerSnapshot{
+		AgentProfiles: []app.ACPAgentProfile{
+			{ID: controllerAgentID, DisplayName: "Protonman", Command: "protonman", Args: []string{"--acp"}},
+		},
+	}
+
+	var op1 op.Ops
+	var router input.Router
+	gtx1 := layout.Context{
+		Ops:         &op1,
+		Constraints: layout.Exact(image.Point{X: 1180, Y: 760}),
+		Metric:      unit.Metric{PxPerDp: 1, PxPerSp: 1},
+		Now:         time.Unix(1, 0),
+		Source:      router.Source(),
+	}
+	view.layout(gtx1, snapshot)
+	router.Frame(gtx1.Ops)
+
+	// In the center of the window, click on the modal dialog
+	centerPt := f32.Point{X: 590, Y: 380}
+	router.Queue(pointer.Event{
+		Kind:     pointer.Press,
+		Source:   pointer.Mouse,
+		Position: centerPt,
+		Buttons:  pointer.ButtonPrimary,
+	})
+	router.Queue(pointer.Event{
+		Kind:     pointer.Release,
+		Source:   pointer.Mouse,
+		Position: centerPt,
+		Buttons:  pointer.ButtonPrimary,
+	})
+
+	var op2 op.Ops
+	gtx2 := layout.Context{
+		Ops:         &op2,
+		Constraints: layout.Exact(image.Point{X: 1180, Y: 760}),
+		Metric:      unit.Metric{PxPerDp: 1, PxPerSp: 1},
+		Now:         time.Unix(2, 0),
+		Source:      router.Source(),
+	}
+	view.layout(gtx2, snapshot)
+	router.Frame(gtx2.Ops)
+
+	t.Logf("after click at center: settingsModalOpen=%v, agentEditorVisible=%v, scrimClicked=%v",
+		view.settingsModalOpen, view.agentEditorVisible, view.settingsModalScrim.Clicked(gtx2))
+}
+
+func TestSettingsModalAddACPAgentClick(t *testing.T) {
+	view := newShell(newTheme("dark"))
+	view.openSettingsModal()
+	view.settingsActiveTab = 2 // ACP tab
+
+	snapshot := controllerSnapshot{
+		AgentProfiles: []app.ACPAgentProfile{
+			{ID: controllerAgentID, DisplayName: "Protonman", Command: "protonman", Args: []string{"--acp"}},
+		},
+	}
+
+	var op1 op.Ops
+	var router input.Router
+	gtx1 := layout.Context{
+		Ops:         &op1,
+		Constraints: layout.Exact(image.Point{X: 1180, Y: 760}),
+		Metric:      unit.Metric{PxPerDp: 1, PxPerSp: 1},
+		Now:         time.Unix(1, 0),
+		Source:      router.Source(),
+	}
+	view.layout(gtx1, snapshot)
+	router.Frame(gtx1.Ops)
+
+	view.agentFormToggleButton.Click()
+
+	var op2 op.Ops
+	gtx2 := layout.Context{
+		Ops:         &op2,
+		Constraints: layout.Exact(image.Point{X: 1180, Y: 760}),
+		Metric:      unit.Metric{PxPerDp: 1, PxPerSp: 1},
+		Now:         time.Unix(2, 0),
+		Source:      router.Source(),
+	}
+	view.layout(gtx2, snapshot)
+	router.Frame(gtx2.Ops)
+
+	if !view.agentEditorVisible {
+		t.Fatalf("agentEditorVisible = false after clicking agentFormToggleButton")
+	}
+
+	// Verify closing with close button
+	view.agentCloseButton.Click()
+	var op4 op.Ops
+	gtx4 := layout.Context{
+		Ops:         &op4,
+		Constraints: layout.Exact(image.Point{X: 1180, Y: 760}),
+		Metric:      unit.Metric{PxPerDp: 1, PxPerSp: 1},
+		Now:         time.Unix(4, 0),
+		Source:      router.Source(),
+	}
+	view.layout(gtx4, snapshot)
+	router.Frame(gtx4.Ops)
+
+	if view.agentEditorVisible {
+		t.Fatalf("agentEditorVisible = true after clicking agentCloseButton")
+	}
+}
+
+func TestAddACPAgentHeadlessFrame(t *testing.T) {
+	view := newShell(newTheme("dark"))
+	view.openSettingsModal()
+	view.settingsActiveTab = 2 // ACP tab
+	view.agentEditorVisible = true
+
+	snapshot := controllerSnapshot{
+		AgentProfiles: []app.ACPAgentProfile{
+			{ID: "antigravity", DisplayName: "Antigravity", Command: "agy", Args: []string{"--acp"}},
+			{ID: "protonman", DisplayName: "Protonman", Command: "protonman", Args: []string{"--acp"}},
+		},
+	}
+
+	win, err := headless.NewWindow(1180, 760)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer win.Release()
+
+	var op1 op.Ops
+	var router input.Router
+	gtx := layout.Context{
+		Ops:         &op1,
+		Constraints: layout.Exact(image.Point{X: 1180, Y: 760}),
+		Metric:      unit.Metric{PxPerDp: 2, PxPerSp: 2},
+		Now:         time.Unix(1, 0),
+		Source:      router.Source(),
+	}
+	view.layout(gtx, snapshot)
+	if err := win.Frame(gtx.Ops); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestSettingsModalAddMCPIntegrationClick(t *testing.T) {
+	view := newShell(newTheme("dark"))
+	view.openSettingsModal()
+	view.settingsActiveTab = 1 // MCP tab
+
+	snapshot := controllerSnapshot{
+		State: desktopstate.State{
+			Integrations: []desktopstate.MCPIntegrationState{
+				{Name: "github", Command: "npx", Args: []string{"-y", "@modelcontextprotocol/server-github"}},
+			},
+		},
+	}
+
+	var op1 op.Ops
+	var router input.Router
+	gtx1 := layout.Context{
+		Ops:         &op1,
+		Constraints: layout.Exact(image.Point{X: 1180, Y: 760}),
+		Metric:      unit.Metric{PxPerDp: 1, PxPerSp: 1},
+		Now:         time.Unix(1, 0),
+		Source:      router.Source(),
+	}
+	view.layout(gtx1, snapshot)
+	router.Frame(gtx1.Ops)
+
+	if view.mcpFormVisible {
+		t.Fatalf("mcpFormVisible should start false")
+	}
+
+	view.mcpFormToggleButton.Click()
+
+	var op2 op.Ops
+	gtx2 := layout.Context{
+		Ops:         &op2,
+		Constraints: layout.Exact(image.Point{X: 1180, Y: 760}),
+		Metric:      unit.Metric{PxPerDp: 1, PxPerSp: 1},
+		Now:         time.Unix(2, 0),
+		Source:      router.Source(),
+	}
+	view.layout(gtx2, snapshot)
+	router.Frame(gtx2.Ops)
+
+	if !view.mcpFormVisible {
+		t.Fatalf("mcpFormVisible = false after clicking mcpFormToggleButton")
+	}
+
+	// Verify closing with close button
+	view.mcpCloseButton.Click()
+	var op3 op.Ops
+	gtx3 := layout.Context{
+		Ops:         &op3,
+		Constraints: layout.Exact(image.Point{X: 1180, Y: 760}),
+		Metric:      unit.Metric{PxPerDp: 1, PxPerSp: 1},
+		Now:         time.Unix(3, 0),
+		Source:      router.Source(),
+	}
+	view.layout(gtx3, snapshot)
+	router.Frame(gtx3.Ops)
+
+	if view.mcpFormVisible {
+		t.Fatalf("mcpFormVisible = true after clicking mcpCloseButton")
 	}
 }

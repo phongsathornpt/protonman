@@ -239,6 +239,12 @@ func (c *controller) clientForSessionLocked(sessionID string) (*acpclient.Client
 }
 
 func (c *controller) clientCurrentLocked(agentID string, client *acpclient.Client) bool {
+	if agentID == "" {
+		agentID = c.activeAgentID
+	}
+	if agentID == "" {
+		agentID = controllerAgentID
+	}
 	return client != nil && c.clients[agentID] == client
 }
 

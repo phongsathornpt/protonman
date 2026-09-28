@@ -88,7 +88,7 @@ func (s *Server) dispatchSessionConfig(ctx context.Context, request RPCRequest) 
 	if err := json.Unmarshal(request.Params, &params); err != nil {
 		return nil, true, fmt.Errorf("decode %s: %w", methodSessionSetConfigOption, err)
 	}
-	sess, err := s.runtimeSession(params.SessionID)
+	sess, err := s.runtimeSession(ctx, params.SessionID)
 	if err != nil {
 		return nil, true, err
 	}

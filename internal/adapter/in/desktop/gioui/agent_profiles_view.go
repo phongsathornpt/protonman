@@ -3,12 +3,18 @@
 package gioui
 
 import (
+	"image"
+	"image/color"
+	"log"
 	"strconv"
 	"strings"
 
 	"gioui.org/font"
 	"gioui.org/io/semantic"
 	"gioui.org/layout"
+	"gioui.org/op"
+	"gioui.org/op/clip"
+	"gioui.org/op/paint"
 	"gioui.org/widget"
 
 	"github.com/phongsathornpt/protonman/internal/app"
@@ -208,6 +214,27 @@ func anyAgentConnected(snapshot controllerSnapshot) bool {
 	return snapshot.Connection == connectionConnected
 }
 
+func connectionStatusInfo(phase connectionPhase) (color.NRGBA, string) {
+	switch phase {
+	case connectionConnected:
+		return color.NRGBA{R: 52, G: 199, B: 89, A: 255}, "Ready"
+	case connectionConnecting:
+		return color.NRGBA{R: 255, G: 159, B: 10, A: 255}, "Starting"
+	case connectionReconnecting:
+		return color.NRGBA{R: 255, G: 159, B: 10, A: 255}, "Retrying"
+	default:
+		return color.NRGBA{R: 142, G: 142, B: 147, A: 255}, "Offline"
+	}
+}
+
+func (s *shell) layoutStatusDot(gtx layout.Context, c color.NRGBA) layout.Dimensions {
+	size := gtx.Dp(8)
+	gtx.Constraints.Min = image.Pt(size, size)
+	gtx.Constraints.Max = image.Pt(size, size)
+	paint.FillShape(gtx.Ops, c, clip.Ellipse{Max: image.Pt(size, size)}.Op(gtx.Ops))
+	return layout.Dimensions{Size: image.Pt(size, size)}
+}
+
 func (s *shell) layoutAgentProfilesPanel(gtx layout.Context, snapshot controllerSnapshot) layout.Dimensions {
 	profiles := snapshot.AgentProfiles
 	enabled := !snapshot.AgentUpdating
@@ -216,91 +243,73 @@ func (s *shell) layoutAgentProfilesPanel(gtx layout.Context, snapshot controller
 			return s.layoutPanelTitle(gtx, "ACP agents")
 		}),
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			summary := "One ACP process"
+			summary := "1 supervised daemon process"
 			if len(profiles) != 1 {
-				summary = strconv.Itoa(len(profiles)) + " supervised ACP processes"
+				summary = strconv.Itoa(len(profiles)) + " supervised daemon processes · Select an agent card to edit"
 			}
-			return s.layoutLabel(gtx, summary, textBodyMedium, font.Normal, s.theme.onSurfaceVariant, 2)
+			return desktopInset{Top: 2, Bottom: 10}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+				return s.layoutLabel(gtx, summary, textBodySmall, font.Normal, s.theme.onSurfaceVariant, 2)
+			})
 		}),
 	}
 
 	for _, profile := range profiles {
 		profile := profile
 		children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return s.layoutAgentProfileRow(gtx, profile, profile.ID == s.agentEditorOriginalID, enabled)
+			return s.layoutAgentProfileRow(gtx, profile, profile.ID == s.agentEditorOriginalID && s.agentEditorVisible, enabled, snapshot)
 		}))
 	}
 
-	toggleLabel := "Add agent"
-	if s.agentEditorVisible {
-		toggleLabel = "Hide editor"
+	if enabled && s.agentFormToggleButton.Clicked(gtx) {
+		s.agentEditorVisible = true
+		s.agentEditorOriginalID = ""
+		s.agentEditorKey = ""
+		s.agentConfirmDelete = false
+		s.clearAgentProfileEditors()
+		log.Printf("[UI] + Add ACP Agent clicked, agentEditorVisible is now true")
+		gtx.Execute(op.InvalidateCmd{})
 	}
-	children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-		return desktopUniformInset(4).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-			return s.layoutButton(gtx, &s.agentFormToggleButton, toggleLabel, enabled, func() {
-				if s.agentEditorVisible {
-					s.agentEditorVisible = false
-					s.agentEditorOriginalID = ""
-					s.agentEditorKey = ""
-					s.clearAgentProfileEditors()
-					return
-				}
-				s.agentEditorVisible = true
-				s.agentEditorOriginalID = ""
-				s.agentEditorKey = ""
-				s.clearAgentProfileEditors()
+
+	if !s.agentEditorVisible {
+		children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			return desktopInset{Top: 6, Bottom: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+				return s.layoutButton(gtx, &s.agentFormToggleButton, "+ Add ACP Agent", enabled, nil)
 			})
-		})
-	}))
-
-	if s.agentEditorVisible {
-		children = append(children,
-			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				return s.layoutAgentProfileEditor(gtx, "Agent ID", &s.agentIDEditor, enabled)
-			}),
-			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				return s.layoutAgentProfileEditor(gtx, "Display name", &s.agentNameEditor, enabled)
-			}),
-			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				return s.layoutAgentProfileEditor(gtx, "Command", &s.agentCommandEditor, enabled)
-			}),
-			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				return s.layoutAgentProfileEditor(gtx, "Arguments (JSON array or flags)", &s.agentArgsEditor, enabled)
-			}),
-			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				return s.layoutAgentProfileEditor(gtx, "Environment keys (JSON array or space-separated)", &s.agentEnvEditor, enabled)
-			}),
-			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				return s.layoutPrimaryButton(gtx, &s.agentSaveButton, "Save agent", enabled && strings.TrimSpace(s.agentIDEditor.Text()) != "" && strings.TrimSpace(s.agentCommandEditor.Text()) != "", func() {
-					s.onSaveAgentProfile(s.agentEditorOriginalID, s.agentIDEditor.Text(), s.agentNameEditor.Text(), s.agentCommandEditor.Text(), s.agentArgsEditor.Text(), s.agentEnvEditor.Text())
-				})
-			}),
-			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				return s.layoutDangerButton(gtx, &s.agentRemoveButton, "Remove agent", enabled && s.agentEditorOriginalID != "" && len(profiles) > 1, func() {
-					s.onRemoveAgentProfile(s.agentEditorOriginalID)
-				})
-			}),
-		)
+		}))
 	}
 
-	status := "Changes apply after restarting Desktop. Environment values are read at process start and are never stored."
+	if s.agentEditorVisible {
+		children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			return desktopInset{Top: 10, Bottom: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+				return s.layoutAgentConfigurationCard(gtx, snapshot, profiles, enabled)
+			})
+		}))
+	}
+
+	status := "Daemon changes apply upon restarting Protonman Desktop. Environment values are read at launch and never stored."
 	statusColor := s.theme.onSurfaceVariant
 	if snapshot.AgentError != "" {
 		status = "ACP settings unavailable · " + compactInspectorText(snapshot.AgentError, 240)
 		statusColor = s.theme.onErrorContainer
 	} else if snapshot.AgentConfigOverridden {
-		status = "PROTONMAN_ACP_AGENTS_JSON is active. Remove the override and restart to apply saved profiles."
+		status = "PROTONMAN_ACP_AGENTS_JSON is active. Remove the environment override to apply changes."
 	} else if snapshot.AgentUpdating {
 		status = "Saving ACP agent settings…"
 	}
 	children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-		return s.layoutLabel(gtx, status, textLabelMedium, font.Normal, statusColor, 4)
+		return desktopInset{Top: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+			return s.layoutLabel(gtx, status, textLabelSmall, font.Normal, statusColor, 4)
+		})
 	}))
 	return layout.Flex{Axis: layout.Vertical}.Layout(gtx, children...)
 }
 
-func (s *shell) layoutAgentProfileRow(gtx layout.Context, profile app.ACPAgentProfile, selected, enabled bool) layout.Dimensions {
+func (s *shell) layoutAgentProfileRow(gtx layout.Context, profile app.ACPAgentProfile, selected, enabled bool, snapshot controllerSnapshot) layout.Dimensions {
 	button := s.agentProfileButtons[profile.ID]
+	if button == nil {
+		button = new(widget.Clickable)
+		s.agentProfileButtons[profile.ID] = button
+	}
 	rowContext := gtx
 	if !enabled {
 		rowContext = gtx.Disabled()
@@ -309,44 +318,412 @@ func (s *shell) layoutAgentProfileRow(gtx layout.Context, profile app.ACPAgentPr
 		s.agentEditorOriginalID = profile.ID
 		s.agentEditorKey = ""
 		s.agentEditorVisible = true
+		s.agentConfirmDelete = false
+		gtx.Execute(op.InvalidateCmd{})
 	}
-	gtx.Constraints.Min.Y = gtx.Dp(44)
-	background := s.theme.surface
-	foreground := s.theme.onSurface
+	gtx.Constraints.Min.Y = gtx.Dp(52)
+	bg := s.theme.surface
+	borderColor := s.theme.outlineVariant
+	borderWidth := 1
 	if selected {
-		background = s.theme.primaryContainer
-		foreground = s.theme.onPrimaryContainer
+		bg = s.theme.surfaceContainerHigh
+		borderColor = s.theme.primary
+		borderWidth = 2
 	} else if button.Hovered() {
-		background = s.theme.surfaceContainerHigh
+		bg = s.theme.surfaceContainerHigh
 	}
+
+	phase := sessionConnection(snapshot, profile.ID)
+	dotColor, statusText := connectionStatusInfo(phase)
+	isActive := profile.ID == snapshot.ActiveAgentID
+
+	cmdText := profile.Command
+	if len(profile.Args) > 0 {
+		cmdText += " " + strings.Join(profile.Args, " ")
+	}
+
 	dims := button.Layout(rowContext, func(gtx layout.Context) layout.Dimensions {
-		gtx.Constraints.Min.Y = gtx.Dp(44)
-		semantic.Button.Add(gtx.Ops)
-		semantic.SelectedOp(selected).Add(gtx.Ops)
-		semantic.EnabledOp(gtx.Enabled()).Add(gtx.Ops)
-		semantic.DescriptionOp("Edit ACP agent " + profile.DisplayName).Add(gtx.Ops)
-		return s.roundedSurface(gtx, shapeSmall, background, func(gtx layout.Context) layout.Dimensions {
-			return desktopInset{Top: 8, Bottom: 8, Left: 10, Right: 10}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-				return s.layoutLabel(gtx, profile.DisplayName+" · "+profile.ID, textBodyMedium, font.Medium, foreground, 1)
+		return desktopInset{Bottom: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+			return s.roundedBorderSurface(gtx, shapeMedium, bg, borderColor, borderWidth, func(gtx layout.Context) layout.Dimensions {
+				return desktopInset{Top: 10, Bottom: 10, Left: 14, Right: 14}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+					return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
+						// Header row: Status Dot + Name + ID + Active Badge + Status text + Edit hint
+						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+							return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
+								layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+									return desktopInset{Right: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+										return s.layoutStatusDot(gtx, dotColor)
+									})
+								}),
+								layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+									return s.layoutLabel(gtx, profile.DisplayName, textBodyMedium, font.SemiBold, s.theme.onSurface, 1)
+								}),
+								layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+									return desktopInset{Left: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+										return s.roundedSurface(gtx, shapeSmall, s.theme.surfaceContainerLow, func(gtx layout.Context) layout.Dimensions {
+											return desktopInset{Top: 2, Bottom: 2, Left: 6, Right: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+												return s.layoutLabel(gtx, profile.ID, textLabelSmall, font.Normal, s.theme.onSurfaceVariant, 1)
+											})
+										})
+									})
+								}),
+								layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+									if !isActive {
+										return layout.Dimensions{}
+									}
+									return desktopInset{Left: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+										return s.roundedSurface(gtx, shapeSmall, s.theme.primaryContainer, func(gtx layout.Context) layout.Dimensions {
+											return desktopInset{Top: 2, Bottom: 2, Left: 6, Right: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+												return s.layoutLabel(gtx, "ACTIVE", textLabelSmall, font.Bold, s.theme.onPrimaryContainer, 1)
+											})
+										})
+									})
+								}),
+								layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+									return layout.Spacer{}.Layout(gtx)
+								}),
+								layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+									return desktopInset{Right: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+										return s.layoutLabel(gtx, statusText, textLabelSmall, font.Medium, dotColor, 1)
+									})
+								}),
+								layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+									return s.roundedSurface(gtx, shapeSmall, s.theme.surfaceContainerLow, func(gtx layout.Context) layout.Dimensions {
+										return desktopInset{Top: 2, Bottom: 2, Left: 8, Right: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+											return s.layoutLabel(gtx, "Edit", textLabelSmall, font.SemiBold, s.theme.primary, 1)
+										})
+									})
+								}),
+							)
+						}),
+						// Command preview pill
+						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+							return desktopInset{Top: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+								return s.roundedSurface(gtx, shapeSmall, s.theme.surfaceContainerLowest, func(gtx layout.Context) layout.Dimensions {
+									return desktopInset{Top: 3, Bottom: 3, Left: 8, Right: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+										return s.layoutLabel(gtx, compactInspectorText(cmdText, 64), textLabelSmall, font.Normal, s.theme.onSurfaceVariant, 1)
+									})
+								})
+							})
+						}),
+						// Status detail / error pill when not connected and an error message is available
+						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+							if phase == connectionConnected || snapshot.AgentStatuses == nil {
+								return layout.Dimensions{}
+							}
+							errMsg := snapshot.AgentStatuses[profile.ID]
+							if errMsg == "" || errMsg == "Starting "+profile.DisplayName+"…" || errMsg == "Offline" || errMsg == "Connected" {
+								return layout.Dimensions{}
+							}
+							return desktopInset{Top: 4}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+								return s.roundedSurface(gtx, shapeSmall, s.theme.errorContainer, func(gtx layout.Context) layout.Dimensions {
+									return desktopInset{Top: 3, Bottom: 3, Left: 8, Right: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+										return s.layoutLabel(gtx, compactInspectorText(errMsg, 80), textLabelSmall, font.Normal, s.theme.onErrorContainer, 1)
+									})
+								})
+							})
+						}),
+					)
+				})
 			})
 		})
 	})
 	if enabled && rowContext.Focused(button) {
-		widget.Border{Color: s.theme.primary, CornerRadius: shapeSmall, Width: 2}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+		widget.Border{Color: s.theme.primary, CornerRadius: shapeMedium, Width: 2}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 			return layout.Dimensions{Size: dims.Size}
 		})
 	}
 	return dims
 }
 
-func (s *shell) layoutAgentProfileEditor(gtx layout.Context, label string, editor *widget.Editor, enabled bool) layout.Dimensions {
-	if enabled {
-		for {
-			if _, ok := editor.Update(gtx); !ok {
-				break
-			}
+func (s *shell) layoutAgentConfigurationCard(gtx layout.Context, snapshot controllerSnapshot, profiles []app.ACPAgentProfile, enabled bool) layout.Dimensions {
+	isEditing := s.agentEditorOriginalID != ""
+	title := "Add New ACP Agent"
+	if isEditing {
+		title = "Edit Agent: " + s.agentNameEditor.Text()
+		if strings.TrimSpace(title) == "Edit Agent:" {
+			title = "Edit Agent: " + s.agentEditorOriginalID
 		}
 	}
+	log.Printf("[UI] rendering layoutAgentConfigurationCard: title=%q", title)
+
+	canRemove := enabled && isEditing && len(profiles) > 1
+	canSave := enabled && strings.TrimSpace(s.agentIDEditor.Text()) != "" && strings.TrimSpace(s.agentCommandEditor.Text()) != ""
+
+	if gtx.Constraints.Max.X > 0 {
+		gtx.Constraints.Min.X = gtx.Constraints.Max.X
+	}
+	return s.roundedBorderSurface(gtx, shapeMedium, s.theme.surfaceContainerHigh, s.theme.outlineVariant, 1, func(gtx layout.Context) layout.Dimensions {
+		if gtx.Constraints.Max.X > 0 {
+			gtx.Constraints.Min.X = gtx.Constraints.Max.X
+		}
+		return desktopInset{Top: 16, Bottom: 16, Left: 16, Right: 16}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+			return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
+				// Header
+				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+					return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle, Spacing: layout.SpaceBetween}.Layout(gtx,
+						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+							return s.layoutLabel(gtx, title, textTitleMedium, font.Bold, s.theme.onSurface, 1)
+						}),
+						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+							if s.agentCloseButton.Clicked(gtx) {
+								log.Printf("[UI] agentCloseButton clicked")
+								s.agentEditorVisible = false
+								s.agentEditorOriginalID = ""
+								s.agentEditorKey = ""
+								s.agentConfirmDelete = false
+								s.clearAgentProfileEditors()
+								gtx.Execute(op.InvalidateCmd{})
+							}
+							return s.layoutMiniIconButton(gtx, &s.agentCloseButton, "✕", s.theme.onSurfaceVariant)
+						}),
+					)
+				}),
+				// Presets bar (only shown when adding a new agent)
+				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+					if isEditing {
+						return layout.Dimensions{}
+					}
+					return desktopInset{Top: 10}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+						return s.layoutAgentPresetsBar(gtx, enabled)
+					})
+				}),
+				// Form editors
+				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+					return desktopInset{Top: 8, Bottom: 10}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+						return s.layoutAgentProfileEditor(gtx, "Agent ID", &s.agentIDEditor, enabled)
+					})
+				}),
+				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+					return desktopInset{Bottom: 10}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+						return s.layoutAgentProfileEditor(gtx, "Display name", &s.agentNameEditor, enabled)
+					})
+				}),
+				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+					return desktopInset{Bottom: 10}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+						return s.layoutAgentProfileEditor(gtx, "Command", &s.agentCommandEditor, enabled)
+					})
+				}),
+				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+					return desktopInset{Bottom: 10}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+						return s.layoutAgentProfileEditor(gtx, "Arguments (flags or space-separated, e.g. --acp)", &s.agentArgsEditor, enabled)
+					})
+				}),
+				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+					return desktopInset{Bottom: 4}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+						return s.layoutAgentProfileEditor(gtx, "Environment keys (space or comma-separated)", &s.agentEnvEditor, enabled)
+					})
+				}),
+				// Actions / Delete Confirmation
+				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+					if s.agentConfirmDelete {
+						return desktopInset{Top: 12}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+							return s.roundedBorderSurface(gtx, shapeSmall, s.theme.errorContainer, s.theme.errorContainer, 1, func(gtx layout.Context) layout.Dimensions {
+								return desktopInset{Top: 10, Bottom: 10, Left: 12, Right: 12}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+									return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
+										layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+											return s.layoutLabel(gtx, "Delete this agent profile? This cannot be undone.", textBodySmall, font.SemiBold, s.theme.onErrorContainer, 2)
+										}),
+										layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+											return desktopInset{Top: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+												return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle, Spacing: layout.SpaceBetween}.Layout(gtx,
+													layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+														return s.layoutButton(gtx, &s.agentCancelDeleteBtn, "Cancel", enabled, func() {
+															s.agentConfirmDelete = false
+														})
+													}),
+													layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+														return s.layoutDangerButton(gtx, &s.agentConfirmDeleteBtn, "Confirm Delete", enabled, func() {
+															origID := s.agentEditorOriginalID
+															s.agentEditorVisible = false
+															s.agentEditorOriginalID = ""
+															s.agentEditorKey = ""
+															s.agentConfirmDelete = false
+															s.clearAgentProfileEditors()
+															s.onRemoveAgentProfile(origID)
+														})
+													}),
+												)
+											})
+										}),
+									)
+								})
+							})
+						})
+					}
+
+					return desktopInset{Top: 14}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+						return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
+							layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+								if !canRemove {
+									return layout.Dimensions{}
+								}
+								return s.layoutDangerButton(gtx, &s.agentRemoveButton, "Remove agent", canRemove, func() {
+									s.agentConfirmDelete = true
+								})
+							}),
+							layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+								return layout.Spacer{}.Layout(gtx)
+							}),
+							layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+								return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
+									layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+										return desktopInset{Right: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+											return s.layoutButton(gtx, &s.agentCancelButton, "Cancel", enabled, func() {
+												s.agentEditorVisible = false
+												s.agentEditorOriginalID = ""
+												s.agentEditorKey = ""
+												s.agentConfirmDelete = false
+												s.clearAgentProfileEditors()
+												gtx.Execute(op.InvalidateCmd{})
+											})
+										})
+									}),
+									layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+										return s.layoutPrimaryButton(gtx, &s.agentSaveButton, "Save agent", canSave, func() {
+											origID := s.agentEditorOriginalID
+											agentID := s.agentIDEditor.Text()
+											name := s.agentNameEditor.Text()
+											cmd := s.agentCommandEditor.Text()
+											args := s.agentArgsEditor.Text()
+											env := s.agentEnvEditor.Text()
+											s.agentEditorVisible = false
+											s.agentEditorOriginalID = ""
+											s.agentEditorKey = ""
+											s.agentConfirmDelete = false
+											s.clearAgentProfileEditors()
+											s.onSaveAgentProfile(origID, agentID, name, cmd, args, env)
+										})
+									}),
+								)
+							}),
+						)
+					})
+				}),
+			)
+		})
+	})
+}
+
+func (s *shell) layoutAgentPresetsBar(gtx layout.Context, enabled bool) layout.Dimensions {
+	if s.agentPresetProtonmanBtn.Clicked(gtx) {
+		log.Printf("[UI] preset clicked: Protonman")
+		s.agentIDEditor.SetText("protonman")
+		s.agentNameEditor.SetText("Protonman")
+		s.agentCommandEditor.SetText("protonman")
+		s.agentArgsEditor.SetText("--acp")
+		s.agentEnvEditor.SetText("")
+		gtx.Execute(op.InvalidateCmd{})
+	}
+	if s.agentPresetOpencodeBtn.Clicked(gtx) {
+		log.Printf("[UI] preset clicked: OpenCode")
+		s.agentIDEditor.SetText("opencode")
+		s.agentNameEditor.SetText("OpenCode")
+		s.agentCommandEditor.SetText("opencode")
+		s.agentArgsEditor.SetText("acp")
+		s.agentEnvEditor.SetText("")
+		gtx.Execute(op.InvalidateCmd{})
+	}
+	if s.agentPresetClineBtn.Clicked(gtx) {
+		log.Printf("[UI] preset clicked: Cline")
+		s.agentIDEditor.SetText("cline")
+		s.agentNameEditor.SetText("Cline")
+		s.agentCommandEditor.SetText("cline")
+		s.agentArgsEditor.SetText("--acp")
+		s.agentEnvEditor.SetText("")
+		gtx.Execute(op.InvalidateCmd{})
+	}
+	if s.agentPresetAntigravityBtn.Clicked(gtx) {
+		log.Printf("[UI] preset clicked: Antigravity")
+		s.agentIDEditor.SetText("antigravity")
+		s.agentNameEditor.SetText("Antigravity")
+		s.agentCommandEditor.SetText("agy")
+		s.agentArgsEditor.SetText("--acp")
+		s.agentEnvEditor.SetText("")
+		gtx.Execute(op.InvalidateCmd{})
+	}
+	if s.agentPresetClaudeBtn.Clicked(gtx) {
+		log.Printf("[UI] preset clicked: Claude Code")
+		s.agentIDEditor.SetText("claude")
+		s.agentNameEditor.SetText("Claude Code")
+		s.agentCommandEditor.SetText("claude")
+		s.agentArgsEditor.SetText("--acp")
+		s.agentEnvEditor.SetText("")
+		gtx.Execute(op.InvalidateCmd{})
+	}
+	if s.agentPresetCustomBtn.Clicked(gtx) {
+		log.Printf("[UI] preset clicked: Custom")
+		s.clearAgentProfileEditors()
+		gtx.Execute(op.InvalidateCmd{})
+	}
+
+	return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
+		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			return s.layoutLabel(gtx, "QUICK PRESETS", textLabelSmall, font.Bold, s.theme.onSurfaceVariant, 1)
+		}),
+		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			return desktopInset{Top: 6, Bottom: 4}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+				return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
+					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+						return s.layoutPresetChip(gtx, &s.agentPresetProtonmanBtn, "Protonman", enabled)
+					}),
+					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+						return desktopInset{Left: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+							return s.layoutPresetChip(gtx, &s.agentPresetOpencodeBtn, "OpenCode", enabled)
+						})
+					}),
+					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+						return desktopInset{Left: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+							return s.layoutPresetChip(gtx, &s.agentPresetClineBtn, "Cline", enabled)
+						})
+					}),
+				)
+			})
+		}),
+		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			return desktopInset{Top: 2, Bottom: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+				return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
+					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+						return s.layoutPresetChip(gtx, &s.agentPresetAntigravityBtn, "Antigravity", enabled)
+					}),
+					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+						return desktopInset{Left: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+							return s.layoutPresetChip(gtx, &s.agentPresetClaudeBtn, "Claude Code", enabled)
+						})
+					}),
+					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+						return desktopInset{Left: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+							return s.layoutPresetChip(gtx, &s.agentPresetCustomBtn, "Custom", enabled)
+						})
+					}),
+				)
+			})
+		}),
+	)
+}
+
+func (s *shell) layoutPresetChip(gtx layout.Context, btn *widget.Clickable, label string, enabled bool) layout.Dimensions {
+	bg := s.theme.surfaceContainerLow
+	fg := s.theme.onSurface
+	borderColor := s.theme.outlineVariant
+	if btn.Hovered() {
+		bg = s.theme.surfaceContainerHigh
+		borderColor = s.theme.primary
+	}
+	ctx := gtx
+	if !enabled {
+		ctx = gtx.Disabled()
+	}
+	return btn.Layout(ctx, func(gtx layout.Context) layout.Dimensions {
+		return s.roundedBorderSurface(gtx, shapeSmall, bg, borderColor, 1, func(gtx layout.Context) layout.Dimensions {
+			return desktopInset{Top: 6, Bottom: 6, Left: 10, Right: 10}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+				return s.layoutLabel(gtx, label, textLabelSmall, font.SemiBold, fg, 1)
+			})
+		})
+	})
+}
+
+func (s *shell) layoutAgentProfileEditor(gtx layout.Context, label string, editor *widget.Editor, enabled bool) layout.Dimensions {
 	return s.layoutInspectorEditor(gtx, label, editor, enabled)
 }
 
@@ -354,6 +731,7 @@ func (s *shell) clearAgentProfileEditors() {
 	s.agentIDEditor.SetText("")
 	s.agentNameEditor.SetText("")
 	s.agentCommandEditor.SetText("")
-	s.agentArgsEditor.SetText("[]")
-	s.agentEnvEditor.SetText("[]")
+	s.agentArgsEditor.SetText("")
+	s.agentEnvEditor.SetText("")
+	s.agentConfirmDelete = false
 }

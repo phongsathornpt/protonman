@@ -37,6 +37,9 @@ const (
 	iconArchive
 	iconDiscord
 	iconBrandLogo
+	iconTerminal
+	iconCheck
+	iconCopy
 )
 
 func (s *shell) layoutActionIcon(gtx layout.Context, kind iconKind, size unit.Dp, color color.NRGBA) layout.Dimensions {
@@ -171,6 +174,21 @@ func desktopIconPath(ops *op.Ops, kind iconKind, size float32) clip.PathSpec {
 		path.LineTo(p(.68, .52))
 		path.LineTo(p(.22, .52))
 		line(.38, .36, .52, .36)
+	case iconTerminal:
+		line(.22, .26, .50, .50)
+		line(.50, .50, .22, .74)
+		line(.56, .74, .82, .74)
+	case iconCheck:
+		line(.22, .52, .44, .74)
+		line(.44, .74, .82, .26)
+	case iconCopy:
+		path.MoveTo(p(.35, .20))
+		path.LineTo(p(.78, .20))
+		path.LineTo(p(.78, .65))
+		path.LineTo(p(.35, .65))
+		path.Close()
+		line(.22, .35, .22, .80)
+		line(.22, .80, .65, .80)
 	}
 	return path.End()
 }
@@ -178,6 +196,7 @@ func desktopIconPath(ops *op.Ops, kind iconKind, size float32) clip.PathSpec {
 func (s *shell) layoutIconActionButton(gtx layout.Context, button *widget.Clickable, kind iconKind, tooltip string, action func()) layout.Dimensions {
 	if button.Clicked(gtx) && action != nil {
 		action()
+		gtx.Execute(op.InvalidateCmd{})
 	}
 	size := gtx.Dp(30)
 	gtx.Constraints.Min = image.Pt(size, size)

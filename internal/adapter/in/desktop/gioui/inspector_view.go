@@ -11,8 +11,6 @@ import (
 	"gioui.org/font"
 	"gioui.org/io/semantic"
 	"gioui.org/layout"
-	"gioui.org/op"
-	"gioui.org/op/paint"
 	"gioui.org/unit"
 	"gioui.org/widget"
 	"gioui.org/widget/material"
@@ -77,14 +75,6 @@ func (s *shell) layoutInspector(gtx layout.Context, session desktopstate.Session
 	} else {
 		gtx.Constraints.Min.X = gtx.Dp(inspectorPanelWidth)
 		gtx.Constraints.Max.X = gtx.Dp(inspectorPanelWidth)
-	}
-
-	if s.mcpFormVisible {
-		s.openSettingsModal()
-		s.settingsActiveTab = 1
-	} else if s.agentEditorVisible {
-		s.openSettingsModal()
-		s.settingsActiveTab = 2
 	}
 
 	panelCount := s.inspectorPanelCount(session)
@@ -153,7 +143,7 @@ func (s *shell) layoutInspectorHeader(gtx layout.Context, session desktopstate.S
 func (s *shell) layoutInspectorTabBar(gtx layout.Context, session desktopstate.SessionState) layout.Dimensions {
 	tabs := []string{"Plan", "Memory", "Skills"}
 	if !protonmanSession(session) {
-		tabs = []string{"Agent", "MCP", "Profiles"}
+		tabs = []string{"Agent"}
 	}
 	if s.activeInspectorTab >= len(tabs) {
 		s.activeInspectorTab = 0
@@ -203,19 +193,8 @@ func (s *shell) layoutInspectorTabBar(gtx layout.Context, session desktopstate.S
 func (s *shell) layoutInspectorPanel(gtx layout.Context, session desktopstate.SessionState, snapshot controllerSnapshot, index int) layout.Dimensions {
 	var content layout.Widget
 	if !protonmanSession(session) {
-		switch s.activeInspectorTab {
-		case 0:
-			content = func(gtx layout.Context) layout.Dimensions {
-				return s.layoutExternalAgentPanel(gtx, session, snapshot)
-			}
-		case 1:
-			content = func(gtx layout.Context) layout.Dimensions {
-				return s.layoutMCPIntegrationsPanel(gtx, snapshot)
-			}
-		default:
-			content = func(gtx layout.Context) layout.Dimensions {
-				return s.layoutAgentProfilesPanel(gtx, snapshot)
-			}
+		content = func(gtx layout.Context) layout.Dimensions {
+			return s.layoutExternalAgentPanel(gtx, session, snapshot)
 		}
 		return s.layoutInspectorPanelSurface(gtx, content)
 	}
@@ -693,32 +672,40 @@ func (s *shell) layoutInspectorEditor(gtx layout.Context, label string, editor *
 	if !enabled {
 		textColor = s.theme.onSurfaceVariant
 	}
-	textMaterial := op.Record(gtx.Ops)
-	paint.ColorOp{Color: textColor}.Add(gtx.Ops)
-	textCall := textMaterial.Stop()
-	selectionMaterial := op.Record(gtx.Ops)
-	paint.ColorOp{Color: s.theme.primaryContainer}.Add(gtx.Ops)
-	selectionCall := selectionMaterial.Stop()
 	return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return s.layoutLabel(gtx, label, textLabelMedium, font.SemiBold, s.theme.onSurfaceVariant, 1)
+			return desktopInset{Bottom: 4}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+				return s.layoutLabel(gtx, label, textLabelMedium, font.SemiBold, s.theme.onSurfaceVariant, 1)
+			})
 		}),
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			gtx.Constraints.Min.Y = gtx.Dp(44)
+			if gtx.Constraints.Max.X > 0 {
+				gtx.Constraints.Min.X = gtx.Constraints.Max.X
+			}
+			gtx.Constraints.Min.Y = gtx.Dp(40)
 			semantic.EnabledOp(enabled).Add(gtx.Ops)
 			semantic.DescriptionOp(label).Add(gtx.Ops)
 			dims := s.roundedSurface(gtx, shapeSmall, s.theme.surface, func(gtx layout.Context) layout.Dimensions {
-				gtx.Constraints.Min.Y = gtx.Dp(44)
-				return desktopUniformInset(10).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-					return editor.Layout(gtx, s.theme.material.Shaper, s.theme.textFont(font.Normal), textBodyMedium, textCall, selectionCall)
+				if gtx.Constraints.Max.X > 0 {
+					gtx.Constraints.Min.X = gtx.Constraints.Max.X
+				}
+				gtx.Constraints.Min.Y = gtx.Dp(40)
+				return desktopInset{Top: 9, Bottom: 9, Left: 12, Right: 12}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+					ed := material.Editor(s.theme.material, editor, "")
+					ed.TextSize = textBodyMedium
+					ed.Color = textColor
+					ed.SelectionColor = s.theme.primaryContainer
+					return ed.Layout(gtx)
 				})
 			})
-			if enabled && gtx.Focused(editor) {
-				widget.Border{Color: s.theme.primary, CornerRadius: shapeSmall, Width: 2}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-					return layout.Dimensions{Size: dims.Size}
-				})
-			} else {
-				widget.Border{Color: s.theme.outlineVariant, CornerRadius: shapeSmall, Width: 1}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+			if dims.Size.X > 0 && dims.Size.Y > 0 {
+				borderColor := s.theme.outlineVariant
+				borderWidth := unit.Dp(1)
+				if enabled && gtx.Focused(editor) {
+					borderColor = s.theme.primary
+					borderWidth = unit.Dp(2)
+				}
+				widget.Border{Color: borderColor, CornerRadius: shapeSmall, Width: borderWidth}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 					return layout.Dimensions{Size: dims.Size}
 				})
 			}

@@ -5,12 +5,18 @@ package gioui
 import (
 	"context"
 	"errors"
+	"image"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
+
+	"gioui.org/io/input"
+	"gioui.org/layout"
+	"gioui.org/op"
+	"gioui.org/unit"
 
 	"github.com/phongsathornpt/protonman/internal/app"
 	desktopstate "github.com/phongsathornpt/protonman/internal/feature/desktop"
@@ -268,5 +274,189 @@ func TestParseSmartArgumentsAndEnvironment(t *testing.T) {
 	}
 	if !reflect.DeepEqual(env, []string{"API_KEY", "GH_TOKEN", "PROT_SECRET"}) {
 		t.Fatalf("unexpected env: %#v", env)
+	}
+}
+
+func TestMCPIntegrationsPanelAndPresetsLayout(t *testing.T) {
+	view := newShell(newTheme("dark"))
+	snapshot := controllerSnapshot{
+		State: desktopstate.State{
+			Integrations: []desktopstate.MCPIntegrationState{
+				{Name: "github", Command: "npx", Args: []string{"-y", "@modelcontextprotocol/server-github"}, Env: []string{"GITHUB_TOKEN"}},
+			},
+		},
+	}
+
+	// 1. Layout panel
+	var operations op.Ops
+	var router input.Router
+	gtx := layout.Context{
+		Ops:         &operations,
+		Constraints: layout.Exact(image.Point{X: 600, Y: 800}),
+		Metric:      unit.Metric{PxPerDp: 1, PxPerSp: 1},
+		Now:         time.Unix(1, 0),
+		Source:      router.Source(),
+	}
+	dims := view.layoutMCPIntegrationsPanel(gtx, snapshot)
+	router.Frame(gtx.Ops)
+	if dims.Size.X == 0 {
+		t.Fatal("layoutMCPIntegrationsPanel returned 0 width")
+	}
+
+	// 2. Open form for new integration
+	view.mcpFormVisible = true
+	view.mcpSelectedName = ""
+	view.clearMCPIntegrationEditors()
+
+	// Click GitHub preset
+	view.mcpPresetGitHubBtn.Click()
+	var opGitHub op.Ops
+	gtxGitHub := layout.Context{
+		Ops:         &opGitHub,
+		Constraints: layout.Exact(image.Point{X: 600, Y: 800}),
+		Metric:      unit.Metric{PxPerDp: 1, PxPerSp: 1},
+		Now:         time.Unix(1, 0),
+		Source:      router.Source(),
+	}
+	view.layoutMCPIntegrationsPanel(gtxGitHub, snapshot)
+	router.Frame(gtxGitHub.Ops)
+
+	if view.mcpNameEditor.Text() != "github" || view.mcpCommandEditor.Text() != "npx" || !strings.Contains(view.mcpArgsEditor.Text(), "server-github") {
+		t.Fatalf("github preset mismatch: name=%q cmd=%q args=%q", view.mcpNameEditor.Text(), view.mcpCommandEditor.Text(), view.mcpArgsEditor.Text())
+	}
+
+	// Click Memory preset
+	view.mcpPresetMemoryBtn.Click()
+	var opMemory op.Ops
+	gtxMemory := layout.Context{
+		Ops:         &opMemory,
+		Constraints: layout.Exact(image.Point{X: 600, Y: 800}),
+		Metric:      unit.Metric{PxPerDp: 1, PxPerSp: 1},
+		Now:         time.Unix(1, 0),
+		Source:      router.Source(),
+	}
+	view.layoutMCPIntegrationsPanel(gtxMemory, snapshot)
+	router.Frame(gtxMemory.Ops)
+
+	if view.mcpNameEditor.Text() != "memory" || view.mcpCommandEditor.Text() != "npx" || !strings.Contains(view.mcpArgsEditor.Text(), "server-memory") {
+		t.Fatalf("memory preset mismatch: name=%q cmd=%q args=%q", view.mcpNameEditor.Text(), view.mcpCommandEditor.Text(), view.mcpArgsEditor.Text())
+	}
+}
+
+func TestMCPConfigurationCardWidthExpansion(t *testing.T) {
+	view := newShell(newTheme("dark"))
+	snapshot := controllerSnapshot{}
+	view.clearMCPIntegrationEditors()
+
+	var opCard op.Ops
+	var router input.Router
+	gtxCard := layout.Context{
+		Ops:         &opCard,
+		Constraints: layout.Constraints{Min: image.Point{X: 0, Y: 0}, Max: image.Point{X: 520, Y: 800}},
+		Metric:      unit.Metric{PxPerDp: 1, PxPerSp: 1},
+		Now:         time.Unix(1, 0),
+		Source:      router.Source(),
+	}
+	dimsCard := view.layoutMCPConfigurationCard(gtxCard, snapshot, nil, true)
+	router.Frame(gtxCard.Ops)
+	if dimsCard.Size.X != 520 {
+		t.Fatalf("layoutMCPConfigurationCard width = %d, want 520", dimsCard.Size.X)
+	}
+}
+
+func TestMCPIntegrationDeleteConfirmationFlow(t *testing.T) {
+	view := newShell(newTheme("dark"))
+	var removedName string
+	view.onRemoveMCPIntegration = func(name string) {
+		removedName = name
+	}
+	snapshot := controllerSnapshot{
+		State: desktopstate.State{
+			Integrations: []desktopstate.MCPIntegrationState{
+				{Name: "fetch", Command: "uvx", Args: []string{"mcp-server-fetch"}},
+			},
+		},
+	}
+	view.mcpFormVisible = true
+	view.mcpSelectedName = "fetch"
+	view.mcpNameEditor.SetText("fetch")
+	view.mcpCommandEditor.SetText("uvx")
+
+	var operations op.Ops
+	var router input.Router
+	gtx := layout.Context{
+		Ops:         &operations,
+		Constraints: layout.Exact(image.Point{X: 600, Y: 800}),
+		Metric:      unit.Metric{PxPerDp: 1, PxPerSp: 1},
+		Now:         time.Unix(1, 0),
+		Source:      router.Source(),
+	}
+	view.layoutMCPIntegrationsPanel(gtx, snapshot)
+	router.Frame(gtx.Ops)
+
+	// Click remove integration
+	view.mcpRemoveButton.Click()
+	var opRemove op.Ops
+	gtxRemove := layout.Context{
+		Ops:         &opRemove,
+		Constraints: layout.Exact(image.Point{X: 600, Y: 800}),
+		Metric:      unit.Metric{PxPerDp: 1, PxPerSp: 1},
+		Now:         time.Unix(1, 0),
+		Source:      router.Source(),
+	}
+	view.layoutMCPIntegrationsPanel(gtxRemove, snapshot)
+	router.Frame(gtxRemove.Ops)
+
+	if !view.mcpConfirmDelete {
+		t.Fatal("clicking remove integration did not activate delete confirmation mode")
+	}
+
+	// Click Cancel
+	view.mcpCancelDeleteBtn.Click()
+	var opCancel op.Ops
+	gtxCancel := layout.Context{
+		Ops:         &opCancel,
+		Constraints: layout.Exact(image.Point{X: 600, Y: 800}),
+		Metric:      unit.Metric{PxPerDp: 1, PxPerSp: 1},
+		Now:         time.Unix(1, 0),
+		Source:      router.Source(),
+	}
+	view.layoutMCPIntegrationsPanel(gtxCancel, snapshot)
+	router.Frame(gtxCancel.Ops)
+
+	if view.mcpConfirmDelete {
+		t.Fatal("canceling delete did not exit delete confirmation mode")
+	}
+
+	// Click remove integration again and confirm
+	view.mcpRemoveButton.Click()
+	var opRemove2 op.Ops
+	gtxRemove2 := layout.Context{
+		Ops:         &opRemove2,
+		Constraints: layout.Exact(image.Point{X: 600, Y: 800}),
+		Metric:      unit.Metric{PxPerDp: 1, PxPerSp: 1},
+		Now:         time.Unix(1, 0),
+		Source:      router.Source(),
+	}
+	view.layoutMCPIntegrationsPanel(gtxRemove2, snapshot)
+	router.Frame(gtxRemove2.Ops)
+
+	view.mcpConfirmDeleteBtn.Click()
+	var opConfirm op.Ops
+	gtxConfirm := layout.Context{
+		Ops:         &opConfirm,
+		Constraints: layout.Exact(image.Point{X: 600, Y: 800}),
+		Metric:      unit.Metric{PxPerDp: 1, PxPerSp: 1},
+		Now:         time.Unix(1, 0),
+		Source:      router.Source(),
+	}
+	view.layoutMCPIntegrationsPanel(gtxConfirm, snapshot)
+	router.Frame(gtxConfirm.Ops)
+
+	if removedName != "fetch" {
+		t.Fatalf("onRemoveMCPIntegration was not called with 'fetch', got %q", removedName)
+	}
+	if view.mcpFormVisible {
+		t.Fatal("form remained visible after deletion")
 	}
 }

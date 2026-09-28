@@ -4,13 +4,17 @@ package gioui
 
 import (
 	"image/color"
+	"log"
 
 	"gioui.org/font"
 	"gioui.org/io/key"
 	"gioui.org/layout"
+	"gioui.org/op"
 	"gioui.org/op/clip"
 	"gioui.org/op/paint"
 	"gioui.org/widget"
+
+	"github.com/phongsathornpt/protonman/internal/base/buildinfo"
 )
 
 var themeChoices = []struct {
@@ -27,10 +31,12 @@ var themeChoices = []struct {
 
 func (s *shell) openSettingsModal() {
 	s.settingsModalOpen = true
+	log.Printf("[UI] settings modal opened, activeTab=%d", s.settingsActiveTab)
 }
 
 func (s *shell) closeSettingsModal() {
 	s.settingsModalOpen = false
+	log.Printf("[UI] settings modal closed")
 }
 
 func (s *shell) layoutSettingsModal(gtx layout.Context, snapshot controllerSnapshot) layout.Dimensions {
@@ -62,49 +68,55 @@ func (s *shell) layoutSettingsModal(gtx layout.Context, snapshot controllerSnaps
 			gtx.Constraints.Max.X = width
 			gtx.Constraints.Max.Y = maxHeight
 
-			return s.roundedBorderSurface(gtx, shapeLarge, s.theme.surfaceContainerHigh, s.theme.outlineVariant, 1, func(gtx layout.Context) layout.Dimensions {
-				return desktopInset{Top: 16, Bottom: 16, Left: 20, Right: 20}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-					return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
-						// Header: Title + Close Button
-						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-							return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle, Spacing: layout.SpaceBetween}.Layout(gtx,
-								layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-									return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
-										layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-											return desktopInset{Right: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-												return s.layoutActionIcon(gtx, iconSettings, 18, s.theme.primary)
-											})
-										}),
-										layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-											return s.layoutLabel(gtx, "Settings", textTitleLarge, font.Bold, s.theme.onSurface, 1)
-										}),
-									)
-								}),
-								layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-									return s.layoutMiniIconButton(gtx, &s.settingsModalCloseBtn, "✕", s.theme.onSurfaceVariant)
-								}),
-							)
-						}),
-						// Tab Bar
-						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-							return desktopInset{Top: 14, Bottom: 14}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-								return s.layoutSettingsTabBar(gtx)
-							})
-						}),
-						// Tab Content (Scrollable list if long)
-						layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-							return s.settingsModalList.Layout(gtx, 1, func(gtx layout.Context, index int) layout.Dimensions {
-								switch s.settingsActiveTab {
-								case 1:
-									return s.layoutMCPIntegrationsPanel(gtx, snapshot)
-								case 2:
-									return s.layoutAgentProfilesPanel(gtx, snapshot)
-								default:
-									return s.layoutSettingsGeneralTab(gtx, snapshot)
-								}
-							})
-						}),
-					)
+			return s.settingsModalCard.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+				return s.roundedBorderSurface(gtx, shapeLarge, s.theme.surfaceContainerHigh, s.theme.outlineVariant, 1, func(gtx layout.Context) layout.Dimensions {
+					return desktopInset{Top: 16, Bottom: 16, Left: 20, Right: 20}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+						return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
+							// Header: Title + Close Button
+							layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+								return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle, Spacing: layout.SpaceBetween}.Layout(gtx,
+									layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+										return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
+											layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+												return desktopInset{Right: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+													return s.layoutActionIcon(gtx, iconSettings, 18, s.theme.primary)
+												})
+											}),
+											layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+												return s.layoutLabel(gtx, "Settings", textTitleLarge, font.Bold, s.theme.onSurface, 1)
+											}),
+										)
+									}),
+									layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+										return s.layoutMiniIconButton(gtx, &s.settingsModalCloseBtn, "✕", s.theme.onSurfaceVariant)
+									}),
+								)
+							}),
+							// Tab Bar
+							layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+								return desktopInset{Top: 14, Bottom: 14}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+									return s.layoutSettingsTabBar(gtx)
+								})
+							}),
+							// Tab Content (Scrollable list if long)
+							layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+								s.settingsModalList.Axis = layout.Vertical
+								return s.settingsModalList.Layout(gtx, 1, func(gtx layout.Context, index int) layout.Dimensions {
+									if gtx.Constraints.Max.X > 0 {
+										gtx.Constraints.Min.X = gtx.Constraints.Max.X
+									}
+									switch s.settingsActiveTab {
+									case 1:
+										return s.layoutMCPIntegrationsPanel(gtx, snapshot)
+									case 2:
+										return s.layoutAgentProfilesPanel(gtx, snapshot)
+									default:
+										return s.layoutSettingsGeneralTab(gtx, snapshot)
+									}
+								})
+							}),
+						)
+					})
 				})
 			})
 		}),
@@ -124,6 +136,8 @@ func (s *shell) layoutSettingsTabBar(gtx layout.Context) layout.Dimensions {
 					btn := &s.settingsTabButtons[tabIdx]
 					if btn.Clicked(gtx) {
 						s.settingsActiveTab = tabIdx
+						log.Printf("[UI] tab clicked: %d (%s)", tabIdx, tabLabel)
+						gtx.Execute(op.InvalidateCmd{})
 					}
 					bg := color.NRGBA{}
 					fg := s.theme.onSurfaceVariant
@@ -227,16 +241,67 @@ func (s *shell) layoutSettingsGeneralTab(gtx layout.Context, snapshot controller
 			return s.layoutLabel(gtx, "ABOUT PROTONMAN DESKTOP", textLabelSmall, font.Bold, s.theme.onSurfaceVariant, 1)
 		}),
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return desktopInset{Top: 6, Bottom: 4}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-				return s.layoutLabel(gtx, "Protonman Autonomous Coding Agent", textBodyMedium, font.SemiBold, s.theme.onSurface, 1)
+			return desktopInset{Top: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+				return s.roundedBorderSurface(gtx, shapeMedium, s.theme.surface, s.theme.outlineVariant, 1, func(gtx layout.Context) layout.Dimensions {
+					return desktopInset{Top: 14, Bottom: 14, Left: 16, Right: 16}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+						return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
+							layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+								return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle, Spacing: layout.SpaceBetween}.Layout(gtx,
+									layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+										return s.layoutLabel(gtx, "Protonman Autonomous Coding Agent", textBodyMedium, font.SemiBold, s.theme.onSurface, 1)
+									}),
+									layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+										return s.roundedSurface(gtx, shapeSmall, s.theme.surfaceContainerHigh, func(gtx layout.Context) layout.Dimensions {
+											return desktopInset{Top: 2, Bottom: 2, Left: 8, Right: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+												return s.layoutLabel(gtx, buildinfo.Version(), textLabelSmall, font.SemiBold, s.theme.primary, 1)
+											})
+										})
+									}),
+								)
+							}),
+							layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+								return desktopInset{Top: 6, Bottom: 10}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+									return s.layoutLabel(gtx, "Native Gio frontend driving the Protonman runtime over Agent Client Protocol (ACP) JSON-RPC stdio. Preserves clean architecture boundaries, fail-closed permission enforcement, and workspace confinement.", textBodySmall, font.Normal, s.theme.onSurfaceVariant, 4)
+								})
+							}),
+							layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+								return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
+									layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+										return s.layoutFeatureTag(gtx, "ACP stdio")
+									}),
+									layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+										return desktopInset{Left: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+											return s.layoutFeatureTag(gtx, "Clean Architecture")
+										})
+									}),
+									layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+										return desktopInset{Left: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+											return s.layoutFeatureTag(gtx, "Gio Native GUI")
+										})
+									}),
+									layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+										return desktopInset{Left: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+											return s.layoutFeatureTag(gtx, "Fail-Closed Security")
+										})
+									}),
+								)
+							}),
+						)
+					})
+				})
 			})
-		}),
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return s.layoutLabel(gtx, "Native Gio frontend driving the Protonman runtime over Agent Client Protocol (ACP) JSON-RPC stdio. Preserves clean architecture boundaries, fail-closed permission enforcement, and workspace confinement.", textBodySmall, font.Normal, s.theme.onSurfaceVariant, 4)
 		}),
 	}
 
 	return layout.Flex{Axis: layout.Vertical}.Layout(gtx, children...)
+}
+
+func (s *shell) layoutFeatureTag(gtx layout.Context, label string) layout.Dimensions {
+	return s.roundedSurface(gtx, shapeSmall, s.theme.surfaceContainerLow, func(gtx layout.Context) layout.Dimensions {
+		return desktopInset{Top: 3, Bottom: 3, Left: 8, Right: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+			return s.layoutLabel(gtx, label, textLabelSmall, font.Medium, s.theme.onSurfaceVariant, 1)
+		})
+	})
 }
 
 func (s *shell) layoutThemeChoiceButton(gtx layout.Context, mode, label, desc string, selected bool) layout.Dimensions {

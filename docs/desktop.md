@@ -51,6 +51,8 @@ agent process.
 ```sh
 PROTONMAN_ACP_AGENTS_JSON='[
   {"id":"protonman","displayName":"Protonman","command":"protonman","args":["--acp"]},
+  {"id":"opencode","displayName":"OpenCode","command":"opencode","args":["acp"]},
+  {"id":"cline","displayName":"Cline","command":"cline","args":["--acp"]},
   {"id":"antigravity","displayName":"Google Antigravity","command":"/path/to/agy_acp_server.par"}
 ]' protonman-desktop-gio
 ```

@@ -637,8 +637,20 @@ func (c *controller) loadSessionHistory(sessionID string) {
 		return
 	}
 	session, ok := desktopSessionByID(c.state, sessionID)
+	if !ok {
+		c.mu.Unlock()
+		return
+	}
 	workspace := strings.TrimSpace(session.Workspace)
-	if !ok || workspace == "" {
+	if workspace == "" {
+		if defaultWS, err := newSessionWorkspace(c.state); err == nil && defaultWS != "" {
+			workspace = defaultWS
+			if sess := desktopstateSessionPointer(&c.state, sessionID); sess != nil {
+				sess.Workspace = defaultWS
+			}
+		}
+	}
+	if workspace == "" {
 		c.mu.Unlock()
 		return
 	}
@@ -678,7 +690,7 @@ func (c *controller) loadSessionHistory(sessionID string) {
 	go func() {
 		unlock, acquired := c.lockAgentSessionContext(callCtx, agentID)
 		if !acquired {
-			c.finishSessionHistoryLoadRequest(client, sessionID, request, callCtx.Err())
+			c.finishSessionHistoryLoadRequest(client, sessionID, request, callCtx.Err(), nil)
 			return
 		}
 		defer unlock()
@@ -690,22 +702,25 @@ func (c *controller) loadSessionHistory(sessionID string) {
 			return
 		}
 		if !activeSession {
-			c.finishSessionHistoryLoadRequest(client, sessionID, request, context.Canceled)
+			c.finishSessionHistoryLoadRequest(client, sessionID, request, context.Canceled, nil)
 			return
 		}
-		err := client.Call(callCtx, "session/load", params, nil)
+		var loadResult struct {
+			ConfigOptions []acpConfigOption `json:"configOptions,omitempty"`
+		}
+		err := client.Call(callCtx, "session/load", params, &loadResult)
 		if isACPMethodNotFound(err) {
 			err = nil
 		}
-		c.finishSessionHistoryLoadRequest(client, sessionID, request, err)
+		c.finishSessionHistoryLoadRequest(client, sessionID, request, err, loadResult.ConfigOptions)
 	}()
 }
 
 func (c *controller) finishSessionHistoryLoad(client *acpclient.Client, sessionID string, loadErr error) {
-	c.finishSessionHistoryLoadRequest(client, sessionID, nil, loadErr)
+	c.finishSessionHistoryLoadRequest(client, sessionID, nil, loadErr, nil)
 }
 
-func (c *controller) finishSessionHistoryLoadRequest(client *acpclient.Client, sessionID string, request *sessionHistoryLoad, loadErr error) {
+func (c *controller) finishSessionHistoryLoadRequest(client *acpclient.Client, sessionID string, request *sessionHistoryLoad, loadErr error, configOptions []acpConfigOption) {
 	c.mu.Lock()
 	if request != nil {
 		if c.historyLoads[sessionID] != request {
@@ -729,6 +744,12 @@ func (c *controller) finishSessionHistoryLoadRequest(client *acpclient.Client, s
 	if loadErr == nil && c.state.ActiveSessionID == sessionID {
 		if session := desktopstateSessionPointer(&c.state, sessionID); session != nil {
 			session.HistoryTruncated = session.HistoryTruncated || truncated
+			if models, currentModel := extractModelsFromConfigOptions(configOptions); len(models) > 0 {
+				session.AvailableModels = models
+				if currentModel != "" && session.Runtime.Model == "" {
+					session.Runtime.Model = currentModel
+				}
+			}
 		}
 		for _, event := range coalesceStagedMessageChunks(staged) {
 			c.applyTimelineEventLocked(event)
@@ -761,6 +782,7 @@ func (c *controller) finishSessionHistoryLoadRequest(client *acpclient.Client, s
 func (c *controller) resumeKnownSessions(agentID string, client *acpclient.Client) {
 	c.mu.RLock()
 	sessions := append([]desktopstate.SessionState(nil), c.state.Sessions...)
+	activeSessionID := c.state.ActiveSessionID
 	c.mu.RUnlock()
 	defer c.lockAgentSession(agentID)()
 	for _, session := range sessions {
@@ -768,15 +790,52 @@ func (c *controller) resumeKnownSessions(agentID string, client *acpclient.Clien
 			return
 		}
 		workspace := strings.TrimSpace(session.Workspace)
+		if workspace == "" {
+			if defaultWS, err := newSessionWorkspace(c.state); err == nil && defaultWS != "" {
+				wsKey := sessionWorkspaceKey(defaultWS)
+				sessKey := sessionWorkspaceKeyFromSession(session)
+				if sessKey == "" || sessKey == wsKey || sessKey == "workspace:"+canonicalWorkspacePath(defaultWS) {
+					workspace = defaultWS
+					c.mu.Lock()
+					if sess := desktopstateSessionPointer(&c.state, session.ID); sess != nil {
+						sess.Workspace = defaultWS
+					}
+					c.mu.Unlock()
+				}
+			}
+		}
 		if session.ID == "" || workspace == "" || session.AgentID != agentID && !(session.AgentID == "" && agentID == controllerAgentID) {
 			continue
 		}
+		if sessKey := sessionWorkspaceKeyFromSession(session); sessKey != "" {
+			if sessionWorkspaceKey(workspace) != sessKey {
+				continue
+			}
+		}
 		params := c.mcpSessionParams(session.ID, workspace, session.AdditionalDirectories)
 		callCtx, cancel := context.WithTimeout(c.ctx, reconnectRequestTimeout)
-		err := client.Call(callCtx, "session/resume", params, nil)
+		var resumeResult struct {
+			ConfigOptions []acpConfigOption `json:"configOptions"`
+		}
+		err := client.Call(callCtx, "session/resume", params, &resumeResult)
 		cancel()
 		if err != nil && !isACPMethodNotFound(err) && c.ctx.Err() == nil {
-			c.setAgentStatus(agentID, "Session resume failed · "+compactError(err))
+			if session.ID == activeSessionID {
+				c.setAgentStatus(agentID, "Session resume failed · "+compactError(err))
+			}
+		} else if err == nil && len(resumeResult.ConfigOptions) > 0 {
+			if models, currentModel := extractModelsFromConfigOptions(resumeResult.ConfigOptions); len(models) > 0 {
+				c.mu.Lock()
+				if sess := desktopstateSessionPointer(&c.state, session.ID); sess != nil {
+					sess.AvailableModels = models
+					if currentModel != "" && sess.Runtime.Model == "" {
+						sess.Runtime.Model = currentModel
+					}
+					c.revision++
+				}
+				c.mu.Unlock()
+				c.notify()
+			}
 		}
 	}
 }
@@ -794,8 +853,17 @@ func (c *controller) sendExpandedPrompt(prompt ExpandedPrompt) {
 	c.mu.Lock()
 	sessionID := c.state.ActiveSessionID
 	session, ok := desktopSessionByID(c.state, sessionID)
+	workspace := strings.TrimSpace(session.Workspace)
+	if workspace == "" {
+		if defaultWS, err := newSessionWorkspace(c.state); err == nil && defaultWS != "" {
+			workspace = defaultWS
+			if current := desktopstateSessionPointer(&c.state, sessionID); current != nil {
+				current.Workspace = defaultWS
+			}
+		}
+	}
 	client, agentID := c.clientForSessionLocked(sessionID)
-	if !ok || client == nil || c.connections[agentID] != connectionConnected || sessionBusy(session.Status) || c.histories[sessionID] == historyStateLoading || strings.TrimSpace(session.Workspace) == "" {
+	if !ok || client == nil || c.connections[agentID] != connectionConnected || sessionBusy(session.Status) || c.histories[sessionID] == historyStateLoading || workspace == "" {
 		c.mu.Unlock()
 		return
 	}

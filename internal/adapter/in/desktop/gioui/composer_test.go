@@ -154,3 +154,149 @@ func TestComposerEditorAutoExpandsWithLines(t *testing.T) {
 		t.Fatalf("multi-line composer height = %d, want > empty height %d", multiLineDims.Size.Y, emptyDims.Size.Y)
 	}
 }
+
+func TestEmptyStateStarterPromptCards(t *testing.T) {
+	view := newShell(newTheme("dark"))
+	session := desktopstate.SessionState{
+		ID:        "session-empty",
+		Workspace: "/path/to/project",
+		AgentID:   "Protonman",
+		Runtime:   desktopstate.RuntimeSettingsState{Model: "mimo-v2.6-pro"},
+	}
+
+	var ops op.Ops
+	var router input.Router
+	gtx := layout.Context{
+		Ops:         &ops,
+		Constraints: layout.Constraints{Min: image.Pt(800, 0), Max: image.Pt(800, 600)},
+		Metric:      unit.Metric{PxPerDp: 1, PxPerSp: 1},
+		Now:         time.Unix(1, 0),
+		Source:      router.Source(),
+	}
+
+	dims := view.layoutEmptyState(gtx, session)
+	if dims.Size.X <= 0 || dims.Size.Y <= 0 {
+		t.Fatalf("layoutEmptyState returned invalid dims: %v", dims)
+	}
+
+	// Verify clicking first starter card sets composer text and focuses it
+	view.starterPromptButtons[0].Click()
+	_ = view.layoutEmptyState(gtx, session)
+	if got := view.composer.Text(); got != starterPrompts[0].prompt {
+		t.Fatalf("composer text after clicking card 0 = %q, want %q", got, starterPrompts[0].prompt)
+	}
+
+	// Verify clicking another starter card replaces composer text
+	view.starterPromptButtons[2].Click()
+	_ = view.layoutEmptyState(gtx, session)
+	if got := view.composer.Text(); got != starterPrompts[2].prompt {
+		t.Fatalf("composer text after clicking card 2 = %q, want %q", got, starterPrompts[2].prompt)
+	}
+}
+
+func TestMessageActionButtons(t *testing.T) {
+	view := newShell(newTheme("dark"))
+	sessionID := "session-actions"
+
+	var ops op.Ops
+	var router input.Router
+	gtx := layout.Context{
+		Ops:         &ops,
+		Constraints: layout.Constraints{Min: image.Pt(800, 0), Max: image.Pt(800, 600)},
+		Metric:      unit.Metric{PxPerDp: 1, PxPerSp: 1},
+		Now:         time.Unix(1, 0),
+		Source:      router.Source(),
+	}
+
+	userItem := desktopstate.TimelineItem{
+		Kind: desktopstate.TimelineUser,
+		Text: "Can you fix the login bug?",
+	}
+	userDims := view.layoutTimelineItem(gtx, sessionID, 0, userItem)
+	if userDims.Size.Y <= 0 {
+		t.Fatalf("user timeline item height = %d, want > 0", userDims.Size.Y)
+	}
+
+	userMsgKey := "session-actions:user:0"
+	retryBtn := view.userRetryButtons[userMsgKey]
+	if retryBtn == nil {
+		t.Fatalf("userRetryButtons[%q] was not initialized", userMsgKey)
+	}
+	retryBtn.Click()
+	_ = view.layoutTimelineItem(gtx, sessionID, 0, userItem)
+	if got := view.composer.Text(); got != userItem.Text {
+		t.Fatalf("composer text after clicking retry = %q, want %q", got, userItem.Text)
+	}
+
+	asstItem := desktopstate.TimelineItem{
+		Kind: desktopstate.TimelineAssistant,
+		Text: "Here is the fix for the login bug.",
+	}
+	asstDims := view.layoutTimelineItem(gtx, sessionID, 1, asstItem)
+	if asstDims.Size.Y <= 0 {
+		t.Fatalf("asst timeline item height = %d, want > 0", asstDims.Size.Y)
+	}
+
+	asstMsgKey := "session-actions:asst:1"
+	copyBtn := view.messageCopyButtons[asstMsgKey]
+	if copyBtn == nil {
+		t.Fatalf("messageCopyButtons[%q] was not initialized", asstMsgKey)
+	}
+	copyBtn.Click()
+	_ = view.layoutTimelineItem(gtx, sessionID, 1, asstItem)
+	if _, ok := view.messageCopiedAt[asstMsgKey]; !ok {
+		t.Fatalf("messageCopiedAt[%q] was not set after clicking copy", asstMsgKey)
+	}
+}
+
+func TestCollapsibleToolAndDiffCards(t *testing.T) {
+	view := newShell(newTheme("dark"))
+	sessionID := "session-tools"
+
+	var ops op.Ops
+	var router input.Router
+	gtx := layout.Context{
+		Ops:         &ops,
+		Constraints: layout.Constraints{Min: image.Pt(800, 0), Max: image.Pt(800, 600)},
+		Metric:      unit.Metric{PxPerDp: 1, PxPerSp: 1},
+		Now:         time.Unix(1, 0),
+		Source:      router.Source(),
+	}
+
+	toolItem := desktopstate.TimelineItem{
+		Kind:   desktopstate.TimelineTool,
+		ID:     "tool-1",
+		Title:  "bash: go test ./...",
+		Text:   "PASS\nok github.com/proton/test 0.05s",
+		Status: "completed",
+	}
+
+	collapsedDims := view.layoutTimelineItem(gtx, sessionID, 0, toolItem)
+	if collapsedDims.Size.Y <= 0 {
+		t.Fatalf("collapsed tool item height = %d, want > 0", collapsedDims.Size.Y)
+	}
+
+	toolBtn := view.toolExpandButtons["tool-1"]
+	if toolBtn == nil {
+		t.Fatalf("toolExpandButtons[tool-1] was not initialized")
+	}
+	toolBtn.Click()
+	expandedDims := view.layoutTimelineItem(gtx, sessionID, 0, toolItem)
+	if expandedDims.Size.Y <= collapsedDims.Size.Y {
+		t.Fatalf("expanded tool item height %d should be greater than collapsed %d", expandedDims.Size.Y, collapsedDims.Size.Y)
+	}
+
+	diffText := "diff --git a/main.go b/main.go\n--- a/main.go\n+++ b/main.go\n@@ -1,3 +1,4 @@\n package main\n+import \"fmt\"\n func main() {}\n"
+	diffItem := desktopstate.TimelineItem{
+		Kind:   desktopstate.TimelineTool,
+		ID:     "diff-1",
+		Title:  "edit: main.go",
+		Text:   diffText,
+		Status: "completed",
+	}
+
+	diffDims := view.layoutTimelineItem(gtx, sessionID, 1, diffItem)
+	if diffDims.Size.Y <= 0 {
+		t.Fatalf("diff item height = %d, want > 0", diffDims.Size.Y)
+	}
+}

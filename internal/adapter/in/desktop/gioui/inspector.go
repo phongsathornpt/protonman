@@ -189,7 +189,7 @@ func (c *controller) beginSessionRefresh(sessionID string, force bool, kind sess
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	session, ok := desktopSessionByID(c.state, sessionID)
-	if !ok || sessionID != c.state.ActiveSessionID || session.AgentID != controllerAgentID {
+	if !ok || sessionID != c.state.ActiveSessionID || (session.AgentID != "" && session.AgentID != controllerAgentID) {
 		return nil, nil, false
 	}
 	client, agentID := c.clientForSessionLocked(sessionID)

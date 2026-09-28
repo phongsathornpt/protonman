@@ -101,7 +101,7 @@ func (s *Server) dispatchSessionRuntime(ctx context.Context, request RPCRequest)
 		if err := json.Unmarshal(request.Params, &params); err != nil {
 			return nil, true, fmt.Errorf("decode %s: %w", request.Method, err)
 		}
-		sess, err := s.runtimeSession(params.SessionID)
+		sess, err := s.runtimeSession(ctx, params.SessionID)
 		if err != nil {
 			return nil, true, err
 		}
@@ -112,7 +112,7 @@ func (s *Server) dispatchSessionRuntime(ctx context.Context, request RPCRequest)
 		if err := json.Unmarshal(request.Params, &params); err != nil {
 			return nil, true, fmt.Errorf("decode %s: %w", methodSessionSetReasoning, err)
 		}
-		sess, err := s.runtimeSession(params.SessionID)
+		sess, err := s.runtimeSession(ctx, params.SessionID)
 		if err != nil {
 			return nil, true, err
 		}
@@ -130,7 +130,7 @@ func (s *Server) dispatchSessionRuntime(ctx context.Context, request RPCRequest)
 		if err := json.Unmarshal(request.Params, &params); err != nil {
 			return nil, true, fmt.Errorf("decode %s: %w", methodSessionSetLowConcurrency, err)
 		}
-		sess, err := s.runtimeSession(params.SessionID)
+		sess, err := s.runtimeSession(ctx, params.SessionID)
 		if err != nil {
 			return nil, true, err
 		}
@@ -150,17 +150,19 @@ func (s *Server) dispatchSessionRuntime(ctx context.Context, request RPCRequest)
 		if err := json.Unmarshal(request.Params, &params); err != nil {
 			return nil, true, fmt.Errorf("decode %s: %w", methodSessionSetModel, err)
 		}
-		sess, err := s.runtimeSession(params.SessionID)
+		sess, err := s.runtimeSession(ctx, params.SessionID)
 		if err != nil {
 			return nil, true, err
 		}
-		provider := strings.TrimSpace(params.Provider)
 		modelID := strings.TrimSpace(params.Model)
-		if provider == "" || modelID == "" {
-			return nil, true, fmt.Errorf("provider and model are required")
+		if modelID == "" {
+			return nil, true, fmt.Errorf("model is required")
 		}
+		provider := strings.TrimSpace(params.Provider)
 		if err := s.updateSessionRuntime(ctx, sess, func(next *SessionRuntimeSettings) {
-			next.Provider = provider
+			if provider != "" {
+				next.Provider = provider
+			}
 			next.Model = modelID
 		}); err != nil {
 			return nil, true, err
@@ -171,13 +173,23 @@ func (s *Server) dispatchSessionRuntime(ctx context.Context, request RPCRequest)
 	}
 }
 
-func (s *Server) runtimeSession(sessionID string) (*Session, error) {
+func (s *Server) runtimeSession(ctx context.Context, sessionID string) (*Session, error) {
 	sessionID = strings.TrimSpace(sessionID)
 	if sessionID == "" {
 		return nil, fmt.Errorf("sessionId is required")
 	}
 	sess, ok := s.lookupSession(sessionID)
 	if !ok {
+		if s.sessionService != nil {
+			if ctx == nil {
+				ctx = context.Background()
+			}
+			loaded, err := s.loadOrCreateSession(ctx, sessionID, "", nil)
+			if err != nil {
+				return nil, fmt.Errorf("load session %q: %w", sessionID, err)
+			}
+			return loaded, nil
+		}
 		return nil, fmt.Errorf("unknown session %q", sessionID)
 	}
 	return sess, nil
@@ -288,6 +300,10 @@ func restoreSessionRuntime(ctx context.Context, server *Server, sess *Session, p
 		settings.LowConcurrency = setting.String()
 	}
 	settings.Reasoning = reasoningSetting(sess.ReasoningEffort())
+	if _, ok := sessionRuntimeControlFor(server); !ok {
+		storeSessionRuntime(sess, settings)
+		return nil
+	}
 	if settings.Provider == current.Provider && settings.Model == current.Model && settings.LowConcurrency == current.LowConcurrency {
 		storeSessionRuntime(sess, settings)
 		return nil

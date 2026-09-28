@@ -3,14 +3,16 @@
 package gioui
 
 import (
+	"fmt"
+	"image/color"
 	"strings"
 
 	"gioui.org/font"
+	"gioui.org/io/key"
 	"gioui.org/io/semantic"
 	"gioui.org/layout"
-	"gioui.org/op"
-	"gioui.org/op/paint"
 	"gioui.org/widget"
+	"gioui.org/widget/material"
 
 	desktopstate "github.com/phongsathornpt/protonman/internal/feature/desktop"
 )
@@ -31,6 +33,9 @@ var popoverReasoningOptions = []struct {
 func (s *shell) openModelPopover() {
 	s.modelPopoverVisible = true
 	s.reasoningPopoverVisible = false
+	if s.onRefreshRuntime != nil {
+		s.onRefreshRuntime()
+	}
 }
 
 func (s *shell) openReasoningPopover() {
@@ -98,70 +103,76 @@ func (s *shell) addRecentModel(provider, model, name string) {
 	s.recentModels = recents
 }
 
-func (s *shell) layoutModelPopover(gtx layout.Context, session desktopstate.SessionState, enabled bool) layout.Dimensions {
+func (s *shell) layoutModelPopover(gtx layout.Context, session desktopstate.SessionState, snapshot controllerSnapshot, enabled bool) layout.Dimensions {
 	if s.modelPopoverCloseButton.Clicked(gtx) {
 		s.modelPopoverVisible = false
 		return layout.Dimensions{}
 	}
 
-	maxHeight := gtx.Dp(260)
+	maxHeight := gtx.Dp(320)
 	gtx.Constraints.Max.Y = maxHeight
 
 	currentModel := strings.TrimSpace(session.Runtime.Model)
 	currentProvider := strings.TrimSpace(session.Runtime.Provider)
-	if currentProvider == "" {
-		currentProvider = "protonman"
+	agentName := activeAgentDisplayName(snapshot)
+
+	searchQuery := strings.ToLower(strings.TrimSpace(s.modelSearchEditor.Text()))
+	rawModels := session.AvailableModels
+	filteredModels := make([]string, 0, len(rawModels))
+	for _, m := range rawModels {
+		mTrimmed := strings.TrimSpace(m)
+		if mTrimmed == "" {
+			continue
+		}
+		if searchQuery == "" || strings.Contains(strings.ToLower(mTrimmed), searchQuery) {
+			filteredModels = append(filteredModels, mTrimmed)
+		}
 	}
 
 	return desktopInset{Bottom: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 		return s.roundedBorderSurface(gtx, shapeMedium, s.theme.surfaceContainerHigh, s.theme.outlineVariant, 1, func(gtx layout.Context) layout.Dimensions {
 			return desktopInset{Top: 8, Bottom: 8, Left: 10, Right: 10}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-				return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
-					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-						return s.layoutModelPopoverHeader(gtx, currentProvider)
-					}),
-					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-						return desktopInset{Top: 4, Bottom: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-							return s.layoutHorizontalDivider(gtx)
-						})
-					}),
-					layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-						items := make([]layout.Widget, 0, 5)
+				children := make([]layout.FlexChild, 0, 5)
 
-						// 1. Models from Agent
-						items = append(items, func(gtx layout.Context) layout.Dimensions {
-							return s.layoutAgentModelsSection(gtx, session.AvailableModels, currentModel, currentProvider, enabled)
-						})
+				// Header with agent display name and close button
+				children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+					return s.layoutModelPopoverHeader(gtx, agentName)
+				}))
 
-						// 2. Curated Presets
-						items = append(items, func(gtx layout.Context) layout.Dimensions {
-							return s.layoutCuratedPresetsSection(gtx, currentModel, enabled)
-						})
+				// Divider
+				children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+					return desktopInset{Top: 4, Bottom: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+						return s.layoutHorizontalDivider(gtx)
+					})
+				}))
 
-						// 3. Recent Models
-						if len(s.recentModels) > 0 {
-							items = append(items, func(gtx layout.Context) layout.Dimensions {
-								return s.layoutRecentModelsSection(gtx, currentModel, enabled)
-							})
-						}
-
-						// 4. Custom Model inputs
-						items = append(items, func(gtx layout.Context) layout.Dimensions {
-							return s.layoutCustomModelSection(gtx, currentProvider, enabled)
+				// Search input when the agent advertises models
+				if len(rawModels) > 0 {
+					children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+						return desktopInset{Bottom: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+							return s.layoutModelSearchInput(gtx)
 						})
+					}))
+				}
 
-						s.modelList.Axis = layout.Vertical
-						return s.modelList.Layout(gtx, len(items), func(gtx layout.Context, index int) layout.Dimensions {
-							return desktopInset{Bottom: 6}.Layout(gtx, items[index])
-						})
-					}),
-				)
+				// Content: empty state, no search matches, or scrollable model list
+				children = append(children, layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+					if len(rawModels) == 0 {
+						return s.layoutAgentModelsEmptyState(gtx, agentName, enabled)
+					}
+					if len(filteredModels) == 0 {
+						return s.layoutModelSearchNoMatch(gtx, s.modelSearchEditor.Text())
+					}
+					return s.layoutAgentModelsList(gtx, filteredModels, currentModel, currentProvider, enabled)
+				}))
+
+				return layout.Flex{Axis: layout.Vertical}.Layout(gtx, children...)
 			})
 		})
 	})
 }
 
-func (s *shell) layoutModelPopoverHeader(gtx layout.Context, provider string) layout.Dimensions {
+func (s *shell) layoutModelPopoverHeader(gtx layout.Context, agentName string) layout.Dimensions {
 	return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 			return s.layoutLabel(gtx, "Select Model", textLabelLarge, font.SemiBold, s.theme.onSurface, 1)
@@ -169,8 +180,8 @@ func (s *shell) layoutModelPopoverHeader(gtx layout.Context, provider string) la
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 			return desktopInset{Left: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 				return s.roundedSurface(gtx, shapeSmall, s.theme.surfaceContainerLow, func(gtx layout.Context) layout.Dimensions {
-					return desktopInset{Top: 1, Bottom: 1, Left: 6, Right: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-						return s.layoutLabel(gtx, provider, textLabelSmall, font.Normal, s.theme.onSurfaceVariant, 1)
+					return desktopInset{Top: 2, Bottom: 2, Left: 7, Right: 7}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+						return s.layoutLabel(gtx, agentName, textLabelSmall, font.Medium, s.theme.primary, 1)
 					})
 				})
 			})
@@ -197,125 +208,166 @@ func (s *shell) layoutModelPopoverHeader(gtx layout.Context, provider string) la
 	)
 }
 
-func (s *shell) layoutAgentModelsSection(gtx layout.Context, models []string, currentModel, provider string, enabled bool) layout.Dimensions {
-	children := []layout.FlexChild{
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			countStr := ""
-			if len(models) > 0 {
-				countStr = " (" + strings.TrimSpace(string(rune('0'+len(models)))) + ")"
-				if len(models) >= 10 {
-					countStr = " (10+)"
-				}
-			}
-			return desktopInset{Bottom: 4}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-				return s.layoutLabel(gtx, "FROM AGENT"+countStr, textLabelSmall, font.SemiBold, s.theme.primary, 1)
-			})
-		}),
-	}
-
-	if len(models) == 0 {
-		children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return s.roundedSurface(gtx, shapeSmall, s.theme.surfaceContainerLow, func(gtx layout.Context) layout.Dimensions {
-				return desktopInset{Top: 4, Bottom: 4, Left: 8, Right: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-					return s.layoutLabel(gtx, "Discovering models from agent… Press Alt+M to refresh", textLabelSmall, font.Normal, s.theme.onSurfaceVariant, 1)
-				})
-			})
-		}))
-		return layout.Flex{Axis: layout.Vertical}.Layout(gtx, children...)
-	}
-
-	// Layout agent models in rows of 2 or 3
-	rowChildren := make([]layout.Widget, 0, (len(models)+1)/2)
-	for i := 0; i < len(models); i += 2 {
-		first := models[i]
-		second := ""
-		if i+1 < len(models) {
-			second = models[i+1]
+func (s *shell) layoutModelSearchInput(gtx layout.Context) layout.Dimensions {
+	for {
+		evt, ok := gtx.Event(key.Filter{Focus: &s.modelSearchEditor, Name: key.NameEscape})
+		if !ok {
+			break
 		}
-		f := first
-		sec := second
-		rowChildren = append(rowChildren, func(gtx layout.Context) layout.Dimensions {
-			return layout.Flex{Axis: layout.Horizontal}.Layout(gtx,
-				layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-					return desktopInset{Right: 4}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-						return s.layoutModelPill(gtx, f, f, provider, f == currentModel, enabled, s.agentModelButton(f))
+		if e, ok := evt.(key.Event); ok && e.State == key.Press {
+			s.modelSearchEditor.SetText("")
+			gtx.Execute(key.FocusCmd{Tag: nil})
+		}
+	}
+	if s.modelSearchClearBtn.Clicked(gtx) {
+		s.modelSearchEditor.SetText("")
+	}
+
+	gtx.Constraints.Min.Y = gtx.Dp(28)
+	isFocused := gtx.Focused(&s.modelSearchEditor)
+	borderColor := color.NRGBA{}
+	borderWidth := 0
+	iconColor := s.theme.onSurfaceVariant
+	if isFocused {
+		borderColor = s.theme.primary
+		borderWidth = 1
+		iconColor = s.theme.primary
+	}
+
+	return s.roundedBorderSurface(gtx, shapeSmall, s.theme.surfaceContainerLow, borderColor, borderWidth, func(gtx layout.Context) layout.Dimensions {
+		return desktopInset{Top: 4, Bottom: 4, Left: 8, Right: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+			return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
+				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+					return desktopInset{Right: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+						return s.layoutActionIcon(gtx, iconSearch, 14, iconColor)
 					})
 				}),
 				layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-					if sec == "" {
-						return layout.Spacer{}.Layout(gtx)
+					ed := material.Editor(s.theme.material, &s.modelSearchEditor, "Filter models…")
+					ed.TextSize = textBodySmall
+					ed.Color = s.theme.onSurface
+					ed.HintColor = s.theme.onSurfaceVariant
+					return ed.Layout(gtx)
+				}),
+				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+					if s.modelSearchEditor.Text() == "" {
+						return layout.Dimensions{}
 					}
 					return desktopInset{Left: 4}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-						return s.layoutModelPill(gtx, sec, sec, provider, sec == currentModel, enabled, s.agentModelButton(sec))
+						return s.layoutMiniIconButton(gtx, &s.modelSearchClearBtn, "×", s.theme.onSurfaceVariant)
 					})
 				}),
 			)
 		})
-	}
-
-	for _, row := range rowChildren {
-		r := row
-		children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return desktopInset{Bottom: 4}.Layout(gtx, r)
-		}))
-	}
-
-	return layout.Flex{Axis: layout.Vertical}.Layout(gtx, children...)
+	})
 }
 
-func (s *shell) layoutCuratedPresetsSection(gtx layout.Context, currentModel string, enabled bool) layout.Dimensions {
-	children := []layout.FlexChild{
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return desktopInset{Top: 4, Bottom: 4}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-				return s.layoutLabel(gtx, "QUICK PRESETS", textLabelSmall, font.SemiBold, s.theme.onSurfaceVariant, 1)
-			})
-		}),
+func (s *shell) layoutAgentModelsEmptyState(gtx layout.Context, agentName string, enabled bool) layout.Dimensions {
+	if s.modelRefreshButton.Clicked(gtx) && enabled {
+		if s.onRefreshRuntime != nil {
+			s.onRefreshRuntime()
+		}
 	}
 
-	for _, preset := range curatedModelPresets {
-		p := preset
-		children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return desktopInset{Bottom: 3}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-				return s.layoutModelPill(gtx, p.Name, p.Model, p.Provider, p.Model == currentModel, enabled, s.modelPresetButton(p.Model))
-			})
-		}))
-	}
-
-	return layout.Flex{Axis: layout.Vertical}.Layout(gtx, children...)
+	return s.roundedSurface(gtx, shapeSmall, s.theme.surfaceContainerLow, func(gtx layout.Context) layout.Dimensions {
+		return desktopInset{Top: 16, Bottom: 16, Left: 14, Right: 14}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+			return layout.Flex{Axis: layout.Vertical, Alignment: layout.Middle}.Layout(gtx,
+				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+					return desktopInset{Bottom: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+						return s.layoutLabel(gtx, "ⓘ", textTitleMedium, font.Normal, s.theme.onSurfaceVariant, 1)
+					})
+				}),
+				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+					msg := fmt.Sprintf("%s manages models internally or does not advertise them over ACP.", agentName)
+					return desktopInset{Bottom: 4}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+						return s.layoutLabel(gtx, msg, textBodySmall, font.Medium, s.theme.onSurface, 2)
+					})
+				}),
+				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+					return desktopInset{Bottom: 12}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+						return s.layoutLabel(gtx, "Configure models directly in the agent or press refresh to query.", textLabelSmall, font.Normal, s.theme.onSurfaceVariant, 2)
+					})
+				}),
+				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+					btn := &s.modelRefreshButton
+					semantic.Button.Add(gtx.Ops)
+					semantic.EnabledOp(enabled).Add(gtx.Ops)
+					bg := s.theme.surfaceContainerHighest
+					fg := s.theme.onSurface
+					if enabled && btn.Hovered() {
+						bg = s.theme.primaryContainer
+						fg = s.theme.onPrimaryContainer
+					}
+					if !enabled {
+						gtx = gtx.Disabled()
+					}
+					return btn.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+						return s.roundedBorderSurface(gtx, shapeSmall, bg, s.theme.outlineVariant, 1, func(gtx layout.Context) layout.Dimensions {
+							return desktopInset{Top: 5, Bottom: 5, Left: 12, Right: 12}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+								return s.layoutLabel(gtx, "Refresh models (Alt+M)", textLabelSmall, font.SemiBold, fg, 1)
+							})
+						})
+					})
+				}),
+			)
+		})
+	})
 }
 
-func (s *shell) layoutRecentModelsSection(gtx layout.Context, currentModel string, enabled bool) layout.Dimensions {
-	children := []layout.FlexChild{
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return desktopInset{Top: 4, Bottom: 4}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-				return s.layoutLabel(gtx, "RECENT", textLabelSmall, font.SemiBold, s.theme.onSurfaceVariant, 1)
-			})
-		}),
+func (s *shell) layoutModelSearchNoMatch(gtx layout.Context, query string) layout.Dimensions {
+	if s.modelSearchClearBtn.Clicked(gtx) {
+		s.modelSearchEditor.SetText("")
 	}
 
-	for _, item := range s.recentModels {
-		it := item
-		children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return desktopInset{Bottom: 3}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-				return s.layoutModelPill(gtx, it.Name, it.Model, it.Provider, it.Model == currentModel, enabled, s.modelPresetButton("recent_"+it.Model))
-			})
-		}))
-	}
-
-	return layout.Flex{Axis: layout.Vertical}.Layout(gtx, children...)
+	return s.roundedSurface(gtx, shapeSmall, s.theme.surfaceContainerLow, func(gtx layout.Context) layout.Dimensions {
+		return desktopInset{Top: 16, Bottom: 16, Left: 14, Right: 14}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+			return layout.Flex{Axis: layout.Vertical, Alignment: layout.Middle}.Layout(gtx,
+				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+					msg := fmt.Sprintf("No models match \"%s\"", query)
+					return desktopInset{Bottom: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+						return s.layoutLabel(gtx, msg, textBodySmall, font.Medium, s.theme.onSurfaceVariant, 1)
+					})
+				}),
+				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+					btn := &s.modelSearchClearBtn
+					semantic.Button.Add(gtx.Ops)
+					return btn.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+						fg := s.theme.primary
+						if btn.Hovered() {
+							fg = s.theme.onSurface
+						}
+						return s.layoutLabel(gtx, "Clear filter", textLabelSmall, font.SemiBold, fg, 1)
+					})
+				}),
+			)
+		})
+	})
 }
 
-func (s *shell) layoutModelPill(gtx layout.Context, label, modelID, provider string, selected, enabled bool, btn *widget.Clickable) layout.Dimensions {
+func (s *shell) layoutAgentModelsList(gtx layout.Context, models []string, currentModel, provider string, enabled bool) layout.Dimensions {
+	s.modelList.Axis = layout.Vertical
+	return s.modelList.Layout(gtx, len(models), func(gtx layout.Context, index int) layout.Dimensions {
+		m := models[index]
+		selected := m == currentModel
+		return desktopInset{Bottom: 3}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+			return s.layoutModelListItem(gtx, m, provider, selected, enabled)
+		})
+	})
+}
+
+func (s *shell) layoutModelListItem(gtx layout.Context, modelID, provider string, selected, enabled bool) layout.Dimensions {
+	btn := s.agentModelButton(modelID)
 	if enabled && btn.Clicked(gtx) {
-		s.onSetRuntimeModel(provider, modelID)
-		s.addRecentModel(provider, modelID, label)
+		if s.onSetRuntimeModel != nil {
+			s.onSetRuntimeModel(provider, modelID)
+		}
 		s.modelPopoverVisible = false
 	}
 
 	semantic.Button.Add(gtx.Ops)
 	semantic.EnabledOp(enabled).Add(gtx.Ops)
 	semantic.SelectedOp(selected).Add(gtx.Ops)
-	semantic.DescriptionOp("Select model " + label).Add(gtx.Ops)
+	semantic.DescriptionOp("Select model " + modelID).Add(gtx.Ops)
 
 	bg := s.theme.surfaceContainerLow
 	fg := s.theme.onSurface
@@ -331,18 +383,28 @@ func (s *shell) layoutModelPill(gtx layout.Context, label, modelID, provider str
 
 	return btn.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 		dims := s.roundedSurface(gtx, shapeSmall, bg, func(gtx layout.Context) layout.Dimensions {
-			return desktopInset{Top: 5, Bottom: 5, Left: 8, Right: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+			return desktopInset{Top: 6, Bottom: 6, Left: 10, Right: 10}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 				return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
 					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 						if selected {
-							return desktopInset{Right: 4}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-								return s.layoutLabel(gtx, "✓", textLabelSmall, font.Bold, fg, 1)
+							return desktopInset{Right: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+								return s.layoutLabel(gtx, "✓", textLabelMedium, font.Bold, fg, 1)
 							})
 						}
 						return layout.Dimensions{}
 					}),
 					layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-						return s.layoutLabel(gtx, compactInspectorText(label, 30), textLabelSmall, font.Medium, fg, 1)
+						return s.layoutLabel(gtx, modelID, textBodySmall, font.Medium, fg, 1)
+					}),
+					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+						if selected {
+							return s.roundedSurface(gtx, shapeSmall, s.theme.primary, func(gtx layout.Context) layout.Dimensions {
+								return desktopInset{Top: 1, Bottom: 1, Left: 6, Right: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+									return s.layoutLabel(gtx, "Active", textLabelSmall, font.SemiBold, s.theme.onPrimary, 1)
+								})
+							})
+						}
+						return layout.Dimensions{}
 					}),
 				)
 			})
@@ -354,100 +416,6 @@ func (s *shell) layoutModelPill(gtx layout.Context, label, modelID, provider str
 		}
 		return dims
 	})
-}
-
-func (s *shell) layoutCustomModelSection(gtx layout.Context, defaultProvider string, enabled bool) layout.Dimensions {
-	if s.popoverApplyModelButton.Clicked(gtx) && enabled {
-		p := strings.TrimSpace(s.popoverProviderEditor.Text())
-		if p == "" {
-			p = defaultProvider
-		}
-		m := strings.TrimSpace(s.popoverModelEditor.Text())
-		if p != "" && m != "" {
-			s.onSetRuntimeModel(p, m)
-			s.addRecentModel(p, m, m)
-			s.modelPopoverVisible = false
-		}
-	}
-
-	textColor := s.theme.onSurface
-	textMaterial := op.Record(gtx.Ops)
-	paint.ColorOp{Color: textColor}.Add(gtx.Ops)
-	textCall := textMaterial.Stop()
-	selectionMaterial := op.Record(gtx.Ops)
-	paint.ColorOp{Color: s.theme.primaryContainer}.Add(gtx.Ops)
-	selectionCall := selectionMaterial.Stop()
-
-	return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return desktopInset{Top: 6, Bottom: 4}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-				return s.layoutLabel(gtx, "CUSTOM MODEL", textLabelSmall, font.SemiBold, s.theme.onSurfaceVariant, 1)
-			})
-		}),
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
-				layout.Flexed(0.4, func(gtx layout.Context) layout.Dimensions {
-					return desktopInset{Right: 4}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-						return s.roundedBorderSurface(gtx, shapeSmall, s.theme.surface, s.theme.outlineVariant, 1, func(gtx layout.Context) layout.Dimensions {
-							return desktopInset{Top: 4, Bottom: 4, Left: 6, Right: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-								if s.popoverProviderEditor.Text() == "" && !gtx.Focused(&s.popoverProviderEditor) {
-									semantic.DescriptionOp("Provider").Add(gtx.Ops)
-									return layout.Stack{}.Layout(gtx,
-										layout.Stacked(func(gtx layout.Context) layout.Dimensions {
-											return s.layoutLabel(gtx, defaultProvider, textBodySmall, font.Normal, s.theme.onSurfaceVariant, 1)
-										}),
-										layout.Expanded(func(gtx layout.Context) layout.Dimensions {
-											return s.popoverProviderEditor.Layout(gtx, s.theme.material.Shaper, s.theme.textFont(font.Normal), textBodySmall, textCall, selectionCall)
-										}),
-									)
-								}
-								return s.popoverProviderEditor.Layout(gtx, s.theme.material.Shaper, s.theme.textFont(font.Normal), textBodySmall, textCall, selectionCall)
-							})
-						})
-					})
-				}),
-				layout.Flexed(0.6, func(gtx layout.Context) layout.Dimensions {
-					return desktopInset{Right: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-						return s.roundedBorderSurface(gtx, shapeSmall, s.theme.surface, s.theme.outlineVariant, 1, func(gtx layout.Context) layout.Dimensions {
-							return desktopInset{Top: 4, Bottom: 4, Left: 6, Right: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-								if s.popoverModelEditor.Text() == "" && !gtx.Focused(&s.popoverModelEditor) {
-									return layout.Stack{}.Layout(gtx,
-										layout.Stacked(func(gtx layout.Context) layout.Dimensions {
-											return s.layoutLabel(gtx, "model-id…", textBodySmall, font.Normal, s.theme.onSurfaceVariant, 1)
-										}),
-										layout.Expanded(func(gtx layout.Context) layout.Dimensions {
-											return s.popoverModelEditor.Layout(gtx, s.theme.material.Shaper, s.theme.textFont(font.Normal), textBodySmall, textCall, selectionCall)
-										}),
-									)
-								}
-								return s.popoverModelEditor.Layout(gtx, s.theme.material.Shaper, s.theme.textFont(font.Normal), textBodySmall, textCall, selectionCall)
-							})
-						})
-					})
-				}),
-				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-					canApply := strings.TrimSpace(s.popoverModelEditor.Text()) != ""
-					btn := &s.popoverApplyModelButton
-					bg := s.theme.primary
-					fg := s.theme.onPrimary
-					if !canApply || !enabled {
-						bg = s.theme.surfaceContainerLow
-						fg = s.theme.onSurfaceVariant
-					} else if btn.Hovered() {
-						bg = s.theme.primaryContainer
-						fg = s.theme.onPrimaryContainer
-					}
-					return btn.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-						return s.roundedSurface(gtx, shapeSmall, bg, func(gtx layout.Context) layout.Dimensions {
-							return desktopInset{Top: 5, Bottom: 5, Left: 10, Right: 10}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-								return s.layoutLabel(gtx, "Apply", textLabelSmall, font.SemiBold, fg, 1)
-							})
-						})
-					})
-				}),
-			)
-		}),
-	)
 }
 
 func (s *shell) layoutReasoningPopover(gtx layout.Context, session desktopstate.SessionState, enabled bool) layout.Dimensions {

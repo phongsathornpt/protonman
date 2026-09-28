@@ -35,9 +35,25 @@ func acpSessionRuntimeOption(runtimeState *appRuntime) acp.Option {
 		settings acp.SessionRuntimeSettings,
 	) (app.Conversation, error) {
 		providerName := strings.ToLower(strings.TrimSpace(settings.Provider))
+		if providerName == "" {
+			providerName = strings.ToLower(strings.TrimSpace(runtimeState.config.Model.Provider))
+		}
+		if providerName == "" {
+			providerName = "protonman"
+		}
 		provider, ok := runtimeState.config.Providers[providerName]
 		if !ok {
-			return nil, fmt.Errorf("provider %q is not configured", settings.Provider)
+			defaultProvider := strings.ToLower(strings.TrimSpace(runtimeState.config.Model.Provider))
+			if defaultProvider != "" && defaultProvider != providerName {
+				if p, fallbackOK := runtimeState.config.Providers[defaultProvider]; fallbackOK {
+					provider = p
+					providerName = defaultProvider
+					ok = true
+				}
+			}
+			if !ok {
+				return nil, fmt.Errorf("provider %q is not configured", settings.Provider)
+			}
 		}
 		modelID := strings.TrimSpace(settings.Model)
 		if modelID == "" {
@@ -165,7 +181,9 @@ func acpSessionModelOptionsProvider(runtimeState *appRuntime) acp.SessionModelOp
 			fetchedAt: time.Now(),
 		}
 		mu.Unlock()
-
+		if len(options) > 0 {
+			return options, nil
+		}
 		return options, discoverErr
 	}
 }

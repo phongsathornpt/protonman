@@ -4,6 +4,8 @@ package gioui
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"os"
@@ -16,6 +18,7 @@ import (
 
 	"github.com/phongsathornpt/protonman/internal/adapter/out/acpclient"
 	"github.com/phongsathornpt/protonman/internal/app"
+	"github.com/phongsathornpt/protonman/internal/base/buildinfo"
 	desktopstate "github.com/phongsathornpt/protonman/internal/feature/desktop"
 )
 
@@ -54,6 +57,7 @@ type controllerSnapshot struct {
 	ActiveAgentID         string
 	AgentProfiles         []app.ACPAgentProfile
 	AgentConnections      map[string]connectionPhase
+	AgentStatuses         map[string]string
 	AgentConfigOverridden bool
 	AgentUpdating         bool
 	AgentError            string
@@ -90,11 +94,12 @@ type controller struct {
 	statuses      map[string]string
 	activeAgentID string
 
-	preferences    *app.DesktopPreferences
-	pinnedSessions []string
-	customTitles   map[string]string
-	filterMode     string
-	theme          string
+	preferences        *app.DesktopPreferences
+	pinnedSessions     []string
+	customTitles       map[string]string
+	agentDefaultModels map[string]string
+	filterMode         string
+	theme              string
 
 	histories               map[string]historyState
 	historyLoads            map[string]*sessionHistoryLoad
@@ -166,6 +171,7 @@ func newController(parent context.Context, onChange func(), agents app.ACPAgents
 		preferences:             preferences,
 		pinnedSessions:          make([]string, 0),
 		customTitles:            make(map[string]string),
+		agentDefaultModels:      make(map[string]string),
 		filterMode:              "all",
 		theme:                   "system",
 	}
@@ -194,6 +200,12 @@ func (c *controller) loadPreferences() {
 	defer c.mu.Unlock()
 	c.pinnedSessions = slices.Clone(state.PinnedSessions)
 	c.customTitles = cloneCustomTitles(state.CustomTitles)
+	if len(state.AgentDefaultModels) > 0 {
+		c.agentDefaultModels = make(map[string]string, len(state.AgentDefaultModels))
+		for k, v := range state.AgentDefaultModels {
+			c.agentDefaultModels[k] = v
+		}
+	}
 	if state.FilterMode != "" {
 		c.filterMode = state.FilterMode
 	}
@@ -266,6 +278,7 @@ func (c *controller) snapshot() controllerSnapshot {
 		ActiveAgentID:         c.activeAgentID,
 		AgentProfiles:         cloneACPAgentProfiles(c.profiles),
 		AgentConnections:      make(map[string]connectionPhase, len(c.connections)),
+		AgentStatuses:         make(map[string]string, len(c.statuses)),
 		AgentConfigOverridden: c.agentConfigOverridden,
 		AgentUpdating:         c.agentMutation,
 		AgentError:            c.agentError,
@@ -283,6 +296,9 @@ func (c *controller) snapshot() controllerSnapshot {
 	}
 	for agentID, phase := range c.connections {
 		snapshot.AgentConnections[agentID] = phase
+	}
+	for agentID, status := range c.statuses {
+		snapshot.AgentStatuses[agentID] = status
 	}
 	if state, ok := c.histories[snapshot.State.ActiveSessionID]; ok {
 		snapshot.HistoryState = state
@@ -334,6 +350,8 @@ func (c *controller) selectSession(sessionID string) {
 			c.state.ActiveProjectID = session.ProjectID
 			if strings.TrimSpace(session.AgentID) != "" {
 				c.activeAgentID = session.AgentID
+			} else {
+				c.activeAgentID = controllerAgentID
 			}
 			break
 		}
@@ -520,6 +538,32 @@ func (c *controller) setFilterMode(mode string) {
 	c.notify()
 }
 
+type acpConfigOption struct {
+	ID           string `json:"id"`
+	Name         string `json:"name"`
+	CurrentValue string `json:"currentValue"`
+	Options      []struct {
+		Value string `json:"value"`
+		Name  string `json:"name"`
+	} `json:"options"`
+}
+
+func extractModelsFromConfigOptions(options []acpConfigOption) (models []string, currentModel string) {
+	for _, opt := range options {
+		if strings.TrimSpace(opt.ID) == "model" {
+			currentModel = strings.TrimSpace(opt.CurrentValue)
+			for _, o := range opt.Options {
+				val := strings.TrimSpace(o.Value)
+				if val != "" {
+					models = append(models, val)
+				}
+			}
+			return models, currentModel
+		}
+	}
+	return nil, ""
+}
+
 func (c *controller) newSession() {
 	c.mu.Lock()
 	agentID := c.agentForProjectLocked(c.state.ActiveProjectID)
@@ -558,7 +602,8 @@ func (c *controller) newSession() {
 		callCtx, cancel := context.WithTimeout(c.ctx, newSessionTimeout)
 		defer cancel()
 		var result struct {
-			SessionID string `json:"sessionId"`
+			SessionID     string            `json:"sessionId"`
+			ConfigOptions []acpConfigOption `json:"configOptions,omitempty"`
 		}
 		err := client.Call(callCtx, "session/new", params, &result)
 		if err == nil && strings.TrimSpace(result.SessionID) == "" {
@@ -576,6 +621,14 @@ func (c *controller) newSession() {
 			return
 		}
 		c.state = addLocalSession(c.state, result.SessionID, workspace, agentID)
+		if models, currentModel := extractModelsFromConfigOptions(result.ConfigOptions); len(models) > 0 {
+			if sess := desktopstateSessionPointer(&c.state, result.SessionID); sess != nil {
+				sess.AvailableModels = models
+				if currentModel != "" && sess.Runtime.Model == "" {
+					sess.Runtime.Model = currentModel
+				}
+			}
+		}
 		c.state.ActiveSessionID = result.SessionID
 		c.state.ActiveProjectID = workspaceKey(workspace, result.SessionID)
 		c.histories[result.SessionID] = historyStateLoaded
@@ -620,6 +673,7 @@ func (c *controller) superviseAgent(profile app.ACPAgentProfile) {
 		startedClient.Store(client)
 
 		if err := initializeACP(c.ctx, client); err != nil {
+			fmt.Printf("[superviseAgent %s] initializeACP failed: %v\n", profile.ID, err)
 			_ = client.Close()
 			if c.ctx.Err() != nil {
 				return
@@ -644,14 +698,15 @@ func (c *controller) superviseAgent(profile app.ACPAgentProfile) {
 
 		c.setClient(profile.ID, client)
 		delay = reconnectInitialDelay
-		c.resumeKnownSessions(profile.ID, client)
 		if err := c.refreshSessions(profile.ID, client); err != nil {
+			fmt.Printf("[superviseAgent %s] refreshSessions failed: %v\n", profile.ID, err)
 			if isACPMethodNotFound(err) {
 				c.setAgentStatus(profile.ID, "Connected · session list unavailable")
 			} else {
 				c.setAgentStatus(profile.ID, "Connected · session refresh failed")
 			}
 		}
+		c.resumeKnownSessions(profile.ID, client)
 
 		select {
 		case <-c.ctx.Done():
@@ -660,6 +715,7 @@ func (c *controller) superviseAgent(profile app.ACPAgentProfile) {
 		case <-client.Done():
 		}
 
+		fmt.Printf("[superviseAgent %s] client done\n", profile.ID)
 		c.markAgentDisconnected(profile.ID, client)
 		if c.ctx.Err() != nil {
 			return
@@ -778,8 +834,12 @@ func initializeACP(ctx context.Context, client *acpclient.Client) error {
 		ProtocolVersion int `json:"protocolVersion"`
 	}
 	err := client.Call(callCtx, "initialize", map[string]any{
-		"protocolVersion":    1,
-		"clientInfo":         map[string]any{"name": "protonman-desktop-gio", "title": "Protonman Desktop"},
+		"protocolVersion": 1,
+		"clientInfo": map[string]any{
+			"name":    "protonman-desktop-gio",
+			"title":   "Protonman Desktop",
+			"version": buildinfo.Version(),
+		},
 		"clientCapabilities": map[string]any{},
 	}, &result)
 	if err != nil {
@@ -826,6 +886,25 @@ func projectSessions(current desktopstate.State, agentID string, remoteSessions 
 		session.Workspace = strings.TrimSpace(remote.Cwd)
 		if session.Workspace == "" {
 			session.Workspace = previousWorkspace
+		}
+		if session.Workspace == "" {
+			if proj, ok := projectByID(current, remote.WorkspaceKey); ok && len(proj.Folders) > 0 {
+				session.Workspace = proj.Folders[0].Path
+			}
+		}
+		if session.Workspace == "" {
+			if defaultWS, err := newSessionWorkspace(current); err == nil && defaultWS != "" {
+				wsKey := sessionWorkspaceKey(defaultWS)
+				remoteKey := strings.TrimSpace(remote.WorkspaceKey)
+				if remoteKey == "" {
+					if parts := strings.Split(remote.ID, "-"); len(parts) >= 2 && len(parts[1]) == 16 && isHexString(parts[1]) {
+						remoteKey = parts[1]
+					}
+				}
+				if remoteKey == "" || remoteKey == wsKey || remoteKey == "workspace:"+canonicalWorkspacePath(defaultWS) {
+					session.Workspace = defaultWS
+				}
+			}
 		}
 		if len(remote.AdditionalDirectories) > 0 {
 			session.AdditionalDirectories = slices.Clone(remote.AdditionalDirectories)
@@ -1063,6 +1142,41 @@ func workspaceName(workspace, sessionID string) string {
 	return "Session " + shortID(sessionID)
 }
 
+func sessionWorkspaceKey(workDir string) string {
+	workDir = strings.TrimSpace(workDir)
+	if workDir == "" {
+		return ""
+	}
+	digest := sha256.Sum256([]byte(filepath.Clean(workDir)))
+	return hex.EncodeToString(digest[:8])
+}
+
+func sessionWorkspaceKeyFromSession(session desktopstate.SessionState) string {
+	key := strings.TrimSpace(session.WorkspaceKey)
+	if len(key) == 16 && isHexString(key) {
+		return key
+	}
+	if strings.HasPrefix(session.ID, "workspace-") {
+		parts := strings.Split(session.ID, "-")
+		if len(parts) >= 2 && len(parts[1]) == 16 && isHexString(parts[1]) {
+			return parts[1]
+		}
+	}
+	return ""
+}
+
+func isHexString(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, c := range s {
+		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
+			return false
+		}
+	}
+	return true
+}
+
 func resolveACPBinary() string {
 	executable, _ := os.Executable()
 	return resolveACPBinaryFor(os.Getenv("PROTONMAN_BINARY"), executable, func(path string) bool {
@@ -1089,8 +1203,15 @@ func resolveACPBinaryFor(override, executable string, isFile func(string) bool) 
 }
 
 func isACPMethodNotFound(err error) bool {
+	if err == nil {
+		return false
+	}
 	var rpcError *acpclient.RPCError
-	return errors.As(err, &rpcError) && rpcError.Code == -32601
+	if errors.As(err, &rpcError) && rpcError.Code == -32601 {
+		return true
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "-32601") || strings.Contains(msg, "method not found")
 }
 
 func waitForReconnect(ctx context.Context, delay time.Duration) bool {

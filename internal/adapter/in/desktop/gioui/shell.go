@@ -126,8 +126,14 @@ type shell struct {
 	mentionCache                 workspaceMentionCache
 	codeCopyButtons              map[string]*widget.Clickable
 	codeCopiedAt                 map[string]time.Time
+	messageCopyButtons           map[string]*widget.Clickable
+	messageCopiedAt              map[string]time.Time
+	userRetryButtons             map[string]*widget.Clickable
+	toolExpanded                 map[string]bool
+	toolExpandButtons            map[string]*widget.Clickable
 	sendButton                   widget.Clickable
 	stopButton                   widget.Clickable
+	starterPromptButtons         [4]widget.Clickable
 	permissionButtons            map[string]map[string]*widget.Clickable
 	permissionButtonLive         map[string]struct{}
 	permissionButtonRevision     uint64
@@ -155,6 +161,16 @@ type shell struct {
 	mcpFormToggleButton          widget.Clickable
 	mcpSaveButton                widget.Clickable
 	mcpRemoveButton              widget.Clickable
+	mcpCloseButton               widget.Clickable
+	mcpCancelButton              widget.Clickable
+	mcpPresetGitHubBtn           widget.Clickable
+	mcpPresetMemoryBtn           widget.Clickable
+	mcpPresetFilesystemBtn       widget.Clickable
+	mcpPresetFetchBtn            widget.Clickable
+	mcpPresetCustomBtn           widget.Clickable
+	mcpConfirmDelete             bool
+	mcpConfirmDeleteBtn          widget.Clickable
+	mcpCancelDeleteBtn           widget.Clickable
 	mcpReconnectButton           widget.Clickable
 	agentSelectorButton          widget.Clickable
 	agentSelectorList            layout.List
@@ -175,6 +191,17 @@ type shell struct {
 	agentFormToggleButton        widget.Clickable
 	agentSaveButton              widget.Clickable
 	agentRemoveButton            widget.Clickable
+	agentCloseButton             widget.Clickable
+	agentCancelButton            widget.Clickable
+	agentPresetProtonmanBtn      widget.Clickable
+	agentPresetOpencodeBtn       widget.Clickable
+	agentPresetClineBtn          widget.Clickable
+	agentPresetAntigravityBtn    widget.Clickable
+	agentPresetClaudeBtn         widget.Clickable
+	agentPresetCustomBtn         widget.Clickable
+	agentConfirmDelete           bool
+	agentConfirmDeleteBtn        widget.Clickable
+	agentCancelDeleteBtn         widget.Clickable
 	activeSessionID              string
 	syncRevision                 uint64
 
@@ -214,6 +241,7 @@ type shell struct {
 
 	settingsModalOpen     bool
 	settingsModalScrim    widget.Clickable
+	settingsModalCard     widget.Clickable
 	settingsModalCloseBtn widget.Clickable
 	settingsActiveTab     int
 	settingsTabButtons    [3]widget.Clickable
@@ -227,6 +255,9 @@ type shell struct {
 	reasoningPopoverVisible  bool
 	modelPopoverCloseButton  widget.Clickable
 	reasoningPopoverCloseBtn widget.Clickable
+	modelSearchEditor        widget.Editor
+	modelSearchClearBtn      widget.Clickable
+	modelRefreshButton       widget.Clickable
 	popoverProviderEditor    widget.Editor
 	popoverModelEditor       widget.Editor
 	popoverApplyModelButton  widget.Clickable
@@ -298,8 +329,10 @@ func newShell(theme *theme) *shell {
 		sidebarList:                  layout.List{Axis: layout.Vertical},
 		conversationList:             layout.List{Axis: layout.Vertical, ScrollToEnd: true},
 		inspectorList:                layout.List{Axis: layout.Vertical},
+		settingsModalList:            layout.List{Axis: layout.Vertical},
 		composer:                     widget.Editor{Submit: true, MaxLen: 1 << 20},
 		composerDrafts:               make(map[string]string),
+		modelSearchEditor:            widget.Editor{SingleLine: true, MaxLen: 256},
 		popoverProviderEditor:        widget.Editor{SingleLine: true, MaxLen: 256},
 		popoverModelEditor:           widget.Editor{SingleLine: true, MaxLen: 256},
 		modelList:                    layout.List{Axis: layout.Vertical},
@@ -593,7 +626,7 @@ func (s *shell) layoutConnectionPill(gtx layout.Context, snapshot controllerSnap
 		background = s.theme.warningContainer
 		foreground = s.theme.onWarningContainer
 	}
-	if strings.Contains(status, "failed") || strings.Contains(status, "unavailable") || strings.Contains(status, "disconnected") {
+	if strings.Contains(status, "failed") || (strings.Contains(status, "unavailable") && !strings.Contains(status, "session list unavailable")) || strings.Contains(status, "disconnected") {
 		background = s.theme.errorContainer
 		foreground = s.theme.onErrorContainer
 	}
@@ -616,10 +649,14 @@ func connectionStatusLabel(status string) string {
 	}
 	lower := strings.ToLower(status)
 	switch {
+	case strings.Contains(lower, "session list unavailable"):
+		return "Connected"
 	case strings.Contains(lower, "mcp settings unavailable"):
 		return "MCP unavailable"
 	case strings.Contains(lower, "history failed"):
 		return "History failed"
+	case strings.Contains(lower, "prompt failed"):
+		return "Prompt failed"
 	case strings.Contains(lower, "permission"):
 		return "Permission required"
 	case strings.Contains(lower, "unavailable"):
@@ -751,7 +788,7 @@ func (s *shell) layoutSidebarFooter(gtx layout.Context, snapshot controllerSnaps
 		statusLabel = "Offline"
 	}
 	status := strings.ToLower(snapshot.Status)
-	if strings.Contains(status, "failed") || strings.Contains(status, "unavailable") || strings.Contains(status, "disconnected") {
+	if strings.Contains(status, "failed") || (strings.Contains(status, "unavailable") && !strings.Contains(status, "session list unavailable")) || strings.Contains(status, "disconnected") {
 		statusColor = s.theme.onErrorContainer
 		statusLabel = "Offline"
 	}
@@ -2104,6 +2141,7 @@ func (s *shell) layoutDangerButton(gtx layout.Context, button *widget.Clickable,
 func (s *shell) layoutButtonStyle(gtx layout.Context, button *widget.Clickable, label string, enabled bool, action func(), primary, danger bool) layout.Dimensions {
 	if enabled && button.Clicked(gtx) && action != nil {
 		action()
+		gtx.Execute(op.InvalidateCmd{})
 	}
 	if !enabled {
 		gtx = gtx.Disabled()
@@ -2174,6 +2212,7 @@ func (s *shell) layoutIconButton(gtx layout.Context, button *widget.Clickable, i
 	}
 	if button.Clicked(gtx) && action != nil {
 		action()
+		gtx.Execute(op.InvalidateCmd{})
 	}
 	size := gtx.Dp(30)
 	gtx.Constraints.Min = image.Pt(size, size)
@@ -2268,7 +2307,7 @@ func (s *shell) layoutLabel(gtx layout.Context, value string, size unit.Sp, weig
 
 func (s *shell) roundedBorderSurface(gtx layout.Context, radius unit.Dp, background color.NRGBA, borderColor color.NRGBA, borderWidth int, content layout.Widget) layout.Dimensions {
 	dims := s.roundedSurface(gtx, radius, background, content)
-	if borderWidth > 0 {
+	if borderWidth > 0 && dims.Size.X > 0 && dims.Size.Y > 0 {
 		widget.Border{Color: borderColor, CornerRadius: radius, Width: unit.Dp(borderWidth)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 			return layout.Dimensions{Size: dims.Size}
 		})
