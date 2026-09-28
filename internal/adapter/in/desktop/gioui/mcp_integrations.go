@@ -253,17 +253,76 @@ func parseMCPStringList(raw string) ([]string, error) {
 	if raw == "" {
 		return nil, nil
 	}
-	var values []string
-	if err := json.Unmarshal([]byte(raw), &values); err != nil {
-		return nil, fmt.Errorf("expected a JSON string array: %w", err)
+	if strings.HasPrefix(raw, "[") {
+		var values []string
+		if err := json.Unmarshal([]byte(raw), &values); err != nil {
+			return nil, fmt.Errorf("expected a JSON string array: %w", err)
+		}
+		return trimMCPStringList(values), nil
 	}
-	return trimMCPStringList(values), nil
+	return parseSmartArguments(raw)
+}
+
+func parseSmartArguments(raw string) ([]string, error) {
+	var args []string
+	var current strings.Builder
+	inDouble := false
+	inSingle := false
+	escaped := false
+
+	for _, r := range raw {
+		if escaped {
+			current.WriteRune(r)
+			escaped = false
+			continue
+		}
+		if r == '\\' && !inSingle {
+			escaped = true
+			continue
+		}
+		if r == '"' && !inSingle {
+			inDouble = !inDouble
+			continue
+		}
+		if r == '\'' && !inDouble {
+			inSingle = !inSingle
+			continue
+		}
+		if (r == ' ' || r == '\t' || r == '\n' || r == '\r') && !inDouble && !inSingle {
+			if current.Len() > 0 {
+				args = append(args, current.String())
+				current.Reset()
+			}
+			continue
+		}
+		current.WriteRune(r)
+	}
+	if inDouble || inSingle {
+		return nil, fmt.Errorf("unclosed quote in arguments")
+	}
+	if current.Len() > 0 {
+		args = append(args, current.String())
+	}
+	return trimMCPStringList(args), nil
 }
 
 func parseMCPEnvironmentKeys(raw string) ([]string, error) {
-	values, err := parseMCPStringList(raw)
-	if err != nil {
-		return nil, err
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil, nil
+	}
+	var values []string
+	if strings.HasPrefix(raw, "[") {
+		var err error
+		values, err = parseMCPStringList(raw)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		tokens := strings.FieldsFunc(raw, func(r rune) bool {
+			return r == ' ' || r == '\t' || r == '\n' || r == '\r' || r == ','
+		})
+		values = trimMCPStringList(tokens)
 	}
 	for _, value := range values {
 		if strings.Contains(value, "=") {

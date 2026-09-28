@@ -139,6 +139,8 @@ type shell struct {
 	reasoningButtons             map[string]*widget.Clickable
 	lowConcurrencyButtons        map[string]*widget.Clickable
 	runtimeEditorKey             string
+	runtimeEditorProvider        string
+	runtimeEditorModel           string
 	mcpNameEditor                widget.Editor
 	mcpCommandEditor             widget.Editor
 	mcpArgsEditor                widget.Editor
@@ -209,6 +211,15 @@ type shell struct {
 	sidebarInspectorButton widget.Clickable
 	sidebarArchiveButton   widget.Clickable
 	sidebarCommunityButton widget.Clickable
+
+	settingsModalOpen     bool
+	settingsModalScrim    widget.Clickable
+	settingsModalCloseBtn widget.Clickable
+	settingsActiveTab     int
+	settingsTabButtons    [3]widget.Clickable
+	settingsThemeButtons  map[string]*widget.Clickable
+	settingsModalList     layout.List
+	onSetTheme            func(string)
 
 	modelChipButton          widget.Clickable
 	reasoningChipButton      widget.Clickable
@@ -349,6 +360,8 @@ func newShell(theme *theme) *shell {
 		onSelectAgent:                func(string) {},
 		onSaveAgentProfile:           func(string, string, string, string, string, string) {},
 		onRemoveAgentProfile:         func(string) {},
+		settingsThemeButtons:         make(map[string]*widget.Clickable),
+		onSetTheme:                   func(string) {},
 	}
 }
 
@@ -360,6 +373,7 @@ func (s *shell) handleGlobalShortcuts(gtx layout.Context, snapshot controllerSna
 			key.Filter{Name: "N", Required: key.ModShortcut},
 			key.Filter{Name: "K", Required: key.ModShortcut},
 			key.Filter{Name: "F", Required: key.ModShortcut},
+			key.Filter{Name: ",", Required: key.ModShortcut},
 			key.Filter{Name: "M", Required: key.ModAlt},
 			key.Filter{Name: "R", Required: key.ModAlt},
 			key.Filter{Name: key.NameEscape},
@@ -382,6 +396,8 @@ func (s *shell) handleGlobalShortcuts(gtx layout.Context, snapshot controllerSna
 			case "K", "F":
 				s.sidebarVisible = true
 				gtx.Execute(key.FocusCmd{Tag: &s.sidebarSearchEditor})
+			case ",":
+				s.settingsModalOpen = !s.settingsModalOpen
 			case "M":
 				s.modelPopoverVisible = !s.modelPopoverVisible
 				s.reasoningPopoverVisible = false
@@ -392,6 +408,10 @@ func (s *shell) handleGlobalShortcuts(gtx layout.Context, snapshot controllerSna
 				s.reasoningPopoverVisible = !s.reasoningPopoverVisible
 				s.modelPopoverVisible = false
 			case key.NameEscape:
+				if s.settingsModalOpen {
+					s.settingsModalOpen = false
+					break
+				}
 				if s.modelPopoverVisible || s.reasoningPopoverVisible {
 					s.modelPopoverVisible = false
 					s.reasoningPopoverVisible = false
@@ -443,6 +463,9 @@ func (s *shell) layout(gtx layout.Context, snapshot controllerSnapshot) layout.D
 	dims := layout.Flex{Axis: layout.Horizontal}.Layout(gtx, children...)
 	if s.deletingSessionID != "" {
 		s.layoutDeleteModal(gtx)
+	}
+	if s.settingsModalOpen {
+		s.layoutSettingsModal(gtx, snapshot)
 	}
 	return dims
 }
@@ -698,11 +721,8 @@ func openBrowserURL(targetURL string) {
 }
 
 func (s *shell) layoutSidebarFooter(gtx layout.Context, snapshot controllerSnapshot) layout.Dimensions {
-	wideInspector := gtx.Constraints.Max.X >= gtx.Dp(inspectorWideBreakpoint)
-	showInspector := s.shouldShowInspector(wideInspector)
 	if s.sidebarInspectorButton.Clicked(gtx) {
-		s.inspectorOverride = true
-		s.inspectorVisible = !showInspector
+		s.openSettingsModal()
 	}
 
 	if s.sidebarArchiveButton.Clicked(gtx) && s.onSetFilterMode != nil {
@@ -744,7 +764,7 @@ func (s *shell) layoutSidebarFooter(gtx layout.Context, snapshot controllerSnaps
 						btnGtx := gtx
 						bg := color.NRGBA{}
 						fg := s.theme.onSurfaceVariant
-						if showInspector {
+						if s.settingsModalOpen {
 							bg = s.theme.primaryContainer
 							fg = s.theme.onPrimaryContainer
 						} else if s.sidebarInspectorButton.Hovered() {
@@ -752,7 +772,7 @@ func (s *shell) layoutSidebarFooter(gtx layout.Context, snapshot controllerSnaps
 							fg = s.theme.onSurface
 						}
 						semantic.Button.Add(btnGtx.Ops)
-						semantic.DescriptionOp("Open Settings and Inspector (⌘I)").Add(btnGtx.Ops)
+						semantic.DescriptionOp("Open Settings (⌘,)").Add(btnGtx.Ops)
 						return s.sidebarInspectorButton.Layout(btnGtx, func(gtx layout.Context) layout.Dimensions {
 							return s.roundedSurface(gtx, shapeSmall, bg, func(gtx layout.Context) layout.Dimensions {
 								return desktopUniformInset(6).Layout(gtx, func(gtx layout.Context) layout.Dimensions {

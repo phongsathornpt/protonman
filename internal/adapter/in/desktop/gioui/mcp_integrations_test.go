@@ -252,3 +252,21 @@ func TestMCPUpsertNormalizesAndDeduplicates(t *testing.T) {
 		t.Fatalf("items = %#v", items)
 	}
 }
+
+func TestParseSmartArgumentsAndEnvironment(t *testing.T) {
+	args, err := parseMCPStringList("--stdio --log-level debug")
+	if err != nil {
+		t.Fatalf("parseMCPStringList: %v", err)
+	}
+	if !reflect.DeepEqual(args, []string{"--stdio", "--log-level", "debug"}) {
+		t.Fatalf("unexpected args: %#v", args)
+	}
+
+	env, err := parseMCPEnvironmentKeys("API_KEY, GH_TOKEN\nPROT_SECRET")
+	if err != nil {
+		t.Fatalf("parseMCPEnvironmentKeys: %v", err)
+	}
+	if !reflect.DeepEqual(env, []string{"API_KEY", "GH_TOKEN", "PROT_SECRET"}) {
+		t.Fatalf("unexpected env: %#v", env)
+	}
+}

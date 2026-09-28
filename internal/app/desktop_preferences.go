@@ -13,6 +13,7 @@ type DesktopPreferencesState struct {
 	PinnedSessions []string          `json:"pinnedSessions,omitempty"`
 	CustomTitles   map[string]string `json:"customTitles,omitempty"`
 	FilterMode     string            `json:"filterMode,omitempty"`
+	Theme          string            `json:"theme,omitempty"`
 }
 
 // DesktopPreferencesRepository is the outbound port for persisting desktop preferences.
@@ -37,6 +38,7 @@ func NewDesktopPreferences(repository DesktopPreferencesRepository) *DesktopPref
 			PinnedSessions: make([]string, 0),
 			CustomTitles:   make(map[string]string),
 			FilterMode:     "all",
+			Theme:          "system",
 		},
 	}
 }
@@ -164,6 +166,25 @@ func (p *DesktopPreferences) SetFilterMode(ctx context.Context, mode string) err
 	return nil
 }
 
+// SetTheme updates the UI theme (dark, light, slate-dark, slate-light) and saves the change.
+func (p *DesktopPreferences) SetTheme(ctx context.Context, theme string) error {
+	if p == nil {
+		return nil
+	}
+	theme = strings.ToLower(strings.TrimSpace(theme))
+
+	p.mu.Lock()
+	p.state.Theme = theme
+	cloned := p.cloneStateLocked()
+	repo := p.repository
+	p.mu.Unlock()
+
+	if repo != nil {
+		return repo.Save(ctx, cloned)
+	}
+	return nil
+}
+
 // RemoveSession cleans up any pinned state or custom title when a session is deleted.
 func (p *DesktopPreferences) RemoveSession(ctx context.Context, sessionID string) error {
 	if p == nil {
@@ -205,6 +226,7 @@ func (p *DesktopPreferences) cloneStateLocked() DesktopPreferencesState {
 		PinnedSessions: append([]string(nil), p.state.PinnedSessions...),
 		CustomTitles:   make(map[string]string, len(p.state.CustomTitles)),
 		FilterMode:     p.state.FilterMode,
+		Theme:          p.state.Theme,
 	}
 	for k, v := range p.state.CustomTitles {
 		cloned.CustomTitles[k] = v

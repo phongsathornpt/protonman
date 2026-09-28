@@ -152,10 +152,10 @@ func (s *shell) layoutMCPIntegrationsPanel(gtx layout.Context, snapshot controll
 				return s.layoutMCPIntegrationEditor(gtx, "Command", &s.mcpCommandEditor, enabled)
 			}),
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				return s.layoutMCPIntegrationEditor(gtx, "Arguments JSON", &s.mcpArgsEditor, enabled)
+				return s.layoutMCPIntegrationEditor(gtx, "Arguments (JSON array or flags)", &s.mcpArgsEditor, enabled)
 			}),
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				return s.layoutMCPIntegrationEditor(gtx, "Environment keys JSON", &s.mcpEnvEditor, enabled)
+				return s.layoutMCPIntegrationEditor(gtx, "Environment keys (JSON array or space-separated)", &s.mcpEnvEditor, enabled)
 			}),
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 				return s.layoutLabel(gtx, "Values are read from the Protonman process environment and are never stored.", textLabelMedium, font.Normal, s.theme.onSurfaceVariant, 3)

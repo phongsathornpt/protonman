@@ -82,3 +82,23 @@ func TestDesktopPreferencesCustomTitleAndFilter(t *testing.T) {
 		t.Fatal("expected custom title to be removed")
 	}
 }
+
+func TestDesktopPreferencesSetTheme(t *testing.T) {
+	ctx := context.Background()
+	repo := &memoryPreferencesRepo{}
+	prefs := app.NewDesktopPreferences(repo)
+	_, _ = prefs.Load(ctx)
+
+	if err := prefs.SetTheme(ctx, "slate-dark"); err != nil {
+		t.Fatalf("SetTheme: %v", err)
+	}
+
+	snap := prefs.Snapshot()
+	if snap.Theme != "slate-dark" {
+		t.Fatalf("expected theme=slate-dark, got %s", snap.Theme)
+	}
+
+	if repo.state.Theme != "slate-dark" {
+		t.Fatalf("expected repo theme=slate-dark, got %s", repo.state.Theme)
+	}
+}

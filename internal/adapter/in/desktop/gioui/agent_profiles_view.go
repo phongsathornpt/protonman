@@ -265,10 +265,10 @@ func (s *shell) layoutAgentProfilesPanel(gtx layout.Context, snapshot controller
 				return s.layoutAgentProfileEditor(gtx, "Command", &s.agentCommandEditor, enabled)
 			}),
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				return s.layoutAgentProfileEditor(gtx, "Arguments JSON", &s.agentArgsEditor, enabled)
+				return s.layoutAgentProfileEditor(gtx, "Arguments (JSON array or flags)", &s.agentArgsEditor, enabled)
 			}),
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				return s.layoutAgentProfileEditor(gtx, "Environment keys JSON", &s.agentEnvEditor, enabled)
+				return s.layoutAgentProfileEditor(gtx, "Environment keys (JSON array or space-separated)", &s.agentEnvEditor, enabled)
 			}),
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 				return s.layoutPrimaryButton(gtx, &s.agentSaveButton, "Save agent", enabled && strings.TrimSpace(s.agentIDEditor.Text()) != "" && strings.TrimSpace(s.agentCommandEditor.Text()) != "", func() {

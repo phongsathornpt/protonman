@@ -67,6 +67,7 @@ type controllerSnapshot struct {
 	PinnedSessions        []string
 	CustomTitles          map[string]string
 	FilterMode            string
+	Theme                 string
 }
 
 type controllerSnapshotCache struct {
@@ -93,6 +94,7 @@ type controller struct {
 	pinnedSessions []string
 	customTitles   map[string]string
 	filterMode     string
+	theme          string
 
 	histories               map[string]historyState
 	historyLoads            map[string]*sessionHistoryLoad
@@ -165,6 +167,7 @@ func newController(parent context.Context, onChange func(), agents app.ACPAgents
 		pinnedSessions:          make([]string, 0),
 		customTitles:            make(map[string]string),
 		filterMode:              "all",
+		theme:                   "system",
 	}
 	for _, profile := range profiles {
 		instance.profiles[profile.ID] = cloneACPAgentProfile(profile)
@@ -194,7 +197,24 @@ func (c *controller) loadPreferences() {
 	if state.FilterMode != "" {
 		c.filterMode = state.FilterMode
 	}
+	if state.Theme != "" {
+		c.theme = state.Theme
+	}
 	c.revision++
+}
+
+func (c *controller) setTheme(theme string) {
+	c.mu.Lock()
+	c.theme = theme
+	c.revision++
+	c.mu.Unlock()
+	c.notify()
+
+	if c.preferences != nil {
+		go func() {
+			_ = c.preferences.SetTheme(c.ctx, theme)
+		}()
+	}
 }
 
 func cloneCustomTitles(m map[string]string) map[string]string {
@@ -259,6 +279,7 @@ func (c *controller) snapshot() controllerSnapshot {
 		PinnedSessions:        slices.Clone(c.pinnedSessions),
 		CustomTitles:          cloneCustomTitles(c.customTitles),
 		FilterMode:            c.filterMode,
+		Theme:                 c.theme,
 	}
 	for agentID, phase := range c.connections {
 		snapshot.AgentConnections[agentID] = phase
