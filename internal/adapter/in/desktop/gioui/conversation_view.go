@@ -48,7 +48,38 @@ const (
 	responseSplitRetainedEstimate = 96
 	maxToolDiffCacheEntries       = 512
 	maxThinkingParseCacheEntries  = 512
+	// Tool outputs above this threshold render through the paged large-message
+	// pattern instead of laying out the full text every frame. Expanded tool
+	// bodies (terminal dumps in particular) previously laid out unbounded text
+	// on every scroll frame.
+	maxToolOutputUnpagedBytes = 8 << 10
+	// Caps the per-item accessibility description memo; conversation frames
+	// rebuild visible descriptions every redraw, which dominated frame
+	// allocations in tool-heavy sessions.
+	maxConversationDescriptionCacheEntries = 512
 )
+
+// descriptionCacheEntry memoizes conversationItemDescription for one timeline
+// item. Descriptions are rebuilt for every visible item on each frame; the
+// full source item is retained for equality so streaming text invalidates
+// naturally.
+type descriptionCacheEntry struct {
+	source      desktopstate.TimelineItem
+	description string
+}
+
+// conversationDescription returns the cached accessibility description for a
+// timeline item, rebuilding it only when the item changes. Keys use the same
+// stable timeline identity as the other conversation caches; kind separation
+// keeps user/assistant/tool items with matching IDs from colliding.
+func (s *shell) conversationDescription(key conversationCacheKey, item desktopstate.TimelineItem) string {
+	if cached, ok := s.conversationDescriptions.get(key); ok && cached.source == item {
+		return cached.description
+	}
+	description := conversationItemDescription(item)
+	s.conversationDescriptions.put(key, descriptionCacheEntry{source: item, description: description})
+	return description
+}
 
 // toolDiffCacheEntry memoizes the per-frame classification of one tool item's
 // output text (diff detection, stats, filename, preview).
@@ -135,10 +166,12 @@ func (s *shell) syncConversation(state desktopstate.State) {
 	clear(s.conversationExpanded)
 	clear(s.conversationPage)
 	clear(s.conversationExpandButtons)
+	clear(s.toolOutputPages)
+	s.expansionOrder.reset()
 	clear(s.conversationThinkingExpanded)
 	clear(s.conversationThinkingButtons)
-	clear(s.conversationThinkingCache)
-	clear(s.toolDiffCache)
+	s.conversationThinkingCache.reset()
+	s.toolDiffCache.reset()
 	clear(s.permissionButtons)
 	clear(s.toolExpanded)
 	clear(s.toolExpandButtons)
@@ -510,20 +543,11 @@ func parseAssistantThinking(text string) parsedAssistantMessage {
 // messages are re-parsed on every frame; caching by identity and source keeps a
 // long, unchanged message from being re-scanned while the view redraws.
 func (s *shell) parsedThinking(key conversationCacheKey, text string) parsedAssistantMessage {
-	if cached, ok := s.conversationThinkingCache[key]; ok && cached.source == text {
+	if cached, ok := s.conversationThinkingCache.get(key); ok && cached.source == text {
 		return cached.parsed
 	}
 	parsed := parseAssistantThinking(text)
-	if s.conversationThinkingCache == nil {
-		s.conversationThinkingCache = make(map[conversationCacheKey]thinkingParseCacheEntry)
-	}
-	if len(s.conversationThinkingCache) >= maxThinkingParseCacheEntries {
-		for existing := range s.conversationThinkingCache {
-			delete(s.conversationThinkingCache, existing)
-			break
-		}
-	}
-	s.conversationThinkingCache[key] = thinkingParseCacheEntry{source: text, parsed: parsed}
+	s.conversationThinkingCache.put(key, thinkingParseCacheEntry{source: text, parsed: parsed})
 	return parsed
 }
 
@@ -777,11 +801,12 @@ func (s *shell) layoutTimelineItem(gtx layout.Context, sessionID string, index i
 	if item.Streaming {
 		descriptionItem.Text = streamingText(item.Text)
 	}
+	itemKey := makeConversationCacheKey(sessionID, index, item)
 
 	if item.Kind == desktopstate.TimelineUser {
 		msgKey := conversationButtonKey(sessionID, "user", index, item)
 		return desktopInset{Top: 8, Bottom: 8, Left: 16, Right: 16}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-			semantic.DescriptionOp(conversationItemDescription(descriptionItem)).Add(gtx.Ops)
+			semantic.DescriptionOp(s.conversationDescription(itemKey, descriptionItem)).Add(gtx.Ops)
 			return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Start}.Layout(gtx,
 				layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
 					return layout.Spacer{}.Layout(gtx)
@@ -847,7 +872,7 @@ func (s *shell) layoutTimelineItem(gtx layout.Context, sessionID string, index i
 	foreground := s.theme.onSurface
 
 	return desktopInset{Top: 8, Bottom: 12, Left: 16, Right: 16}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-		semantic.DescriptionOp(conversationItemDescription(descriptionItem)).Add(gtx.Ops)
+		semantic.DescriptionOp(s.conversationDescription(key, descriptionItem)).Add(gtx.Ops)
 		children := []layout.FlexChild{
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 				msgKey := conversationButtonKey(sessionID, "asst", index, item)
@@ -995,18 +1020,24 @@ func (s *shell) largeMessageDisclosureButtons(key conversationCacheKey) *convers
 	}
 	buttons := s.conversationExpandButtons[key]
 	if buttons == nil {
-		if len(s.conversationExpandButtons) >= maxConversationExpansionKeys {
-			for oldest := range s.conversationExpandButtons {
-				delete(s.conversationExpanded, oldest)
-				delete(s.conversationPage, oldest)
-				delete(s.conversationExpandButtons, oldest)
-				break
-			}
-		}
+		s.admitExpansionKey(key)
 		buttons = new(conversationDisclosureButtons)
 		s.conversationExpandButtons[key] = buttons
 	}
 	return buttons
+}
+
+// admitExpansionKey registers a key in the shared expansion-order FIFO. When
+// the bound is reached the oldest key is evicted from every expansion-state
+// map at once; the previous per-map evictions could orphan another map's
+// entry and grow past the bound.
+func (s *shell) admitExpansionKey(key conversationCacheKey) {
+	if oldest, _, evicted := s.expansionOrder.put(key, struct{}{}); evicted {
+		delete(s.conversationExpandButtons, oldest)
+		delete(s.toolOutputPages, oldest)
+		delete(s.conversationExpanded, oldest)
+		delete(s.conversationPage, oldest)
+	}
 }
 
 func largeMessageWindow(source string, page int) (string, int, int) {
@@ -1035,7 +1066,10 @@ func largeMessagePreview(source string) string {
 	for end > 0 && !utf8.RuneStart(source[end]) {
 		end--
 	}
-	return source[:end] + "\n…"
+	// Substring without allocating a fresh buffer: largeMessagePreview sits on
+	// the per-frame render path, and truncation is already conveyed by the
+	// "Show full message" affordance that follows the preview.
+	return source[:end]
 }
 
 func streamingText(source string) string {
@@ -1114,7 +1148,7 @@ func toolCategoryIcon(title string) iconKind {
 // The conversation view re-runs for every visible item on each frame, so the full
 // line split lives here instead of on the render hot path.
 func (s *shell) toolDiffInfo(toolKey, text string) toolDiffCacheEntry {
-	if cached, ok := s.toolDiffCache[toolKey]; ok && cached.source == text {
+	if cached, ok := s.toolDiffCache.get(toolKey); ok && cached.source == text {
 		return cached
 	}
 	entry := toolDiffCacheEntry{source: text}
@@ -1124,16 +1158,7 @@ func (s *shell) toolDiffInfo(toolKey, text string) toolDiffCacheEntry {
 		entry.additions, entry.deletions = diffutil.DiffStats(text)
 		entry.preview, entry.omitted = diffutil.ExtractPreview(text, 32)
 	}
-	if s.toolDiffCache == nil {
-		s.toolDiffCache = make(map[string]toolDiffCacheEntry)
-	}
-	if len(s.toolDiffCache) >= maxToolDiffCacheEntries {
-		for existing := range s.toolDiffCache {
-			delete(s.toolDiffCache, existing)
-			break
-		}
-	}
-	s.toolDiffCache[toolKey] = entry
+	s.toolDiffCache.put(toolKey, entry)
 	return entry
 }
 
@@ -1142,6 +1167,7 @@ func (s *shell) layoutToolItem(gtx layout.Context, sessionID string, index int, 
 	if toolKey == "" {
 		toolKey = fmt.Sprintf("%s:tool:%d", sessionID, index)
 	}
+	cacheKey := makeConversationCacheKey(sessionID, index, item)
 
 	if s.toolExpandButtons == nil {
 		s.toolExpandButtons = make(map[string]*widget.Clickable)
@@ -1183,7 +1209,7 @@ func (s *shell) layoutToolItem(gtx layout.Context, sessionID string, index int, 
 	}
 
 	if diff := s.toolDiffInfo(toolKey, item.Text); diff.isDiff {
-		return s.layoutDiffToolItem(gtx, toolKey, item, diff, statusLabel, statusBg, statusFg)
+		return s.layoutDiffToolItem(gtx, cacheKey, toolKey, item, diff, statusLabel, statusBg, statusFg)
 	}
 
 	expanded, hasExplicit := s.toolExpanded[toolKey]
@@ -1211,7 +1237,7 @@ func (s *shell) layoutToolItem(gtx layout.Context, sessionID string, index int, 
 				return btn.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 					gtx.Constraints.Min.Y = gtx.Dp(36)
 					return s.roundedBorderSurface(gtx, shapeMedium, headerBg, headerBorder, 1, func(gtx layout.Context) layout.Dimensions {
-						semantic.DescriptionOp(conversationItemDescription(item)).Add(gtx.Ops)
+						semantic.DescriptionOp(s.conversationDescription(cacheKey, item)).Add(gtx.Ops)
 						return desktopInset{Top: 6, Bottom: 6, Left: 10, Right: 10}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 							return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
 								layout.Rigid(func(gtx layout.Context) layout.Dimensions {
@@ -1246,35 +1272,149 @@ func (s *shell) layoutToolItem(gtx layout.Context, sessionID string, index int, 
 				if !expanded || strings.TrimSpace(item.Text) == "" {
 					return layout.Dimensions{}
 				}
-				return desktopInset{Top: 4}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-					return s.roundedBorderSurface(gtx, shapeSmall, s.theme.surfaceContainerLowest, s.theme.outlineVariant, 1, func(gtx layout.Context) layout.Dimensions {
-						return desktopInset{Top: 8, Bottom: 8, Left: 10, Right: 10}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-							return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
-								layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-									return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
-										layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-											return layout.Spacer{}.Layout(gtx)
-										}),
-										layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-											return s.layoutMessageCopyButton(gtx, toolKey+":copy", item.Text)
-										}),
-									)
-								}),
-								layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-									return desktopInset{Top: 4}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-										return s.layoutLabel(gtx, item.Text, textBodySmall, font.Normal, s.theme.onSurfaceVariant, 0)
-									})
-								}),
-							)
-						})
-					})
-				})
+				return s.layoutToolOutputBody(gtx, cacheKey, toolKey, item.Text)
 			}),
 		)
 	})
 }
 
-func (s *shell) layoutDiffToolItem(gtx layout.Context, toolKey string, item desktopstate.TimelineItem, diff toolDiffCacheEntry, statusLabel string, statusBg, statusFg color.NRGBA) layout.Dimensions {
+// toolOutputPageButtons bundles the widget state for one paged tool output.
+type toolOutputPageButtons struct {
+	previous widget.Clickable
+	next     widget.Clickable
+	collapse widget.Clickable
+}
+
+// toolOutputPageState returns the paging widgets for a tool output, creating
+// them on first use and evicting an arbitrary entry once the map exceeds the
+// shared expansion-key bound.
+func (s *shell) toolOutputPageState(key conversationCacheKey) *toolOutputPageButtons {
+	if s.toolOutputPages == nil {
+		s.toolOutputPages = make(map[conversationCacheKey]*toolOutputPageButtons)
+	}
+	pages := s.toolOutputPages[key]
+	if pages == nil {
+		s.admitExpansionKey(key)
+		pages = new(toolOutputPageButtons)
+		s.toolOutputPages[key] = pages
+	}
+	return pages
+}
+
+// toolOutputWindow returns the visible page text and paging facts for a tool
+// output. Pure so pagination behavior is testable without a frame.
+func toolOutputWindow(source string, page int) (text string, pageCount, current int) {
+	pageCount = (len(source) + largeMessagePageBytes - 1) / largeMessagePageBytes
+	if page < 0 {
+		page = 0
+	} else if page >= pageCount {
+		page = pageCount - 1
+	}
+	start := page * largeMessagePageBytes
+	for start > 0 && start < len(source) && !utf8.RuneStart(source[start]) {
+		start--
+	}
+	end := min((page+1)*largeMessagePageBytes, len(source))
+	for end > start && end < len(source) && !utf8.RuneStart(source[end]) {
+		end--
+	}
+	return source[start:end], pageCount, page
+}
+
+// layoutToolOutputBody renders one expanded tool item's output. Small outputs
+// render whole; large ones reuse the assistant large-message pattern: a
+// preview plus "Show full message", then byte-paged parts. Per-frame layout
+// cost stays bounded by the page size rather than the output size.
+func (s *shell) layoutToolOutputBody(gtx layout.Context, key conversationCacheKey, toolKey, text string) layout.Dimensions {
+	if len(text) <= maxToolOutputUnpagedBytes {
+		return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
+			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+				return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
+					layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+						return layout.Spacer{}.Layout(gtx)
+					}),
+					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+						return s.layoutMessageCopyButton(gtx, toolKey+":copy", text)
+					}),
+				)
+			}),
+			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+				return desktopInset{Top: 4}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+					return s.layoutLabel(gtx, text, textBodySmall, font.Normal, s.theme.onSurfaceVariant, 0)
+				})
+			}),
+		)
+	}
+
+	pages := s.toolOutputPageState(key)
+	expanded := s.conversationExpanded[key]
+	if !expanded {
+		return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
+			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+				return s.layoutLabel(gtx, largeMessagePreview(text), textBodySmall, font.Normal, s.theme.onSurfaceVariant, largeMessagePreviewLines)
+			}),
+			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+				return s.layoutButton(gtx, &pages.collapse, "Show full output", true, func() {
+					s.conversationExpanded[key] = true
+				})
+			}),
+		)
+	}
+
+	page := 0
+	if stored, ok := s.conversationPage[key]; ok {
+		page = stored
+	}
+	pageText, pageCount, current := toolOutputWindow(text, page)
+	s.conversationPage[key] = current
+	copyText := text
+	return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
+		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
+				layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+					return layout.Spacer{}.Layout(gtx)
+				}),
+				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+					return s.layoutMessageCopyButton(gtx, toolKey+":copy", copyText)
+				}),
+			)
+		}),
+		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			return s.layoutLabel(gtx, pageText, textBodySmall, font.Normal, s.theme.onSurfaceVariant, 0)
+		}),
+		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			label := "Part " + strconv.Itoa(current+1) + " of " + strconv.Itoa(pageCount)
+			return s.layoutLabel(gtx, label, textLabelMedium, font.Medium, s.theme.onSurfaceVariant, 1)
+		}),
+		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
+				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+					return s.layoutButton(gtx, &pages.previous, "Previous part", current > 0, func() {
+						if page, ok := s.conversationPage[key]; ok && page > 0 {
+							s.conversationPage[key] = page - 1
+						}
+					})
+				}),
+				layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+					return layout.Spacer{}.Layout(gtx)
+				}),
+				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+					return s.layoutButton(gtx, &pages.next, "Next part", current < pageCount-1, func() {
+						s.conversationPage[key] = current + 1
+					})
+				}),
+				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+					return s.layoutButton(gtx, &pages.collapse, "Show less", true, func() {
+						s.conversationExpanded[key] = false
+						s.conversationPage[key] = 0
+					})
+				}),
+			)
+		}),
+	)
+}
+
+func (s *shell) layoutDiffToolItem(gtx layout.Context, cacheKey conversationCacheKey, toolKey string, item desktopstate.TimelineItem, diff toolDiffCacheEntry, statusLabel string, statusBg, statusFg color.NRGBA) layout.Dimensions {
 	adds, dels := diff.additions, diff.deletions
 	displayTitle := item.Title
 	if diff.filename != "" {
@@ -1292,7 +1432,10 @@ func (s *shell) layoutDiffToolItem(gtx layout.Context, toolKey string, item desk
 
 	expanded, hasExplicit := s.toolExpanded[toolKey]
 	if !hasExplicit {
-		expanded = true
+		// Diffs default collapsed like plain tool items: expanded previews
+		// re-render their line list on every frame while scrolling through
+		// history, which dominated frame cost in diff-heavy sessions.
+		expanded = false
 	}
 
 	chevron := iconChevronRight
@@ -1315,7 +1458,7 @@ func (s *shell) layoutDiffToolItem(gtx layout.Context, toolKey string, item desk
 				return btn.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 					gtx.Constraints.Min.Y = gtx.Dp(36)
 					return s.roundedBorderSurface(gtx, shapeMedium, headerBg, headerBorder, 1, func(gtx layout.Context) layout.Dimensions {
-						semantic.DescriptionOp(conversationItemDescription(item)).Add(gtx.Ops)
+						semantic.DescriptionOp(s.conversationDescription(cacheKey, item)).Add(gtx.Ops)
 						return desktopInset{Top: 8, Bottom: 8, Left: 12, Right: 12}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 							return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
 								layout.Rigid(func(gtx layout.Context) layout.Dimensions {

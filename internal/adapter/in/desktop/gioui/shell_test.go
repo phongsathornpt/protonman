@@ -177,11 +177,14 @@ func TestLargeMessagePreviewIsBoundedAndUTF8Safe(t *testing.T) {
 	if !utf8.ValidString(preview) {
 		t.Fatal("large message preview contains invalid UTF-8")
 	}
-	if len(preview) > largeMessagePreviewBytes+len("\n…") {
-		t.Fatalf("preview bytes = %d, limit = %d", len(preview), largeMessagePreviewBytes+len("\n…"))
+	if len(preview) > largeMessagePreviewBytes {
+		t.Fatalf("preview bytes = %d, limit = %d", len(preview), largeMessagePreviewBytes)
 	}
-	if !strings.HasSuffix(preview, "\n…") {
-		t.Fatalf("large message preview lacks its truncation marker: %q", preview[len(preview)-8:])
+	// The preview is a zero-copy substring of the source; truncation is
+	// signaled by the "Show full message" affordance rather than an appended
+	// marker, which kept a per-frame string allocation off the render path.
+	if !strings.HasPrefix(source, preview) {
+		t.Fatal("large message preview must be a prefix of its source")
 	}
 	if got := largeMessagePreview("short message"); got != "short message" {
 		t.Fatalf("short preview = %q", got)
@@ -642,7 +645,7 @@ func TestToolDiffInfoCachesClassificationBySource(t *testing.T) {
 	}
 
 	// The stored entry tracks the latest source for the key.
-	if cached := view.toolDiffCache["tool-1"]; cached.source != "plain output" || cached.isDiff {
+	if cached, ok := view.toolDiffCache.get("tool-1"); !ok || cached.source != "plain output" || cached.isDiff {
 		t.Fatalf("cached entry = %+v", cached)
 	}
 
@@ -657,7 +660,7 @@ func TestToolDiffInfoCacheIsBounded(t *testing.T) {
 	for index := 0; index <= maxToolDiffCacheEntries; index++ {
 		view.toolDiffInfo("tool-"+strconv.Itoa(index), "output")
 	}
-	if got := len(view.toolDiffCache); got > maxToolDiffCacheEntries {
+	if got := view.toolDiffCache.len(); got > maxToolDiffCacheEntries {
 		t.Fatalf("tool diff cache = %d entries, want <= %d", got, maxToolDiffCacheEntries)
 	}
 }
@@ -671,7 +674,7 @@ func TestParsedThinkingCachesBySource(t *testing.T) {
 	if !first.hasThinking || !first.thinkingDone || first.responseText != "final answer" {
 		t.Fatalf("parsed thinking = %+v", first)
 	}
-	if cached, ok := view.conversationThinkingCache[key]; !ok || cached.source != text {
+	if cached, ok := view.conversationThinkingCache.get(key); !ok || cached.source != text {
 		t.Fatalf("thinking parse was not cached: %#v", view.conversationThinkingCache)
 	}
 
@@ -680,7 +683,7 @@ func TestParsedThinkingCachesBySource(t *testing.T) {
 	if second.hasThinking || second.responseText != "plain reply" {
 		t.Fatalf("recomputed parse = %+v", second)
 	}
-	if cached := view.conversationThinkingCache[key]; cached.source != "plain reply" {
+	if cached, ok := view.conversationThinkingCache.get(key); !ok || cached.source != "plain reply" {
 		t.Fatalf("thinking cache did not track new source: %#v", cached)
 	}
 }

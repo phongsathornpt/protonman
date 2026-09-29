@@ -55,10 +55,13 @@ type shell struct {
 	conversationExpanded         map[conversationCacheKey]bool
 	conversationPage             map[conversationCacheKey]int
 	conversationExpandButtons    map[conversationCacheKey]*conversationDisclosureButtons
+	toolOutputPages              map[conversationCacheKey]*toolOutputPageButtons
+	expansionOrder               boundedCache[conversationCacheKey, struct{}]
+	conversationDescriptions     boundedCache[conversationCacheKey, descriptionCacheEntry]
 	conversationThinkingExpanded map[conversationCacheKey]bool
 	conversationThinkingButtons  map[conversationCacheKey]*widget.Clickable
-	conversationThinkingCache    map[conversationCacheKey]thinkingParseCacheEntry
-	toolDiffCache                map[string]toolDiffCacheEntry
+	conversationThinkingCache    boundedCache[conversationCacheKey, thinkingParseCacheEntry]
+	toolDiffCache                boundedCache[string, toolDiffCacheEntry]
 	inspectorList                layout.List
 	inspectorVisible             bool
 	inspectorOverride            bool
@@ -318,10 +321,12 @@ func newShell(theme *theme) *shell {
 		conversationExpanded:         make(map[conversationCacheKey]bool),
 		conversationPage:             make(map[conversationCacheKey]int),
 		conversationExpandButtons:    make(map[conversationCacheKey]*conversationDisclosureButtons),
+		expansionOrder:               newBoundedCache[conversationCacheKey, struct{}](maxConversationExpansionKeys),
 		conversationThinkingExpanded: make(map[conversationCacheKey]bool),
 		conversationThinkingButtons:  make(map[conversationCacheKey]*widget.Clickable),
-		conversationThinkingCache:    make(map[conversationCacheKey]thinkingParseCacheEntry),
-		toolDiffCache:                make(map[string]toolDiffCacheEntry),
+		conversationThinkingCache:    newBoundedCache[conversationCacheKey, thinkingParseCacheEntry](maxThinkingParseCacheEntries),
+		toolDiffCache:                newBoundedCache[string, toolDiffCacheEntry](maxToolDiffCacheEntries),
+		conversationDescriptions:     newBoundedCache[conversationCacheKey, descriptionCacheEntry](maxConversationDescriptionCacheEntries),
 		permissionButtons:            make(map[string]map[string]*widget.Clickable),
 		permissionButtonLive:         make(map[string]struct{}),
 		questionStates:               make(map[string]*questionInteractionState),

@@ -454,6 +454,122 @@ func BenchmarkLayoutLabelLongText(b *testing.B) {
 	}
 }
 
+// benchmarkToolTimeline builds a conversation timeline dominated by expanded
+// tool items, the scroll-jank worst case: half the items are diffs (which
+// previously defaulted expanded) and half carry large plain tool output.
+func benchmarkToolTimeline(count int) []desktopstate.TimelineItem {
+	timeline := make([]desktopstate.TimelineItem, count)
+	for index := range timeline {
+		if index%2 == 0 {
+			lines := make([]string, 0, 200)
+			for line := 0; line < 200; line++ {
+				marker := "+"
+				if line%2 == 0 {
+					marker = "-"
+				}
+				lines = append(lines, marker+" changed line of the patch body "+strconv.Itoa(line))
+			}
+			timeline[index] = desktopstate.TimelineItem{
+				Kind:   desktopstate.TimelineTool,
+				ID:     "tool-diff-" + strconv.Itoa(index),
+				Title:  "edit",
+				Status: "completed",
+				Text:   "diff --git a/file.go b/file.go\n@@ -1,2 +1,2 @@\n" + strings.Join(lines, "\n"),
+			}
+			continue
+		}
+		timeline[index] = desktopstate.TimelineItem{
+			Kind:   desktopstate.TimelineTool,
+			ID:     "tool-out-" + strconv.Itoa(index),
+			Title:  "bash",
+			Status: "completed",
+			Text:   strings.Repeat("tool output line with some diagnostic detail\n", 2000),
+		}
+	}
+	return timeline
+}
+
+// benchmarkConversationFrame lays out the conversation list once against a
+// fixed frame context, mirroring how production draws a single frame.
+func benchmarkConversationFrame(b *testing.B, timeline []desktopstate.TimelineItem) {
+	view := newShell(newTheme("light"))
+	snapshot := benchmarkShellSnapshot()
+	snapshot.State.Sessions[0].Timeline = timeline
+	var operations op.Ops
+	var router input.Router
+	gtx := layout.Context{
+		Ops:         &operations,
+		Constraints: layout.Exact(image.Pt(1180, 760)),
+		Metric:      unit.Metric{},
+		Now:         time.Unix(1, 0),
+		Source:      router.Source(),
+	}
+	session := snapshot.State.Sessions[0]
+	view.layoutConversation(gtx, session, historyStateLoaded)
+	router.Frame(gtx.Ops)
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for range b.N {
+		operations.Reset()
+		view.layoutConversation(gtx, session, historyStateLoaded)
+		router.Frame(gtx.Ops)
+	}
+}
+
+func BenchmarkConversationFrameToolHeavy(b *testing.B) {
+	benchmarkConversationFrame(b, benchmarkToolTimeline(64))
+}
+
+// BenchmarkConversationFrameMixedProse renders a transcript shaped like a real
+// working session: prose answers with code cards, one oversized paged answer,
+// and interleaved user messages.
+func BenchmarkConversationFrameMixedProse(b *testing.B) {
+	prose := "## Plan\n\nRun the checks first.\n\n```go\nfunc main() {\n\tfmt.Println(\"hello world\")\n}\n```\n\nDone. See the numbers above and the referenced file list."
+	timeline := make([]desktopstate.TimelineItem, 48)
+	for index := range timeline {
+		switch index % 4 {
+		case 0:
+			timeline[index] = desktopstate.TimelineItem{
+				Kind: desktopstate.TimelineUser,
+				ID:   "message-" + strconv.Itoa(index),
+				Text: "Please continue with step " + strconv.Itoa(index) + " and verify the result.",
+			}
+		case 1:
+			timeline[index] = desktopstate.TimelineItem{
+				Kind:      desktopstate.TimelineAssistant,
+				ID:        "message-" + strconv.Itoa(index),
+				Text:      prose,
+				Streaming: false,
+			}
+		case 2:
+			timeline[index] = desktopstate.TimelineItem{
+				Kind:      desktopstate.TimelineAssistant,
+				ID:        "message-" + strconv.Itoa(index),
+				Text:      strings.Repeat("long analysis paragraph with markdown **emphasis** and `inline code`.\n\n", 1500),
+				Streaming: false,
+			}
+		default:
+			timeline[index] = desktopstate.TimelineItem{
+				Kind:  desktopstate.TimelineTool,
+				ID:    "tool-" + strconv.Itoa(index),
+				Title: "bash",
+				Status: "completed",
+				Text:  "exit 0\n" + strings.Repeat("output line\n", 60),
+			}
+		}
+	}
+	benchmarkConversationFrame(b, timeline)
+}
+
+func BenchmarkConversationFrameToolHeavyScaling(b *testing.B) {
+	for _, items := range []int{16, 64, 256} {
+		b.Run("items-"+strconv.Itoa(items), func(b *testing.B) {
+			benchmarkConversationFrame(b, benchmarkToolTimeline(items))
+		})
+	}
+}
+
 func benchmarkShellSnapshot() controllerSnapshot {
 	sessions := make([]desktopstate.SessionState, 32)
 	for index := range sessions {
