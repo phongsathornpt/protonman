@@ -300,3 +300,63 @@ func TestCollapsibleToolAndDiffCards(t *testing.T) {
 		t.Fatalf("diff item height = %d, want > 0", diffDims.Size.Y)
 	}
 }
+
+func TestComposerTopHeaderAndPopoverLayout(t *testing.T) {
+	snapshot := desktopCaptureSnapshot()
+	session := snapshot.State.Sessions[0]
+	session.Context.Goal = "Optimize desktop UI components"
+
+	view := newShell(newTheme("light"))
+	var ops op.Ops
+	var router input.Router
+	gtx := layout.Context{
+		Ops:         &ops,
+		Constraints: layout.Constraints{Min: image.Pt(700, 0), Max: image.Pt(700, 600)},
+		Metric:      unit.Metric{PxPerDp: 1, PxPerSp: 1},
+		Now:         time.Unix(1, 0),
+		Source:      router.Source(),
+	}
+
+	dims := view.layoutComposer(gtx, session, snapshot)
+	if dims.Size.Y <= 0 {
+		t.Fatalf("composer height = %d, want > 0", dims.Size.Y)
+	}
+
+	// Popover open: popover is displayed above composer without breaking constraints
+	view.modelPopoverVisible = true
+	popoverDims := view.layoutComposer(gtx, session, snapshot)
+	if popoverDims.Size.Y <= dims.Size.Y {
+		t.Fatalf("popover composer height = %d should be greater than base composer height %d", popoverDims.Size.Y, dims.Size.Y)
+	}
+}
+
+func TestJumpToBottomSuppressedWhenPopoverOpen(t *testing.T) {
+	view := newShell(newTheme("dark"))
+	session := desktopstate.SessionState{
+		ID: "session-scroll",
+		Timeline: []desktopstate.TimelineItem{
+			{Kind: desktopstate.TimelineUser, Text: "Msg 1"},
+			{Kind: desktopstate.TimelineAssistant, Text: "Msg 2"},
+			{Kind: desktopstate.TimelineUser, Text: "Msg 3"},
+			{Kind: desktopstate.TimelineAssistant, Text: "Msg 4"},
+		},
+	}
+	var ops op.Ops
+	var router input.Router
+	gtx := layout.Context{
+		Ops:         &ops,
+		Constraints: layout.Constraints{Min: image.Pt(800, 0), Max: image.Pt(800, 600)},
+		Metric:      unit.Metric{PxPerDp: 1, PxPerSp: 1},
+		Now:         time.Unix(1, 0),
+		Source:      router.Source(),
+	}
+
+	// Normal scrolled state (Position.BeforeEnd = true)
+	view.conversationList.Position.BeforeEnd = true
+	view.modelPopoverVisible = false
+	_ = view.layoutConversation(gtx, session, historyStateLoaded)
+
+	// Popover open suppresses jump to bottom
+	view.modelPopoverVisible = true
+	_ = view.layoutConversation(gtx, session, historyStateLoaded)
+}

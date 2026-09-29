@@ -176,10 +176,10 @@ func (s *shell) layoutConversation(gtx layout.Context, session desktopstate.Sess
 					return dims
 				}),
 				layout.Stacked(func(gtx layout.Context) layout.Dimensions {
-					if !s.conversationList.Position.BeforeEnd || len(session.Timeline) <= 2 {
+					if !s.conversationList.Position.BeforeEnd || len(session.Timeline) <= 2 || s.modelPopoverVisible || s.reasoningPopoverVisible || s.mentionActive {
 						return layout.Dimensions{}
 					}
-					return desktopInset{Bottom: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+					return desktopInset{Bottom: 12}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 						return s.layoutJumpToBottomButton(gtx)
 					})
 				}),
@@ -1946,64 +1946,69 @@ func (s *shell) layoutComposer(gtx layout.Context, session desktopstate.SessionS
 	return layout.Stack{Alignment: layout.Center}.Layout(gtx, layout.Stacked(func(gtx layout.Context) layout.Dimensions {
 		gtx.Constraints.Max.X = min(gtx.Constraints.Max.X, gtx.Dp(840))
 		return outerInset.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-			return s.roundedBorderSurface(gtx, shapeExtraLarge, s.theme.surfaceContainer, borderColor, borderWidth, func(gtx layout.Context) layout.Dimensions {
-				innerInset := desktopInset{Top: 10, Bottom: 10, Left: 14, Right: 14}
-				if compact {
-					innerInset = desktopInset{Top: 6, Bottom: 6, Left: 10, Right: 10}
-				}
-				return innerInset.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-					children := make([]layout.FlexChild, 0, 5)
-					if s.mentionActive && len(s.mentionItems) > 0 {
-						children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-							return s.layoutMentionPopup(gtx)
-						}))
+			containerChildren := make([]layout.FlexChild, 0, 2)
+			if s.mentionActive && len(s.mentionItems) > 0 {
+				containerChildren = append(containerChildren, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+					return s.layoutMentionPopup(gtx)
+				}))
+			} else if s.modelPopoverVisible {
+				containerChildren = append(containerChildren, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+					return s.layoutModelPopover(gtx, session, snapshot, canSend)
+				}))
+			} else if s.reasoningPopoverVisible {
+				containerChildren = append(containerChildren, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+					return s.layoutReasoningPopover(gtx, session, canSend)
+				}))
+			}
+
+			containerChildren = append(containerChildren, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+				return s.roundedBorderSurface(gtx, shapeExtraLarge, s.theme.surfaceContainer, borderColor, borderWidth, func(gtx layout.Context) layout.Dimensions {
+					innerInset := desktopInset{Top: 10, Bottom: 10, Left: 14, Right: 14}
+					if compact {
+						innerInset = desktopInset{Top: 6, Bottom: 6, Left: 10, Right: 10}
 					}
-					if s.modelPopoverVisible {
-						children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-							return s.layoutModelPopover(gtx, session, snapshot, canSend)
-						}))
-					} else if s.reasoningPopoverVisible {
-						children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-							return s.layoutReasoningPopover(gtx, session, canSend)
-						}))
-					}
-					children = append(children,
-						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-							return s.layoutComposerEditor(gtx, canSend, compact)
-						}),
-						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-							return desktopInset{Top: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-								return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
-									layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-										return s.layoutComposerContextChips(gtx, session, snapshot, canSend)
-									}),
-									layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-										if helper == "" {
-											return layout.Spacer{}.Layout(gtx)
-										}
-										return desktopInset{Left: 8, Right: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-											return s.layoutLabel(gtx, helper, textLabelSmall, font.Normal, helperColor, 1)
-										})
-									}),
-									layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-										if busy {
-											return s.layoutComposerActionButton(gtx, &s.stopButton, "Stop", "Stop prompt", connected, true, s.onCancelPrompt)
-										}
-										label := "↑"
-										if !compact {
-											label = "Send"
-										}
-										return s.layoutComposerActionButton(gtx, &s.sendButton, label, "Send prompt", canSend && strings.TrimSpace(s.composer.Text()) != "", false, func() {
-											s.submitComposer(s.composer.Text())
-										})
-									}),
-								)
-							})
-						}),
-					)
-					return layout.Flex{Axis: layout.Vertical}.Layout(gtx, children...)
+					return innerInset.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+						return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
+							layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+								return desktopInset{Bottom: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+									return s.layoutComposerContextChips(gtx, session, snapshot, canSend)
+								})
+							}),
+							layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+								return s.layoutComposerEditor(gtx, canSend, compact)
+							}),
+							layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+								return desktopInset{Top: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+									return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
+										layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+											if helper == "" {
+												return layout.Spacer{}.Layout(gtx)
+											}
+											return desktopInset{Right: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+												return s.layoutLabel(gtx, helper, textLabelSmall, font.Normal, helperColor, 1)
+											})
+										}),
+										layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+											if busy {
+												return s.layoutComposerActionButton(gtx, &s.stopButton, "Stop", "Stop prompt", connected, true, s.onCancelPrompt)
+											}
+											label := "↑"
+											if !compact {
+												label = "Send"
+											}
+											return s.layoutComposerActionButton(gtx, &s.sendButton, label, "Send prompt", canSend && strings.TrimSpace(s.composer.Text()) != "", false, func() {
+												s.submitComposer(s.composer.Text())
+											})
+										}),
+									)
+								})
+							}),
+						)
+					})
 				})
-			})
+			}))
+
+			return layout.Flex{Axis: layout.Vertical}.Layout(gtx, containerChildren...)
 		})
 	}))
 }
@@ -2084,17 +2089,20 @@ func composerHelper(compact, busy, loading, connected bool) string {
 
 func (s *shell) layoutComposerContextChips(gtx layout.Context, session desktopstate.SessionState, snapshot controllerSnapshot, enabled bool) layout.Dimensions {
 	chips := make([]layout.FlexChild, 0, 3)
-	goalLimit, modelLimit := 30, 24
+	goalLimit, modelLimit := 36, 28
 	reasoningLabel := "Reasoning: "
-	if gtx.Constraints.Max.X < gtx.Dp(480) {
-		goalLimit, modelLimit = 20, 16
+	if gtx.Constraints.Max.X < gtx.Dp(600) {
+		goalLimit = 22
 		reasoningLabel = "Effort: "
 	}
-	if gtx.Constraints.Max.X < gtx.Dp(420) {
-		goalLimit, modelLimit = 14, 10
+	if gtx.Constraints.Max.X < gtx.Dp(480) {
+		goalLimit = 14
+		modelLimit = 20
+		reasoningLabel = "Effort: "
 	}
-	if gtx.Constraints.Max.X < gtx.Dp(360) {
-		goalLimit, modelLimit = 9, 7
+	if gtx.Constraints.Max.X < gtx.Dp(380) {
+		goalLimit = 8
+		modelLimit = 16
 		reasoningLabel = ""
 	}
 	var contextDescription strings.Builder
@@ -2155,6 +2163,7 @@ func (s *shell) layoutComposerContextChips(gtx layout.Context, session desktopst
 			if s.modelPopoverVisible && s.onRefreshRuntime != nil {
 				s.onRefreshRuntime()
 			}
+			gtx.Execute(op.InvalidateCmd{})
 		}
 		semantic.Button.Add(gtx.Ops)
 		semantic.EnabledOp(enabled).Add(gtx.Ops)
@@ -2205,6 +2214,7 @@ func (s *shell) layoutComposerContextChips(gtx layout.Context, session desktopst
 		if enabled && s.reasoningChipButton.Clicked(gtx) {
 			s.reasoningPopoverVisible = !s.reasoningPopoverVisible
 			s.modelPopoverVisible = false
+			gtx.Execute(op.InvalidateCmd{})
 		}
 		semantic.Button.Add(gtx.Ops)
 		semantic.EnabledOp(enabled).Add(gtx.Ops)

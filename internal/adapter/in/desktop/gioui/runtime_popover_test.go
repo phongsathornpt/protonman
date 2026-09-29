@@ -390,3 +390,213 @@ func TestRuntimePopoverModelListChangesWithACPAgent(t *testing.T) {
 		})
 	}
 }
+
+func TestFreeModelDetectionAndGrouping(t *testing.T) {
+	// 1. Detection tests
+	freeCases := []struct {
+		modelID string
+		want    bool
+	}{
+		{"cline/google/gemma-4-26b-a4b-it:free", true},
+		{"cline/qwen/qwen3.8-27b:free", true},
+		{"cline/openrouter/free", true},
+		{"openrouter/free", true},
+		{"cline/meta/muse-spark-1.3-contributor", true},
+		{"cline/deepseek/deepseek-v4.1-flash", true},
+		{"cline/xiaomi/mimo-v2.6-flash", true},
+		{"cline-free/mimo-v2.6-flash", true},
+		{"MiMo-V2.6-Flash (free)", true},
+		{"DeepSeek V4.1 Flash (free)", true},
+		{"Muse Spark 1.3 Contributor (free)", true},
+		{"stealth/pixel-canary", true},
+		{"stealth/space-bunny-alpha", true},
+		{"big-pickle", true},
+		{"deepseek-coder", false},
+		{"proton/glm-5.3-flash", false},
+		{"proton/deepseek-v4.1-flash", false},
+		{"proton/muse-spark-1.3-contributor", false},
+		{"protonman/deepseek-v4.1-flash", false},
+		{"claude-3-7-sonnet", false},
+	}
+	for _, tc := range freeCases {
+		if got := isFreeModel(tc.modelID); got != tc.want {
+			t.Errorf("isFreeModel(%q) = %v, want %v", tc.modelID, got, tc.want)
+		}
+	}
+
+	// Provider & agent checks
+	if !isProtonmanAgent("protonman") || !isProtonmanAgent("proton") || !isProtonmanAgent("") {
+		t.Fatal("expected isProtonmanAgent to be true for protonman, proton, and empty")
+	}
+	if isProtonmanAgent("cline") {
+		t.Fatal("expected isProtonmanAgent to be false for cline")
+	}
+	if !isClineProvider("cline", "", nil, nil) {
+		t.Fatal("expected isClineProvider to be true for cline agent")
+	}
+	if isClineProvider("protonman", "", nil, nil) || isClineProvider("proton", "", nil, nil) || isClineProvider("", "", nil, nil) {
+		t.Fatal("expected isClineProvider to be false for protonman")
+	}
+
+	// 2. Partition tests
+	allModels := []string{
+		"cline/anthropic/claude-3-5-sonnet",
+		"cline/google/gemma-4-26b-a4b-it:free",
+		"cline/deepseek/deepseek-chat",
+		"cline/qwen/qwen3.8-27b:free",
+	}
+	free, other := partitionModels(allModels)
+	if len(free) != 2 || len(other) != 2 {
+		t.Fatalf("expected 2 free and 2 other, got free=%d other=%d", len(free), len(other))
+	}
+	if !hasAnyFreeModel(allModels) {
+		t.Fatal("expected hasAnyFreeModel to be true")
+	}
+
+	clineCuratedModels := []string{
+		"cline/meta/muse-spark-1.3-contributor",
+		"cline/deepseek/deepseek-v4.1-flash",
+		"cline/xiaomi/mimo-v2.6-flash",
+		"cline/anthropic/claude-3-5-sonnet",
+	}
+	clineFree, clineOther := partitionModels(clineCuratedModels)
+	if len(clineFree) != 3 || len(clineOther) != 1 {
+		t.Fatalf("expected 3 free and 1 other for cline curated, got free=%d other=%d", len(clineFree), len(clineOther))
+	}
+
+	protonModels := []string{
+		"proton/glm-5.3-flash",
+		"proton/glm-5.3-flashx",
+		"proton/deepseek-v4.1-flash",
+		"proton/muse-spark-1.3-contributor",
+	}
+	if hasAnyFreeModel(protonModels) {
+		t.Fatal("expected hasAnyFreeModel to be false for protonModels (protonman has no free models)")
+	}
+
+	// 3. UI interaction test with Free Models
+	sh := newShell(newTheme("dark"))
+	var selectedModel string
+	sh.onSetRuntimeModel = func(_, m string) {
+		selectedModel = m
+	}
+
+	sessionCline := desktopstate.SessionState{
+		ID:              "sess-cline",
+		AgentID:         "cline",
+		AvailableModels: allModels,
+	}
+	snapshotCline := controllerSnapshot{
+		ActiveAgentID: "cline",
+		AgentProfiles: []app.ACPAgentProfile{
+			{ID: "cline", DisplayName: "Cline"},
+		},
+	}
+
+	gtx := testLayoutContext()
+	sh.openModelPopover()
+
+	// Select a free model
+	sh.agentModelButton("cline/google/gemma-4-26b-a4b-it:free").Click()
+	sh.layoutModelPopover(gtx, sessionCline, snapshotCline, true)
+
+	if selectedModel != "cline/google/gemma-4-26b-a4b-it:free" {
+		t.Fatalf("expected selectedModel to be free model, got %q", selectedModel)
+	}
+	if sh.modelPopoverVisible {
+		t.Fatal("expected popover to close after selection")
+	}
+
+	if dir := os.Getenv("CAPTURE_ARTIFACTS"); dir != "" {
+		captureDesktopWidget(t, filepath.Join(dir, "desktop_cline_free_grouping_widget.png"), image.Pt(840, 420), sh, func(gtx layout.Context) layout.Dimensions {
+			sh.modelPopoverVisible = true
+			return sh.layoutModelPopover(gtx, sessionCline, snapshotCline, true)
+		})
+	}
+}
+
+func TestFreeModelSearchFiltering(t *testing.T) {
+	sh := newShell(newTheme("dark"))
+	allModels := []string{
+		"cline/anthropic/claude-3-5-sonnet",
+		"cline/google/gemma-4-26b-a4b-it:free",
+		"cline/deepseek/deepseek-chat",
+		"cline/qwen/qwen3.8-27b:free",
+	}
+	sessionCline := desktopstate.SessionState{
+		ID:              "sess-cline",
+		AgentID:         "cline",
+		AvailableModels: allModels,
+	}
+	snapshotCline := controllerSnapshot{
+		ActiveAgentID: "cline",
+		AgentProfiles: []app.ACPAgentProfile{
+			{ID: "cline", DisplayName: "Cline"},
+		},
+	}
+
+	gtx := testLayoutContext()
+	sh.openModelPopover()
+
+	// Search for "free" - should match only free models
+	sh.modelSearchEditor.SetText("free")
+	dims := sh.layoutModelPopover(gtx, sessionCline, snapshotCline, true)
+	if dims.Size.Y <= 0 {
+		t.Fatal("expected popover to layout with matching free models")
+	}
+
+	// Search for "claude" - should match only other model
+	sh.modelSearchEditor.SetText("claude")
+	dims = sh.layoutModelPopover(gtx, sessionCline, snapshotCline, true)
+	if dims.Size.Y <= 0 {
+		t.Fatal("expected popover to layout with matching claude model")
+	}
+}
+
+func TestProtonmanHasNoFreeModels(t *testing.T) {
+	sh := newShell(newTheme("dark"))
+	protonModels := []string{
+		"proton/glm-5.3-flash",
+		"proton/glm-5.3-flashx",
+		"proton/deepseek-v4.1-flash",
+		"proton/muse-spark-1.3-contributor",
+	}
+	sessionProton := desktopstate.SessionState{
+		ID:              "sess-proton",
+		AgentID:         "protonman",
+		AvailableModels: protonModels,
+	}
+	snapshotProton := controllerSnapshot{
+		ActiveAgentID: "protonman",
+		AgentProfiles: []app.ACPAgentProfile{
+			{ID: "protonman", DisplayName: "Protonman"},
+		},
+	}
+
+	gtx := testLayoutContext()
+	sh.openModelPopover()
+
+	dims := sh.layoutModelPopover(gtx, sessionProton, snapshotProton, true)
+	if dims.Size.Y <= 0 {
+		t.Fatal("expected popover to layout successfully for protonman")
+	}
+
+	for _, m := range protonModels {
+		if isFreeModel(m) {
+			t.Fatalf("expected model %q to not be free for protonman", m)
+		}
+	}
+	if hasAnyFreeModel(protonModels) {
+		t.Fatal("expected hasAnyFreeModel to be false for protonman models")
+	}
+	if isClineProvider(sessionProton.AgentID, "", protonModels, snapshotProton.AgentProfiles) {
+		t.Fatal("expected isClineProvider to be false for protonman")
+	}
+
+	if dir := os.Getenv("CAPTURE_ARTIFACTS"); dir != "" {
+		captureDesktopWidget(t, filepath.Join(dir, "desktop_protonman_flat_widget.png"), image.Pt(840, 420), sh, func(gtx layout.Context) layout.Dimensions {
+			sh.modelPopoverVisible = true
+			return sh.layoutModelPopover(gtx, sessionProton, snapshotProton, true)
+		})
+	}
+}

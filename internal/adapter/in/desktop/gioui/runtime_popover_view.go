@@ -5,6 +5,7 @@ package gioui
 import (
 	"fmt"
 	"image/color"
+	"sort"
 	"strings"
 
 	"gioui.org/font"
@@ -14,6 +15,7 @@ import (
 	"gioui.org/widget"
 	"gioui.org/widget/material"
 
+	"github.com/phongsathornpt/protonman/internal/app"
 	desktopstate "github.com/phongsathornpt/protonman/internal/feature/desktop"
 )
 
@@ -169,6 +171,55 @@ func (s *shell) layoutModelPopover(gtx layout.Context, session desktopstate.Sess
 					}))
 				}
 
+				supportsFreeGrouping := isClineProvider(agentID, currentProvider, rawModels, snapshot.AgentProfiles) && hasAnyFreeModel(rawModels)
+				var modelItems []modelPopoverListItem
+				if supportsFreeGrouping {
+					freeFiltered, otherFiltered := partitionModels(filteredModels)
+					sort.Slice(freeFiltered, func(i, j int) bool {
+						return strings.ToLower(freeFiltered[i]) < strings.ToLower(freeFiltered[j])
+					})
+					sort.Slice(otherFiltered, func(i, j int) bool {
+						return strings.ToLower(otherFiltered[i]) < strings.ToLower(otherFiltered[j])
+					})
+
+					if len(freeFiltered) > 0 {
+						modelItems = append(modelItems, modelPopoverListItem{
+							kind:  modelItemHeader,
+							title: "Free Models",
+							count: len(freeFiltered),
+						})
+						for _, m := range freeFiltered {
+							modelItems = append(modelItems, modelPopoverListItem{
+								kind:    modelItemEntry,
+								modelID: m,
+								isFree:  true,
+							})
+						}
+					}
+					if len(otherFiltered) > 0 {
+						modelItems = append(modelItems, modelPopoverListItem{
+							kind:  modelItemHeader,
+							title: "Other Models",
+							count: len(otherFiltered),
+						})
+						for _, m := range otherFiltered {
+							modelItems = append(modelItems, modelPopoverListItem{
+								kind:    modelItemEntry,
+								modelID: m,
+								isFree:  false,
+							})
+						}
+					}
+				} else {
+					for _, m := range filteredModels {
+						modelItems = append(modelItems, modelPopoverListItem{
+							kind:    modelItemEntry,
+							modelID: m,
+							isFree:  false,
+						})
+					}
+				}
+
 				// Content: empty state, no search matches, or scrollable model list
 				children = append(children, layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
 					if len(rawModels) == 0 {
@@ -177,7 +228,7 @@ func (s *shell) layoutModelPopover(gtx layout.Context, session desktopstate.Sess
 					if len(filteredModels) == 0 {
 						return s.layoutModelSearchNoMatch(gtx, s.modelSearchEditor.Text())
 					}
-					return s.layoutAgentModelsList(gtx, filteredModels, currentModel, currentProvider, enabled)
+					return s.layoutAgentModelsList(gtx, modelItems, currentModel, currentProvider, enabled)
 				}))
 
 				return layout.Flex{Axis: layout.Vertical}.Layout(gtx, children...)
@@ -358,18 +409,150 @@ func (s *shell) layoutModelSearchNoMatch(gtx layout.Context, query string) layou
 	})
 }
 
-func (s *shell) layoutAgentModelsList(gtx layout.Context, models []string, currentModel, provider string, enabled bool) layout.Dimensions {
+type modelPopoverItemKind int
+
+const (
+	modelItemHeader modelPopoverItemKind = iota
+	modelItemEntry
+)
+
+type modelPopoverListItem struct {
+	kind    modelPopoverItemKind
+	title   string
+	count   int
+	modelID string
+	isFree  bool
+}
+
+func isProtonmanAgent(agentID string) bool {
+	lower := strings.ToLower(strings.TrimSpace(agentID))
+	return lower == "" || lower == controllerAgentID || lower == "proton"
+}
+
+func isClineProvider(agentID, provider string, models []string, profiles []app.ACPAgentProfile) bool {
+	if isProtonmanAgent(agentID) {
+		return false
+	}
+	lowerAgent := strings.ToLower(strings.TrimSpace(agentID))
+	if strings.Contains(lowerAgent, "cline") {
+		return true
+	}
+	lowerProv := strings.ToLower(strings.TrimSpace(provider))
+	if strings.Contains(lowerProv, "cline") {
+		return true
+	}
+	for _, prof := range profiles {
+		if strings.EqualFold(prof.ID, agentID) {
+			if strings.Contains(strings.ToLower(prof.DisplayName), "cline") ||
+				strings.Contains(strings.ToLower(prof.Command), "cline") {
+				return true
+			}
+		}
+	}
+	for _, m := range models {
+		lower := strings.ToLower(strings.TrimSpace(m))
+		if strings.HasPrefix(lower, "cline/") || strings.HasPrefix(lower, "cline-free/") {
+			return true
+		}
+	}
+	return false
+}
+
+func isFreeModel(modelID string) bool {
+	lower := strings.ToLower(strings.TrimSpace(modelID))
+	if lower == "" {
+		return false
+	}
+	// Protonman models are never free.
+	if strings.HasPrefix(lower, "proton/") || strings.HasPrefix(lower, "protonman/") {
+		return false
+	}
+	if strings.HasSuffix(lower, ":free") ||
+		strings.Contains(lower, ":free") ||
+		strings.HasSuffix(lower, "/free") ||
+		strings.HasSuffix(lower, "-free") ||
+		strings.HasSuffix(lower, "(free)") ||
+		strings.Contains(lower, "(free)") ||
+		strings.Contains(lower, "cline-free") ||
+		lower == "free" ||
+		lower == "big-pickle" {
+		return true
+	}
+	// Curated free-tier models provided by Cline without an explicit :free suffix
+	if strings.HasPrefix(lower, "cline/") || strings.HasPrefix(lower, "stealth/") || strings.HasPrefix(lower, "cline-free/") {
+		base := lower
+		if idx := strings.LastIndex(base, "/"); idx != -1 {
+			base = base[idx+1:]
+		}
+		switch base {
+		case "muse-spark-1.3-contributor",
+			"deepseek-v4.1-flash",
+			"mimo-v2.6-flash",
+			"pixel-canary",
+			"space-bunny-alpha",
+			"kat-coder-pro",
+			"big-pickle":
+			return true
+		}
+	}
+	return false
+}
+
+func hasAnyFreeModel(models []string) bool {
+	for _, m := range models {
+		if isFreeModel(m) {
+			return true
+		}
+	}
+	return false
+}
+
+func partitionModels(models []string) (freeModels []string, otherModels []string) {
+	for _, m := range models {
+		if isFreeModel(m) {
+			freeModels = append(freeModels, m)
+		} else {
+			otherModels = append(otherModels, m)
+		}
+	}
+	return freeModels, otherModels
+}
+
+func (s *shell) layoutAgentModelsList(gtx layout.Context, items []modelPopoverListItem, currentModel, provider string, enabled bool) layout.Dimensions {
 	s.modelList.Axis = layout.Vertical
-	return s.modelList.Layout(gtx, len(models), func(gtx layout.Context, index int) layout.Dimensions {
-		m := models[index]
-		selected := m == currentModel
+	return s.modelList.Layout(gtx, len(items), func(gtx layout.Context, index int) layout.Dimensions {
+		item := items[index]
+		if item.kind == modelItemHeader {
+			return s.layoutModelSectionHeader(gtx, item.title, item.count)
+		}
+		selected := item.modelID == currentModel
 		return desktopInset{Bottom: 3}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-			return s.layoutModelListItem(gtx, m, provider, selected, enabled)
+			return s.layoutModelListItem(gtx, item.modelID, provider, selected, item.isFree, enabled)
 		})
 	})
 }
 
-func (s *shell) layoutModelListItem(gtx layout.Context, modelID, provider string, selected, enabled bool) layout.Dimensions {
+func (s *shell) layoutModelSectionHeader(gtx layout.Context, title string, count int) layout.Dimensions {
+	return desktopInset{Top: 6, Bottom: 4, Left: 2, Right: 2}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+		return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
+			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+				return s.layoutLabel(gtx, title, textLabelSmall, font.SemiBold, s.theme.onSurfaceVariant, 1)
+			}),
+			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+				countText := fmt.Sprintf("%d", count)
+				return desktopInset{Left: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+					return s.roundedSurface(gtx, shapeSmall, s.theme.surfaceContainerHighest, func(gtx layout.Context) layout.Dimensions {
+						return desktopInset{Top: 1, Bottom: 1, Left: 5, Right: 5}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+							return s.layoutLabel(gtx, countText, textLabelSmall, font.Medium, s.theme.onSurfaceVariant, 1)
+						})
+					})
+				})
+			}),
+		)
+	})
+}
+
+func (s *shell) layoutModelListItem(gtx layout.Context, modelID, provider string, selected, isFree, enabled bool) layout.Dimensions {
 	btn := s.agentModelButton(modelID)
 	if enabled && btn.Clicked(gtx) {
 		if s.onSetRuntimeModel != nil {
@@ -409,6 +592,18 @@ func (s *shell) layoutModelListItem(gtx layout.Context, modelID, provider string
 					}),
 					layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
 						return s.layoutLabel(gtx, modelID, textBodySmall, font.Medium, fg, 1)
+					}),
+					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+						if isFree {
+							return desktopInset{Right: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+								return s.roundedSurface(gtx, shapeSmall, s.theme.successContainer, func(gtx layout.Context) layout.Dimensions {
+									return desktopInset{Top: 1, Bottom: 1, Left: 6, Right: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+										return s.layoutLabel(gtx, "Free", textLabelSmall, font.SemiBold, s.theme.onSuccessContainer, 1)
+									})
+								})
+							})
+						}
+						return layout.Dimensions{}
 					}),
 					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 						if selected {
