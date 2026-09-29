@@ -190,6 +190,37 @@ func TestSelectAgentUpdatesActiveProjectDefault(t *testing.T) {
 	}
 }
 
+func TestSelectAgentSwitchesToMatchingAgentSession(t *testing.T) {
+	controller := newTestController()
+	controller.state.Projects = []desktopstate.ProjectState{{ID: "project", AgentIDs: []string{controllerAgentID, "cline"}}}
+	controller.state.ActiveProjectID = "project"
+	controller.state.Sessions = []desktopstate.SessionState{
+		{ID: "sess-proton", ProjectID: "project", AgentID: controllerAgentID, AvailableModels: []string{"claude-3-7-sonnet"}},
+		{ID: "sess-cline", ProjectID: "project", AgentID: "cline", AvailableModels: []string{"claude-3-5-sonnet", "deepseek-coder"}},
+	}
+	controller.state.ActiveSessionID = "sess-proton"
+	controller.activeAgentID = controllerAgentID
+	controller.profiles["cline"] = app.ACPAgentProfile{ID: "cline", DisplayName: "Cline", Command: "cline"}
+	controller.connections["cline"] = connectionConnected
+	controller.statuses["cline"] = "Connected"
+
+	controller.selectAgent("cline")
+
+	if controller.activeAgentID != "cline" {
+		t.Fatalf("active agent = %q, want cline", controller.activeAgentID)
+	}
+	if controller.state.ActiveSessionID != "sess-cline" {
+		t.Fatalf("active session ID = %q, want sess-cline", controller.state.ActiveSessionID)
+	}
+	activeSession, ok := desktopSessionByID(controller.state, controller.state.ActiveSessionID)
+	if !ok {
+		t.Fatal("expected active session found")
+	}
+	if len(activeSession.AvailableModels) != 2 || activeSession.AvailableModels[0] != "claude-3-5-sonnet" {
+		t.Fatalf("expected cline available models, got %#v", activeSession.AvailableModels)
+	}
+}
+
 func TestSessionConnectionUsesOwningAgent(t *testing.T) {
 	snapshot := controllerSnapshot{
 		ActiveAgentID:    "reviewer",

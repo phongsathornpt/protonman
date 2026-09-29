@@ -4,6 +4,8 @@ package gioui
 
 import (
 	"image"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -12,6 +14,7 @@ import (
 	"gioui.org/layout"
 	"gioui.org/op"
 	"gioui.org/unit"
+	"github.com/phongsathornpt/protonman/internal/app"
 	desktopstate "github.com/phongsathornpt/protonman/internal/feature/desktop"
 )
 
@@ -277,19 +280,113 @@ func TestComposerContextChipsTogglePopovers(t *testing.T) {
 		},
 	}
 
+	snapshot := controllerSnapshot{ActiveAgentID: "protonman"}
 	gtx := testLayoutContext()
 
 	// Click model chip -> opens model popover
 	sh.modelChipButton.Click()
-	sh.layoutComposerContextChips(gtx, session, true)
+	sh.layoutComposerContextChips(gtx, session, snapshot, true)
 	if !sh.modelPopoverVisible || sh.reasoningPopoverVisible {
 		t.Fatalf("expected model popover open, got model=%v reasoning=%v", sh.modelPopoverVisible, sh.reasoningPopoverVisible)
 	}
 
 	// Click reasoning chip -> switches to reasoning popover
 	sh.reasoningChipButton.Click()
-	sh.layoutComposerContextChips(gtx, session, true)
+	sh.layoutComposerContextChips(gtx, session, snapshot, true)
 	if sh.modelPopoverVisible || !sh.reasoningPopoverVisible {
 		t.Fatalf("expected reasoning popover open, got model=%v reasoning=%v", sh.modelPopoverVisible, sh.reasoningPopoverVisible)
+	}
+}
+
+func TestRuntimePopoverModelListChangesWithACPAgent(t *testing.T) {
+	sh := newShell(newTheme("light"))
+	var selectedModel string
+	sh.onSetRuntimeModel = func(_, m string) {
+		selectedModel = m
+	}
+
+	// Session 1 belongs to Protonman
+	sessionProton := desktopstate.SessionState{
+		ID:              "sess-proton",
+		AgentID:         "protonman",
+		AvailableModels: []string{"claude-3-7-sonnet", "gpt-4o"},
+		Runtime: desktopstate.RuntimeSettingsState{
+			Model: "claude-3-7-sonnet",
+		},
+	}
+	snapshotProton := controllerSnapshot{
+		ActiveAgentID: "protonman",
+		AgentProfiles: []app.ACPAgentProfile{
+			{ID: "protonman", DisplayName: "Protonman"},
+			{ID: "cline", DisplayName: "Cline"},
+		},
+		AgentAvailableModels: map[string][]string{
+			"protonman": {"claude-3-7-sonnet", "gpt-4o"},
+			"cline":     {"claude-3-5-sonnet", "deepseek-coder"},
+		},
+	}
+
+	sh.openModelPopover()
+	gtx := testLayoutContext()
+
+	// 1. Layout for Protonman session
+	sh.layoutModelPopover(gtx, sessionProton, snapshotProton, true)
+	// Verify Protonman models are clickable
+	sh.agentModelButton("gpt-4o").Click()
+	sh.layoutModelPopover(gtx, sessionProton, snapshotProton, true)
+	if selectedModel != "gpt-4o" {
+		t.Fatalf("expected gpt-4o from protonman session, got %q", selectedModel)
+	}
+
+	// 2. When switching to Cline session
+	sessionCline := desktopstate.SessionState{
+		ID:              "sess-cline",
+		AgentID:         "cline",
+		AvailableModels: []string{"claude-3-5-sonnet", "deepseek-coder"},
+		Runtime: desktopstate.RuntimeSettingsState{
+			Model: "claude-3-5-sonnet",
+		},
+	}
+	snapshotCline := controllerSnapshot{
+		ActiveAgentID: "cline",
+		AgentProfiles: []app.ACPAgentProfile{
+			{ID: "protonman", DisplayName: "Protonman"},
+			{ID: "cline", DisplayName: "Cline"},
+		},
+		AgentAvailableModels: map[string][]string{
+			"protonman": {"claude-3-7-sonnet", "gpt-4o"},
+			"cline":     {"claude-3-5-sonnet", "deepseek-coder"},
+		},
+	}
+
+	sh.openModelPopover()
+	// Click Cline's model
+	sh.agentModelButton("deepseek-coder").Click()
+	sh.layoutModelPopover(gtx, sessionCline, snapshotCline, true)
+	if selectedModel != "deepseek-coder" {
+		t.Fatalf("expected deepseek-coder from cline session, got %q", selectedModel)
+	}
+
+	// 3. Fallback when session.AvailableModels is empty but snapshot.AgentAvailableModels has models
+	sessionEmptyModels := desktopstate.SessionState{
+		ID:      "sess-cline-empty",
+		AgentID: "cline",
+	}
+	sh.openModelPopover()
+	sh.agentModelButton("claude-3-5-sonnet").Click()
+	sh.layoutModelPopover(gtx, sessionEmptyModels, snapshotCline, true)
+	if selectedModel != "claude-3-5-sonnet" {
+		t.Fatalf("expected claude-3-5-sonnet from agent available models fallback, got %q", selectedModel)
+	}
+
+	if dir := os.Getenv("CAPTURE_ARTIFACTS"); dir != "" {
+		captureDesktopWidget(t, filepath.Join(dir, "acp_agent_proton_models.png"), image.Pt(840, 360), sh, func(gtx layout.Context) layout.Dimensions {
+			sh.modelPopoverVisible = true
+			return sh.layoutModelPopover(gtx, sessionProton, snapshotProton, true)
+		})
+		captureDesktopWidget(t, filepath.Join(dir, "acp_agent_cline_models.png"), image.Pt(840, 360), sh, func(gtx layout.Context) layout.Dimensions {
+			sh.modelPopoverVisible = true
+			return sh.layoutModelPopover(gtx, sessionCline, snapshotCline, true)
+		})
 	}
 }

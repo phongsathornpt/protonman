@@ -114,10 +114,24 @@ func (s *shell) layoutModelPopover(gtx layout.Context, session desktopstate.Sess
 
 	currentModel := strings.TrimSpace(session.Runtime.Model)
 	currentProvider := strings.TrimSpace(session.Runtime.Provider)
-	agentName := activeAgentDisplayName(snapshot)
+	agentID := strings.TrimSpace(session.AgentID)
+	if agentID == "" {
+		agentID = strings.TrimSpace(snapshot.ActiveAgentID)
+	}
+	if agentID == "" {
+		agentID = controllerAgentID
+	}
+	agentName := agentDisplayName(snapshot.AgentProfiles, agentID)
+
+	if currentModel == "" && snapshot.AgentDefaultModels != nil {
+		currentModel = strings.TrimSpace(snapshot.AgentDefaultModels[agentID])
+	}
 
 	searchQuery := strings.ToLower(strings.TrimSpace(s.modelSearchEditor.Text()))
 	rawModels := session.AvailableModels
+	if len(rawModels) == 0 && snapshot.AgentAvailableModels != nil {
+		rawModels = snapshot.AgentAvailableModels[agentID]
+	}
 	filteredModels := make([]string, 0, len(rawModels))
 	for _, m := range rawModels {
 		mTrimmed := strings.TrimSpace(m)

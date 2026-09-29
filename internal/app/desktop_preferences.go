@@ -10,11 +10,12 @@ import (
 // DesktopPreferencesState holds desktop UI preferences such as pinned sessions,
 // custom session titles, and active sidebar filter mode.
 type DesktopPreferencesState struct {
-	PinnedSessions     []string          `json:"pinnedSessions,omitempty"`
-	CustomTitles       map[string]string `json:"customTitles,omitempty"`
-	FilterMode         string            `json:"filterMode,omitempty"`
-	Theme              string            `json:"theme,omitempty"`
-	AgentDefaultModels map[string]string `json:"agentDefaultModels,omitempty"`
+	PinnedSessions       []string            `json:"pinnedSessions,omitempty"`
+	CustomTitles         map[string]string   `json:"customTitles,omitempty"`
+	FilterMode           string              `json:"filterMode,omitempty"`
+	Theme                string              `json:"theme,omitempty"`
+	AgentDefaultModels   map[string]string   `json:"agentDefaultModels,omitempty"`
+	AgentAvailableModels map[string][]string `json:"agentAvailableModels,omitempty"`
 }
 
 // DesktopPreferencesRepository is the outbound port for persisting desktop preferences.
@@ -36,11 +37,12 @@ func NewDesktopPreferences(repository DesktopPreferencesRepository) *DesktopPref
 	return &DesktopPreferences{
 		repository: repository,
 		state: DesktopPreferencesState{
-			PinnedSessions:     make([]string, 0),
-			CustomTitles:       make(map[string]string),
-			FilterMode:         "all",
-			Theme:              "system",
-			AgentDefaultModels: make(map[string]string),
+			PinnedSessions:       make([]string, 0),
+			CustomTitles:         make(map[string]string),
+			FilterMode:           "all",
+			Theme:                "system",
+			AgentDefaultModels:   make(map[string]string),
+			AgentAvailableModels: make(map[string][]string),
 		},
 	}
 }
@@ -252,19 +254,48 @@ func (p *DesktopPreferences) SetAgentDefaultModel(ctx context.Context, agentID, 
 	return nil
 }
 
+// SetAgentAvailableModels updates the cached available models for an agent and saves the change.
+func (p *DesktopPreferences) SetAgentAvailableModels(ctx context.Context, agentID string, models []string) error {
+	if p == nil {
+		return nil
+	}
+	agentID = strings.TrimSpace(agentID)
+	if agentID == "" || len(models) == 0 {
+		return nil
+	}
+
+	p.mu.Lock()
+	if p.state.AgentAvailableModels == nil {
+		p.state.AgentAvailableModels = make(map[string][]string)
+	}
+	p.state.AgentAvailableModels[agentID] = slices.Clone(models)
+	cloned := p.cloneStateLocked()
+	repo := p.repository
+	p.mu.Unlock()
+
+	if repo != nil {
+		return repo.Save(ctx, cloned)
+	}
+	return nil
+}
+
 func (p *DesktopPreferences) cloneStateLocked() DesktopPreferencesState {
 	cloned := DesktopPreferencesState{
-		PinnedSessions:     append([]string(nil), p.state.PinnedSessions...),
-		CustomTitles:       make(map[string]string, len(p.state.CustomTitles)),
-		FilterMode:         p.state.FilterMode,
-		Theme:              p.state.Theme,
-		AgentDefaultModels: make(map[string]string, len(p.state.AgentDefaultModels)),
+		PinnedSessions:       append([]string(nil), p.state.PinnedSessions...),
+		CustomTitles:         make(map[string]string, len(p.state.CustomTitles)),
+		FilterMode:           p.state.FilterMode,
+		Theme:                p.state.Theme,
+		AgentDefaultModels:   make(map[string]string, len(p.state.AgentDefaultModels)),
+		AgentAvailableModels: make(map[string][]string, len(p.state.AgentAvailableModels)),
 	}
 	for k, v := range p.state.CustomTitles {
 		cloned.CustomTitles[k] = v
 	}
 	for k, v := range p.state.AgentDefaultModels {
 		cloned.AgentDefaultModels[k] = v
+	}
+	for k, v := range p.state.AgentAvailableModels {
+		cloned.AgentAvailableModels[k] = slices.Clone(v)
 	}
 	if cloned.FilterMode == "" {
 		cloned.FilterMode = "all"

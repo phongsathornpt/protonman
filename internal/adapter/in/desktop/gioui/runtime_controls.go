@@ -3,6 +3,7 @@
 package gioui
 
 import (
+	"context"
 	"strings"
 
 	"github.com/phongsathornpt/protonman/internal/adapter/out/acpclient"
@@ -43,8 +44,45 @@ func (c *controller) setRuntimeModel(provider, model string) {
 			},
 		})
 		c.revision++
+		client := c.clients[agentID]
 		c.mu.Unlock()
 		c.notify()
+		if client != nil {
+			go func() {
+				callCtx, cancel := context.WithTimeout(c.ctx, reconnectRequestTimeout)
+				defer cancel()
+				var result struct {
+					ConfigOptions []acpConfigOption `json:"configOptions,omitempty"`
+					Models        *acpModelsResult  `json:"models,omitempty"`
+				}
+				err := client.Call(callCtx, "session/set_config_option", map[string]any{
+					"sessionId": sessionID,
+					"configId":  "model",
+					"value":     model,
+				}, &result)
+				if isACPMethodNotFound(err) {
+					err = client.Call(callCtx, "session/set_model", map[string]any{
+						"sessionId": sessionID,
+						"modelId":   model,
+					}, &result)
+				}
+				if err == nil {
+					if models, currentModel := extractModelsFromACP(result.ConfigOptions, result.Models); len(models) > 0 {
+						c.mu.Lock()
+						c.setAgentAvailableModelsLocked(agentID, models)
+						if sess := desktopstateSessionPointer(&c.state, sessionID); sess != nil {
+							sess.AvailableModels = models
+							if currentModel != "" {
+								sess.Runtime.Model = currentModel
+							}
+							c.revision++
+						}
+						c.mu.Unlock()
+						c.notify()
+					}
+				}
+			}()
+		}
 		return
 	}
 	if provider == "" && ok {

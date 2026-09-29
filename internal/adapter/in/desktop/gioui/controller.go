@@ -72,6 +72,8 @@ type controllerSnapshot struct {
 	CustomTitles          map[string]string
 	FilterMode            string
 	Theme                 string
+	AgentDefaultModels    map[string]string
+	AgentAvailableModels  map[string][]string
 }
 
 type controllerSnapshotCache struct {
@@ -94,12 +96,13 @@ type controller struct {
 	statuses      map[string]string
 	activeAgentID string
 
-	preferences        *app.DesktopPreferences
-	pinnedSessions     []string
-	customTitles       map[string]string
-	agentDefaultModels map[string]string
-	filterMode         string
-	theme              string
+	preferences          *app.DesktopPreferences
+	pinnedSessions       []string
+	customTitles         map[string]string
+	agentDefaultModels   map[string]string
+	agentAvailableModels map[string][]string
+	filterMode           string
+	theme                string
 
 	histories               map[string]historyState
 	historyLoads            map[string]*sessionHistoryLoad
@@ -172,6 +175,7 @@ func newController(parent context.Context, onChange func(), agents app.ACPAgents
 		pinnedSessions:          make([]string, 0),
 		customTitles:            make(map[string]string),
 		agentDefaultModels:      make(map[string]string),
+		agentAvailableModels:    make(map[string][]string),
 		filterMode:              "all",
 		theme:                   "system",
 	}
@@ -204,6 +208,12 @@ func (c *controller) loadPreferences() {
 		c.agentDefaultModels = make(map[string]string, len(state.AgentDefaultModels))
 		for k, v := range state.AgentDefaultModels {
 			c.agentDefaultModels[k] = v
+		}
+	}
+	if len(state.AgentAvailableModels) > 0 {
+		c.agentAvailableModels = make(map[string][]string, len(state.AgentAvailableModels))
+		for k, v := range state.AgentAvailableModels {
+			c.agentAvailableModels[k] = slices.Clone(v)
 		}
 	}
 	if state.FilterMode != "" {
@@ -293,12 +303,20 @@ func (c *controller) snapshot() controllerSnapshot {
 		CustomTitles:          cloneCustomTitles(c.customTitles),
 		FilterMode:            c.filterMode,
 		Theme:                 c.theme,
+		AgentDefaultModels:    make(map[string]string, len(c.agentDefaultModels)),
+		AgentAvailableModels:  make(map[string][]string, len(c.agentAvailableModels)),
 	}
 	for agentID, phase := range c.connections {
 		snapshot.AgentConnections[agentID] = phase
 	}
 	for agentID, status := range c.statuses {
 		snapshot.AgentStatuses[agentID] = status
+	}
+	for agentID, model := range c.agentDefaultModels {
+		snapshot.AgentDefaultModels[agentID] = model
+	}
+	for agentID, models := range c.agentAvailableModels {
+		snapshot.AgentAvailableModels[agentID] = slices.Clone(models)
 	}
 	if state, ok := c.histories[snapshot.State.ActiveSessionID]; ok {
 		snapshot.HistoryState = state
@@ -307,6 +325,26 @@ func (c *controller) snapshot() controllerSnapshot {
 	c.snapshotCache.revision = c.revision
 	c.snapshotCache.value = snapshot
 	return snapshot
+}
+
+func (c *controller) setAgentAvailableModelsLocked(agentID string, models []string) {
+	agentID = strings.ToLower(strings.TrimSpace(agentID))
+	if agentID == "" {
+		agentID = controllerAgentID
+	}
+	if len(models) == 0 {
+		return
+	}
+	if c.agentAvailableModels == nil {
+		c.agentAvailableModels = make(map[string][]string)
+	}
+	c.agentAvailableModels[agentID] = slices.Clone(models)
+	if c.preferences != nil {
+		cloned := slices.Clone(models)
+		go func(aID string, m []string) {
+			_ = c.preferences.SetAgentAvailableModels(c.ctx, aID, m)
+		}(agentID, cloned)
+	}
 }
 
 // advanceSnapshotCacheForTimelineLocked reuses the cached presentation snapshot
@@ -564,9 +602,34 @@ func extractModelsFromConfigOptions(options []acpConfigOption) (models []string,
 	return nil, ""
 }
 
+type acpModelsResult struct {
+	CurrentModelID  string `json:"currentModelId"`
+	AvailableModels []struct {
+		ModelID string `json:"modelId"`
+		Name    string `json:"name"`
+	} `json:"availableModels"`
+}
+
+func extractModelsFromACP(options []acpConfigOption, modelsResult *acpModelsResult) ([]string, string) {
+	if modelsResult != nil && len(modelsResult.AvailableModels) > 0 {
+		var models []string
+		for _, m := range modelsResult.AvailableModels {
+			id := strings.TrimSpace(m.ModelID)
+			if id != "" {
+				models = append(models, id)
+			}
+		}
+		return models, strings.TrimSpace(modelsResult.CurrentModelID)
+	}
+	return extractModelsFromConfigOptions(options)
+}
+
 func (c *controller) newSession() {
 	c.mu.Lock()
-	agentID := c.agentForProjectLocked(c.state.ActiveProjectID)
+	agentID := c.activeAgentID
+	if agentID == "" {
+		agentID = c.agentForProjectLocked(c.state.ActiveProjectID)
+	}
 	client := c.clients[agentID]
 	if c.connections[agentID] != connectionConnected || client == nil || c.creatingSession {
 		c.mu.Unlock()
@@ -604,6 +667,7 @@ func (c *controller) newSession() {
 		var result struct {
 			SessionID     string            `json:"sessionId"`
 			ConfigOptions []acpConfigOption `json:"configOptions,omitempty"`
+			Models        *acpModelsResult  `json:"models,omitempty"`
 		}
 		err := client.Call(callCtx, "session/new", params, &result)
 		if err == nil && strings.TrimSpace(result.SessionID) == "" {
@@ -621,11 +685,21 @@ func (c *controller) newSession() {
 			return
 		}
 		c.state = addLocalSession(c.state, result.SessionID, workspace, agentID)
-		if models, currentModel := extractModelsFromConfigOptions(result.ConfigOptions); len(models) > 0 {
+		if models, currentModel := extractModelsFromACP(result.ConfigOptions, result.Models); len(models) > 0 {
+			c.setAgentAvailableModelsLocked(agentID, models)
 			if sess := desktopstateSessionPointer(&c.state, result.SessionID); sess != nil {
 				sess.AvailableModels = models
 				if currentModel != "" && sess.Runtime.Model == "" {
 					sess.Runtime.Model = currentModel
+				} else if sess.Runtime.Model == "" && c.agentDefaultModels[agentID] != "" {
+					sess.Runtime.Model = c.agentDefaultModels[agentID]
+				}
+			}
+		} else if c.agentAvailableModels != nil && len(c.agentAvailableModels[agentID]) > 0 {
+			if sess := desktopstateSessionPointer(&c.state, result.SessionID); sess != nil {
+				sess.AvailableModels = slices.Clone(c.agentAvailableModels[agentID])
+				if sess.Runtime.Model == "" && c.agentDefaultModels[agentID] != "" {
+					sess.Runtime.Model = c.agentDefaultModels[agentID]
 				}
 			}
 		}

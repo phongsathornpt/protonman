@@ -194,8 +194,9 @@ func (c *controller) mcpSessionParams(sessionID, workspace string, additionalDir
 
 func (c *controller) mcpSessionParamsWithServers(sessionID, workspace string, additionalDirectories []string, servers []map[string]any) map[string]any {
 	params := map[string]any{
-		"sessionId": sessionID,
-		"cwd":       workspace,
+		"sessionId":  sessionID,
+		"cwd":        workspace,
+		"mcpServers": []map[string]any{},
 	}
 	if len(additionalDirectories) > 0 {
 		params["additionalDirectories"] = append([]string(nil), additionalDirectories...)
@@ -207,7 +208,10 @@ func (c *controller) mcpSessionParamsWithServers(sessionID, workspace string, ad
 }
 
 func (c *controller) mcpNewSessionParams(workspace string, additionalDirectories []string) map[string]any {
-	params := map[string]any{"cwd": workspace}
+	params := map[string]any{
+		"cwd":        workspace,
+		"mcpServers": []map[string]any{},
+	}
 	// docs/desktop.md promises the primary folder as cwd and the remaining
 	// project folders as additionalDirectories for new sessions too. Dropping
 	// them here silently narrows what the session is authorized to touch.

@@ -157,7 +157,52 @@ func (c *controller) selectAgent(agentID string) {
 	c.activeAgentID = agentID
 	c.setProjectDefaultAgentLocked(c.state.ActiveProjectID, agentID)
 	c.statuses[agentID] = "Selected · " + c.profiles[agentID].DisplayName
+
+	currentSession, ok := desktopSessionByID(c.state, c.state.ActiveSessionID)
+	matchesCurrent := ok && (currentSession.AgentID == agentID || (currentSession.AgentID == "" && agentID == controllerAgentID))
+	if matchesCurrent {
+		c.revision++
+		c.mu.Unlock()
+		c.notify()
+		return
+	}
+
+	var targetSession *desktopstate.SessionState
+	for i := range c.state.Sessions {
+		sess := &c.state.Sessions[i]
+		if sess.ProjectID == c.state.ActiveProjectID && (sess.AgentID == agentID || (sess.AgentID == "" && agentID == controllerAgentID)) {
+			if targetSession == nil || sess.LastActivityAt.After(targetSession.LastActivityAt) {
+				targetSession = sess
+			}
+		}
+	}
+
+	if targetSession != nil {
+		c.state.ActiveSessionID = targetSession.ID
+		c.pruneInactiveSessionHistoryLocked(targetSession.ID)
+		c.revision++
+		c.snapshotCache = controllerSnapshotCache{}
+		targetID := targetSession.ID
+		c.mu.Unlock()
+		c.notify()
+		c.loadSessionHistory(targetID)
+		c.refreshActiveSession(true)
+		return
+	}
+
+	if c.connections[agentID] == connectionConnected && c.clients[agentID] != nil && !c.creatingSession {
+		c.state.ActiveSessionID = ""
+		c.revision++
+		c.snapshotCache = controllerSnapshotCache{}
+		c.mu.Unlock()
+		c.notify()
+		c.newSession()
+		return
+	}
+
+	c.state.ActiveSessionID = ""
 	c.revision++
+	c.snapshotCache = controllerSnapshotCache{}
 	c.mu.Unlock()
 	c.notify()
 }

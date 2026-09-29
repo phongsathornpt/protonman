@@ -690,7 +690,7 @@ func (c *controller) loadSessionHistory(sessionID string) {
 	go func() {
 		unlock, acquired := c.lockAgentSessionContext(callCtx, agentID)
 		if !acquired {
-			c.finishSessionHistoryLoadRequest(client, sessionID, request, callCtx.Err(), nil)
+			c.finishSessionHistoryLoadRequest(client, sessionID, request, callCtx.Err(), nil, nil)
 			return
 		}
 		defer unlock()
@@ -702,25 +702,26 @@ func (c *controller) loadSessionHistory(sessionID string) {
 			return
 		}
 		if !activeSession {
-			c.finishSessionHistoryLoadRequest(client, sessionID, request, context.Canceled, nil)
+			c.finishSessionHistoryLoadRequest(client, sessionID, request, context.Canceled, nil, nil)
 			return
 		}
 		var loadResult struct {
 			ConfigOptions []acpConfigOption `json:"configOptions,omitempty"`
+			Models        *acpModelsResult  `json:"models,omitempty"`
 		}
 		err := client.Call(callCtx, "session/load", params, &loadResult)
 		if isACPMethodNotFound(err) {
 			err = nil
 		}
-		c.finishSessionHistoryLoadRequest(client, sessionID, request, err, loadResult.ConfigOptions)
+		c.finishSessionHistoryLoadRequest(client, sessionID, request, err, loadResult.ConfigOptions, loadResult.Models)
 	}()
 }
 
 func (c *controller) finishSessionHistoryLoad(client *acpclient.Client, sessionID string, loadErr error) {
-	c.finishSessionHistoryLoadRequest(client, sessionID, nil, loadErr, nil)
+	c.finishSessionHistoryLoadRequest(client, sessionID, nil, loadErr, nil, nil)
 }
 
-func (c *controller) finishSessionHistoryLoadRequest(client *acpclient.Client, sessionID string, request *sessionHistoryLoad, loadErr error, configOptions []acpConfigOption) {
+func (c *controller) finishSessionHistoryLoadRequest(client *acpclient.Client, sessionID string, request *sessionHistoryLoad, loadErr error, configOptions []acpConfigOption, modelsResult *acpModelsResult) {
 	c.mu.Lock()
 	if request != nil {
 		if c.historyLoads[sessionID] != request {
@@ -744,7 +745,8 @@ func (c *controller) finishSessionHistoryLoadRequest(client *acpclient.Client, s
 	if loadErr == nil && c.state.ActiveSessionID == sessionID {
 		if session := desktopstateSessionPointer(&c.state, sessionID); session != nil {
 			session.HistoryTruncated = session.HistoryTruncated || truncated
-			if models, currentModel := extractModelsFromConfigOptions(configOptions); len(models) > 0 {
+			if models, currentModel := extractModelsFromACP(configOptions, modelsResult); len(models) > 0 {
+				c.setAgentAvailableModelsLocked(session.AgentID, models)
 				session.AvailableModels = models
 				if currentModel != "" && session.Runtime.Model == "" {
 					session.Runtime.Model = currentModel
@@ -816,6 +818,7 @@ func (c *controller) resumeKnownSessions(agentID string, client *acpclient.Clien
 		callCtx, cancel := context.WithTimeout(c.ctx, reconnectRequestTimeout)
 		var resumeResult struct {
 			ConfigOptions []acpConfigOption `json:"configOptions"`
+			Models        *acpModelsResult  `json:"models,omitempty"`
 		}
 		err := client.Call(callCtx, "session/resume", params, &resumeResult)
 		cancel()
@@ -823,9 +826,10 @@ func (c *controller) resumeKnownSessions(agentID string, client *acpclient.Clien
 			if session.ID == activeSessionID {
 				c.setAgentStatus(agentID, "Session resume failed · "+compactError(err))
 			}
-		} else if err == nil && len(resumeResult.ConfigOptions) > 0 {
-			if models, currentModel := extractModelsFromConfigOptions(resumeResult.ConfigOptions); len(models) > 0 {
+		} else if err == nil {
+			if models, currentModel := extractModelsFromACP(resumeResult.ConfigOptions, resumeResult.Models); len(models) > 0 {
 				c.mu.Lock()
+				c.setAgentAvailableModelsLocked(agentID, models)
 				if sess := desktopstateSessionPointer(&c.state, session.ID); sess != nil {
 					sess.AvailableModels = models
 					if currentModel != "" && sess.Runtime.Model == "" {

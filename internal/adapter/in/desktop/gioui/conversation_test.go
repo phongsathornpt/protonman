@@ -7,11 +7,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"image"
 	"runtime"
 	"strings"
 	"testing"
 	"time"
 	"unicode/utf8"
+
+	"gioui.org/layout"
+	"gioui.org/op"
+	"gioui.org/unit"
 
 	"github.com/phongsathornpt/protonman/internal/adapter/out/acpclient"
 	"github.com/phongsathornpt/protonman/internal/app"
@@ -775,5 +780,67 @@ func TestIsDiffTextAndExtractFilename(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestChatUIRefinements(t *testing.T) {
+	sh := newShell(newTheme("dark"))
+	ops := new(op.Ops)
+	gtx := layout.Context{
+		Ops: ops,
+		Constraints: layout.Constraints{
+			Min: image.Pt(0, 0),
+			Max: image.Pt(1200, 800),
+		},
+		Metric: unit.Metric{PxPerDp: 1, PxPerSp: 1},
+	}
+
+	session := desktopstate.SessionState{
+		ID:        "test-session",
+		Workspace: "/workspace/test",
+		Runtime: desktopstate.RuntimeSettingsState{
+			Model:     "proton/glm-5.3-flash",
+			Reasoning: "medium",
+		},
+		Timeline: []desktopstate.TimelineItem{
+			{
+				Kind: desktopstate.TimelineUser,
+				Text: "Please check tests",
+			},
+			{
+				Kind:  desktopstate.TimelineTool,
+				Title: "Read Makefile",
+				Text:  "test-desktop: ...",
+			},
+			{
+				Kind: desktopstate.TimelineAssistant,
+				Text: "Here are the results of the tests.",
+			},
+		},
+	}
+
+	// 1. Verify layoutConversation renders cleanly across different widths (responsive breakpoints)
+	for _, width := range []int{480, 800, 1200} {
+		gtx.Constraints.Max.X = width
+		dims := sh.layoutConversation(gtx, session, historyStateLoaded)
+		if dims.Size.X == 0 || dims.Size.Y == 0 {
+			t.Fatalf("layoutConversation returned empty dims for width %d", width)
+		}
+	}
+
+	// 2. Verify layoutComposer renders with floating margins
+	snap := controllerSnapshot{
+		State:      desktopstate.State{ActiveSessionID: "test-session"},
+		Connection: connectionConnected,
+	}
+	composerDims := sh.layoutComposer(gtx, session, snap)
+	if composerDims.Size.X == 0 || composerDims.Size.Y == 0 {
+		t.Fatalf("layoutComposer returned empty dims")
+	}
+
+	// 3. Verify jump to bottom button layouts cleanly
+	jumpDims := sh.layoutJumpToBottomButton(gtx)
+	if jumpDims.Size.X == 0 || jumpDims.Size.Y == 0 {
+		t.Fatalf("layoutJumpToBottomButton returned empty dims")
 	}
 }

@@ -189,7 +189,7 @@ func (c *controller) beginSessionRefresh(sessionID string, force bool, kind sess
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	session, ok := desktopSessionByID(c.state, sessionID)
-	if !ok || sessionID != c.state.ActiveSessionID || (session.AgentID != "" && session.AgentID != controllerAgentID) {
+	if !ok || sessionID != c.state.ActiveSessionID || (session.AgentID != "" && session.AgentID != controllerAgentID && kind != runtimeRefreshKind) {
 		return nil, nil, false
 	}
 	client, agentID := c.clientForSessionLocked(sessionID)
@@ -277,6 +277,37 @@ func (c *controller) refreshSessionRuntime(sessionID string, force bool) {
 	}
 	go func() {
 		defer tracker.finish(sessionID, time.Now())
+		c.mu.Lock()
+		session, hasSession := desktopSessionByID(c.state, sessionID)
+		c.mu.Unlock()
+		if !hasSession {
+			return
+		}
+		if session.AgentID != "" && session.AgentID != controllerAgentID {
+			params := c.mcpSessionParams(session.ID, session.Workspace, session.AdditionalDirectories)
+			callCtx, cancel := context.WithTimeout(c.ctx, reconnectRequestTimeout)
+			defer cancel()
+			var resumeResult struct {
+				ConfigOptions []acpConfigOption `json:"configOptions"`
+				Models        *acpModelsResult  `json:"models,omitempty"`
+			}
+			if err := client.Call(callCtx, "session/resume", params, &resumeResult); err == nil {
+				if models, currentModel := extractModelsFromACP(resumeResult.ConfigOptions, resumeResult.Models); len(models) > 0 {
+					c.mu.Lock()
+					c.setAgentAvailableModelsLocked(session.AgentID, models)
+					if sess := desktopstateSessionPointer(&c.state, session.ID); sess != nil {
+						sess.AvailableModels = models
+						if currentModel != "" && sess.Runtime.Model == "" {
+							sess.Runtime.Model = currentModel
+						}
+						c.revision++
+					}
+					c.mu.Unlock()
+					c.notify()
+				}
+			}
+			return
+		}
 		var result sessionRuntimeResult
 		if err := c.callInspector(client, "protonman/session/runtime", map[string]any{"sessionId": sessionID}, &result); err != nil {
 			return
@@ -430,6 +461,9 @@ func (c *controller) applySessionRuntime(client *acpclient.Client, result sessio
 		return false
 	}
 	models := decodeAvailableModels(result.AvailableModels)
+	if len(models) > 0 {
+		c.setAgentAvailableModelsLocked(controllerAgentID, models)
+	}
 	desktopstate.Apply(&c.state, desktopstate.Event{
 		Kind:            desktopstate.EventSessionRuntimeUpdated,
 		SessionID:       sessionID,

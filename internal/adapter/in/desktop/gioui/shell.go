@@ -133,6 +133,7 @@ type shell struct {
 	toolExpandButtons            map[string]*widget.Clickable
 	sendButton                   widget.Clickable
 	stopButton                   widget.Clickable
+	jumpToBottomButton           widget.Clickable
 	starterPromptButtons         [4]widget.Clickable
 	permissionButtons            map[string]map[string]*widget.Clickable
 	permissionButtonLive         map[string]struct{}
@@ -1887,7 +1888,7 @@ func (s *shell) layoutConversationPane(gtx layout.Context, session desktopstate.
 	if permission := activePermission(snapshot.State, session.ID); permission != nil {
 		children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 			return layout.Stack{Alignment: layout.Center}.Layout(gtx, layout.Stacked(func(gtx layout.Context) layout.Dimensions {
-				gtx.Constraints.Max.X = min(gtx.Constraints.Max.X, gtx.Dp(840))
+				gtx.Constraints.Max.X = min(gtx.Constraints.Max.X, gtx.Dp(960))
 				return desktopInset{Top: 8, Bottom: 8, Left: 16, Right: 16}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 					return s.layoutPermissionPanel(gtx, *permission)
 				})
@@ -1897,7 +1898,7 @@ func (s *shell) layoutConversationPane(gtx layout.Context, session desktopstate.
 	if question := activeQuestion(snapshot.State, session.ID); question != nil {
 		children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 			return layout.Stack{Alignment: layout.Center}.Layout(gtx, layout.Stacked(func(gtx layout.Context) layout.Dimensions {
-				gtx.Constraints.Max.X = min(gtx.Constraints.Max.X, gtx.Dp(840))
+				gtx.Constraints.Max.X = min(gtx.Constraints.Max.X, gtx.Dp(960))
 				return desktopInset{Top: 8, Bottom: 8, Left: 16, Right: 16}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 					return s.layoutQuestionPanel(gtx, *question)
 				})
