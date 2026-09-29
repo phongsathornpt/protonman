@@ -376,3 +376,39 @@ func TestSidebarEmptyState_ClearFilter(t *testing.T) {
 		t.Fatalf("expected filter mode set to 'all', got %q", filterModeSet)
 	}
 }
+
+func TestSidebarCacheInvalidatesOnAgentDisplayNameChange(t *testing.T) {
+	state := desktopstate.State{
+		Projects: []desktopstate.ProjectState{{ID: "p1", Name: "Project"}},
+		Sessions: []desktopstate.SessionState{{ID: "s1", ProjectID: "p1", AgentID: "reviewer", Title: "Review"}},
+	}
+	profiles := []app.ACPAgentProfile{{ID: "reviewer", DisplayName: "Reviewer"}}
+	_, cache := buildSidebarRowsWithOptions(state, profiles, nil, nil)
+
+	if !cache.matchesWithOptions(state, profiles, cache.filterMode, nil, nil) {
+		t.Fatal("cache should match identical inputs")
+	}
+
+	// A renamed agent profile must invalidate the cached subtitle even though the
+	// session's agent ID is unchanged.
+	renamed := []app.ACPAgentProfile{{ID: "reviewer", DisplayName: "Reviewer Renamed"}}
+	if cache.matchesWithOptions(state, renamed, cache.filterMode, nil, nil) {
+		t.Fatal("cache matched after an agent display name changed")
+	}
+}
+
+func TestSidebarCachePinnedEqualityTreatsNilAndEmptyAlike(t *testing.T) {
+	state := desktopstate.State{
+		Projects: []desktopstate.ProjectState{{ID: "p1", Name: "Project"}},
+		Sessions: []desktopstate.SessionState{{ID: "s1", ProjectID: "p1", AgentID: controllerAgentID, Title: "T"}},
+	}
+	profiles := []app.ACPAgentProfile{{ID: controllerAgentID, DisplayName: "Protonman"}}
+	_, cache := buildSidebarRowsWithOptions(state, profiles, nil, nil)
+
+	if !cache.matchesWithOptions(state, profiles, cache.filterMode, []string{}, nil) {
+		t.Fatal("nil and empty pinned sets should compare equal")
+	}
+	if cache.matchesWithOptions(state, profiles, cache.filterMode, []string{"s1"}, nil) {
+		t.Fatal("cache matched after the pinned set changed")
+	}
+}

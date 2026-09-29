@@ -627,6 +627,64 @@ func TestResponseSplitCacheReusesStableSource(t *testing.T) {
 	}
 }
 
+func TestToolDiffInfoCachesClassificationBySource(t *testing.T) {
+	view := newShell(newTheme("light"))
+	diff := "diff --git a/foo/bar.go b/foo/bar.go\n--- a/foo/bar.go\n+++ b/foo/bar.go\n@@ -1 +1 @@\n-old\n+new\n"
+
+	first := view.toolDiffInfo("tool-1", diff)
+	if !first.isDiff || first.filename != "foo/bar.go" || first.additions != 1 || first.deletions != 1 || len(first.preview) == 0 {
+		t.Fatalf("diff classification = %+v", first)
+	}
+
+	plain := view.toolDiffInfo("tool-1", "plain output")
+	if plain.isDiff {
+		t.Fatalf("plain output classified as diff: %+v", plain)
+	}
+
+	// The stored entry tracks the latest source for the key.
+	if cached := view.toolDiffCache["tool-1"]; cached.source != "plain output" || cached.isDiff {
+		t.Fatalf("cached entry = %+v", cached)
+	}
+
+	// Repeated lookups for an unchanged source return the cached entry.
+	if got := view.toolDiffInfo("tool-1", "plain output"); got.source != "plain output" {
+		t.Fatalf("cached lookup = %+v", got)
+	}
+}
+
+func TestToolDiffInfoCacheIsBounded(t *testing.T) {
+	view := newShell(newTheme("light"))
+	for index := 0; index <= maxToolDiffCacheEntries; index++ {
+		view.toolDiffInfo("tool-"+strconv.Itoa(index), "output")
+	}
+	if got := len(view.toolDiffCache); got > maxToolDiffCacheEntries {
+		t.Fatalf("tool diff cache = %d entries, want <= %d", got, maxToolDiffCacheEntries)
+	}
+}
+
+func TestParsedThinkingCachesBySource(t *testing.T) {
+	view := newShell(newTheme("dark"))
+	key := conversationCacheKey{sessionID: "session", itemID: "assistant-1", kind: desktopstate.TimelineAssistant}
+	text := "<think>\nreasoning about it\n</think>\nfinal answer"
+
+	first := view.parsedThinking(key, text)
+	if !first.hasThinking || !first.thinkingDone || first.responseText != "final answer" {
+		t.Fatalf("parsed thinking = %+v", first)
+	}
+	if cached, ok := view.conversationThinkingCache[key]; !ok || cached.source != text {
+		t.Fatalf("thinking parse was not cached: %#v", view.conversationThinkingCache)
+	}
+
+	// A changed source for the same key must be recomputed, not served stale.
+	second := view.parsedThinking(key, "plain reply")
+	if second.hasThinking || second.responseText != "plain reply" {
+		t.Fatalf("recomputed parse = %+v", second)
+	}
+	if cached := view.conversationThinkingCache[key]; cached.source != "plain reply" {
+		t.Fatalf("thinking cache did not track new source: %#v", cached)
+	}
+}
+
 func TestShellLaysOutInspectorContentAtBothBreakpoints(t *testing.T) {
 	view := newShell(newTheme("dark"))
 	snapshot := controllerSnapshot{

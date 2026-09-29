@@ -55,6 +55,10 @@ type messageStreamBuffer struct {
 	sessionID string
 	itemID    string
 	kind      desktopstate.TimelineKind
+	// index caches the buffer item's position in the session timeline so a
+	// stream flush can update it without rescanning the whole timeline. It is
+	// repaired whenever retention pruning shifts the timeline.
+	index     int
 	text      strings.Builder
 	truncated bool
 	timer     *time.Timer
@@ -264,7 +268,7 @@ func (c *controller) appendMessageChunkLocked(sessionID, kind string, event desk
 	}
 	buffer := c.messageStreamBuffers[streamKey]
 	if buffer == nil {
-		buffer = &messageStreamBuffer{sessionID: sessionID, itemID: event.Item.ID, kind: event.Item.Kind}
+		buffer = &messageStreamBuffer{sessionID: sessionID, itemID: event.Item.ID, kind: event.Item.Kind, index: -1}
 		c.messageStreamBuffers[streamKey] = buffer
 		found := false
 		if session := desktopstateSessionPointer(&c.state, sessionID); session != nil {
@@ -335,38 +339,56 @@ func (c *controller) flushMessageStreamLocked(buffer *messageStreamBuffer) bool 
 	if session == nil {
 		return false
 	}
-	for index := range session.Timeline {
-		item := &session.Timeline[index]
-		if item.ID != buffer.itemID || item.Kind != buffer.kind {
-			continue
-		}
-		next := buffer.text.String()
-		changed := item.Text != next
-		grown := 0
-		if changed {
-			if c.timelineBytes == nil {
-				c.timelineBytes = make(map[string]int)
-			}
-			if _, ok := c.timelineBytes[buffer.sessionID]; !ok {
-				c.timelineBytes[buffer.sessionID] = timelineSize(session.Timeline)
-			}
-			grown = len(next) - len(item.Text)
-			c.timelineBytes[buffer.sessionID] += grown
-			item.Text = next
-		}
-		if buffer.truncated && !session.HistoryTruncated {
-			session.HistoryTruncated = true
-			changed = true
-		}
-		item.Streaming = true
-		if changed {
-			if grown > 4096 || c.timelineBytes[buffer.sessionID] > maxSessionTimelineBytes || len(session.Timeline) > maxSessionTimelineItems {
-				c.pruneSessionTimelineTrustedLocked(session)
-			}
-		}
-		return changed
+	index := timelineItemIndex(session, buffer)
+	if index < 0 {
+		return false
 	}
-	return false
+	item := &session.Timeline[index]
+	next := buffer.text.String()
+	changed := item.Text != next
+	grown := 0
+	if changed {
+		if c.timelineBytes == nil {
+			c.timelineBytes = make(map[string]int)
+		}
+		if _, ok := c.timelineBytes[buffer.sessionID]; !ok {
+			c.timelineBytes[buffer.sessionID] = timelineSize(session.Timeline)
+		}
+		grown = len(next) - len(item.Text)
+		c.timelineBytes[buffer.sessionID] += grown
+		item.Text = next
+	}
+	if buffer.truncated && !session.HistoryTruncated {
+		session.HistoryTruncated = true
+		changed = true
+	}
+	item.Streaming = true
+	if changed {
+		if grown > 4096 || c.timelineBytes[buffer.sessionID] > maxSessionTimelineBytes || len(session.Timeline) > maxSessionTimelineItems {
+			c.pruneSessionTimelineTrustedLocked(session)
+		}
+	}
+	return changed
+}
+
+// timelineItemIndex returns the current position of a stream buffer's item in
+// the session timeline. It trusts the buffer's cached index and repairs it when
+// the timeline shifted (for example after retention pruning), so a per-frame
+// stream flush never has to rescan the full timeline.
+func timelineItemIndex(session *desktopstate.SessionState, buffer *messageStreamBuffer) int {
+	if buffer.index >= 0 && buffer.index < len(session.Timeline) {
+		if item := session.Timeline[buffer.index]; item.ID == buffer.itemID && item.Kind == buffer.kind {
+			return buffer.index
+		}
+	}
+	for index := range session.Timeline {
+		if item := session.Timeline[index]; item.ID == buffer.itemID && item.Kind == buffer.kind {
+			buffer.index = index
+			return index
+		}
+	}
+	buffer.index = -1
+	return -1
 }
 
 func (c *controller) flushMessageStreamsLocked(sessionID string) {
@@ -447,27 +469,36 @@ func (c *controller) applyTimelineEventLocked(event desktopstate.Event) {
 	var delta int
 	switch event.Kind {
 	case desktopstate.EventTimelineAppended:
+		session.Timeline = append(session.Timeline, event.Item)
 		delta = timelineItemSize(event.Item)
 	case desktopstate.EventTimelineUpserted:
-		previousSize := 0
-		if event.Item.ID != "" {
-			for _, previous := range session.Timeline {
-				if previous.ID == event.Item.ID && previous.Kind == event.Item.Kind {
-					previousSize = timelineItemSize(previous)
-					delta = timelineItemSize(desktopstate.MergeTimelineItem(previous, event.Item)) - previousSize
-					break
-				}
-			}
-		}
-		if previousSize == 0 {
-			delta = timelineItemSize(event.Item)
-		}
+		delta = upsertTimelineItemLocked(session, event.Item)
 	default:
 		return
 	}
-	desktopstate.Apply(&c.state, event)
 	c.timelineBytes[event.SessionID] += delta
 	c.pruneSessionTimelineTrustedLocked(session)
+}
+
+// upsertTimelineItemLocked merges a timeline item into its existing slot or
+// appends it, returning the change in retained size. Unlike a reducer round trip
+// it locates, merges, and measures the item in a single pass, and it searches
+// the retained tail where streamed and tool items live so a tool-call update is
+// usually O(1) instead of rescanning the whole timeline twice.
+func upsertTimelineItemLocked(session *desktopstate.SessionState, item desktopstate.TimelineItem) int {
+	if item.ID != "" {
+		for index := len(session.Timeline) - 1; index >= 0; index-- {
+			previous := session.Timeline[index]
+			if previous.ID != item.ID || previous.Kind != item.Kind {
+				continue
+			}
+			merged := desktopstate.MergeTimelineItem(previous, item)
+			session.Timeline[index] = merged
+			return timelineItemSize(merged) - timelineItemSize(previous)
+		}
+	}
+	session.Timeline = append(session.Timeline, item)
+	return timelineItemSize(item)
 }
 
 func (c *controller) applyStagedHistoryEventsLocked(sessionID string, events []desktopstate.Event) {
@@ -1285,25 +1316,37 @@ func (c *controller) clearMessageStreamsLocked(sessionID string) {
 		session = &c.state.Sessions[index]
 	}
 	for streamKey := range c.messageStreams {
-		if streamKey.sessionID == sessionID {
-			if buffer := c.messageStreamBuffers[streamKey]; buffer != nil {
-				if buffer.timer != nil {
-					buffer.timer.Stop()
-					buffer.timer = nil
-				}
-				c.flushMessageStreamLocked(buffer)
-				delete(c.messageStreamBuffers, streamKey)
+		if streamKey.sessionID != sessionID {
+			continue
+		}
+		itemID := c.messageStreams[streamKey]
+		buffer := c.messageStreamBuffers[streamKey]
+		if buffer != nil {
+			if buffer.timer != nil {
+				buffer.timer.Stop()
+				buffer.timer = nil
 			}
-			if session != nil {
-				for index := range session.Timeline {
-					if session.Timeline[index].ID == c.messageStreams[streamKey] {
-						session.Timeline[index].Streaming = false
+			c.flushMessageStreamLocked(buffer)
+			delete(c.messageStreamBuffers, streamKey)
+		}
+		if session != nil {
+			index := -1
+			if buffer != nil {
+				index = timelineItemIndex(session, buffer)
+			}
+			if index < 0 {
+				for candidate := range session.Timeline {
+					if session.Timeline[candidate].ID == itemID {
+						index = candidate
 						break
 					}
 				}
 			}
-			delete(c.messageStreams, streamKey)
+			if index >= 0 {
+				session.Timeline[index].Streaming = false
+			}
 		}
+		delete(c.messageStreams, streamKey)
 	}
 }
 

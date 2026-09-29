@@ -8,6 +8,7 @@ import (
 	"image/color"
 	"os/exec"
 	"runtime"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -72,7 +73,7 @@ type sidebarRowsCache struct {
 	projects   []sidebarProjectCache
 	sessions   []sidebarSessionCache
 	filterMode string
-	pinnedHash string
+	pinned     []string
 }
 
 // Sidebar vertical rhythm and glyph sizing. These keep row heights stable as
@@ -536,13 +537,23 @@ func buildSidebarRowsWithOptions(state desktopstate.State, profiles []app.ACPAge
 
 	pinnedRows := make([]sidebarRow, 0, len(pinnedSessions))
 
+	displayNames := make(map[string]string)
+	subtitleFor := func(agentID string) string {
+		if name, ok := displayNames[agentID]; ok {
+			return name
+		}
+		name := agentDisplayName(profiles, agentID)
+		displayNames[agentID] = name
+		return name
+	}
+
 	for _, session := range state.Sessions {
 		title := session.Title
 		if custom, ok := customTitles[session.ID]; ok && custom != "" {
 			title = custom
 		}
 		pinned := pinnedMap[session.ID]
-		subtitle := agentDisplayName(profiles, session.AgentID)
+		subtitle := subtitleFor(session.AgentID)
 		sessions = append(sessions, sidebarSessionCache{
 			id:             session.ID,
 			projectID:      session.ProjectID,
@@ -612,11 +623,11 @@ func buildSidebarRowsWithOptions(state desktopstate.State, profiles []app.ACPAge
 	}
 
 	return rows, sidebarRowsCache{
-		valid:      true,
-		rows:       rows,
-		projects:   projects,
-		sessions:   sessions,
-		pinnedHash: strings.Join(pinnedSessions, ","),
+		valid:    true,
+		rows:     rows,
+		projects: projects,
+		sessions: sessions,
+		pinned:   slices.Clone(pinnedSessions),
 	}
 }
 
@@ -625,7 +636,7 @@ func (cache sidebarRowsCache) matches(state desktopstate.State, profiles []app.A
 }
 
 func (cache sidebarRowsCache) matchesWithOptions(state desktopstate.State, profiles []app.ACPAgentProfile, filterMode string, pinnedSessions []string, customTitles map[string]string) bool {
-	if cache.filterMode != filterMode || cache.pinnedHash != strings.Join(pinnedSessions, ",") {
+	if cache.filterMode != filterMode || !slices.Equal(cache.pinned, pinnedSessions) {
 		return false
 	}
 	if len(cache.projects) != len(state.Projects) || len(cache.sessions) != len(state.Sessions) {
@@ -645,17 +656,23 @@ func (cache sidebarRowsCache) matchesWithOptions(state desktopstate.State, profi
 	if projectIndex != len(cache.projects) || len(state.Sessions) != len(cache.sessions) {
 		return false
 	}
+	displayNames := make(map[string]string)
 	for sessionIndex, session := range state.Sessions {
 		cachedSession := cache.sessions[sessionIndex]
 		expectedTitle := session.Title
 		if custom, ok := customTitles[session.ID]; ok && custom != "" {
 			expectedTitle = custom
 		}
+		subtitle, ok := displayNames[session.AgentID]
+		if !ok {
+			subtitle = agentDisplayName(profiles, session.AgentID)
+			displayNames[session.AgentID] = subtitle
+		}
 		if cachedSession.id != session.ID ||
 			cachedSession.projectID != session.ProjectID ||
 			cachedSession.agentID != session.AgentID ||
 			cachedSession.title != expectedTitle ||
-			cachedSession.subtitle != agentDisplayName(profiles, session.AgentID) ||
+			cachedSession.subtitle != subtitle ||
 			cachedSession.status != string(session.Status) ||
 			!cachedSession.lastActivityAt.Equal(session.LastActivityAt) {
 			return false

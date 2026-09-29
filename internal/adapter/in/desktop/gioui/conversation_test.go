@@ -1018,3 +1018,98 @@ func TestSessionHistoryLoadParamsDeferModelDiscovery(t *testing.T) {
 		t.Fatalf("session history load params lost session/workspace: %#v", params)
 	}
 }
+
+func TestTimelineItemIndexRepairsStaleCache(t *testing.T) {
+	session := &desktopstate.SessionState{Timeline: []desktopstate.TimelineItem{
+		{ID: "a", Kind: desktopstate.TimelineAssistant},
+		{ID: "b", Kind: desktopstate.TimelineTool},
+		{ID: "c", Kind: desktopstate.TimelineAssistant},
+	}}
+	buffer := &messageStreamBuffer{sessionID: "s", itemID: "c", kind: desktopstate.TimelineAssistant, index: -1}
+
+	if got := timelineItemIndex(session, buffer); got != 2 || buffer.index != 2 {
+		t.Fatalf("initial lookup = %d (cached %d), want 2", got, buffer.index)
+	}
+
+	// Prepend an item: the cached index stays in range but now points at a
+	// different item, so the scan must repair it.
+	session.Timeline = append([]desktopstate.TimelineItem{{ID: "z", Kind: desktopstate.TimelineUser}}, session.Timeline...)
+	if got := timelineItemIndex(session, buffer); got != 3 || buffer.index != 3 {
+		t.Fatalf("repaired lookup = %d (cached %d), want 3", got, buffer.index)
+	}
+
+	// Drop the front: the cached index falls out of range and is repaired.
+	session.Timeline = session.Timeline[2:]
+	if got := timelineItemIndex(session, buffer); got != 1 || buffer.index != 1 {
+		t.Fatalf("shifted lookup = %d (cached %d), want 1", got, buffer.index)
+	}
+
+	// Item removed entirely.
+	session.Timeline = nil
+	if got := timelineItemIndex(session, buffer); got != -1 || buffer.index != -1 {
+		t.Fatalf("missing lookup = %d (cached %d), want -1", got, buffer.index)
+	}
+}
+
+func TestFlushMessageStreamUsesRepairedIndex(t *testing.T) {
+	controller := newTestController()
+	controller.state.ActiveSessionID = "session-1"
+	controller.state.Sessions[0].Timeline = []desktopstate.TimelineItem{
+		{ID: "user-1", Kind: desktopstate.TimelineUser, Text: "hi"},
+		{ID: "assistant-1", Kind: desktopstate.TimelineAssistant, Text: "before"},
+	}
+	key := messageStreamKey{sessionID: "session-1", kind: "agent_message_chunk"}
+	buffer := &messageStreamBuffer{sessionID: "session-1", itemID: "assistant-1", kind: desktopstate.TimelineAssistant, index: 1}
+	buffer.text.WriteString("before after")
+	controller.messageStreamBuffers[key] = buffer
+
+	// Shift the timeline so the buffer's cached index is stale before the flush.
+	controller.state.Sessions[0].Timeline = append([]desktopstate.TimelineItem{
+		{ID: "note-0", Kind: desktopstate.TimelineStatus, Text: "note"},
+	}, controller.state.Sessions[0].Timeline...)
+
+	controller.mu.Lock()
+	changed := controller.flushMessageStreamLocked(buffer)
+	controller.mu.Unlock()
+	if !changed {
+		t.Fatal("flush against a shifted timeline reported no change")
+	}
+
+	var flushed *desktopstate.TimelineItem
+	for index := range controller.state.Sessions[0].Timeline {
+		if controller.state.Sessions[0].Timeline[index].ID == "assistant-1" {
+			flushed = &controller.state.Sessions[0].Timeline[index]
+		}
+	}
+	if flushed == nil || flushed.Text != "before after" || !flushed.Streaming {
+		t.Fatalf("flushed item = %#v", flushed)
+	}
+	if buffer.index != 2 {
+		t.Fatalf("buffer index after flush = %d, want 2", buffer.index)
+	}
+}
+
+func TestUpsertTimelineItemLockedMergeAndAppend(t *testing.T) {
+	session := &desktopstate.SessionState{Timeline: []desktopstate.TimelineItem{
+		{ID: "assistant-1", Kind: desktopstate.TimelineAssistant, Text: "hello"},
+	}}
+
+	delta := upsertTimelineItemLocked(session, desktopstate.TimelineItem{
+		ID: "assistant-1", Kind: desktopstate.TimelineAssistant, Text: " world",
+	})
+	if len(session.Timeline) != 1 || session.Timeline[0].Text != "hello world" {
+		t.Fatalf("merged timeline = %#v", session.Timeline)
+	}
+	if want := len(" world"); delta != want {
+		t.Fatalf("merge delta = %d, want %d", delta, want)
+	}
+
+	appended := desktopstate.TimelineItem{ID: "tool-1", Kind: desktopstate.TimelineTool, Title: "read", Status: "completed"}
+	before := len(session.Timeline)
+	if delta := upsertTimelineItemLocked(session, appended); delta != timelineItemSize(appended) {
+		t.Fatalf("append delta = %d, want %d", delta, timelineItemSize(appended))
+	}
+	if len(session.Timeline) != before+1 || session.Timeline[before].ID != "tool-1" {
+		t.Fatalf("appended timeline = %#v", session.Timeline)
+	}
+}

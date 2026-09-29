@@ -46,7 +46,27 @@ const (
 	maxResponseSplitCacheEntries  = 128
 	maxResponseSplitCacheBytes    = 2 << 20
 	responseSplitRetainedEstimate = 96
+	maxToolDiffCacheEntries       = 512
+	maxThinkingParseCacheEntries  = 512
 )
+
+// toolDiffCacheEntry memoizes the per-frame classification of one tool item's
+// output text (diff detection, stats, filename, preview).
+type toolDiffCacheEntry struct {
+	source    string
+	isDiff    bool
+	filename  string
+	additions int
+	deletions int
+	preview   []string
+	omitted   int
+}
+
+// thinkingParseCacheEntry memoizes parseAssistantThinking for one timeline item.
+type thinkingParseCacheEntry struct {
+	source string
+	parsed parsedAssistantMessage
+}
 
 type conversationMarkdownCache struct {
 	source string
@@ -117,6 +137,8 @@ func (s *shell) syncConversation(state desktopstate.State) {
 	clear(s.conversationExpandButtons)
 	clear(s.conversationThinkingExpanded)
 	clear(s.conversationThinkingButtons)
+	clear(s.conversationThinkingCache)
+	clear(s.toolDiffCache)
 	clear(s.permissionButtons)
 	clear(s.toolExpanded)
 	clear(s.toolExpandButtons)
@@ -484,6 +506,27 @@ func parseAssistantThinking(text string) parsedAssistantMessage {
 	}
 }
 
+// parsedThinking memoizes parseAssistantThinking per timeline item. Assistant
+// messages are re-parsed on every frame; caching by identity and source keeps a
+// long, unchanged message from being re-scanned while the view redraws.
+func (s *shell) parsedThinking(key conversationCacheKey, text string) parsedAssistantMessage {
+	if cached, ok := s.conversationThinkingCache[key]; ok && cached.source == text {
+		return cached.parsed
+	}
+	parsed := parseAssistantThinking(text)
+	if s.conversationThinkingCache == nil {
+		s.conversationThinkingCache = make(map[conversationCacheKey]thinkingParseCacheEntry)
+	}
+	if len(s.conversationThinkingCache) >= maxThinkingParseCacheEntries {
+		for existing := range s.conversationThinkingCache {
+			delete(s.conversationThinkingCache, existing)
+			break
+		}
+	}
+	s.conversationThinkingCache[key] = thinkingParseCacheEntry{source: text, parsed: parsed}
+	return parsed
+}
+
 func (s *shell) layoutThinkingBlock(gtx layout.Context, key conversationCacheKey, parsed parsedAssistantMessage) layout.Dimensions {
 	if s.conversationThinkingButtons == nil {
 		s.conversationThinkingButtons = make(map[conversationCacheKey]*widget.Clickable)
@@ -800,7 +843,7 @@ func (s *shell) layoutTimelineItem(gtx layout.Context, sessionID string, index i
 
 	// Assistant message
 	key := makeConversationCacheKey(sessionID, index, item)
-	parsed := parseAssistantThinking(item.Text)
+	parsed := s.parsedThinking(key, item.Text)
 	foreground := s.theme.onSurface
 
 	return desktopInset{Top: 8, Bottom: 12, Left: 16, Right: 16}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
@@ -1067,6 +1110,33 @@ func toolCategoryIcon(title string) iconKind {
 	}
 }
 
+// toolDiffInfo classifies and parses a tool item's text at most once per source.
+// The conversation view re-runs for every visible item on each frame, so the full
+// line split lives here instead of on the render hot path.
+func (s *shell) toolDiffInfo(toolKey, text string) toolDiffCacheEntry {
+	if cached, ok := s.toolDiffCache[toolKey]; ok && cached.source == text {
+		return cached
+	}
+	entry := toolDiffCacheEntry{source: text}
+	if isDiffText(text) {
+		entry.isDiff = true
+		entry.filename = extractDiffFilename(text)
+		entry.additions, entry.deletions = diffutil.DiffStats(text)
+		entry.preview, entry.omitted = diffutil.ExtractPreview(text, 32)
+	}
+	if s.toolDiffCache == nil {
+		s.toolDiffCache = make(map[string]toolDiffCacheEntry)
+	}
+	if len(s.toolDiffCache) >= maxToolDiffCacheEntries {
+		for existing := range s.toolDiffCache {
+			delete(s.toolDiffCache, existing)
+			break
+		}
+	}
+	s.toolDiffCache[toolKey] = entry
+	return entry
+}
+
 func (s *shell) layoutToolItem(gtx layout.Context, sessionID string, index int, item desktopstate.TimelineItem, foreground color.NRGBA) layout.Dimensions {
 	toolKey := item.ID
 	if toolKey == "" {
@@ -1112,8 +1182,8 @@ func (s *shell) layoutToolItem(gtx layout.Context, sessionID string, index int, 
 		}
 	}
 
-	if isDiffText(item.Text) {
-		return s.layoutDiffToolItem(gtx, toolKey, item, statusLabel, statusBg, statusFg)
+	if diff := s.toolDiffInfo(toolKey, item.Text); diff.isDiff {
+		return s.layoutDiffToolItem(gtx, toolKey, item, diff, statusLabel, statusBg, statusFg)
 	}
 
 	expanded, hasExplicit := s.toolExpanded[toolKey]
@@ -1204,11 +1274,11 @@ func (s *shell) layoutToolItem(gtx layout.Context, sessionID string, index int, 
 	})
 }
 
-func (s *shell) layoutDiffToolItem(gtx layout.Context, toolKey string, item desktopstate.TimelineItem, statusLabel string, statusBg, statusFg color.NRGBA) layout.Dimensions {
-	adds, dels := diffutil.DiffStats(item.Text)
+func (s *shell) layoutDiffToolItem(gtx layout.Context, toolKey string, item desktopstate.TimelineItem, diff toolDiffCacheEntry, statusLabel string, statusBg, statusFg color.NRGBA) layout.Dimensions {
+	adds, dels := diff.additions, diff.deletions
 	displayTitle := item.Title
-	if fn := extractDiffFilename(item.Text); fn != "" {
-		displayTitle = fn
+	if diff.filename != "" {
+		displayTitle = diff.filename
 	}
 
 	btn, ok := s.toolExpandButtons[toolKey]
@@ -1237,7 +1307,7 @@ func (s *shell) layoutDiffToolItem(gtx layout.Context, toolKey string, item desk
 		headerBorder = s.theme.primary
 	}
 
-	previewLines, omitted := diffutil.ExtractPreview(item.Text, 32)
+	previewLines, omitted := diff.preview, diff.omitted
 
 	return desktopInset{Top: 4, Bottom: 4, Left: 16, Right: 16}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 		return layout.Flex{Axis: layout.Vertical}.Layout(gtx,

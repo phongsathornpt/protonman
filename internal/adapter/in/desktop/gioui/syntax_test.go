@@ -197,3 +197,56 @@ func TestHighlightCodeSpans(t *testing.T) {
 		t.Errorf("highlightCodeSpans did not find 'package' span: %#v", spans)
 	}
 }
+
+func TestHasRunePrefix(t *testing.T) {
+	runes := []rune("hello world")
+	for _, tc := range []struct {
+		name   string
+		index  int
+		prefix string
+		want   bool
+	}{
+		{name: "match at start", index: 0, prefix: "hello", want: true},
+		{name: "match mid string", index: 6, prefix: "world", want: true},
+		{name: "mismatch", index: 0, prefix: "world", want: false},
+		{name: "single char mismatch", index: 0, prefix: "y", want: false},
+		{name: "prefix extends past end", index: 8, prefix: "world", want: false},
+		{name: "at end of runes", index: len(runes), prefix: "#", want: false},
+		{name: "negative index", index: -1, prefix: "h", want: false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := hasRunePrefix(runes, tc.index, []rune(tc.prefix)); got != tc.want {
+				t.Fatalf("hasRunePrefix(%q, %d, %q) = %v, want %v", string(runes), tc.index, tc.prefix, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestTokenizeLineCommentDetection(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		line        string
+		lang        string
+		wantComment string
+	}{
+		{name: "go line comment", line: "x := 1 // trailing", lang: "go", wantComment: "// trailing"},
+		{name: "python hash comment", line: "def f():  # note", lang: "py", wantComment: "# note"},
+		{name: "sql dash comment", line: "SELECT 1 -- note", lang: "sql", wantComment: "-- note"},
+		{name: "comment only line", line: "//", lang: "go", wantComment: "//"},
+		{name: "no comment", line: "x := 1", lang: "go", wantComment: ""},
+		{name: "single slash is not a comment", line: "a / b", lang: "go", wantComment: ""},
+		{name: "trailing slash is not a comment", line: "path/", lang: "go", wantComment: ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			comment := ""
+			for _, tok := range tokenizeLine(tc.line, tc.lang) {
+				if tok.Type == TokenComment {
+					comment = tok.Text
+				}
+			}
+			if comment != tc.wantComment {
+				t.Fatalf("comment token = %q, want %q (line %q)", comment, tc.wantComment, tc.line)
+			}
+		})
+	}
+}

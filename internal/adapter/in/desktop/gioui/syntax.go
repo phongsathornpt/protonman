@@ -253,6 +253,21 @@ func classifyWord(word, lang string) TokenType {
 	return TokenPlain
 }
 
+// hasRunePrefix reports whether runes[index:] begins with prefix. Comparing runes
+// directly avoids allocating a copy of the remaining line for every token, which
+// made comment detection quadratic in the line length.
+func hasRunePrefix(runes []rune, index int, prefix []rune) bool {
+	if index < 0 || index+len(prefix) > len(runes) {
+		return false
+	}
+	for offset, expected := range prefix {
+		if runes[index+offset] != expected {
+			return false
+		}
+	}
+	return true
+}
+
 // tokenizeLine parses a single line of source code into syntax tokens.
 func tokenizeLine(line, lang string) []Token {
 	runes := []rune(line)
@@ -267,6 +282,7 @@ func tokenizeLine(line, lang string) []Token {
 	case "sql":
 		commentPrefix = "--"
 	}
+	commentRunes := []rune(commentPrefix)
 
 	for idx < n {
 		if unicode.IsSpace(runes[idx]) {
@@ -278,7 +294,7 @@ func tokenizeLine(line, lang string) []Token {
 			continue
 		}
 
-		if strings.HasPrefix(string(runes[idx:]), commentPrefix) {
+		if hasRunePrefix(runes, idx, commentRunes) {
 			tokens = append(tokens, Token{Type: TokenComment, Text: string(runes[idx:])})
 			break
 		}
