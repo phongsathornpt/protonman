@@ -318,72 +318,99 @@ func (c *Client) write(v any) error {
 }
 
 func (c *Client) readLoop(r io.Reader) {
-	scanner := bufio.NewScanner(r)
-	scanner.Buffer(make([]byte, 0, 64*1024), 10*1024*1024)
-	for scanner.Scan() {
-		var msg envelope
-		if err := json.Unmarshal(scanner.Bytes(), &msg); err != nil {
-			continue
-		}
-		if msg.Method != "" {
-			if len(msg.ID) > 0 && !(len(msg.ID) == len("null") && string(msg.ID) == "null") {
-				request := incomingRequest{}
-				if len(msg.ID) > maxIncomingRequestID {
-					request.request.ID = json.RawMessage("null")
-					request.errorCode = -32600
-					request.errorText = "ACP request ID exceeds the supported size"
-				} else {
-					request.request.ID = append(json.RawMessage(nil), msg.ID...)
-					if len(msg.Method) > maxIncomingRequestMethod {
+	reader := bufio.NewReaderSize(r, 64*1024)
+	for {
+		line, err := reader.ReadBytes('\n')
+		if len(line) > 0 {
+			if len(line) > maxACPMessageBytes {
+				continue
+			}
+			var msg envelope
+			if jerr := json.Unmarshal(line, &msg); jerr != nil {
+				continue
+			}
+			if serr := checkEnvelopeSizes(&msg); serr != nil {
+				continue
+			}
+			if msg.Method != "" {
+				if len(msg.ID) > 0 && !(len(msg.ID) == len("null") && string(msg.ID) == "null") {
+					request := incomingRequest{}
+					if len(msg.ID) > maxIncomingRequestID {
+						request.request.ID = json.RawMessage("null")
 						request.errorCode = -32600
-						request.errorText = "ACP request method exceeds the supported size"
+						request.errorText = "ACP request ID exceeds the supported size"
 					} else {
-						request.request.Method = strings.Clone(msg.Method)
+						request.request.ID = append(json.RawMessage(nil), msg.ID...)
+						if len(msg.Method) > maxIncomingRequestMethod {
+							request.errorCode = -32600
+							request.errorText = "ACP request method exceeds the supported size"
+						} else {
+							request.request.Method = strings.Clone(msg.Method)
+						}
 					}
+					if request.errorCode == 0 && len(msg.Params) > maxIncomingRequestParams {
+						request.errorCode = -32600
+						request.errorText = "ACP request parameters exceed the supported size"
+					} else if request.errorCode == 0 {
+						request.request.Params = append(json.RawMessage(nil), msg.Params...)
+					}
+					select {
+					case c.requests <- request:
+					default:
+						select {
+						case <-c.requests:
+						default:
+						}
+						select {
+						case c.requests <- request:
+						default:
+							c.shutdown(errIncomingRequestQueueFull)
+							return
+						}
+					}
+					continue
 				}
-				if request.errorCode == 0 && len(msg.Params) > maxIncomingRequestParams {
-					request.errorCode = -32600
-					request.errorText = "ACP request parameters exceed the supported size"
-				} else if request.errorCode == 0 {
-					request.request.Params = append(json.RawMessage(nil), msg.Params...)
-				}
-				select {
-				case c.requests <- request:
-				default:
-					c.shutdown(errIncomingRequestQueueFull)
-					return
+				if c.onEvent != nil {
+					c.onEvent(Event{Method: msg.Method, Params: append(json.RawMessage(nil), msg.Params...)})
 				}
 				continue
 			}
-			if c.onEvent != nil {
-				c.onEvent(Event{Method: msg.Method, Params: append(json.RawMessage(nil), msg.Params...)})
+			var id uint64
+			if len(msg.ID) == 0 || json.Unmarshal(msg.ID, &id) != nil {
+				continue
 			}
-			continue
+			c.mu.Lock()
+			ch := c.pending[id]
+			delete(c.pending, id)
+			c.mu.Unlock()
+			if ch == nil {
+				continue
+			}
+			if msg.Error != nil {
+				ch <- response{err: msg.Error}
+			} else {
+				ch <- response{result: msg.Result}
+			}
 		}
-		var id uint64
-		if len(msg.ID) == 0 || json.Unmarshal(msg.ID, &id) != nil {
-			continue
-		}
-		c.mu.Lock()
-		ch := c.pending[id]
-		delete(c.pending, id)
-		c.mu.Unlock()
-		if ch == nil {
-			continue
-		}
-		if msg.Error != nil {
-			ch <- response{err: msg.Error}
-		} else {
-			ch <- response{result: msg.Result}
+		if err != nil {
+			c.waitForStderrDrain()
+			if errors.Is(err, io.EOF) {
+				c.shutdown(io.EOF)
+			} else {
+				c.shutdown(fmt.Errorf("read ACP stream: %w", err))
+			}
+			return
 		}
 	}
-	if err := scanner.Err(); err != nil {
-		c.waitForStderrDrain()
-		c.shutdown(fmt.Errorf("read ACP stream: %w", err))
-	} else {
-		c.waitForStderrDrain()
-		c.shutdown(io.EOF)
+}
+
+const maxACPMessageBytes = 64 * 1024 * 1024
+
+func checkEnvelopeSizes(msg *envelope) error {
+	if len(msg.Params)+len(msg.Result) > maxACPMessageBytes {
+		return errors.New("ACP message exceeds the supported size")
 	}
+	return nil
 }
 
 func (c *Client) requestLoop() {

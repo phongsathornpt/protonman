@@ -35,19 +35,23 @@ var popoverReasoningOptions = []struct {
 func (s *shell) openModelPopover() {
 	s.modelPopoverVisible = true
 	s.reasoningPopoverVisible = false
+	s.modelSearchFocusPending = true
+	s.mentionActive = false
 	if s.onRefreshRuntime != nil {
 		s.onRefreshRuntime()
 	}
 }
 
 func (s *shell) openReasoningPopover() {
+	s.closePopovers()
 	s.reasoningPopoverVisible = true
-	s.modelPopoverVisible = false
+	s.mentionActive = false
 }
 
 func (s *shell) closePopovers() {
 	s.modelPopoverVisible = false
 	s.reasoningPopoverVisible = false
+	s.modelSearchFocusPending = false
 }
 
 func (s *shell) agentModelButton(name string) *widget.Clickable {
@@ -107,7 +111,8 @@ func (s *shell) addRecentModel(provider, model, name string) {
 
 func (s *shell) layoutModelPopover(gtx layout.Context, session desktopstate.SessionState, snapshot controllerSnapshot, enabled bool) layout.Dimensions {
 	if s.modelPopoverCloseButton.Clicked(gtx) {
-		s.modelPopoverVisible = false
+		s.closePopovers()
+		gtx.Execute(key.FocusCmd{Tag: &s.composer})
 		return layout.Dimensions{}
 	}
 
@@ -274,6 +279,11 @@ func (s *shell) layoutModelPopoverHeader(gtx layout.Context, agentName string) l
 }
 
 func (s *shell) layoutModelSearchInput(gtx layout.Context) layout.Dimensions {
+	if s.modelSearchFocusPending {
+		s.modelSearchFocusPending = false
+		gtx.Execute(key.FocusCmd{Tag: &s.modelSearchEditor})
+	}
+
 	for {
 		evt, ok := gtx.Event(key.Filter{Focus: &s.modelSearchEditor, Name: key.NameEscape})
 		if !ok {
@@ -558,7 +568,8 @@ func (s *shell) layoutModelListItem(gtx layout.Context, modelID, provider string
 		if s.onSetRuntimeModel != nil {
 			s.onSetRuntimeModel(provider, modelID)
 		}
-		s.modelPopoverVisible = false
+		s.closePopovers()
+		gtx.Execute(key.FocusCmd{Tag: &s.composer})
 	}
 
 	semantic.Button.Add(gtx.Ops)
@@ -629,7 +640,8 @@ func (s *shell) layoutModelListItem(gtx layout.Context, modelID, provider string
 
 func (s *shell) layoutReasoningPopover(gtx layout.Context, session desktopstate.SessionState, enabled bool) layout.Dimensions {
 	if s.reasoningPopoverCloseBtn.Clicked(gtx) {
-		s.reasoningPopoverVisible = false
+		s.closePopovers()
+		gtx.Execute(key.FocusCmd{Tag: &s.composer})
 		return layout.Dimensions{}
 	}
 
@@ -681,7 +693,8 @@ func (s *shell) layoutReasoningPopover(gtx layout.Context, session desktopstate.
 							btn := s.popoverReasoningButton(o.Level)
 							if enabled && btn.Clicked(gtx) {
 								s.onSetRuntimeReasoning(o.Level)
-								s.reasoningPopoverVisible = false
+								s.closePopovers()
+								gtx.Execute(key.FocusCmd{Tag: &s.composer})
 							}
 							rows = append(rows, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 								return desktopInset{Bottom: 3}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {

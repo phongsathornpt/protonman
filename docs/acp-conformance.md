@@ -27,4 +27,6 @@ The first implementation milestones are:
 - elicitation and authentication;
 - request cancellation and reverse client services where supported.
 
-The project should only claim full ACP v1 coverage once all stable agent-side requirements and all advertised optional capabilities are covered by conformance tests and real-client interoperability tests.
+## Desktop model compat matrix
+
+Native Proton agents use `protonman/session/runtime` and `protonman/session/set_model {model}`. Third-party agents (OpenCode/Cline/Antigravity) fall back to `session/set_config_option {configId: model}` and, when that returns `-32601`, to `session/set_model {modelId}`. Non-Proton model discovery uses `session/resume`; native uses `protonman/session/runtime`. Missing `session/load` keeps the local transcript and resumes; missing `session/list` uses the local index.

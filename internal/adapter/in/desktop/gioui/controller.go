@@ -379,6 +379,7 @@ func (c *controller) advanceSnapshotCacheForTimelineLocked(sessionID string) boo
 
 func (c *controller) selectSession(sessionID string) {
 	c.mu.Lock()
+	previousSessionID := c.state.ActiveSessionID
 	desktopstate.Apply(&c.state, desktopstate.Event{
 		Kind:      desktopstate.EventSessionSelected,
 		SessionID: sessionID,
@@ -394,7 +395,7 @@ func (c *controller) selectSession(sessionID string) {
 			break
 		}
 	}
-	c.pruneInactiveSessionHistoryLocked(c.state.ActiveSessionID)
+	c.pruneInactiveSessionHistoryLocked(c.state.ActiveSessionID, previousSessionID)
 	c.revision++
 	c.snapshotCache = controllerSnapshotCache{}
 	activeSessionID := c.state.ActiveSessionID

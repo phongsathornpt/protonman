@@ -50,6 +50,13 @@ type conversationMarkdownCache struct {
 	plain  bool
 }
 
+type conversationCodeCache struct {
+	source string
+	lang   string
+	spans  []richtext.SpanStyle
+	bytes  int
+}
+
 type conversationCacheKey struct {
 	sessionID string
 	itemID    string
@@ -86,22 +93,34 @@ func (s *shell) syncConversation(state desktopstate.State) {
 			}
 		}
 	}
-	s.composer.SetText(s.takeComposerDraft(state.ActiveSessionID))
+	s.setComposerText(s.takeComposerDraft(state.ActiveSessionID))
+	s.closePopovers()
 	s.conversationList.Position = layout.Position{}
 	s.inspectorList.Position = layout.Position{}
 	s.inspectorOverride = false
 	s.inspectorVisible = false
 	s.runtimeEditorKey = ""
-	clear(s.conversationCache)
-	s.conversationCacheBytes = 0
 	clear(s.conversationExpanded)
 	clear(s.conversationPage)
 	clear(s.conversationExpandButtons)
 	clear(s.conversationThinkingExpanded)
 	clear(s.conversationThinkingButtons)
 	clear(s.permissionButtons)
+	clear(s.toolExpanded)
+	clear(s.toolExpandButtons)
+	clear(s.messageCopyButtons)
+	clear(s.messageCopiedAt)
+	clear(s.codeCopyButtons)
+	clear(s.codeCopiedAt)
+	clear(s.userRetryButtons)
+	clear(s.mentionButtons)
+	clear(s.agentModelButtons)
+	clear(s.modelPresetButtons)
+	clear(s.popoverReasoningButtons)
+	clear(s.questionStates)
 	s.permissionButtonRevision = 0
 	s.permissionButtonRevisionSet = false
+	s.mentionStateDirty = true
 }
 
 func (s *shell) syncPermissionButtons(state desktopstate.State) {
@@ -168,15 +187,18 @@ func (s *shell) layoutConversation(gtx layout.Context, session desktopstate.Sess
 						}
 						return layout.Spacer{Height: 16}.Layout(gtx)
 					})
+					composerOverlayOpen := s.modelPopoverVisible || s.reasoningPopoverVisible || (s.mentionActive && len(s.mentionItems) > 0)
 					if s.conversationList.Position.BeforeEnd {
 						s.conversationList.ScrollToEnd = false
-					} else {
+					} else if !composerOverlayOpen {
 						s.conversationList.ScrollToEnd = true
+					} else {
+						s.conversationList.ScrollToEnd = false
 					}
 					return dims
 				}),
 				layout.Stacked(func(gtx layout.Context) layout.Dimensions {
-					if !s.conversationList.Position.BeforeEnd || len(session.Timeline) <= 2 || s.modelPopoverVisible || s.reasoningPopoverVisible || s.mentionActive {
+					if !s.conversationList.Position.BeforeEnd || len(session.Timeline) <= 2 {
 						return layout.Dimensions{}
 					}
 					return desktopInset{Bottom: 12}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
@@ -357,7 +379,7 @@ func (s *shell) layoutEmptyState(gtx layout.Context, session desktopstate.Sessio
 func (s *shell) layoutStarterCard(gtx layout.Context, index int, p starterPrompt) layout.Dimensions {
 	btn := &s.starterPromptButtons[index]
 	if btn.Clicked(gtx) {
-		s.composer.SetText(p.prompt)
+		s.setComposerText(p.prompt)
 		s.composer.SetCaret(len(p.prompt), len(p.prompt))
 		s.composerError = ""
 		s.conversationList.ScrollToEnd = true
@@ -555,6 +577,8 @@ func (s *shell) layoutActiveThinkingIndicator(gtx layout.Context, session deskto
 
 func (s *shell) layoutJumpToBottomButton(gtx layout.Context) layout.Dimensions {
 	if s.jumpToBottomButton.Clicked(gtx) {
+		s.closePopovers()
+		gtx.Execute(key.FocusCmd{Tag: &s.composer})
 		s.conversationList.ScrollToEnd = true
 		s.conversationList.Position = layout.Position{}
 		gtx.Execute(op.InvalidateCmd{})
@@ -657,7 +681,7 @@ func (s *shell) layoutUserRetryButton(gtx layout.Context, keyStr, text string) l
 	}
 
 	if btn.Clicked(gtx) {
-		s.composer.SetText(text)
+		s.setComposerText(text)
 		s.composer.SetCaret(len(text), len(text))
 		s.composerError = ""
 		gtx.Execute(key.FocusCmd{Tag: &s.composer})
@@ -908,9 +932,12 @@ func (s *shell) largeMessageDisclosureButtons(key conversationCacheKey) *convers
 	buttons := s.conversationExpandButtons[key]
 	if buttons == nil {
 		if len(s.conversationExpandButtons) >= maxConversationExpansionKeys {
-			clear(s.conversationExpanded)
-			clear(s.conversationPage)
-			clear(s.conversationExpandButtons)
+			for oldest := range s.conversationExpandButtons {
+				delete(s.conversationExpanded, oldest)
+				delete(s.conversationPage, oldest)
+				delete(s.conversationExpandButtons, oldest)
+				break
+			}
 		}
 		buttons = new(conversationDisclosureButtons)
 		s.conversationExpandButtons[key] = buttons
@@ -1569,12 +1596,62 @@ func (s *shell) layoutCodeCard(gtx layout.Context, key conversationCacheKey, lan
 			}),
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 				return desktopInset{Top: 8, Bottom: 8, Left: 12, Right: 12}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-					spans := highlightCodeSpans(s.theme, lang, code)
+					spans := s.cachedCodeSpans(key, lang, code)
 					return richtext.Text(nil, s.theme.material.Shaper, spans...).Layout(gtx)
 				})
 			}),
 		)
 	})
+}
+
+func codeCacheEntryBytes(key conversationCacheKey, cached conversationCodeCache) int {
+	bytes := 128 + len(key.sessionID) + len(key.itemID) + len(cached.lang) + len(cached.source)
+	for _, span := range cached.spans {
+		bytes += markdownSpanRetainedEstimate + len(span.Content)
+	}
+	return bytes
+}
+
+func (s *shell) cachedCodeSpans(key conversationCacheKey, lang, code string) []richtext.SpanStyle {
+	if cached, ok := s.conversationCodeCache[key]; ok && cached.source == code && cached.lang == lang {
+		return cached.spans
+	}
+	spans := highlightCodeSpans(s.theme, lang, code)
+	entry := conversationCodeCache{source: code, lang: lang, spans: spans}
+	entry.bytes = codeCacheEntryBytes(key, entry)
+	if entry.bytes > maxConversationCacheBytes {
+		return spans
+	}
+	if s.conversationCodeCache == nil {
+		s.conversationCodeCache = make(map[conversationCacheKey]conversationCodeCache)
+	}
+	if _, ok := s.conversationCodeCache[key]; ok {
+		for index, id := range s.conversationCodeCacheOrder {
+			if id == key {
+				s.conversationCodeCacheOrder = append(s.conversationCodeCacheOrder[:index], s.conversationCodeCacheOrder[index+1:]...)
+				break
+			}
+		}
+		if previous, ok := s.conversationCodeCache[key]; ok {
+			s.conversationCodeCacheBytes -= previous.bytes
+		}
+		delete(s.conversationCodeCache, key)
+	}
+	for len(s.conversationCodeCache) >= maxConversationCacheEntries || s.conversationCodeCacheBytes+entry.bytes > maxConversationCacheBytes {
+		if len(s.conversationCodeCacheOrder) == 0 {
+			break
+		}
+		oldest := s.conversationCodeCacheOrder[0]
+		s.conversationCodeCacheOrder = s.conversationCodeCacheOrder[1:]
+		if previous, ok := s.conversationCodeCache[oldest]; ok {
+			delete(s.conversationCodeCache, oldest)
+			s.conversationCodeCacheBytes -= previous.bytes
+		}
+	}
+	s.conversationCodeCache[key] = entry
+	s.conversationCodeCacheOrder = append(s.conversationCodeCacheOrder, key)
+	s.conversationCodeCacheBytes += entry.bytes
+	return spans
 }
 
 func markdownCacheEntryBytes(key conversationCacheKey, cached conversationMarkdownCache) int {
@@ -1599,12 +1676,26 @@ func (s *shell) storeMarkdownCache(key conversationCacheKey, cached conversation
 	if previous, ok := s.conversationCache[key]; ok {
 		s.conversationCacheBytes -= previous.bytes
 		delete(s.conversationCache, key)
+		for index, id := range s.conversationCacheOrder {
+			if id == key {
+				s.conversationCacheOrder = append(s.conversationCacheOrder[:index], s.conversationCacheOrder[index+1:]...)
+				break
+			}
+		}
 	}
-	if len(s.conversationCache) >= maxConversationCacheEntries || s.conversationCacheBytes+cached.bytes > maxConversationCacheBytes {
-		clear(s.conversationCache)
-		s.conversationCacheBytes = 0
+	for len(s.conversationCache) >= maxConversationCacheEntries || s.conversationCacheBytes+cached.bytes > maxConversationCacheBytes {
+		if len(s.conversationCacheOrder) == 0 {
+			break
+		}
+		oldest := s.conversationCacheOrder[0]
+		s.conversationCacheOrder = s.conversationCacheOrder[1:]
+		if previous, ok := s.conversationCache[oldest]; ok {
+			delete(s.conversationCache, oldest)
+			s.conversationCacheBytes -= previous.bytes
+		}
 	}
 	s.conversationCache[key] = cached
+	s.conversationCacheOrder = append(s.conversationCacheOrder, key)
 	s.conversationCacheBytes += cached.bytes
 	return true
 }
@@ -1613,6 +1704,12 @@ func (s *shell) dropMarkdownCache(key conversationCacheKey) {
 	if cached, ok := s.conversationCache[key]; ok {
 		delete(s.conversationCache, key)
 		s.conversationCacheBytes -= cached.bytes
+	}
+	for index, id := range s.conversationCacheOrder {
+		if id == key {
+			s.conversationCacheOrder = append(s.conversationCacheOrder[:index], s.conversationCacheOrder[index+1:]...)
+			break
+		}
 	}
 }
 
@@ -1846,12 +1943,13 @@ func (s *shell) layoutComposer(gtx layout.Context, session desktopstate.SessionS
 	connected := sessionConnection(snapshot, session.AgentID) == connectionConnected
 	loading := snapshot.HistoryState == historyStateLoading
 	canSend := connected && !busy && !loading
+	canEdit := canSend && !s.settingsModalOpen
 	compact := gtx.Constraints.Max.X < gtx.Dp(480)
 	helper := composerHelper(compact, busy, loading, connected)
 	s.activeWorkspace = session.Workspace
-	s.composer.ReadOnly = !canSend
-	if canSend {
-		s.updateMentionState(session.Workspace)
+	s.composer.ReadOnly = !canEdit
+	if canEdit {
+		s.refreshMentionState(session.Workspace)
 		if s.mentionActive && len(s.mentionItems) > 0 {
 			for {
 				evt, ok := gtx.Event(key.Filter{Focus: &s.composer, Name: key.NameUpArrow})
@@ -1887,15 +1985,6 @@ func (s *shell) layoutComposer(gtx layout.Context, session desktopstate.SessionS
 				}
 			}
 			for {
-				evt, ok := gtx.Event(key.Filter{Focus: &s.composer, Name: key.NameReturn})
-				if !ok {
-					break
-				}
-				if e, ok := evt.(key.Event); ok && e.State == key.Press {
-					s.applySelectedMention()
-				}
-			}
-			for {
 				evt, ok := gtx.Event(key.Filter{Focus: &s.composer, Name: key.NameEscape})
 				if !ok {
 					break
@@ -1912,8 +2001,14 @@ func (s *shell) layoutComposer(gtx layout.Context, session desktopstate.SessionS
 			if !ok {
 				break
 			}
-			if _, ok := event.(widget.ChangeEvent); ok {
+			switch event.(type) {
+			case widget.ChangeEvent:
 				s.composerError = ""
+				s.mentionStateDirty = true
+				s.refreshMentionState(session.Workspace)
+			case widget.SelectEvent:
+				s.mentionStateDirty = true
+				s.refreshMentionState(session.Workspace)
 			}
 			if submit, ok := event.(widget.SubmitEvent); ok {
 				if s.mentionActive && len(s.mentionItems) > 0 {
@@ -1996,7 +2091,7 @@ func (s *shell) layoutComposer(gtx layout.Context, session desktopstate.SessionS
 											if !compact {
 												label = "Send"
 											}
-											return s.layoutComposerActionButton(gtx, &s.sendButton, label, "Send prompt", canSend && strings.TrimSpace(s.composer.Text()) != "", false, func() {
+											return s.layoutComposerActionButton(gtx, &s.sendButton, label, "Send prompt", canSend && s.composerHasContent, false, func() {
 												s.submitComposer(s.composer.Text())
 											})
 										}),
@@ -2158,10 +2253,11 @@ func (s *shell) layoutComposerContextChips(gtx layout.Context, session desktopst
 
 	chips = append(chips, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 		if enabled && s.modelChipButton.Clicked(gtx) {
-			s.modelPopoverVisible = !s.modelPopoverVisible
-			s.reasoningPopoverVisible = false
-			if s.modelPopoverVisible && s.onRefreshRuntime != nil {
-				s.onRefreshRuntime()
+			if s.modelPopoverVisible {
+				s.closePopovers()
+				gtx.Execute(key.FocusCmd{Tag: &s.composer})
+			} else {
+				s.openModelPopover()
 			}
 			gtx.Execute(op.InvalidateCmd{})
 		}
@@ -2212,8 +2308,13 @@ func (s *shell) layoutComposerContextChips(gtx layout.Context, session desktopst
 
 	chips = append(chips, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 		if enabled && s.reasoningChipButton.Clicked(gtx) {
-			s.reasoningPopoverVisible = !s.reasoningPopoverVisible
-			s.modelPopoverVisible = false
+			if s.reasoningPopoverVisible {
+				s.closePopovers()
+				gtx.Execute(key.FocusCmd{Tag: &s.composer})
+			} else {
+				s.openReasoningPopover()
+				gtx.Execute(key.FocusCmd{Tag: &s.composer})
+			}
 			gtx.Execute(op.InvalidateCmd{})
 		}
 		semantic.Button.Add(gtx.Ops)
@@ -2311,7 +2412,7 @@ func (s *shell) submitComposer(text string) {
 	}
 	s.composerError = ""
 	s.onSendPrompt(expanded)
-	s.composer.SetText("")
+	s.setComposerText("")
 	s.forgetComposerDraft(s.activeSessionID)
 	s.conversationList.ScrollToEnd = true
 	s.conversationList.Position = layout.Position{}

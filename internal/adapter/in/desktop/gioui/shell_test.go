@@ -220,6 +220,33 @@ func TestSyncConversationReleasesLargeMessageDisclosureState(t *testing.T) {
 	}
 }
 
+func TestSyncConversationRetainsBoundedRenderCachesAcrossSessionSwitches(t *testing.T) {
+	view := newShell(newTheme("light"))
+	markdownKey := conversationCacheKey{sessionID: "old-session", itemID: "assistant", kind: desktopstate.TimelineAssistant}
+	markdown := conversationMarkdownCache{source: "cached markdown", bytes: 64}
+	codeKey := conversationCacheKey{sessionID: "old-session", itemID: "code", kind: desktopstate.TimelineAssistant}
+	code := conversationCodeCache{source: "cached code", lang: "go", bytes: 48}
+	view.conversationCache[markdownKey] = markdown
+	view.conversationCacheBytes = markdown.bytes
+	view.conversationCacheOrder = []conversationCacheKey{markdownKey}
+	view.conversationCodeCache[codeKey] = code
+	view.conversationCodeCacheBytes = code.bytes
+	view.conversationCodeCacheOrder = []conversationCacheKey{codeKey}
+
+	view.syncConversation(desktopstate.State{ActiveSessionID: "old-session"})
+	view.syncConversation(desktopstate.State{ActiveSessionID: "new-session"})
+
+	if got, ok := view.conversationCache[markdownKey]; !ok || got.source != markdown.source {
+		t.Fatal("session switch discarded the bounded markdown render cache")
+	}
+	if got, ok := view.conversationCodeCache[codeKey]; !ok || got.source != code.source {
+		t.Fatal("session switch discarded the bounded code render cache")
+	}
+	if view.conversationCacheBytes != markdown.bytes || view.conversationCodeCacheBytes != code.bytes {
+		t.Fatal("session switch changed bounded render cache accounting")
+	}
+}
+
 func TestLargeMessageDisclosurePagesContentOnDemand(t *testing.T) {
 	view := newShell(newTheme("light"))
 	key := conversationCacheKey{sessionID: "session", itemID: "large-message", kind: desktopstate.TimelineAssistant}
@@ -454,11 +481,13 @@ func TestBuildSidebarRowsPutsRecentSessionsFirstAndHidesIdleBadges(t *testing.T)
 
 func TestMarkdownCacheStaysWithinByteBudget(t *testing.T) {
 	view := newShell(newTheme("light"))
+	oldKey := conversationCacheKey{sessionID: "old", itemID: "old"}
 	key := conversationCacheKey{sessionID: "session", itemID: "new", kind: desktopstate.TimelineAssistant}
-	view.conversationCache[conversationCacheKey{sessionID: "old", itemID: "old"}] = conversationMarkdownCache{
+	view.conversationCache[oldKey] = conversationMarkdownCache{
 		source: strings.Repeat("x", maxConversationCacheBytes),
 		bytes:  maxConversationCacheBytes,
 	}
+	view.conversationCacheOrder = []conversationCacheKey{oldKey}
 	view.conversationCacheBytes = maxConversationCacheBytes
 
 	var operations op.Ops

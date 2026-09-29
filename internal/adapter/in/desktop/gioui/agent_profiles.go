@@ -178,8 +178,9 @@ func (c *controller) selectAgent(agentID string) {
 	}
 
 	if targetSession != nil {
+		previousSessionID := c.state.ActiveSessionID
 		c.state.ActiveSessionID = targetSession.ID
-		c.pruneInactiveSessionHistoryLocked(targetSession.ID)
+		c.pruneInactiveSessionHistoryLocked(targetSession.ID, previousSessionID)
 		c.revision++
 		c.snapshotCache = controllerSnapshotCache{}
 		targetID := targetSession.ID

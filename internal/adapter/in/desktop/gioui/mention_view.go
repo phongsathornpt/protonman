@@ -11,7 +11,10 @@ import (
 )
 
 func (s *shell) updateMentionState(workDir string) {
-	text := s.composer.Text()
+	s.updateMentionStateForText(workDir, s.composer.Text())
+}
+
+func (s *shell) updateMentionStateForText(workDir, text string) {
 	runes := []rune(text)
 	_, end := s.composer.Selection()
 	if end < 0 {
@@ -35,11 +38,21 @@ func (s *shell) updateMentionState(workDir string) {
 		return
 	}
 	s.mentionDismissed = false
+	wasActive := s.mentionActive
+	previousItems := s.mentionItems
 	s.mentionActive = true
 	s.mentionContext = ctx
+	s.closePopovers()
 	agents := defaultMentionAgents()
 	workspaceFiles := s.mentionCache.get(workDir)
-	s.mentionItems = matchMentionItems(ctx, agents, workspaceFiles)
+	if workspaceFiles == nil && strings.TrimSpace(workDir) != "" && wasActive && len(previousItems) > 0 {
+		s.mentionItems = matchMentionItems(ctx, agents, nil)
+		if len(s.mentionItems) == 0 {
+			s.mentionItems = previousItems
+		}
+	} else {
+		s.mentionItems = matchMentionItems(ctx, agents, workspaceFiles)
+	}
 	if len(s.mentionItems) == 0 {
 		s.mentionSelectedIndex = 0
 	} else if s.mentionSelectedIndex >= len(s.mentionItems) {
@@ -47,6 +60,23 @@ func (s *shell) updateMentionState(workDir string) {
 	} else if s.mentionSelectedIndex < 0 {
 		s.mentionSelectedIndex = 0
 	}
+}
+
+func (s *shell) refreshMentionState(workDir string) {
+	if !s.mentionStateDirty && s.mentionWorkspace == workDir {
+		return
+	}
+	text := s.composer.Text()
+	s.composerHasContent = strings.TrimSpace(text) != ""
+	s.updateMentionStateForText(workDir, text)
+	s.mentionStateDirty = false
+	s.mentionWorkspace = workDir
+}
+
+func (s *shell) setComposerText(text string) {
+	s.composer.SetText(text)
+	s.mentionStateDirty = true
+	s.composerHasContent = strings.TrimSpace(text) != ""
 }
 
 func (s *shell) applySelectedMention() {
@@ -76,7 +106,7 @@ func (s *shell) insertMention(item MentionItem) {
 	}
 	insertion := item.InsertionText()
 	newRunes := append(runes[:start], append([]rune(insertion), runes[end:]...)...)
-	s.composer.SetText(string(newRunes))
+	s.setComposerText(string(newRunes))
 	newCaret := start + len([]rune(insertion))
 	s.composer.SetCaret(newCaret, newCaret)
 	s.mentionActive = false

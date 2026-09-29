@@ -74,7 +74,8 @@ func TestReadLoopBoundsQueuedReverseRequests(t *testing.T) {
 	client.requests = make(chan incomingRequest, 1)
 	input := strings.NewReader(
 		`{"jsonrpc":"2.0","id":1,"method":"first","params":{}}` + "\n" +
-			`{"jsonrpc":"2.0","id":2,"method":"second","params":{}}` + "\n",
+			`{"jsonrpc":"2.0","id":2,"method":"second","params":{}}` + "\n" +
+			`{"jsonrpc":"2.0","id":3,"method":"third","params":{}}` + "\n",
 	)
 	client.readLoop(input)
 
@@ -82,8 +83,8 @@ func TestReadLoopBoundsQueuedReverseRequests(t *testing.T) {
 		t.Fatalf("queued reverse requests = %d, want bounded capacity 1", got)
 	}
 	queued := <-client.requests
-	if string(queued.request.ID) != "1" {
-		t.Fatalf("queued request ID = %s, want 1", queued.request.ID)
+	if string(queued.request.ID) != "3" {
+		t.Fatalf("queued request ID = %s, want newest 3 after dropping oldest", queued.request.ID)
 	}
 	select {
 	case <-client.closed:

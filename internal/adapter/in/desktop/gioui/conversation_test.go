@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"image"
+	"reflect"
 	"runtime"
 	"strings"
 	"testing"
@@ -235,7 +236,7 @@ func TestUnknownSessionPermissionRequestsAreRejected(t *testing.T) {
 	}
 }
 
-func TestSelectSessionEvictsInactiveTimeline(t *testing.T) {
+func TestSelectSessionRetainsImmediatelyPreviousLoadedHistory(t *testing.T) {
 	controller := newTestController()
 	controller.clients = nil
 	controller.state.ActiveSessionID = "session-1"
@@ -246,30 +247,110 @@ func TestSelectSessionEvictsInactiveTimeline(t *testing.T) {
 		Context:   desktopstate.SessionContextState{Goal: "cached goal", Memory: desktopstate.MemoryState{Workspace: []desktopstate.MemoryEntryState{{Value: "cached memory"}}}},
 		Runtime:   desktopstate.RuntimeSettingsState{Model: "cached model"},
 	})
+	controller.state.Sessions = append(controller.state.Sessions, desktopstate.SessionState{
+		ID: "session-3", AgentID: controllerAgentID,
+		Timeline: []desktopstate.TimelineItem{{ID: "older", Kind: desktopstate.TimelineAssistant, Text: "older history"}},
+	})
 	controller.state.Sessions[0].Timeline = []desktopstate.TimelineItem{{ID: "current", Kind: desktopstate.TimelineAssistant, Text: "active history"}}
+	controller.state.Sessions[0].Subagents = []desktopstate.SubagentState{{ID: "previous-child", Summary: "previous result"}}
+	controller.state.Sessions[0].Context = desktopstate.SessionContextState{
+		Goal:   "previous goal",
+		Memory: desktopstate.MemoryState{Workspace: []desktopstate.MemoryEntryState{{Value: "previous memory"}}},
+	}
+	controller.state.Sessions[0].Runtime = desktopstate.RuntimeSettingsState{Model: "previous model"}
 	controller.histories["session-1"] = historyStateLoaded
 	controller.histories["session-2"] = historyStateLoaded
+	controller.histories["session-3"] = historyStateLoaded
 	controller.messageStreams[messageStreamKey{sessionID: "session-1", kind: "agent_message_chunk"}] = "stream"
 
 	controller.selectSession("session-2")
 
-	if len(controller.state.Sessions[0].Timeline) != 0 {
-		t.Fatalf("inactive transcript retained %d items", len(controller.state.Sessions[0].Timeline))
+	if len(controller.state.Sessions[0].Timeline) != 1 {
+		t.Fatalf("previous transcript retained %d items, want 1", len(controller.state.Sessions[0].Timeline))
 	}
-	if len(controller.state.Sessions[0].Subagents) != 0 {
-		t.Fatalf("inactive subagent history retained %d items", len(controller.state.Sessions[0].Subagents))
+	if len(controller.state.Sessions[0].Subagents) != 1 {
+		t.Fatalf("previous subagent history retained %d items, want 1", len(controller.state.Sessions[0].Subagents))
 	}
-	if controller.state.Sessions[0].Context.Goal != "" || len(controller.state.Sessions[0].Context.Memory.Workspace) != 0 || controller.state.Sessions[0].Runtime.Model != "" {
-		t.Fatal("inactive session inspector state was retained")
+	if controller.state.Sessions[0].Context.Goal != "previous goal" || len(controller.state.Sessions[0].Context.Memory.Workspace) != 1 || controller.state.Sessions[0].Runtime.Model != "previous model" {
+		t.Fatal("previous session inspector state was not retained")
 	}
-	if controller.histories["session-1"] != historyStateUnloaded {
-		t.Fatalf("inactive history state = %v, want unloaded", controller.histories["session-1"])
+	if controller.histories["session-1"] != historyStateLoaded {
+		t.Fatalf("previous history state = %v, want loaded", controller.histories["session-1"])
 	}
 	if controller.state.Sessions[1].Timeline[0].Text != "cached history" {
 		t.Fatal("selected session history was evicted")
 	}
+	if len(controller.state.Sessions[2].Timeline) != 0 || controller.histories["session-3"] != historyStateUnloaded {
+		t.Fatal("older inactive history was not evicted")
+	}
 	if _, ok := controller.messageStreams[messageStreamKey{sessionID: "session-1", kind: "agent_message_chunk"}]; ok {
 		t.Fatal("inactive stream retained")
+	}
+
+	controller.selectSession("session-1")
+	if got := controller.state.Sessions[0].Timeline[0].Text; got != "active history" {
+		t.Fatalf("reselected session history = %q, want retained history", got)
+	}
+	if controller.histories["session-1"] != historyStateLoaded {
+		t.Fatalf("reselected history state = %v, want loaded", controller.histories["session-1"])
+	}
+}
+
+func TestSelectSessionEvictsPreviousHistoryWhileItCanReceiveUpdates(t *testing.T) {
+	controller := newTestController()
+	controller.clients = nil
+	controller.state.ActiveSessionID = "session-1"
+	controller.state.Sessions[0].Status = desktopstate.TaskRunning
+	controller.state.Sessions[0].Timeline = []desktopstate.TimelineItem{{ID: "current", Kind: desktopstate.TimelineAssistant, Text: "active history"}}
+	controller.state.Sessions = append(controller.state.Sessions, desktopstate.SessionState{ID: "session-2", AgentID: controllerAgentID})
+	controller.histories["session-1"] = historyStateLoaded
+	controller.histories["session-2"] = historyStateLoaded
+
+	controller.selectSession("session-2")
+
+	if len(controller.state.Sessions[0].Timeline) != 0 || controller.histories["session-1"] != historyStateUnloaded {
+		t.Fatal("inactive running session history was retained despite dropped updates")
+	}
+}
+
+func TestApplyStagedHistoryEventsMatchesIncrementalApplication(t *testing.T) {
+	events := []desktopstate.Event{
+		{
+			Kind: desktopstate.EventTimelineAppended, SessionID: "session-a",
+			Item: desktopstate.TimelineItem{ID: "assistant-1", Kind: desktopstate.TimelineAssistant, Text: "hello", Streaming: true},
+		},
+		{
+			Kind: desktopstate.EventTimelineUpserted, SessionID: "session-a",
+			Item: desktopstate.TimelineItem{ID: "assistant-1", Kind: desktopstate.TimelineAssistant, Text: " world"},
+		},
+		{
+			Kind: desktopstate.EventTimelineAppended, SessionID: "session-a",
+			Item: desktopstate.TimelineItem{ID: "tool-1", Kind: desktopstate.TimelineTool, Title: "read", Status: "completed"},
+		},
+		{
+			Kind: desktopstate.EventSubagentUpserted, SessionID: "session-a",
+			Subagent: desktopstate.SubagentState{ID: "child-1", Profile: "strength", Summary: "done"},
+		},
+	}
+	incremental := benchmarkController()
+	batched := benchmarkController()
+	incremental.state.Sessions[0].Timeline = nil
+	batched.state.Sessions[0].Timeline = nil
+
+	incremental.mu.Lock()
+	for _, event := range events {
+		incremental.applyTimelineEventLocked(event)
+	}
+	incremental.mu.Unlock()
+	batched.mu.Lock()
+	batched.applyStagedHistoryEventsLocked("session-a", events)
+	batched.mu.Unlock()
+
+	if !reflect.DeepEqual(incremental.state.Sessions[0], batched.state.Sessions[0]) {
+		t.Fatalf("batched session state differs from incremental application:\n got: %#v\nwant: %#v", batched.state.Sessions[0], incremental.state.Sessions[0])
+	}
+	if !reflect.DeepEqual(incremental.timelineBytes, batched.timelineBytes) {
+		t.Fatalf("batched timeline accounting = %#v, want %#v", batched.timelineBytes, incremental.timelineBytes)
 	}
 }
 
@@ -321,7 +402,7 @@ func TestSelectingAnotherSessionReleasesInactiveHistoryStaging(t *testing.T) {
 	controller.historyStagingTruncated["session-2"] = true
 
 	controller.mu.Lock()
-	controller.pruneInactiveSessionHistoryLocked("session-1")
+	controller.pruneInactiveSessionHistoryLocked("session-1", "")
 	controller.mu.Unlock()
 
 	if _, ok := controller.historyStaging["session-2"]; ok {
@@ -842,5 +923,30 @@ func TestChatUIRefinements(t *testing.T) {
 	jumpDims := sh.layoutJumpToBottomButton(gtx)
 	if jumpDims.Size.X == 0 || jumpDims.Size.Y == 0 {
 		t.Fatalf("layoutJumpToBottomButton returned empty dims")
+	}
+}
+
+func TestSessionHistoryLoadParamsDeferModelDiscovery(t *testing.T) {
+	controller := newTestController()
+	params := controller.sessionHistoryLoadParams("session-1", "/workspace", []string{"/workspace/extra"})
+	encoded, err := json.Marshal(params)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got struct {
+		Meta struct {
+			Protonman struct {
+				DeferModelDiscovery bool `json:"deferModelDiscovery"`
+			} `json:"protonman"`
+		} `json:"_meta"`
+	}
+	if err := json.Unmarshal(encoded, &got); err != nil {
+		t.Fatal(err)
+	}
+	if !got.Meta.Protonman.DeferModelDiscovery {
+		t.Fatalf("session history load metadata = %s, want deferred model discovery", encoded)
+	}
+	if params["sessionId"] != "session-1" || params["cwd"] != "/workspace" {
+		t.Fatalf("session history load params lost session/workspace: %#v", params)
 	}
 }

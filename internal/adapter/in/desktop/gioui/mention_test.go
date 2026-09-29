@@ -193,3 +193,28 @@ func TestInsertMention(t *testing.T) {
 		t.Error("mentionActive should be false after insert")
 	}
 }
+
+func TestRefreshMentionStateTracksDraftAndWorkspaceChanges(t *testing.T) {
+	s := newShell(newTheme("light"))
+	s.setComposerText("check @str")
+	s.composer.SetCaret(len([]rune("check @str")), len([]rune("check @str")))
+	s.refreshMentionState("")
+	if !s.mentionActive {
+		t.Fatal("mention state did not refresh after a draft change")
+	}
+
+	s.setComposerText("plain text")
+	s.refreshMentionState("")
+	if s.mentionActive {
+		t.Fatal("mention state remained active after the draft changed")
+	}
+
+	s.setComposerText("check @str")
+	s.composer.SetCaret(len([]rune("check @str")), len([]rune("check @str")))
+	s.refreshMentionState("")
+	s.mentionStateDirty = false
+	s.refreshMentionState("/workspace/changed")
+	if !s.mentionActive || s.mentionWorkspace != "/workspace/changed" {
+		t.Fatal("mention state did not refresh after the workspace changed")
+	}
+}

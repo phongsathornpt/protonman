@@ -260,6 +260,7 @@ type workspaceMentionCache struct {
 	workDir     string
 	items       []MentionItem
 	lastIndexed time.Time
+	refreshing  bool
 }
 
 func (c *workspaceMentionCache) get(workDir string) []MentionItem {
@@ -267,20 +268,37 @@ func (c *workspaceMentionCache) get(workDir string) []MentionItem {
 		return nil
 	}
 	c.mu.Lock()
-	if c.workDir == workDir && time.Since(c.lastIndexed) < workspaceCacheTTL && len(c.items) > 0 {
+	if c.workDir == workDir && len(c.items) > 0 {
 		items := c.items
+		stale := time.Since(c.lastIndexed) >= workspaceCacheTTL
+		shouldRefresh := stale && !c.refreshing
+		if shouldRefresh {
+			c.refreshing = true
+		}
 		c.mu.Unlock()
+		if shouldRefresh {
+			go c.refresh(workDir)
+		}
 		return items
 	}
+	if c.workDir == workDir && c.refreshing {
+		c.mu.Unlock()
+		return nil
+	}
+	c.refreshing = true
 	c.mu.Unlock()
+	go c.refresh(workDir)
+	return nil
+}
 
+func (c *workspaceMentionCache) refresh(workDir string) {
 	items := scanWorkspaceFiles(workDir)
 	c.mu.Lock()
 	c.workDir = workDir
 	c.items = items
 	c.lastIndexed = time.Now()
+	c.refreshing = false
 	c.mu.Unlock()
-	return items
 }
 
 func scanWorkspaceFiles(workDir string) []MentionItem {

@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -152,8 +153,8 @@ func (c *controller) handleACPEventFromAgent(agentID string, source *acpclient.C
 	c.mu.Unlock()
 	c.notify()
 	if update.Kind == "tool_call_update" && terminalToolStatus(update.Status) {
-		c.refreshSessionContextFrom(source, payload.SessionID, true)
-		c.refreshSessionMemoryFrom(source, payload.SessionID, true)
+		c.refreshSessionContextFrom(source, payload.SessionID, false)
+		c.refreshSessionMemoryFrom(source, payload.SessionID, false)
 	}
 }
 
@@ -186,10 +187,16 @@ func (c *controller) stageHistoryEventLocked(sessionID string, event desktopstat
 	bytes := c.historyStagingBytes[sessionID]
 	for bytes > stagingTrimTargetBytes || len(staged)-drop > stagingTrimTargetEvents {
 		bytes -= historyEventSize(staged[drop])
+		staged[drop] = desktopstate.Event{}
 		drop++
 	}
-	remaining := append([]desktopstate.Event(nil), staged[drop:]...)
-	c.historyStaging[sessionID] = remaining
+	if drop > 0 {
+		copy(staged, staged[drop:])
+		for i := len(staged) - drop; i < len(staged); i++ {
+			staged[i] = desktopstate.Event{}
+		}
+		c.historyStaging[sessionID] = staged[:len(staged)-drop]
+	}
 	c.historyStagingBytes[sessionID] = bytes
 	c.historyStagingTruncated[sessionID] = true
 }
@@ -327,7 +334,9 @@ func (c *controller) flushMessageStreamLocked(buffer *messageStreamBuffer) bool 
 		if item.ID != buffer.itemID || item.Kind != buffer.kind {
 			continue
 		}
-		changed := item.Text != buffer.text.String()
+		next := buffer.text.String()
+		changed := item.Text != next
+		grown := 0
 		if changed {
 			if c.timelineBytes == nil {
 				c.timelineBytes = make(map[string]int)
@@ -335,15 +344,18 @@ func (c *controller) flushMessageStreamLocked(buffer *messageStreamBuffer) bool 
 			if _, ok := c.timelineBytes[buffer.sessionID]; !ok {
 				c.timelineBytes[buffer.sessionID] = timelineSize(session.Timeline)
 			}
-			c.timelineBytes[buffer.sessionID] += len(buffer.text.String()) - len(item.Text)
-			item.Text = buffer.text.String()
+			grown = len(next) - len(item.Text)
+			c.timelineBytes[buffer.sessionID] += grown
+			item.Text = next
 		}
 		if buffer.truncated && !session.HistoryTruncated {
 			session.HistoryTruncated = true
 			changed = true
 		}
 		item.Streaming = true
-		c.pruneSessionTimelineLocked(buffer.sessionID)
+		if changed && (grown > 4096 || len(session.Timeline) >= maxSessionTimelineItems) {
+			c.pruneSessionTimelineLocked(buffer.sessionID)
+		}
 		return changed
 	}
 	return false
@@ -448,6 +460,50 @@ func (c *controller) applyTimelineEventLocked(event desktopstate.Event) {
 	desktopstate.Apply(&c.state, event)
 	c.timelineBytes[event.SessionID] += delta
 	c.pruneSessionTimelineLocked(event.SessionID)
+}
+
+func (c *controller) applyStagedHistoryEventsLocked(sessionID string, events []desktopstate.Event) {
+	session := desktopstateSessionPointer(&c.state, sessionID)
+	if session == nil {
+		return
+	}
+	if c.timelineBytes == nil {
+		c.timelineBytes = make(map[string]int)
+	}
+	if _, ok := c.timelineBytes[sessionID]; !ok {
+		c.timelineBytes[sessionID] = timelineSize(session.Timeline)
+	}
+
+	appendCount := 0
+	for _, event := range events {
+		if event.SessionID == sessionID && event.Kind == desktopstate.EventTimelineAppended {
+			appendCount++
+		}
+	}
+	session.Timeline = slices.Grow(session.Timeline, appendCount)
+
+	for _, event := range events {
+		if event.SessionID != sessionID {
+			continue
+		}
+		if event.Kind != desktopstate.EventTimelineAppended {
+			c.applyTimelineEventLocked(event)
+			continue
+		}
+		bounded, truncated, keep := boundSessionEvent(event, maxSessionTimelineBytes)
+		if truncated {
+			session.HistoryTruncated = true
+		}
+		if !keep {
+			continue
+		}
+		session.Timeline = append(session.Timeline, bounded.Item)
+		c.timelineBytes[sessionID] += timelineItemSize(bounded.Item)
+		if c.timelineBytes[sessionID] > maxSessionTimelineBytes || len(session.Timeline) > maxSessionTimelineItems {
+			c.pruneSessionTimelineLocked(sessionID)
+		}
+	}
+	c.pruneSessionTimelineLocked(sessionID)
 }
 
 func timelineSize(items []desktopstate.TimelineItem) int {
@@ -685,7 +741,7 @@ func (c *controller) loadSessionHistory(sessionID string) {
 	c.revision++
 	c.mu.Unlock()
 	c.notify()
-	params := c.mcpSessionParams(sessionID, workspace, session.AdditionalDirectories)
+	params := c.sessionHistoryLoadParams(sessionID, workspace, session.AdditionalDirectories)
 
 	go func() {
 		unlock, acquired := c.lockAgentSessionContext(callCtx, agentID)
@@ -717,6 +773,15 @@ func (c *controller) loadSessionHistory(sessionID string) {
 	}()
 }
 
+func (c *controller) sessionHistoryLoadParams(sessionID, workspace string, additionalDirectories []string) map[string]any {
+	params := c.mcpSessionParams(sessionID, workspace, additionalDirectories)
+	// refreshSessionRuntime fetches the catalog in the background after history loads.
+	params["_meta"] = map[string]any{
+		"protonman": map[string]any{"deferModelDiscovery": true},
+	}
+	return params
+}
+
 func (c *controller) finishSessionHistoryLoad(client *acpclient.Client, sessionID string, loadErr error) {
 	c.finishSessionHistoryLoadRequest(client, sessionID, nil, loadErr, nil, nil)
 }
@@ -742,7 +807,8 @@ func (c *controller) finishSessionHistoryLoadRequest(client *acpclient.Client, s
 	delete(c.historyStagingBytes, sessionID)
 	delete(c.historyStagingTruncated, sessionID)
 	c.clearMessageStreamsLocked(sessionID)
-	if loadErr == nil && c.state.ActiveSessionID == sessionID {
+	applyStaged := loadErr == nil && c.state.ActiveSessionID == sessionID
+	if applyStaged {
 		if session := desktopstateSessionPointer(&c.state, sessionID); session != nil {
 			session.HistoryTruncated = session.HistoryTruncated || truncated
 			if models, currentModel := extractModelsFromACP(configOptions, modelsResult); len(models) > 0 {
@@ -753,11 +819,31 @@ func (c *controller) finishSessionHistoryLoadRequest(client *acpclient.Client, s
 				}
 			}
 		}
-		for _, event := range coalesceStagedMessageChunks(staged) {
-			c.applyTimelineEventLocked(event)
+	}
+	c.mu.Unlock()
+	if applyStaged {
+		coalesced := coalesceStagedMessageChunks(staged)
+		c.mu.Lock()
+		if currentClient && loadErr == nil && c.state.ActiveSessionID == sessionID {
+			c.applyStagedHistoryEventsLocked(sessionID, coalesced)
+			c.clearMessageStreamsLocked(sessionID)
 		}
-		c.clearMessageStreamsLocked(sessionID)
-		c.pruneSessionTimelineLocked(sessionID)
+		c.mu.Unlock()
+	}
+	c.mu.Lock()
+	if loadErr == nil && c.state.ActiveSessionID == sessionID {
+		if session := desktopstateSessionPointer(&c.state, sessionID); session != nil {
+			session.HistoryTruncated = session.HistoryTruncated || truncated
+			if models, currentModel := extractModelsFromACP(configOptions, modelsResult); len(models) > 0 {
+				if !applyStaged {
+					c.setAgentAvailableModelsLocked(session.AgentID, models)
+					session.AvailableModels = models
+					if currentModel != "" && session.Runtime.Model == "" {
+						session.Runtime.Model = currentModel
+					}
+				}
+			}
+		}
 		c.histories[sessionID] = historyStateLoaded
 		if truncated {
 			c.statuses[agentID] = "Connected · recent session history loaded"
@@ -786,7 +872,6 @@ func (c *controller) resumeKnownSessions(agentID string, client *acpclient.Clien
 	sessions := append([]desktopstate.SessionState(nil), c.state.Sessions...)
 	activeSessionID := c.state.ActiveSessionID
 	c.mu.RUnlock()
-	defer c.lockAgentSession(agentID)()
 	for _, session := range sessions {
 		if c.ctx.Err() != nil {
 			return
@@ -815,6 +900,10 @@ func (c *controller) resumeKnownSessions(agentID string, client *acpclient.Clien
 			}
 		}
 		params := c.mcpSessionParams(session.ID, workspace, session.AdditionalDirectories)
+		unlock, acquired := c.lockAgentSessionContext(c.ctx, agentID)
+		if !acquired {
+			return
+		}
 		callCtx, cancel := context.WithTimeout(c.ctx, reconnectRequestTimeout)
 		var resumeResult struct {
 			ConfigOptions []acpConfigOption `json:"configOptions"`
@@ -822,6 +911,7 @@ func (c *controller) resumeKnownSessions(agentID string, client *acpclient.Clien
 		}
 		err := client.Call(callCtx, "session/resume", params, &resumeResult)
 		cancel()
+		unlock()
 		if err != nil && !isACPMethodNotFound(err) && c.ctx.Err() == nil {
 			if session.ID == activeSessionID {
 				c.setAgentStatus(agentID, "Session resume failed · "+compactError(err))
@@ -1056,20 +1146,15 @@ func (c *controller) pruneSessionRuntimeLocked() {
 	c.pruneAgentRuntimeLocked()
 }
 
-// pruneInactiveSessionHistoryLocked keeps only the selected session's transcript
-// resident. ACP session/load reconstructs an evicted transcript when selected.
-func (c *controller) pruneInactiveSessionHistoryLocked(activeSessionID string) {
+// pruneInactiveSessionHistoryLocked keeps the active and immediately previous
+// loaded idle transcripts resident. Inactive running sessions must reload because
+// their updates are not applied while another session is selected.
+func (c *controller) pruneInactiveSessionHistoryLocked(activeSessionID, previousSessionID string) {
 	for index := range c.state.Sessions {
 		session := &c.state.Sessions[index]
 		if session.ID == activeSessionID {
 			continue
 		}
-		session.Timeline = nil
-		session.HistoryTruncated = false
-		session.Subagents = nil
-		session.Context = desktopstate.SessionContextState{}
-		session.Runtime = desktopstate.RuntimeSettingsState{}
-		delete(c.timelineBytes, session.ID)
 		if load := c.historyLoads[session.ID]; load != nil {
 			load.cancel()
 			delete(c.historyLoads, session.ID)
@@ -1078,9 +1163,6 @@ func (c *controller) pruneInactiveSessionHistoryLocked(activeSessionID string) {
 		delete(c.historyStaging, session.ID)
 		delete(c.historyStagingBytes, session.ID)
 		delete(c.historyStagingTruncated, session.ID)
-		if c.histories[session.ID] != historyStateLoading {
-			c.histories[session.ID] = historyStateUnloaded
-		}
 		for streamKey := range c.messageStreams {
 			if streamKey.sessionID == session.ID {
 				if buffer := c.messageStreamBuffers[streamKey]; buffer != nil && buffer.timer != nil {
@@ -1090,6 +1172,16 @@ func (c *controller) pruneInactiveSessionHistoryLocked(activeSessionID string) {
 				delete(c.messageStreams, streamKey)
 			}
 		}
+		if session.ID == previousSessionID && c.histories[session.ID] == historyStateLoaded && !sessionBusy(session.Status) {
+			continue
+		}
+		session.Timeline = nil
+		session.HistoryTruncated = false
+		session.Subagents = nil
+		session.Context = desktopstate.SessionContextState{}
+		session.Runtime = desktopstate.RuntimeSettingsState{}
+		delete(c.timelineBytes, session.ID)
+		c.histories[session.ID] = historyStateUnloaded
 	}
 }
 

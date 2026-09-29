@@ -97,6 +97,10 @@ type shell struct {
 	conversationMarkdown         *markdown.Renderer
 	conversationCache            map[conversationCacheKey]conversationMarkdownCache
 	conversationCacheBytes       int
+	conversationCacheOrder       []conversationCacheKey
+	conversationCodeCache        map[conversationCacheKey]conversationCodeCache
+	conversationCodeCacheBytes   int
+	conversationCodeCacheOrder   []conversationCacheKey
 	conversationExpanded         map[conversationCacheKey]bool
 	conversationPage             map[conversationCacheKey]int
 	conversationExpandButtons    map[conversationCacheKey]*conversationDisclosureButtons
@@ -119,6 +123,9 @@ type shell struct {
 	mentionDismissed             bool
 	mentionDismissedQuery        string
 	mentionContext               MentionContext
+	mentionStateDirty            bool
+	mentionWorkspace             string
+	composerHasContent           bool
 	mentionItems                 []MentionItem
 	mentionSelectedIndex         int
 	mentionList                  layout.List
@@ -254,6 +261,7 @@ type shell struct {
 	reasoningChipButton      widget.Clickable
 	modelPopoverVisible      bool
 	reasoningPopoverVisible  bool
+	modelSearchFocusPending  bool
 	modelPopoverCloseButton  widget.Clickable
 	reasoningPopoverCloseBtn widget.Clickable
 	modelSearchEditor        widget.Editor
@@ -357,6 +365,8 @@ func newShell(theme *theme) *shell {
 		agentProfileLive:             make(map[string]struct{}),
 		conversationMarkdown:         markdownRenderer,
 		conversationCache:            make(map[conversationCacheKey]conversationMarkdownCache),
+		conversationCodeCache:        make(map[conversationCacheKey]conversationCodeCache),
+		mentionStateDirty:            true,
 		conversationExpanded:         make(map[conversationCacheKey]bool),
 		conversationPage:             make(map[conversationCacheKey]int),
 		conversationExpandButtons:    make(map[conversationCacheKey]*conversationDisclosureButtons),
@@ -416,6 +426,10 @@ func (s *shell) handleGlobalShortcuts(gtx layout.Context, snapshot controllerSna
 			break
 		}
 		if ev, ok := event.(key.Event); ok && ev.State == key.Press {
+			if s.settingsModalOpen && ev.Name != "," && ev.Name != key.NameEscape {
+				continue
+			}
+
 			switch ev.Name {
 			case "B":
 				s.sidebarVisible = !s.sidebarVisible
@@ -431,24 +445,35 @@ func (s *shell) handleGlobalShortcuts(gtx layout.Context, snapshot controllerSna
 				s.sidebarVisible = true
 				gtx.Execute(key.FocusCmd{Tag: &s.sidebarSearchEditor})
 			case ",":
-				s.settingsModalOpen = !s.settingsModalOpen
+				if s.settingsModalOpen {
+					s.closeSettingsModal()
+					gtx.Execute(key.FocusCmd{Tag: &s.composer})
+				} else {
+					s.openSettingsModal()
+					gtx.Execute(key.FocusCmd{Tag: nil})
+				}
 			case "M":
-				s.modelPopoverVisible = !s.modelPopoverVisible
-				s.reasoningPopoverVisible = false
-				if s.modelPopoverVisible && s.onRefreshRuntime != nil {
-					s.onRefreshRuntime()
+				if s.modelPopoverVisible {
+					s.closePopovers()
+					gtx.Execute(key.FocusCmd{Tag: &s.composer})
+				} else {
+					s.openModelPopover()
 				}
 			case "R":
-				s.reasoningPopoverVisible = !s.reasoningPopoverVisible
-				s.modelPopoverVisible = false
+				if s.reasoningPopoverVisible {
+					s.closePopovers()
+				} else {
+					s.openReasoningPopover()
+					gtx.Execute(key.FocusCmd{Tag: &s.composer})
+				}
 			case key.NameEscape:
 				if s.settingsModalOpen {
-					s.settingsModalOpen = false
+					s.closeSettingsModal()
+					gtx.Execute(key.FocusCmd{Tag: &s.composer})
 					break
 				}
 				if s.modelPopoverVisible || s.reasoningPopoverVisible {
-					s.modelPopoverVisible = false
-					s.reasoningPopoverVisible = false
+					s.closePopovers()
 					gtx.Execute(key.FocusCmd{Tag: &s.composer})
 				}
 			}
@@ -761,6 +786,7 @@ func openBrowserURL(targetURL string) {
 func (s *shell) layoutSidebarFooter(gtx layout.Context, snapshot controllerSnapshot) layout.Dimensions {
 	if s.sidebarInspectorButton.Clicked(gtx) {
 		s.openSettingsModal()
+		gtx.Execute(key.FocusCmd{Tag: nil})
 	}
 
 	if s.sidebarArchiveButton.Clicked(gtx) && s.onSetFilterMode != nil {

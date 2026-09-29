@@ -20,6 +20,7 @@ import (
 
 var ErrInvalidServer = errors.New("invalid ACP server")
 var ErrInvalidRequest = errors.New("invalid request")
+var ErrMethodNotSupported = errors.New("method is not supported")
 
 type Option func(*Server)
 type RunnerFactory func(*toolcall.Service) (app.Conversation, error)
@@ -254,6 +255,9 @@ func (s *Server) writeResponse(output io.Writer, id json.RawMessage, result any,
 	if requestErr != nil {
 		if len(id) == 0 || string(id) == "null" {
 			return nil
+		}
+		if errors.Is(requestErr, ErrMethodNotSupported) {
+			return WriteJSON(output, &s.writeMu, RPCResponse{JSONRPC: "2.0", ID: id, Error: &RPCError{Code: CodeMethodNotFound, Message: requestErr.Error()}})
 		}
 		return WriteJSON(output, &s.writeMu, RPCResponse{JSONRPC: "2.0", ID: id, Error: &RPCError{Code: CodeServerError, Message: requestErr.Error()}})
 	}

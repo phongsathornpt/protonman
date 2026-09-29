@@ -154,6 +154,10 @@ func decodeSessionConfigStringValue(params SetSessionConfigOptionParams) (string
 }
 
 func (s *Server) sessionConfigOptions(ctx context.Context, sess *Session) []SessionConfigOption {
+	return s.sessionConfigOptionsWithModelDiscovery(ctx, sess, true)
+}
+
+func (s *Server) sessionConfigOptionsWithModelDiscovery(ctx context.Context, sess *Session, discoverModels bool) []SessionConfigOption {
 	if sess == nil {
 		return nil
 	}
@@ -164,9 +168,11 @@ func (s *Server) sessionConfigOptions(ctx context.Context, sess *Session) []Sess
 	options := make([]SessionConfigOption, 0, 3)
 
 	modelValues := []SessionConfigSelectOption{{Value: settings.Model, Name: settings.Model}}
-	if provider, ok := sessionModelOptionsProviderFor(s); ok {
-		if discovered, err := provider(ctx, settings); err == nil && len(discovered) > 0 {
-			modelValues = ensureCurrentConfigValue(discovered, settings.Model)
+	if discoverModels {
+		if provider, ok := sessionModelOptionsProviderFor(s); ok {
+			if discovered, err := provider(ctx, settings); err == nil && len(discovered) > 0 {
+				modelValues = ensureCurrentConfigValue(discovered, settings.Model)
+			}
 		}
 	}
 	if strings.TrimSpace(settings.Model) != "" {

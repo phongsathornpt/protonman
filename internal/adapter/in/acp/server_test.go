@@ -336,6 +336,82 @@ func TestACPSessionLoadAndReplay(t *testing.T) {
 	}
 }
 
+func TestACPSessionLoadCanDeferRemoteModelDiscovery(t *testing.T) {
+	ctx := context.Background()
+	store, err := sessionfs.NewFileStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	const sessionID = "deferred-model-load"
+	if err := store.Save(ctx, sessionID, session.State{
+		SessionID:      sessionID,
+		PermissionMode: "ask",
+		ModelProvider:  "runanyware",
+		ModelID:        "mimo-v2.6-pro",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	server := newTestServer(t, permission.ModeAsk)
+	server.sessionService = app.NewSessions(store)
+	sessionRuntimeControls.Store(server, sessionRuntimeControl{
+		defaults: SessionRuntimeSettings{Provider: "runanyware", Model: "mimo-v2.6-pro"},
+	})
+	defer sessionRuntimeControls.Delete(server)
+
+	discoverCalls := 0
+	sessionModelOptionsProviders.Store(server, SessionModelOptionsProvider(func(context.Context, SessionRuntimeSettings) ([]SessionConfigSelectOption, error) {
+		discoverCalls++
+		return []SessionConfigSelectOption{{Value: "remote-model", Name: "Remote Model"}}, nil
+	}))
+	defer sessionModelOptionsProviders.Delete(server)
+
+	deferredParams, err := json.Marshal(SessionLoadParams{
+		MetaCarrier: MetaCarrier{Meta: Meta{
+			"protonman": json.RawMessage(`{"deferModelDiscovery":true}`),
+		}},
+		SessionID: sessionID,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, _, err := server.dispatch(ctx, RPCRequest{Method: "session/load", Params: deferredParams}, &bytes.Buffer{})
+	if err != nil {
+		t.Fatalf("deferred session/load error = %v", err)
+	}
+	deferred, ok := result.(SessionLoadResult)
+	if !ok {
+		t.Fatalf("deferred session/load result = %T, want SessionLoadResult", result)
+	}
+	if discoverCalls != 0 {
+		t.Fatalf("model discovery calls during deferred load = %d, want 0", discoverCalls)
+	}
+	deferredModels, _ := findSessionConfigOption(deferred.ConfigOptions, configIDModel)
+	if len(deferredModels.Options) != 1 || deferredModels.Options[0].Value != "mimo-v2.6-pro" {
+		t.Fatalf("deferred model options = %#v, want only the current model", deferredModels.Options)
+	}
+
+	regularParams, err := json.Marshal(SessionLoadParams{SessionID: sessionID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, _, err = server.dispatch(ctx, RPCRequest{Method: "session/load", Params: regularParams}, &bytes.Buffer{})
+	if err != nil {
+		t.Fatalf("regular session/load error = %v", err)
+	}
+	regular, ok := result.(SessionLoadResult)
+	if !ok {
+		t.Fatalf("regular session/load result = %T, want SessionLoadResult", result)
+	}
+	if discoverCalls != 1 {
+		t.Fatalf("model discovery calls after regular load = %d, want 1", discoverCalls)
+	}
+	regularModels, _ := findSessionConfigOption(regular.ConfigOptions, configIDModel)
+	if !selectOptionContains(regularModels, "remote-model") {
+		t.Fatalf("regular model options = %#v, want discovered model", regularModels.Options)
+	}
+}
+
 func TestACPPromptSurfacesPersistenceFailure(t *testing.T) {
 	store := invalidSessionStore(t)
 	server := newTestServerWithRunner(t, permission.ModeAlwaysApprove, &streamingACPRunner{})
@@ -551,6 +627,18 @@ func TestACPUnknownMethod(t *testing.T) {
 	}
 	if !strings.Contains(output.String(), "not supported") {
 		t.Fatalf("unknown method response = %s", output.String())
+	}
+	var resp RPCResponse
+	for line := range bytes.SplitSeq(bytes.TrimSpace(output.Bytes()), []byte("\n")) {
+		if len(bytes.TrimSpace(line)) == 0 {
+			continue
+		}
+		if err := json.Unmarshal(line, &resp); err != nil {
+			t.Fatalf("decode unknown method response: %v", err)
+		}
+	}
+	if resp.Error == nil || resp.Error.Code != CodeMethodNotFound {
+		t.Fatalf("unknown method error = %#v, want code %d", resp.Error, CodeMethodNotFound)
 	}
 }
 

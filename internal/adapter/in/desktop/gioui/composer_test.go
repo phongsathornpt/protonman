@@ -5,6 +5,7 @@ package gioui
 import (
 	"fmt"
 	"image"
+	"strings"
 	"testing"
 	"time"
 
@@ -332,14 +333,20 @@ func TestComposerTopHeaderAndPopoverLayout(t *testing.T) {
 
 func TestJumpToBottomSuppressedWhenPopoverOpen(t *testing.T) {
 	view := newShell(newTheme("dark"))
+	timeline := make([]desktopstate.TimelineItem, 0, 40)
+	for i := 0; i < 40; i++ {
+		kind := desktopstate.TimelineUser
+		if i%2 == 1 {
+			kind = desktopstate.TimelineAssistant
+		}
+		timeline = append(timeline, desktopstate.TimelineItem{
+			Kind: kind,
+			Text: strings.Repeat("Scrollable message content. ", 8),
+		})
+	}
 	session := desktopstate.SessionState{
-		ID: "session-scroll",
-		Timeline: []desktopstate.TimelineItem{
-			{Kind: desktopstate.TimelineUser, Text: "Msg 1"},
-			{Kind: desktopstate.TimelineAssistant, Text: "Msg 2"},
-			{Kind: desktopstate.TimelineUser, Text: "Msg 3"},
-			{Kind: desktopstate.TimelineAssistant, Text: "Msg 4"},
-		},
+		ID:       "session-scroll",
+		Timeline: timeline,
 	}
 	var ops op.Ops
 	var router input.Router
@@ -351,12 +358,107 @@ func TestJumpToBottomSuppressedWhenPopoverOpen(t *testing.T) {
 		Source:      router.Source(),
 	}
 
-	// Normal scrolled state (Position.BeforeEnd = true)
-	view.conversationList.Position.BeforeEnd = true
-	view.modelPopoverVisible = false
+	// Scrolled away from the tail: user intent is BeforeEnd, so layout does
+	// not force-follow while reading older content.
+	view.conversationList.ScrollToEnd = true
+	view.conversationList.Position = layout.Position{First: 0, Offset: 0, BeforeEnd: true}
 	_ = view.layoutConversation(gtx, session, historyStateLoaded)
+	if view.conversationList.ScrollToEnd {
+		t.Fatal("ScrollToEnd must stay false while scrolled away from the tail")
+	}
 
-	// Popover open suppresses jump to bottom
+	// Popover open suppresses auto-scroll follow, but the jump button stays
+	// available; clicking it closes the overlay and follows the tail.
 	view.modelPopoverVisible = true
+	view.mentionActive = false
+	view.conversationList.Position.BeforeEnd = false
 	_ = view.layoutConversation(gtx, session, historyStateLoaded)
+	if view.conversationList.ScrollToEnd {
+		t.Fatal("ScrollToEnd must stay false while a composer overlay is open")
+	}
+
+	view.jumpToBottomButton.Click()
+	_ = view.layoutConversation(gtx, session, historyStateLoaded)
+	_ = view.layoutJumpToBottomButton(mkJumpGtx())
+	if view.modelPopoverVisible {
+		t.Fatal("jump-to-bottom must close composer overlays")
+	}
+	if !view.conversationList.ScrollToEnd {
+		t.Fatal("jump-to-bottom must follow the tail after closing overlays")
+	}
+}
+
+func mkJumpGtx() layout.Context {
+	ops := new(op.Ops)
+	var router input.Router
+	return layout.Context{
+		Ops:         ops,
+		Constraints: layout.Constraints{Min: image.Pt(800, 0), Max: image.Pt(800, 600)},
+		Metric:      unit.Metric{PxPerDp: 1, PxPerSp: 1},
+		Now:         time.Unix(1, 0),
+		Source:      router.Source(),
+	}
+}
+
+func TestComposerOverlayExclusivity(t *testing.T) {
+	view := newShell(newTheme("dark"))
+	session := desktopstate.SessionState{ID: "session-overlay"}
+
+	if view.modelPopoverVisible || view.reasoningPopoverVisible || view.mentionActive {
+		t.Fatal("expected overlays initially closed")
+	}
+
+	view.mentionActive = true
+	view.mentionItems = []MentionItem{{Kind: MentionItemKindAgent, Name: "strength"}}
+	view.openModelPopover()
+	if !view.modelPopoverVisible || view.reasoningPopoverVisible || view.mentionActive {
+		t.Fatalf("model popover must close mentions, got model=%v reasoning=%v mention=%v",
+			view.modelPopoverVisible, view.reasoningPopoverVisible, view.mentionActive)
+	}
+
+	view.mentionActive = true
+	view.mentionItems = []MentionItem{{Kind: MentionItemKindAgent, Name: "strength"}}
+	view.openReasoningPopover()
+	if view.modelPopoverVisible || !view.reasoningPopoverVisible || view.mentionActive {
+		t.Fatalf("reasoning popover must close mentions, got model=%v reasoning=%v mention=%v",
+			view.modelPopoverVisible, view.reasoningPopoverVisible, view.mentionActive)
+	}
+
+	view.modelPopoverVisible = true
+	view.syncConversation(desktopstate.State{ActiveSessionID: "session-overlay"})
+	if view.modelPopoverVisible || view.reasoningPopoverVisible {
+		t.Fatalf("session switch must close popovers, got model=%v reasoning=%v",
+			view.modelPopoverVisible, view.reasoningPopoverVisible)
+	}
+
+	snapshot := desktopCaptureSnapshot()
+	mkGtx := func() (layout.Context, *op.Ops, *input.Router) {
+		var ops op.Ops
+		var router input.Router
+		return layout.Context{
+			Ops:         &ops,
+			Constraints: layout.Constraints{Min: image.Pt(700, 0), Max: image.Pt(700, 600)},
+			Metric:      unit.Metric{PxPerDp: 1, PxPerSp: 1},
+			Now:         time.Unix(1, 0),
+			Source:      router.Source(),
+		}, &ops, &router
+	}
+	gtx, _, router := mkGtx()
+	_ = session
+	view.activeWorkspace = ""
+	view.modelPopoverVisible = true
+	view.composer.SetText("hello @str")
+	view.composer.SetCaret(len([]rune("hello @str")), len([]rune("hello @str")))
+	_ = view.layoutComposer(gtx, snapshot.State.Sessions[0], snapshot)
+	router.Frame(gtx.Ops)
+	if !view.mentionActive {
+		t.Fatal("mention popup must activate for '@str' at caret")
+	}
+	if len(view.mentionItems) == 0 {
+		t.Fatal("mention popup must offer matches for '@str'")
+	}
+	if view.modelPopoverVisible || view.reasoningPopoverVisible {
+		t.Fatalf("mention activation must close popovers, got model=%v reasoning=%v",
+			view.modelPopoverVisible, view.reasoningPopoverVisible)
+	}
 }

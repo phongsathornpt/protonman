@@ -31,6 +31,8 @@ var themeChoices = []struct {
 
 func (s *shell) openSettingsModal() {
 	s.settingsModalOpen = true
+	s.closePopovers()
+	s.mentionActive = false
 	log.Printf("[UI] settings modal opened, activeTab=%d", s.settingsActiveTab)
 }
 
@@ -42,6 +44,7 @@ func (s *shell) closeSettingsModal() {
 func (s *shell) layoutSettingsModal(gtx layout.Context, snapshot controllerSnapshot) layout.Dimensions {
 	if s.settingsModalCloseBtn.Clicked(gtx) || s.settingsModalScrim.Clicked(gtx) {
 		s.closeSettingsModal()
+		gtx.Execute(key.FocusCmd{Tag: &s.composer})
 	}
 
 	for {
@@ -51,6 +54,7 @@ func (s *shell) layoutSettingsModal(gtx layout.Context, snapshot controllerSnaps
 		}
 		if ev, ok := event.(key.Event); ok && ev.State == key.Press {
 			s.closeSettingsModal()
+			gtx.Execute(key.FocusCmd{Tag: &s.composer})
 		}
 	}
 
