@@ -600,6 +600,33 @@ func TestMarkdownCacheBypassesOversizedMessages(t *testing.T) {
 	}
 }
 
+func TestResponseSplitCacheReusesStableSource(t *testing.T) {
+	view := newShell(newTheme("light"))
+	source := strings.Repeat("paragraph text with **markdown**\n\n", 64)
+	key := conversationCacheKey{sessionID: "session", itemID: "assistant-1", kind: desktopstate.TimelineAssistant}
+
+	first := view.responseBlocks(key, source)
+	if len(view.conversationResponseCache) != 1 {
+		t.Fatalf("response split was not cached: entries=%d", len(view.conversationResponseCache))
+	}
+	second := view.responseBlocks(key, source)
+	if len(first) != len(second) || len(first) == 0 || first[0] != second[0] {
+		t.Fatal("response split cache did not reuse the parsed blocks")
+	}
+
+	changed := strings.Repeat("different **content**\n\n", 64)
+	view.responseBlocks(key, changed)
+	if len(view.conversationResponseCache) != 1 {
+		t.Fatalf("response split cache leaked entries: entries=%d", len(view.conversationResponseCache))
+	}
+
+	oversized := strings.Repeat("x", maxCachedResponseSplitBytes+1)
+	view.responseBlocks(conversationCacheKey{sessionID: "session", itemID: "huge"}, oversized)
+	if _, ok := view.conversationResponseCache[conversationCacheKey{sessionID: "session", itemID: "huge"}]; ok {
+		t.Fatal("oversized response split was cached")
+	}
+}
+
 func TestShellLaysOutInspectorContentAtBothBreakpoints(t *testing.T) {
 	view := newShell(newTheme("dark"))
 	snapshot := controllerSnapshot{

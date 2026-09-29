@@ -107,6 +107,34 @@ func BenchmarkApplyStagedSessionHistory(b *testing.B) {
 	})
 }
 
+func BenchmarkApplyStagedHistoryPruneOverflow(b *testing.B) {
+	const count = 4096
+	events := make([]desktopstate.Event, count)
+	text := strings.Repeat("x", 8<<10)
+	for index := range events {
+		events[index] = desktopstate.Event{
+			Kind:      desktopstate.EventTimelineAppended,
+			SessionID: "session-a",
+			Item: desktopstate.TimelineItem{
+				Kind: desktopstate.TimelineAssistant,
+				ID:   "message-" + strconv.Itoa(index),
+				Text: text,
+			},
+		}
+	}
+	b.SetBytes(int64(count) * int64(len(text)))
+	b.ReportAllocs()
+	b.ResetTimer()
+	for range b.N {
+		controller := benchmarkHistoryApplicationController()
+		controller.state.Sessions[0].Timeline = nil
+		controller.timelineBytes["session-a"] = 0
+		controller.mu.Lock()
+		controller.applyStagedHistoryEventsLocked("session-a", events)
+		controller.mu.Unlock()
+	}
+}
+
 func benchmarkHistoryApplicationController() *controller {
 	sessions := make([]desktopstate.SessionState, 64)
 	for index := range sessions {

@@ -14,6 +14,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/sessionfs"
 	"github.com/phongsathornpt/protonman/internal/app"
+	"github.com/phongsathornpt/protonman/internal/base/envconfig"
 	"github.com/phongsathornpt/protonman/internal/core/conversation"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 	"github.com/phongsathornpt/protonman/internal/core/session"
@@ -409,6 +410,82 @@ func TestACPSessionLoadCanDeferRemoteModelDiscovery(t *testing.T) {
 	regularModels, _ := findSessionConfigOption(regular.ConfigOptions, configIDModel)
 	if !selectOptionContains(regularModels, "remote-model") {
 		t.Fatalf("regular model options = %#v, want discovered model", regularModels.Options)
+	}
+}
+
+func TestACPSessionLoadEmitsStageTimingsWhenEnabled(t *testing.T) {
+	t.Setenv(envconfig.Timing, "1")
+	server := newTestServer(t, permission.ModeAsk)
+	created, _, err := server.dispatch(context.Background(), RPCRequest{Method: "session/new"}, &bytes.Buffer{})
+	if err != nil {
+		t.Fatalf("session/new error = %v", err)
+	}
+	sessionID := created.(SessionNewResult).SessionID
+	sess, ok := server.lookupSession(sessionID)
+	if !ok {
+		t.Fatalf("session %q not found", sessionID)
+	}
+	sess.SetMessages([]domain.Message{
+		{ID: domain.NewMessageID(), Role: domain.RoleUser, Content: "hello"},
+		{ID: domain.NewMessageID(), Role: domain.RoleAssistant, Content: "world"},
+	})
+
+	params, err := json.Marshal(SessionLoadParams{SessionID: sessionID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, _, err := server.dispatch(context.Background(), RPCRequest{Method: "session/load", Params: params}, &bytes.Buffer{})
+	if err != nil {
+		t.Fatalf("session/load error = %v", err)
+	}
+	loaded, ok := result.(SessionLoadResult)
+	if !ok {
+		t.Fatalf("session/load result = %T, want SessionLoadResult", result)
+	}
+	if loaded.Meta == nil {
+		t.Fatal("expected timing metadata on the load result")
+	}
+	var parsed struct {
+		Timings struct {
+			TotalUs        int64 `json:"totalUs"`
+			ReplayUs       int64 `json:"replayUs"`
+			ReplayMessages int   `json:"replayMessages"`
+		} `json:"timings"`
+	}
+	if err := json.Unmarshal(loaded.Meta["protonman"], &parsed); err != nil {
+		t.Fatalf("decode timing metadata: %v", err)
+	}
+	if parsed.Timings.ReplayMessages != 2 {
+		t.Fatalf("replayMessages = %d, want 2", parsed.Timings.ReplayMessages)
+	}
+	if parsed.Timings.TotalUs < parsed.Timings.ReplayUs {
+		t.Fatalf("total (%dus) is less than replay (%dus)", parsed.Timings.TotalUs, parsed.Timings.ReplayUs)
+	}
+}
+
+func TestACPSessionLoadOmitsStageTimingsByDefault(t *testing.T) {
+	t.Setenv(envconfig.Timing, "")
+	server := newTestServer(t, permission.ModeAsk)
+	created, _, err := server.dispatch(context.Background(), RPCRequest{Method: "session/new"}, &bytes.Buffer{})
+	if err != nil {
+		t.Fatalf("session/new error = %v", err)
+	}
+	sessionID := created.(SessionNewResult).SessionID
+
+	params, err := json.Marshal(SessionLoadParams{SessionID: sessionID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, _, err := server.dispatch(context.Background(), RPCRequest{Method: "session/load", Params: params}, &bytes.Buffer{})
+	if err != nil {
+		t.Fatalf("session/load error = %v", err)
+	}
+	loaded, ok := result.(SessionLoadResult)
+	if !ok {
+		t.Fatalf("session/load result = %T, want SessionLoadResult", result)
+	}
+	if loaded.Meta != nil {
+		t.Fatalf("timing metadata leaked without %s: %#v", envconfig.Timing, loaded.Meta)
 	}
 }
 

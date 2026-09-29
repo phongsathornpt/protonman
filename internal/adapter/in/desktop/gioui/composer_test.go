@@ -218,7 +218,7 @@ func TestMessageActionButtons(t *testing.T) {
 		t.Fatalf("user timeline item height = %d, want > 0", userDims.Size.Y)
 	}
 
-	userMsgKey := "session-actions:user:0"
+	userMsgKey := conversationButtonKey(sessionID, "user", 0, userItem)
 	retryBtn := view.userRetryButtons[userMsgKey]
 	if retryBtn == nil {
 		t.Fatalf("userRetryButtons[%q] was not initialized", userMsgKey)
@@ -238,7 +238,7 @@ func TestMessageActionButtons(t *testing.T) {
 		t.Fatalf("asst timeline item height = %d, want > 0", asstDims.Size.Y)
 	}
 
-	asstMsgKey := "session-actions:asst:1"
+	asstMsgKey := conversationButtonKey(sessionID, "asst", 1, asstItem)
 	copyBtn := view.messageCopyButtons[asstMsgKey]
 	if copyBtn == nil {
 		t.Fatalf("messageCopyButtons[%q] was not initialized", asstMsgKey)
@@ -247,6 +247,20 @@ func TestMessageActionButtons(t *testing.T) {
 	_ = view.layoutTimelineItem(gtx, sessionID, 1, asstItem)
 	if _, ok := view.messageCopiedAt[asstMsgKey]; !ok {
 		t.Fatalf("messageCopiedAt[%q] was not set after clicking copy", asstMsgKey)
+	}
+}
+
+func TestConversationCacheKeyIsStableAcrossTrim(t *testing.T) {
+	item := desktopstate.TimelineItem{Kind: desktopstate.TimelineAssistant, ID: "message-7", Text: "hello"}
+	before := makeConversationCacheKey("session-1", 128, item)
+	after := makeConversationCacheKey("session-1", 3, item)
+	if before != after {
+		t.Fatalf("cache key changed with index: before=%#v after=%#v", before, after)
+	}
+
+	anonymous := desktopstate.TimelineItem{Kind: desktopstate.TimelineAssistant, Text: "no id"}
+	if makeConversationCacheKey("session-1", 1, anonymous) == makeConversationCacheKey("session-1", 2, anonymous) {
+		t.Fatal("anonymous items with different indices shared a cache key")
 	}
 }
 

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 
 	"github.com/phongsathornpt/protonman/internal/base/buildinfo"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
@@ -80,14 +81,35 @@ func (s *Server) dispatch(ctx context.Context, request RPCRequest, output io.Wri
 		if err := validateMCPServerConfigs(params.MCPServers); err != nil {
 			return nil, nil, fmt.Errorf("session/load MCP servers: %w", err)
 		}
-		sess, err := s.loadOrCreateSession(ctx, params.SessionID, cwd, directories, params.MCPServers)
+		loadStart := time.Now()
+		sess, timings, err := s.loadSession(ctx, params.SessionID, cwd, directories, params.MCPServers)
 		if err != nil {
 			return nil, nil, err
 		}
-		if err := sess.ReplayHistory(func(notification RPCNotification) error { return WriteJSON(output, &s.writeMu, notification) }); err != nil {
+		timings.sessionLoad = time.Since(loadStart)
+		replayStart := time.Now()
+		replayMessages := 0
+		if err := sess.ReplayHistory(func(notification RPCNotification) error {
+			replayMessages++
+			return WriteJSON(output, &s.writeMu, notification)
+		}); err != nil {
 			return nil, nil, err
 		}
-		return SessionLoadResult{Modes: DefaultSessionModes(sess.service.Mode().String()), ConfigOptions: s.sessionConfigOptions(ctx, sess)}, nil, nil
+		timings.replay = time.Since(replayStart)
+		timings.replayMessages = replayMessages
+		deferModelDiscovery := sessionLoadDefersModelDiscovery(params.Meta)
+		configStart := time.Now()
+		configOptions := s.sessionConfigOptionsWithModelDiscovery(ctx, sess, !deferModelDiscovery)
+		timings.configOptions = time.Since(configStart)
+		timings.total = time.Since(loadStart)
+		result := SessionLoadResult{
+			Modes:         DefaultSessionModes(sess.service.Mode().String()),
+			ConfigOptions: configOptions,
+		}
+		if timingEnabled() {
+			result.Meta = timings.meta()
+		}
+		return result, nil, nil
 	case "session/resume":
 		var params SessionResumeParams
 		if err := json.Unmarshal(request.Params, &params); err != nil {
@@ -223,6 +245,15 @@ func (s *Server) dispatch(ctx context.Context, request RPCRequest, output io.Wri
 		}
 		return nil, nil, nil
 	default:
-		return nil, nil, fmt.Errorf("method %q is not supported", request.Method)
+		return nil, nil, fmt.Errorf("%w: method %q is not supported", ErrMethodNotSupported, request.Method)
 	}
+}
+
+func sessionLoadDefersModelDiscovery(meta Meta) bool {
+	// The desktop refreshes runtime options asynchronously after transcript load.
+	// Let it opt out of network model discovery on this latency-sensitive request.
+	var options struct {
+		DeferModelDiscovery bool `json:"deferModelDiscovery"`
+	}
+	return json.Unmarshal(meta["protonman"], &options) == nil && options.DeferModelDiscovery
 }

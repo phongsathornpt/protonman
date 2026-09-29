@@ -23,6 +23,15 @@ func (s *Server) lookupSession(sessionID string) (*Session, bool) {
 }
 
 func (s *Server) loadOrCreateSession(ctx context.Context, sessionID string, cwd string, additionalDirectories []string, mcpSets ...[]MCPServerConfig) (*Session, error) {
+	sess, _, err := s.loadSession(ctx, sessionID, cwd, additionalDirectories, mcpSets...)
+	return sess, err
+}
+
+// loadSession resolves or creates a session and reports per-stage timings.
+// A session that is already resident returns zeroed timings, which is itself the
+// signal that no disk load or restore work happened on this request.
+func (s *Server) loadSession(ctx context.Context, sessionID string, cwd string, additionalDirectories []string, mcpSets ...[]MCPServerConfig) (*Session, loadTimings, error) {
+	var timings loadTimings
 	var mcpServers []MCPServerConfig
 	if len(mcpSets) > 0 {
 		mcpServers = mcpSets[0]
@@ -33,22 +42,22 @@ func (s *Server) loadOrCreateSession(ctx context.Context, sessionID string, cwd 
 	s.mu.Unlock()
 	if ok {
 		if cwd != "" && existing.cwd != "" && cwd != existing.cwd {
-			return nil, fmt.Errorf("session %q belongs to cwd %q, not %q", sessionID, existing.cwd, cwd)
+			return nil, timings, fmt.Errorf("session %q belongs to cwd %q, not %q", sessionID, existing.cwd, cwd)
 		}
 		if err := existing.matchMCPServers(mcpServers); err != nil {
-			return nil, err
+			return nil, timings, err
 		}
 		if sameDirectories(currentDirectories, additionalDirectories) {
-			return existing, nil
+			return existing, timings, nil
 		}
 		if sessionIsActive(existing) {
-			return nil, fmt.Errorf("session %q has an active prompt; workspace roots cannot change", sessionID)
+			return nil, timings, fmt.Errorf("session %q has an active prompt; workspace roots cannot change", sessionID)
 		}
 		if _, err := s.agents.ForSession(sessionID).CancelSessionAndWait(ctx); err != nil {
-			return nil, fmt.Errorf("cancel session subagents before workspace reconfiguration %q: %w", sessionID, err)
+			return nil, timings, fmt.Errorf("cancel session subagents before workspace reconfiguration %q: %w", sessionID, err)
 		}
 		if err := existing.Close(); err != nil {
-			return nil, fmt.Errorf("close session %q before workspace reconfiguration: %w", sessionID, err)
+			return nil, timings, fmt.Errorf("close session %q before workspace reconfiguration: %w", sessionID, err)
 		}
 		s.mu.Lock()
 		delete(s.sessions, sessionID)
@@ -56,18 +65,23 @@ func (s *Server) loadOrCreateSession(ctx context.Context, sessionID string, cwd 
 		s.mu.Unlock()
 	}
 
+	newSessionStart := time.Now()
 	sess, err := s.newSession(ctx, sessionID, cwd, additionalDirectories, mcpServers)
+	timings.newSession = time.Since(newSessionStart)
 	if err != nil {
-		return nil, err
+		return nil, timings, err
 	}
 	if s.sessionService != nil {
+		diskLoadStart := time.Now()
 		state, found, err := s.sessionService.Load(ctx, sessionID)
+		timings.diskLoad = time.Since(diskLoadStart)
 		if err != nil {
-			return nil, fmt.Errorf("load session state %q: %w", sessionID, err)
+			return nil, timings, fmt.Errorf("load session state %q: %w", sessionID, err)
 		}
 		if found {
+			restoreStart := time.Now()
 			if cwd != "" && state.WorkspaceKey != "" && state.WorkspaceKey != session.WorkspaceKey(cwd) {
-				return nil, fmt.Errorf("session %q belongs to another workspace", sessionID)
+				return nil, timings, fmt.Errorf("session %q belongs to another workspace", sessionID)
 			}
 			if state.WorkspaceKey != "" {
 				sess.workspaceKey = state.WorkspaceKey
@@ -79,35 +93,36 @@ func (s *Server) loadOrCreateSession(ctx context.Context, sessionID string, cwd 
 			sess.SetMessages(session.ToModelMessages(state.Messages))
 			mode, err := permission.ParseMode(state.PermissionMode)
 			if err != nil {
-				return nil, fmt.Errorf("session permission mode %q: %w", sessionID, err)
+				return nil, timings, fmt.Errorf("session permission mode %q: %w", sessionID, err)
 			}
 			if err := sess.service.SetMode(mode); err != nil {
-				return nil, fmt.Errorf("restore session mode %q: %w", sessionID, err)
+				return nil, timings, fmt.Errorf("restore session mode %q: %w", sessionID, err)
 			}
 			if strings.TrimSpace(state.ReasoningEffort) != "" {
 				effort, parseErr := domain.ParseReasoningEffort(state.ReasoningEffort)
 				if parseErr != nil {
-					return nil, fmt.Errorf("restore session reasoning %q: %w", sessionID, parseErr)
+					return nil, timings, fmt.Errorf("restore session reasoning %q: %w", sessionID, parseErr)
 				}
 				if err := sess.SetReasoningEffort(effort); err != nil {
-					return nil, fmt.Errorf("restore session reasoning %q: %w", sessionID, err)
+					return nil, timings, fmt.Errorf("restore session reasoning %q: %w", sessionID, err)
 				}
 			}
 			if err := restoreSessionRuntime(ctx, s, sess, state); err != nil {
-				return nil, fmt.Errorf("restore session runtime %q: %w", sessionID, err)
+				return nil, timings, fmt.Errorf("restore session runtime %q: %w", sessionID, err)
 			}
 			if s.skillRegistry != nil && len(state.ActiveSkills) > 0 {
 				for _, name := range state.ActiveSkills {
 					_ = s.skillRegistry.Activate(name)
 				}
 			}
+			timings.restore = time.Since(restoreStart)
 		}
 	}
 	s.mu.Lock()
 	s.sessions[sessionID] = sess
 	s.sessionDirectories[sessionID] = cloneDirectories(additionalDirectories)
 	s.mu.Unlock()
-	return sess, nil
+	return sess, timings, nil
 }
 
 // newSession retains the historic four-argument call shape used by package

@@ -3,11 +3,14 @@
 package gioui
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"image"
+	"log"
+	"os"
 	"reflect"
 	"runtime"
 	"strings"
@@ -21,6 +24,7 @@ import (
 
 	"github.com/phongsathornpt/protonman/internal/adapter/out/acpclient"
 	"github.com/phongsathornpt/protonman/internal/app"
+	"github.com/phongsathornpt/protonman/internal/base/envconfig"
 	desktopstate "github.com/phongsathornpt/protonman/internal/feature/desktop"
 )
 
@@ -571,6 +575,34 @@ func TestFinishSessionHistoryTrimsOverflowedStagingToRecentEvents(t *testing.T) 
 	}
 }
 
+func TestTrustedPruneKeepsByteAccountingAccurate(t *testing.T) {
+	controller := newTestController()
+	controller.state.ActiveSessionID = "session-1"
+	text := strings.Repeat("y", 1024)
+	for index := 0; index < maxSessionTimelineItems+64; index++ {
+		controller.applyTimelineEventLocked(desktopstate.Event{
+			Kind:      desktopstate.EventTimelineAppended,
+			SessionID: "session-1",
+			Item: desktopstate.TimelineItem{
+				ID:   fmt.Sprintf("item-%d", index),
+				Kind: desktopstate.TimelineAssistant,
+				Text: text,
+			},
+		})
+	}
+
+	session := controller.state.Sessions[0]
+	if len(session.Timeline) > maxSessionTimelineItems {
+		t.Fatalf("retained items = %d, limit %d", len(session.Timeline), maxSessionTimelineItems)
+	}
+	if got, want := controller.timelineBytes["session-1"], retainedTimelineBytes(session.Timeline); got != want {
+		t.Fatalf("trusted byte accounting = %d, actual retained = %d", got, want)
+	}
+	if !session.HistoryTruncated {
+		t.Fatal("trusted prune did not flag truncated history")
+	}
+}
+
 func TestActiveTimelineRetentionIsBounded(t *testing.T) {
 	controller := newTestController()
 	controller.state.ActiveSessionID = "session-1"
@@ -923,6 +955,42 @@ func TestChatUIRefinements(t *testing.T) {
 	jumpDims := sh.layoutJumpToBottomButton(gtx)
 	if jumpDims.Size.X == 0 || jumpDims.Size.Y == 0 {
 		t.Fatalf("layoutJumpToBottomButton returned empty dims")
+	}
+}
+
+func TestLogSessionLoadTimingReportsServerStages(t *testing.T) {
+	t.Setenv(envconfig.Timing, "1")
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer log.SetOutput(os.Stderr)
+
+	meta := json.RawMessage(`{"protonman":{"timings":{"totalUs":12345,"replayUs":4000,"replayMessages":256,"diskLoadUs":900}}}`)
+	request := &sessionHistoryLoad{startedAt: time.Now().Add(-20 * time.Millisecond), serverMeta: meta}
+	logSessionLoadTiming("session-1", request, nil)
+
+	out := buf.String()
+	if !strings.Contains(out, "[TIMING] session/load") {
+		t.Fatalf("timing log missing header: %q", out)
+	}
+	if !strings.Contains(out, "(256 messages)") {
+		t.Fatalf("timing log missing replay message count: %q", out)
+	}
+	if !strings.Contains(out, "diskLoad=900µs") && !strings.Contains(out, "diskLoad=1ms") {
+		t.Fatalf("timing log missing disk load stage: %q", out)
+	}
+}
+
+func TestLogSessionLoadTimingSilentWhenDisabled(t *testing.T) {
+	t.Setenv(envconfig.Timing, "")
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer log.SetOutput(os.Stderr)
+
+	logSessionLoadTiming("session-1", &sessionHistoryLoad{startedAt: time.Now()}, nil)
+	logSessionLoadTiming("session-1", nil, errors.New("boom"))
+
+	if strings.Contains(buf.String(), "[TIMING]") {
+		t.Fatalf("timing log emitted while disabled: %q", buf.String())
 	}
 }
 

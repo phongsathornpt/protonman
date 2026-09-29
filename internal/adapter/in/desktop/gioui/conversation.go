@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"slices"
 	"strings"
@@ -16,6 +17,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/phongsathornpt/protonman/internal/adapter/out/acpclient"
+	"github.com/phongsathornpt/protonman/internal/base/envconfig"
 	desktopstate "github.com/phongsathornpt/protonman/internal/feature/desktop"
 )
 
@@ -42,7 +44,11 @@ const (
 type historyState uint8
 
 type sessionHistoryLoad struct {
-	cancel context.CancelFunc
+	cancel    context.CancelFunc
+	startedAt time.Time
+	// serverMeta carries the `_meta` returned by session/load so diagnostic
+	// timings emitted by the agent can be reported alongside the client timing.
+	serverMeta json.RawMessage
 }
 
 type messageStreamBuffer struct {
@@ -353,8 +359,10 @@ func (c *controller) flushMessageStreamLocked(buffer *messageStreamBuffer) bool 
 			changed = true
 		}
 		item.Streaming = true
-		if changed && (grown > 4096 || len(session.Timeline) >= maxSessionTimelineItems) {
-			c.pruneSessionTimelineLocked(buffer.sessionID)
+		if changed {
+			if grown > 4096 || c.timelineBytes[buffer.sessionID] > maxSessionTimelineBytes || len(session.Timeline) > maxSessionTimelineItems {
+				c.pruneSessionTimelineTrustedLocked(session)
+			}
 		}
 		return changed
 	}
@@ -459,7 +467,7 @@ func (c *controller) applyTimelineEventLocked(event desktopstate.Event) {
 	}
 	desktopstate.Apply(&c.state, event)
 	c.timelineBytes[event.SessionID] += delta
-	c.pruneSessionTimelineLocked(event.SessionID)
+	c.pruneSessionTimelineTrustedLocked(session)
 }
 
 func (c *controller) applyStagedHistoryEventsLocked(sessionID string, events []desktopstate.Event) {
@@ -499,11 +507,10 @@ func (c *controller) applyStagedHistoryEventsLocked(sessionID string, events []d
 		}
 		session.Timeline = append(session.Timeline, bounded.Item)
 		c.timelineBytes[sessionID] += timelineItemSize(bounded.Item)
-		if c.timelineBytes[sessionID] > maxSessionTimelineBytes || len(session.Timeline) > maxSessionTimelineItems {
-			c.pruneSessionTimelineLocked(sessionID)
-		}
 	}
-	c.pruneSessionTimelineLocked(sessionID)
+	// Trim once after the batch rather than rescanning the retained timeline for
+	// every appended event, which kept bulk history application quadratic.
+	c.pruneSessionTimelineTrustedLocked(session)
 }
 
 func timelineSize(items []desktopstate.TimelineItem) int {
@@ -519,14 +526,23 @@ func (c *controller) pruneSessionTimelineLocked(sessionID string) {
 	if session == nil || c.timelineBytes[sessionID] <= maxSessionTimelineBytes && len(session.Timeline) <= maxSessionTimelineItems {
 		return
 	}
-	bytes := 0
-	for _, item := range session.Timeline {
-		bytes += timelineItemSize(item)
-	}
-	if bytes <= maxSessionTimelineBytes && len(session.Timeline) <= maxSessionTimelineItems {
-		c.timelineBytes[sessionID] = bytes
+	if retained := retainedTimelineBytes(session.Timeline); retained <= maxSessionTimelineBytes {
+		c.timelineBytes[sessionID] = retained
 		return
 	}
+	c.pruneSessionTimelineTrustedLocked(session)
+}
+
+// pruneSessionTimelineTrustedLocked trims the session timeline using the
+// incrementally maintained byte counter instead of rescanning every retained
+// item. Callers guarantee c.timelineBytes[sessionID] reflects the current
+// timeline size, which keeps bulk history application linear rather than
+// quadratic in the retained item count.
+func (c *controller) pruneSessionTimelineTrustedLocked(session *desktopstate.SessionState) {
+	if c.timelineBytes[session.ID] <= maxSessionTimelineBytes && len(session.Timeline) <= maxSessionTimelineItems {
+		return
+	}
+	bytes := c.timelineBytes[session.ID]
 	drop := 0
 	for drop < len(session.Timeline) && (bytes > timelineTrimTargetBytes || len(session.Timeline)-drop > timelineTrimTargetItems) {
 		if len(session.Timeline)-drop == 1 && bytes > timelineTrimTargetBytes {
@@ -534,8 +550,9 @@ func (c *controller) pruneSessionTimelineLocked(sessionID string) {
 			metadata := timelineItemSize(*item) - len(item.Text)
 			maxText := timelineTrimTargetBytes - metadata
 			if maxText > 0 && len(item.Text) > maxText {
-				item.Text = suffixBytes(item.Text, maxText)
-				bytes = timelineItemSize(*item)
+				tail := suffixBytes(item.Text, maxText)
+				bytes -= len(item.Text) - len(tail)
+				item.Text = tail
 				break
 			}
 		}
@@ -543,10 +560,23 @@ func (c *controller) pruneSessionTimelineLocked(sessionID string) {
 		session.Timeline[drop] = desktopstate.TimelineItem{}
 		drop++
 	}
-	remaining := append([]desktopstate.TimelineItem(nil), session.Timeline[drop:]...)
-	session.Timeline = remaining
+	if drop > 0 {
+		remaining := append([]desktopstate.TimelineItem(nil), session.Timeline[drop:]...)
+		session.Timeline = remaining
+	} else if bytes <= maxSessionTimelineBytes && len(session.Timeline) <= maxSessionTimelineItems {
+		c.timelineBytes[session.ID] = bytes
+		return
+	}
 	session.HistoryTruncated = true
-	c.timelineBytes[sessionID] = bytes
+	c.timelineBytes[session.ID] = bytes
+}
+
+func retainedTimelineBytes(items []desktopstate.TimelineItem) int {
+	bytes := 0
+	for _, item := range items {
+		bytes += timelineItemSize(item)
+	}
+	return bytes
 }
 
 func desktopstateSessionPointer(state *desktopstate.State, sessionID string) *desktopstate.SessionState {
@@ -764,8 +794,11 @@ func (c *controller) loadSessionHistory(sessionID string) {
 		var loadResult struct {
 			ConfigOptions []acpConfigOption `json:"configOptions,omitempty"`
 			Models        *acpModelsResult  `json:"models,omitempty"`
+			Meta          json.RawMessage   `json:"_meta,omitempty"`
 		}
+		request.startedAt = time.Now()
 		err := client.Call(callCtx, "session/load", params, &loadResult)
+		request.serverMeta = loadResult.Meta
 		if isACPMethodNotFound(err) {
 			err = nil
 		}
@@ -860,6 +893,7 @@ func (c *controller) finishSessionHistoryLoadRequest(client *acpclient.Client, s
 	c.revision++
 	c.mu.Unlock()
 	c.notify()
+	logSessionLoadTiming(sessionID, request, loadErr)
 	if currentClient && loadErr == nil && activeSessionID == sessionID {
 		c.refreshSessionContext(sessionID, false)
 		c.refreshSessionMemory(sessionID, false)
@@ -1298,4 +1332,64 @@ func sessionBusy(status desktopstate.TaskStatus) bool {
 	default:
 		return false
 	}
+}
+
+// desktopTimingEnabled reports whether diagnostic stage timings are requested.
+// The switch is shared with the ACP agent through PROTONMAN_TIMING so a single
+// environment variable enables timings on both ends of the pipe.
+func desktopTimingEnabled() bool {
+	return envconfig.Bool(envconfig.Timing)
+}
+
+// acpLoadTimings mirrors the `_meta.protonman.timings` payload the agent attaches
+// to session/load when timing is enabled. Values are microseconds.
+type acpLoadTimings struct {
+	Protonman struct {
+		Timings struct {
+			NewSessionUs    int64 `json:"newSessionUs"`
+			DiskLoadUs      int64 `json:"diskLoadUs"`
+			RestoreUs       int64 `json:"restoreUs"`
+			ReplayUs        int64 `json:"replayUs"`
+			ReplayMessages  int   `json:"replayMessages"`
+			ConfigOptionsUs int64 `json:"configOptionsUs"`
+			SessionLoadUs   int64 `json:"sessionLoadUs"`
+			TotalUs         int64 `json:"totalUs"`
+		} `json:"timings"`
+	} `json:"protonman"`
+}
+
+// logSessionLoadTiming reports one diagnostic line for a completed history load.
+// It is a no-op unless PROTONMAN_TIMING is set, so normal runs stay quiet.
+func logSessionLoadTiming(sessionID string, request *sessionHistoryLoad, loadErr error) {
+	if !desktopTimingEnabled() {
+		return
+	}
+	var clientElapsed time.Duration
+	var meta json.RawMessage
+	if request != nil {
+		meta = request.serverMeta
+		if !request.startedAt.IsZero() {
+			clientElapsed = time.Since(request.startedAt)
+		}
+	}
+	var parsed acpLoadTimings
+	if len(meta) > 0 {
+		_ = json.Unmarshal(meta, &parsed)
+	}
+	t := parsed.Protonman.Timings
+	micro := func(value int64) time.Duration { return time.Duration(value) * time.Microsecond }
+	log.Printf(
+		"[TIMING] session/load session=%s err=%v client=%s server.total=%s server.sessionLoad=%s newSession=%s diskLoad=%s restore=%s replay=%s(%d messages) configOptions=%s",
+		sessionID,
+		loadErr,
+		clientElapsed.Round(time.Millisecond),
+		micro(t.TotalUs).Round(time.Millisecond),
+		micro(t.SessionLoadUs).Round(time.Millisecond),
+		micro(t.NewSessionUs).Round(time.Millisecond),
+		micro(t.DiskLoadUs).Round(time.Millisecond),
+		micro(t.RestoreUs).Round(time.Millisecond),
+		micro(t.ReplayUs).Round(time.Millisecond),
+		t.ReplayMessages,
+		micro(t.ConfigOptionsUs).Round(time.Millisecond),
+	)
 }

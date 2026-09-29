@@ -31,16 +31,21 @@ import (
 )
 
 const (
-	maxComposerDrafts            = 32
-	maxStreamingTextBytes        = 1 << 10
-	maxConversationCacheEntries  = 512
-	maxConversationCacheBytes    = 4 << 20
-	maxCachedMarkdownItemBytes   = 256 << 10
-	maxConversationExpansionKeys = 256
-	largeMessagePreviewBytes     = 32 << 10
-	largeMessagePageBytes        = 32 << 10
-	largeMessagePreviewLines     = 48
-	markdownSpanRetainedEstimate = 192
+	maxComposerDrafts             = 32
+	maxStreamingTextBytes         = 1 << 10
+	maxConversationCacheEntries   = 512
+	maxConversationCacheBytes     = 4 << 20
+	maxCachedMarkdownItemBytes    = 256 << 10
+	maxConversationExpansionKeys  = 256
+	largeMessagePreviewBytes      = 32 << 10
+	largeMessagePageBytes         = 32 << 10
+	largeMessagePreviewLines      = 48
+	markdownSpanRetainedEstimate  = 192
+	minCachedResponseSplitBytes   = 512
+	maxCachedResponseSplitBytes   = 256 << 10
+	maxResponseSplitCacheEntries  = 128
+	maxResponseSplitCacheBytes    = 2 << 20
+	responseSplitRetainedEstimate = 96
 )
 
 type conversationMarkdownCache struct {
@@ -57,10 +62,14 @@ type conversationCodeCache struct {
 	bytes  int
 }
 
+type conversationResponseCache struct {
+	source string
+	blocks []markdownBlock
+}
+
 type conversationCacheKey struct {
 	sessionID string
 	itemID    string
-	index     int
 	kind      desktopstate.TimelineKind
 }
 
@@ -100,6 +109,9 @@ func (s *shell) syncConversation(state desktopstate.State) {
 	s.inspectorOverride = false
 	s.inspectorVisible = false
 	s.runtimeEditorKey = ""
+	clear(s.conversationResponseCache)
+	s.conversationResponseBytes = 0
+	s.conversationResponseOrder = s.conversationResponseOrder[:0]
 	clear(s.conversationExpanded)
 	clear(s.conversationPage)
 	clear(s.conversationExpandButtons)
@@ -708,6 +720,15 @@ func (s *shell) layoutUserRetryButton(gtx layout.Context, keyStr, text string) l
 	})
 }
 
+// conversationButtonKey derives a stable widget key from timeline identity so
+// copy/retry button state survives retention trimming.
+func conversationButtonKey(sessionID, role string, index int, item desktopstate.TimelineItem) string {
+	if item.ID != "" {
+		return sessionID + ":" + role + ":" + item.ID
+	}
+	return sessionID + ":" + role + ":#" + fmt.Sprint(index)
+}
+
 func (s *shell) layoutTimelineItem(gtx layout.Context, sessionID string, index int, item desktopstate.TimelineItem) layout.Dimensions {
 	descriptionItem := item
 	if item.Streaming {
@@ -715,7 +736,7 @@ func (s *shell) layoutTimelineItem(gtx layout.Context, sessionID string, index i
 	}
 
 	if item.Kind == desktopstate.TimelineUser {
-		msgKey := fmt.Sprintf("%s:user:%d", sessionID, index)
+		msgKey := conversationButtonKey(sessionID, "user", index, item)
 		return desktopInset{Top: 8, Bottom: 8, Left: 16, Right: 16}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 			semantic.DescriptionOp(conversationItemDescription(descriptionItem)).Add(gtx.Ops)
 			return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Start}.Layout(gtx,
@@ -786,7 +807,7 @@ func (s *shell) layoutTimelineItem(gtx layout.Context, sessionID string, index i
 		semantic.DescriptionOp(conversationItemDescription(descriptionItem)).Add(gtx.Ops)
 		children := []layout.FlexChild{
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				msgKey := fmt.Sprintf("%s:asst:%d", sessionID, index)
+				msgKey := conversationButtonKey(sessionID, "asst", index, item)
 				return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
 					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 						return s.layoutActionIcon(gtx, iconBrandLogo, 16, s.theme.primary)
@@ -841,7 +862,7 @@ func (s *shell) layoutTimelineItem(gtx layout.Context, sessionID string, index i
 					if len(parsed.responseText) > maxCachedMarkdownItemBytes {
 						return s.layoutLargeMessage(gtx, key, parsed.responseText, foreground)
 					}
-					return s.layoutRichResponse(gtx, key, parsed.responseText, foreground)
+					return s.layoutRichResponse(gtx, key, s.responseBlocks(key, parsed.responseText), foreground)
 				})
 			}))
 		} else if parsed.hasThinking && !parsed.thinkingDone {
@@ -1497,8 +1518,49 @@ func (s *shell) layoutMarkdown(gtx layout.Context, key conversationCacheKey, sou
 	return richtext.Text(nil, s.theme.material.Shaper, cached.spans...).Layout(gtx)
 }
 
-func (s *shell) layoutRichResponse(gtx layout.Context, key conversationCacheKey, source string, foreground color.NRGBA) layout.Dimensions {
+func (s *shell) responseBlocks(key conversationCacheKey, source string) []markdownBlock {
+	if cached, ok := s.conversationResponseCache[key]; ok && cached.source == source {
+		return cached.blocks
+	}
 	blocks := splitMarkdownCodeBlocks(source)
+	if source == "" || len(source) < minCachedResponseSplitBytes || len(source) > maxCachedResponseSplitBytes {
+		return blocks
+	}
+	if s.conversationResponseCache == nil {
+		s.conversationResponseCache = make(map[conversationCacheKey]conversationResponseCache)
+	}
+	entryBytes := responseSplitRetainedEstimate + len(source) + len(blocks)*16
+	if entryBytes > maxResponseSplitCacheBytes {
+		return blocks
+	}
+	if previous, ok := s.conversationResponseCache[key]; ok {
+		s.conversationResponseBytes -= responseSplitRetainedEstimate + len(previous.source) + len(previous.blocks)*16
+		delete(s.conversationResponseCache, key)
+		for index, id := range s.conversationResponseOrder {
+			if id == key {
+				s.conversationResponseOrder = append(s.conversationResponseOrder[:index], s.conversationResponseOrder[index+1:]...)
+				break
+			}
+		}
+	}
+	for len(s.conversationResponseCache) >= maxResponseSplitCacheEntries || s.conversationResponseBytes+entryBytes > maxResponseSplitCacheBytes {
+		if len(s.conversationResponseOrder) == 0 {
+			break
+		}
+		oldest := s.conversationResponseOrder[0]
+		s.conversationResponseOrder = s.conversationResponseOrder[1:]
+		if previous, ok := s.conversationResponseCache[oldest]; ok {
+			delete(s.conversationResponseCache, oldest)
+			s.conversationResponseBytes -= responseSplitRetainedEstimate + len(previous.source) + len(previous.blocks)*16
+		}
+	}
+	s.conversationResponseCache[key] = conversationResponseCache{source: source, blocks: blocks}
+	s.conversationResponseOrder = append(s.conversationResponseOrder, key)
+	s.conversationResponseBytes += entryBytes
+	return blocks
+}
+
+func (s *shell) layoutRichResponse(gtx layout.Context, key conversationCacheKey, blocks []markdownBlock, foreground color.NRGBA) layout.Dimensions {
 	if len(blocks) == 0 {
 		return layout.Dimensions{}
 	}
@@ -2475,11 +2537,18 @@ func activeQuestion(state desktopstate.State, sessionID string) *desktopstate.Qu
 	return nil
 }
 
+// makeConversationCacheKey keys render caches by stable timeline identity rather
+// than the sliding slice index. Retention trimming shifts indices but preserves
+// item IDs, so an index-based key invalidated every cached markdown span and
+// response split whenever the timeline overflowed.
 func makeConversationCacheKey(sessionID string, index int, item desktopstate.TimelineItem) conversationCacheKey {
+	itemID := item.ID
+	if itemID == "" {
+		itemID = "#" + fmt.Sprint(index)
+	}
 	return conversationCacheKey{
 		sessionID: sessionID,
-		itemID:    item.ID,
-		index:     index,
+		itemID:    itemID,
 		kind:      item.Kind,
 	}
 }

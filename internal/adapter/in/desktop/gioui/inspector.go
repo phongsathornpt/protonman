@@ -5,6 +5,7 @@ package gioui
 import (
 	"context"
 	"encoding/json"
+	"log"
 	"strings"
 	"sync"
 	"time"
@@ -168,6 +169,30 @@ const (
 	skillsRefreshKind
 )
 
+func (kind sessionRefreshKind) String() string {
+	switch kind {
+	case contextRefreshKind:
+		return "context"
+	case memoryRefreshKind:
+		return "memory"
+	case runtimeRefreshKind:
+		return "runtime"
+	case skillsRefreshKind:
+		return "skills"
+	default:
+		return "unknown"
+	}
+}
+
+// logSessionRefreshTiming reports one diagnostic line per completed inspector
+// refresh. It is a no-op unless PROTONMAN_TIMING is set.
+func logSessionRefreshTiming(kind sessionRefreshKind, sessionID string, elapsed time.Duration) {
+	if !desktopTimingEnabled() {
+		return
+	}
+	log.Printf("[TIMING] session refresh kind=%s session=%s duration=%s", kind, sessionID, elapsed.Round(time.Millisecond))
+}
+
 func refreshIntervalFor(kind sessionRefreshKind) time.Duration {
 	switch kind {
 	case contextRefreshKind:
@@ -241,6 +266,8 @@ func (c *controller) refreshSessionContextFrom(source *acpclient.Client, session
 	}
 	go func() {
 		defer tracker.finish(sessionID, time.Now())
+		start := time.Now()
+		defer func() { logSessionRefreshTiming(contextRefreshKind, sessionID, time.Since(start)) }()
 		var result sessionContextResult
 		if err := c.callInspector(client, "protonman/session/context", map[string]any{"sessionId": sessionID}, &result); err != nil {
 			return
@@ -261,6 +288,8 @@ func (c *controller) refreshSessionMemoryFrom(source *acpclient.Client, sessionI
 	}
 	go func() {
 		defer tracker.finish(sessionID, time.Now())
+		start := time.Now()
+		defer func() { logSessionRefreshTiming(memoryRefreshKind, sessionID, time.Since(start)) }()
 		var result sessionMemoryResult
 		if err := c.callInspector(client, "protonman/session/memory", map[string]any{"sessionId": sessionID}, &result); err != nil {
 			return
@@ -277,6 +306,8 @@ func (c *controller) refreshSessionRuntime(sessionID string, force bool) {
 	}
 	go func() {
 		defer tracker.finish(sessionID, time.Now())
+		start := time.Now()
+		defer func() { logSessionRefreshTiming(runtimeRefreshKind, sessionID, time.Since(start)) }()
 		c.mu.Lock()
 		session, hasSession := desktopSessionByID(c.state, sessionID)
 		c.mu.Unlock()

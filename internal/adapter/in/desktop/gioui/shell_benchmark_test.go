@@ -389,6 +389,47 @@ func benchmarkStreamingTextVariants(text string) []string {
 	return variants
 }
 
+func BenchmarkShellLayoutLargeHistoryRichResponses(b *testing.B) {
+	view := newShell(newTheme("light"))
+	snapshot := benchmarkShellSnapshot()
+	const count = 8192
+	prose := strings.Repeat("streamed markdown **content** with a [link](https://example.com) and `inline code`.\n\n", 16)
+	timeline := make([]desktopstate.TimelineItem, count)
+	for index := range timeline {
+		kind := desktopstate.TimelineAssistant
+		text := prose
+		if index%2 == 0 {
+			kind = desktopstate.TimelineUser
+			text = "A retained user message in a large session."
+		}
+		timeline[index] = desktopstate.TimelineItem{
+			Kind: kind,
+			ID:   "message-" + strconv.Itoa(index),
+			Text: text,
+		}
+	}
+	snapshot.State.Sessions[0].Timeline = timeline
+	var operations op.Ops
+	var router input.Router
+	gtx := layout.Context{
+		Ops:         &operations,
+		Constraints: layout.Exact(image.Pt(1180, 760)),
+		Metric:      unit.Metric{},
+		Now:         time.Unix(1, 0),
+		Source:      router.Source(),
+	}
+	view.layout(gtx, snapshot)
+	router.Frame(gtx.Ops)
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for range b.N {
+		operations.Reset()
+		view.layout(gtx, snapshot)
+		router.Frame(gtx.Ops)
+	}
+}
+
 func BenchmarkLayoutLabelLongText(b *testing.B) {
 	view := newShell(newTheme("light"))
 	text := strings.Repeat("streamed markdown **content** ", 160)
