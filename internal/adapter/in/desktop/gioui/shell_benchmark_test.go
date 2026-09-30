@@ -179,6 +179,33 @@ func BenchmarkSidebarRowsCacheMatchesManyProjects(b *testing.B) {
 	}
 }
 
+func BenchmarkSidebarRowsSnapshotRevisionHit(b *testing.B) {
+	for _, count := range []int{16, 256, 4096} {
+		b.Run(strconv.Itoa(count), func(b *testing.B) {
+			state := desktopstate.State{
+				Projects: make([]desktopstate.ProjectState, count),
+				Sessions: make([]desktopstate.SessionState, count),
+			}
+			for index := range count {
+				id := strconv.Itoa(index)
+				projectID := "project-" + id
+				state.Projects[index] = desktopstate.ProjectState{ID: projectID, Name: "Project " + id}
+				state.Sessions[index] = desktopstate.SessionState{ID: "session-" + id, ProjectID: projectID, AgentID: controllerAgentID, Title: "Session " + id}
+			}
+			snapshot := controllerSnapshot{State: state, AgentProfiles: []app.ACPAgentProfile{defaultACPAgentProfile()}, Revision: 1}
+			view := newShell(newTheme("light"))
+			view.sidebarRows(snapshot)
+			b.ReportAllocs()
+			b.ResetTimer()
+			for range b.N {
+				if len(view.sidebarRows(snapshot)) != count*2 {
+					b.Fatal("cached sidebar row count changed")
+				}
+			}
+		})
+	}
+}
+
 func BenchmarkShellLayoutUncachedSidebarRows(b *testing.B) {
 	view := newShell(newTheme("light"))
 	snapshot := benchmarkShellSnapshot()
@@ -198,6 +225,7 @@ func BenchmarkShellLayoutUncachedSidebarRows(b *testing.B) {
 	b.ResetTimer()
 	for range b.N {
 		view.sidebarRowsCache.valid = false
+		view.sidebarDisplayCache.valid = false
 		operations.Reset()
 		view.layout(gtx, snapshot)
 		router.Frame(gtx.Ops)

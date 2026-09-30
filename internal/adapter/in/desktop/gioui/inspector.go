@@ -207,20 +207,29 @@ func refreshIntervalFor(kind sessionRefreshKind) time.Duration {
 	}
 }
 
-func (c *controller) beginSessionRefresh(sessionID string, force bool, kind sessionRefreshKind, source *acpclient.Client) (*acpclient.Client, *sessionRefreshTracker, bool) {
+func (c *controller) beginSessionRefresh(sessionID string, force bool, kind sessionRefreshKind, source *acpclient.Client, agentIDs ...string) (*acpclient.Client, *sessionRefreshTracker, string, string, bool) {
 	sessionID = strings.TrimSpace(sessionID)
 	if sessionID == "" {
-		return nil, nil, false
+		return nil, nil, "", "", false
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	session, ok := desktopSessionByID(c.state, sessionID)
-	if !ok || sessionID != c.state.ActiveSessionID || (session.AgentID != "" && session.AgentID != controllerAgentID && kind != runtimeRefreshKind) {
-		return nil, nil, false
+	agentID := c.state.ActiveAgentID
+	if len(agentIDs) > 0 && agentIDs[0] != "" {
+		agentID = agentIDs[0]
 	}
-	client, agentID := c.clientForSessionLocked(sessionID)
+	if source != nil {
+		if sourceAgentID := c.agentIDForClientLocked(source); sourceAgentID != "" {
+			agentID = sourceAgentID
+		}
+	}
+	session, ok := desktopSessionByID(c.state, sessionID, agentID)
+	if !ok || sessionID != c.state.ActiveSessionID || (c.state.ActiveAgentID != "" && c.state.ActiveAgentID != session.AgentID) || (session.AgentID != "" && session.AgentID != controllerAgentID && kind != runtimeRefreshKind) {
+		return nil, nil, "", "", false
+	}
+	client, agentID := c.clientForSessionLocked(sessionID, session.AgentID)
 	if client == nil || c.connections[agentID] != connectionConnected || source != nil && !c.clientCurrentLocked(agentID, source) {
-		return nil, nil, false
+		return nil, nil, "", "", false
 	}
 	var tracker *sessionRefreshTracker
 	switch kind {
@@ -249,68 +258,69 @@ func (c *controller) beginSessionRefresh(sessionID string, force bool, kind sess
 			c.runtimeRefresh = tracker
 		}
 	}
-	if !tracker.begin(sessionID, force, time.Now()) {
-		return nil, tracker, false
+	trackerKey := sessionRefStorageKey(session.Ref())
+	if !tracker.begin(trackerKey, force, time.Now()) {
+		return nil, tracker, trackerKey, agentID, false
 	}
-	return client, tracker, true
+	return client, tracker, trackerKey, agentID, true
 }
 
-func (c *controller) refreshSessionContext(sessionID string, force bool) {
-	c.refreshSessionContextFrom(nil, sessionID, force)
+func (c *controller) refreshSessionContext(sessionID string, force bool, agentIDs ...string) {
+	c.refreshSessionContextFrom(nil, sessionID, force, agentIDs...)
 }
 
-func (c *controller) refreshSessionContextFrom(source *acpclient.Client, sessionID string, force bool) {
+func (c *controller) refreshSessionContextFrom(source *acpclient.Client, sessionID string, force bool, agentIDs ...string) {
 	sessionID = strings.TrimSpace(sessionID)
-	client, tracker, ok := c.beginSessionRefresh(sessionID, force, contextRefreshKind, source)
+	client, tracker, trackerKey, agentID, ok := c.beginSessionRefresh(sessionID, force, contextRefreshKind, source, agentIDs...)
 	if !ok {
 		return
 	}
 	go func() {
-		defer tracker.finish(sessionID, time.Now())
+		defer tracker.finish(trackerKey, time.Now())
 		start := time.Now()
 		defer func() { logSessionRefreshTiming(contextRefreshKind, sessionID, time.Since(start)) }()
 		var result sessionContextResult
 		if err := c.callInspector(client, "protonman/session/context", map[string]any{"sessionId": sessionID}, &result); err != nil {
 			return
 		}
-		c.applySessionContext(client, result)
+		c.applySessionContextForAgent(client, result, agentID)
 	}()
 }
 
-func (c *controller) refreshSessionMemory(sessionID string, force bool) {
-	c.refreshSessionMemoryFrom(nil, sessionID, force)
+func (c *controller) refreshSessionMemory(sessionID string, force bool, agentIDs ...string) {
+	c.refreshSessionMemoryFrom(nil, sessionID, force, agentIDs...)
 }
 
-func (c *controller) refreshSessionMemoryFrom(source *acpclient.Client, sessionID string, force bool) {
+func (c *controller) refreshSessionMemoryFrom(source *acpclient.Client, sessionID string, force bool, agentIDs ...string) {
 	sessionID = strings.TrimSpace(sessionID)
-	client, tracker, ok := c.beginSessionRefresh(sessionID, force, memoryRefreshKind, source)
+	client, tracker, trackerKey, agentID, ok := c.beginSessionRefresh(sessionID, force, memoryRefreshKind, source, agentIDs...)
 	if !ok {
 		return
 	}
 	go func() {
-		defer tracker.finish(sessionID, time.Now())
+		defer tracker.finish(trackerKey, time.Now())
 		start := time.Now()
 		defer func() { logSessionRefreshTiming(memoryRefreshKind, sessionID, time.Since(start)) }()
 		var result sessionMemoryResult
 		if err := c.callInspector(client, "protonman/session/memory", map[string]any{"sessionId": sessionID}, &result); err != nil {
 			return
 		}
-		c.applySessionMemory(client, result)
+		c.applySessionMemoryForAgent(client, result, agentID)
 	}()
 }
 
-func (c *controller) refreshSessionRuntime(sessionID string, force bool) {
+func (c *controller) refreshSessionRuntime(sessionID string, force bool, agentIDs ...string) {
 	sessionID = strings.TrimSpace(sessionID)
-	client, tracker, ok := c.beginSessionRefresh(sessionID, force, runtimeRefreshKind, nil)
+	client, tracker, trackerKey, agentID, ok := c.beginSessionRefresh(sessionID, force, runtimeRefreshKind, nil, agentIDs...)
 	if !ok {
 		return
 	}
 	go func() {
-		defer tracker.finish(sessionID, time.Now())
+		defer tracker.finish(trackerKey, time.Now())
 		start := time.Now()
 		defer func() { logSessionRefreshTiming(runtimeRefreshKind, sessionID, time.Since(start)) }()
 		c.mu.Lock()
-		session, hasSession := desktopSessionByID(c.state, sessionID)
+		session, hasSession := desktopSessionByID(c.state, sessionID, agentID)
 		c.mu.Unlock()
 		if !hasSession {
 			return
@@ -334,7 +344,7 @@ func (c *controller) refreshSessionRuntime(sessionID string, force bool) {
 				if models, currentModel := extractModelsFromACP(resumeResult.ConfigOptions, resumeResult.Models); len(models) > 0 {
 					c.mu.Lock()
 					c.setAgentAvailableModelsLocked(session.AgentID, models)
-					if sess := desktopstateSessionPointer(&c.state, session.ID); sess != nil {
+					if sess := desktopstateSessionPointer(&c.state, session.ID, session.AgentID); sess != nil {
 						sess.AvailableModels = models
 						if currentModel != "" && sess.Runtime.Model == "" {
 							sess.Runtime.Model = currentModel
@@ -354,27 +364,27 @@ func (c *controller) refreshSessionRuntime(sessionID string, force bool) {
 		if err := c.callInspector(client, "protonman/session/runtime", map[string]any{"sessionId": sessionID}, &result); err != nil {
 			return
 		}
-		c.applySessionRuntime(client, result)
+		c.applySessionRuntimeForAgent(client, result, agentID)
 	}()
 }
 
-func (c *controller) refreshSessionSkills(sessionID string, force bool) {
-	c.refreshSessionSkillsFrom(nil, sessionID, force)
+func (c *controller) refreshSessionSkills(sessionID string, force bool, agentIDs ...string) {
+	c.refreshSessionSkillsFrom(nil, sessionID, force, agentIDs...)
 }
 
-func (c *controller) refreshSessionSkillsFrom(source *acpclient.Client, sessionID string, force bool) {
+func (c *controller) refreshSessionSkillsFrom(source *acpclient.Client, sessionID string, force bool, agentIDs ...string) {
 	sessionID = strings.TrimSpace(sessionID)
-	client, tracker, ok := c.beginSessionRefresh(sessionID, force, skillsRefreshKind, source)
+	client, tracker, trackerKey, agentID, ok := c.beginSessionRefresh(sessionID, force, skillsRefreshKind, source, agentIDs...)
 	if !ok {
 		return
 	}
 	go func() {
-		defer tracker.finish(sessionID, time.Now())
+		defer tracker.finish(trackerKey, time.Now())
 		var result sessionSkillsResult
 		if err := c.callInspector(client, "protonman/session/skills", map[string]any{"sessionId": sessionID}, &result); err != nil {
 			return
 		}
-		c.applySessionSkills(client, result)
+		c.applySessionSkillsForAgent(client, result, agentID)
 	}()
 }
 
@@ -382,10 +392,13 @@ func (c *controller) refreshActiveSession(force bool) {
 	c.mu.RLock()
 	sessionID := c.state.ActiveSessionID
 	c.mu.RUnlock()
-	c.refreshSessionContext(sessionID, force)
-	c.refreshSessionMemory(sessionID, force)
-	c.refreshSessionRuntime(sessionID, force)
-	c.refreshSessionSkills(sessionID, force)
+	c.mu.RLock()
+	agentID := c.state.ActiveAgentID
+	c.mu.RUnlock()
+	c.refreshSessionContext(sessionID, force, agentID)
+	c.refreshSessionMemory(sessionID, force, agentID)
+	c.refreshSessionRuntime(sessionID, force, agentID)
+	c.refreshSessionSkills(sessionID, force, agentID)
 }
 
 func (c *controller) callInspector(client *acpclient.Client, method string, params any, result any) error {
@@ -449,18 +462,26 @@ func projectSessionRuntime(result sessionRuntimeResult) desktopstate.RuntimeSett
 }
 
 func (c *controller) applySessionContext(client *acpclient.Client, result sessionContextResult) bool {
+	return c.applySessionContextForAgent(client, result, "")
+}
+
+func (c *controller) applySessionContextForAgent(client *acpclient.Client, result sessionContextResult, agentID string) bool {
 	sessionID := strings.TrimSpace(result.SessionID)
 	if client == nil || sessionID == "" {
 		return false
 	}
 	c.mu.Lock()
-	session, ok := desktopSessionByID(c.state, sessionID)
-	if !ok || sessionID != c.state.ActiveSessionID || !c.clientCurrentLocked(session.AgentID, client) {
+	if agentID == "" {
+		agentID = c.agentIDForClientLocked(client)
+	}
+	session, ok := desktopSessionByID(c.state, sessionID, agentID)
+	if !ok || sessionID != c.state.ActiveSessionID || c.state.ActiveAgentID != "" && c.state.ActiveAgentID != session.AgentID || !c.clientCurrentLocked(session.AgentID, client) {
 		c.mu.Unlock()
 		return false
 	}
 	desktopstate.Apply(&c.state, desktopstate.Event{
 		Kind:      desktopstate.EventSessionContextUpdated,
+		AgentID:   session.AgentID,
 		SessionID: sessionID,
 		Context:   projectSessionContext(result),
 	})
@@ -471,18 +492,26 @@ func (c *controller) applySessionContext(client *acpclient.Client, result sessio
 }
 
 func (c *controller) applySessionMemory(client *acpclient.Client, result sessionMemoryResult) bool {
+	return c.applySessionMemoryForAgent(client, result, "")
+}
+
+func (c *controller) applySessionMemoryForAgent(client *acpclient.Client, result sessionMemoryResult, agentID string) bool {
 	sessionID := strings.TrimSpace(result.SessionID)
 	if client == nil || sessionID == "" {
 		return false
 	}
 	c.mu.Lock()
-	session, ok := desktopSessionByID(c.state, sessionID)
-	if !ok || sessionID != c.state.ActiveSessionID || !c.clientCurrentLocked(session.AgentID, client) {
+	if agentID == "" {
+		agentID = c.agentIDForClientLocked(client)
+	}
+	session, ok := desktopSessionByID(c.state, sessionID, agentID)
+	if !ok || sessionID != c.state.ActiveSessionID || c.state.ActiveAgentID != "" && c.state.ActiveAgentID != session.AgentID || !c.clientCurrentLocked(session.AgentID, client) {
 		c.mu.Unlock()
 		return false
 	}
 	desktopstate.Apply(&c.state, desktopstate.Event{
 		Kind:      desktopstate.EventSessionMemoryUpdated,
+		AgentID:   session.AgentID,
 		SessionID: sessionID,
 		Memory:    projectSessionMemory(result),
 	})
@@ -493,22 +522,30 @@ func (c *controller) applySessionMemory(client *acpclient.Client, result session
 }
 
 func (c *controller) applySessionRuntime(client *acpclient.Client, result sessionRuntimeResult) bool {
+	return c.applySessionRuntimeForAgent(client, result, "")
+}
+
+func (c *controller) applySessionRuntimeForAgent(client *acpclient.Client, result sessionRuntimeResult, agentID string) bool {
 	sessionID := strings.TrimSpace(result.SessionID)
 	if client == nil || sessionID == "" {
 		return false
 	}
 	c.mu.Lock()
-	session, ok := desktopSessionByID(c.state, sessionID)
-	if !ok || sessionID != c.state.ActiveSessionID || !c.clientCurrentLocked(session.AgentID, client) {
+	if agentID == "" {
+		agentID = c.agentIDForClientLocked(client)
+	}
+	session, ok := desktopSessionByID(c.state, sessionID, agentID)
+	if !ok || sessionID != c.state.ActiveSessionID || c.state.ActiveAgentID != "" && c.state.ActiveAgentID != session.AgentID || !c.clientCurrentLocked(session.AgentID, client) {
 		c.mu.Unlock()
 		return false
 	}
 	models := decodeAvailableModels(result.AvailableModels)
 	if len(models) > 0 {
-		c.setAgentAvailableModelsLocked(controllerAgentID, models)
+		c.setAgentAvailableModelsLocked(session.AgentID, models)
 	}
 	desktopstate.Apply(&c.state, desktopstate.Event{
 		Kind:            desktopstate.EventSessionRuntimeUpdated,
+		AgentID:         session.AgentID,
 		SessionID:       sessionID,
 		Runtime:         projectSessionRuntime(result),
 		AvailableModels: models,
@@ -562,18 +599,26 @@ func cleanModelList(models []string) []string {
 }
 
 func (c *controller) applySessionSkills(client *acpclient.Client, result sessionSkillsResult) bool {
+	return c.applySessionSkillsForAgent(client, result, "")
+}
+
+func (c *controller) applySessionSkillsForAgent(client *acpclient.Client, result sessionSkillsResult, agentID string) bool {
 	sessionID := strings.TrimSpace(result.SessionID)
 	if client == nil || sessionID == "" {
 		return false
 	}
 	c.mu.Lock()
-	session, ok := desktopSessionByID(c.state, sessionID)
-	if !ok || sessionID != c.state.ActiveSessionID || !c.clientCurrentLocked(session.AgentID, client) {
+	if agentID == "" {
+		agentID = c.agentIDForClientLocked(client)
+	}
+	session, ok := desktopSessionByID(c.state, sessionID, agentID)
+	if !ok || sessionID != c.state.ActiveSessionID || c.state.ActiveAgentID != "" && c.state.ActiveAgentID != session.AgentID || !c.clientCurrentLocked(session.AgentID, client) {
 		c.mu.Unlock()
 		return false
 	}
 	desktopstate.Apply(&c.state, desktopstate.Event{
 		Kind:      desktopstate.EventSessionSkillsUpdated,
+		AgentID:   session.AgentID,
 		SessionID: sessionID,
 		Skills:    projectSessionSkills(result),
 	})
@@ -603,6 +648,7 @@ func (c *controller) pruneSessionRefreshersLocked() {
 	live := make(map[string]struct{}, len(c.state.Sessions))
 	for _, session := range c.state.Sessions {
 		live[session.ID] = struct{}{}
+		live[sessionRefStorageKey(session.Ref())] = struct{}{}
 	}
 	c.contextRefresh.prune(live)
 	c.memoryRefresh.prune(live)

@@ -34,6 +34,8 @@ type shell struct {
 	buttonRevision               uint64
 	buttonRevisionSet            bool
 	sidebarRowsCache             sidebarRowsCache
+	sidebarDisplayCache          sidebarDisplayCache
+	sidebarCollapseRevision      uint64
 	sidebarVisible               bool
 	sidebarToggle                widget.Clickable
 	sidebarSearchEditor          widget.Editor
@@ -43,6 +45,7 @@ type shell struct {
 	sidebarNewSessionButton      widget.Clickable
 	emptyNewSessionButton        widget.Clickable
 	conversationList             layout.List
+	sessionScrollPositions       boundedCache[desktopstate.SessionRef, layout.Position]
 	conversationMarkdown         *markdown.Renderer
 	conversationCache            map[conversationCacheKey]conversationMarkdownCache
 	conversationCacheBytes       int
@@ -173,6 +176,7 @@ type shell struct {
 	agentConfirmDeleteBtn        widget.Clickable
 	agentCancelDeleteBtn         widget.Clickable
 	activeSessionID              string
+	activeSessionAgentID         string
 	syncRevision                 uint64
 
 	sessionMenuButtons        map[string]*widget.Clickable
@@ -181,16 +185,19 @@ type shell struct {
 	sessionQuickRenameButtons map[string]*widget.Clickable
 	sessionQuickDeleteButtons map[string]*widget.Clickable
 	menuSessionID             string
+	menuSessionAgentID        string
 	menuPinButton             widget.Clickable
 	menuRenameButton          widget.Clickable
 	menuDeleteButton          widget.Clickable
 
-	editingSessionID    string
-	sessionRenameEditor widget.Editor
-	renameConfirmButton widget.Clickable
-	renameCancelButton  widget.Clickable
+	editingSessionID      string
+	editingSessionAgentID string
+	sessionRenameEditor   widget.Editor
+	renameConfirmButton   widget.Clickable
+	renameCancelButton    widget.Clickable
 
 	deletingSessionID        string
+	deletingSessionAgentID   string
 	deletingSessionTitle     string
 	deleteModalScrim         widget.Clickable
 	deleteModalCancelButton  widget.Clickable
@@ -269,12 +276,12 @@ type shell struct {
 	providerModelsDropdownBtn  widget.Clickable
 	backgroundAttentionButton  widget.Clickable
 
-	onSelectSession            func(string)
+	onSelectSession            func(string, string)
 	onSelectProject            func(string)
 	onNewSession               func()
-	onDeleteSession            func(string)
-	onRenameSession            func(string, string)
-	onTogglePinSession         func(string)
+	onDeleteSession            func(string, string)
+	onRenameSession            func(string, string, string)
+	onTogglePinSession         func(string, string)
 	onToggleSkill              func(string, string)
 	onSetFilterMode            func(string)
 	onSendPrompt               func(ExpandedPrompt)
@@ -336,6 +343,7 @@ func newShell(theme *theme) *shell {
 		projectCollapsed:             make(map[string]bool),
 		sidebarList:                  layout.List{Axis: layout.Vertical},
 		conversationList:             layout.List{Axis: layout.Vertical, ScrollToEnd: true},
+		sessionScrollPositions:       newBoundedCache[desktopstate.SessionRef, layout.Position](maxComposerDrafts),
 		inspectorList:                layout.List{Axis: layout.Vertical},
 		settingsModalList:            layout.List{Axis: layout.Vertical},
 		composer:                     widget.Editor{Submit: true, MaxLen: 1 << 20},
@@ -392,12 +400,12 @@ func newShell(theme *theme) *shell {
 		codeCopiedAt:                 make(map[string]time.Time),
 		mcpIntegrationButtons:        make(map[string]*widget.Clickable),
 		mcpIntegrationLive:           make(map[string]struct{}),
-		onSelectSession:              func(string) {},
+		onSelectSession:              func(string, string) {},
 		onSelectProject:              func(string) {},
 		onNewSession:                 func() {},
-		onDeleteSession:              func(string) {},
-		onRenameSession:              func(string, string) {},
-		onTogglePinSession:           func(string) {},
+		onDeleteSession:              func(string, string) {},
+		onRenameSession:              func(string, string, string) {},
+		onTogglePinSession:           func(string, string) {},
 		onToggleSkill:                func(string, string) {},
 		onSetFilterMode:              func(string) {},
 		onSendPrompt:                 func(ExpandedPrompt) {},
@@ -759,7 +767,7 @@ func (s *shell) layoutMain(gtx layout.Context, snapshot controllerSnapshot) layo
 func (s *shell) layoutConversationPane(gtx layout.Context, session desktopstate.SessionState, snapshot controllerSnapshot) layout.Dimensions {
 	children := make([]layout.FlexChild, 0, 5)
 
-	if banner := s.layoutBackgroundAttentionBanner(gtx, snapshot.State, session.ID); banner.Size.Y > 0 {
+	if banner := s.layoutBackgroundAttentionBanner(gtx, snapshot.State, session.AgentID, session.ID); banner.Size.Y > 0 {
 		children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 			return banner
 		}))
@@ -769,7 +777,7 @@ func (s *shell) layoutConversationPane(gtx layout.Context, session desktopstate.
 		return s.layoutConversation(gtx, session, snapshot.HistoryState)
 	}))
 
-	if permission := activePermission(snapshot.State, session.ID); permission != nil {
+	if permission := activePermission(snapshot.State, session.ID, session.AgentID); permission != nil {
 		children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 			if gtx.Constraints.Max.X > 0 {
 				gtx.Constraints.Min.X = gtx.Constraints.Max.X
@@ -784,7 +792,7 @@ func (s *shell) layoutConversationPane(gtx layout.Context, session desktopstate.
 		}))
 	}
 
-	if question := activeQuestion(snapshot.State, session.ID); question != nil {
+	if question := activeQuestion(snapshot.State, session.ID, session.AgentID); question != nil {
 		children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 			if gtx.Constraints.Max.X > 0 {
 				gtx.Constraints.Min.X = gtx.Constraints.Max.X
@@ -806,10 +814,11 @@ func (s *shell) layoutConversationPane(gtx layout.Context, session desktopstate.
 	return layout.Flex{Axis: layout.Vertical, Alignment: layout.Middle}.Layout(gtx, children...)
 }
 
-func (s *shell) layoutBackgroundAttentionBanner(gtx layout.Context, state desktopstate.State, currentSessionID string) layout.Dimensions {
-	var targetSessionID, targetTitle, targetKind string
+func (s *shell) layoutBackgroundAttentionBanner(gtx layout.Context, state desktopstate.State, currentAgentID, currentSessionID string) layout.Dimensions {
+	var targetAgentID, targetSessionID, targetTitle, targetKind string
 	for _, p := range state.PermissionInbox {
-		if p.SessionID != currentSessionID {
+		if p.SessionID != currentSessionID || p.AgentID != "" && p.AgentID != currentAgentID {
+			targetAgentID = p.AgentID
 			targetSessionID = p.SessionID
 			targetTitle = p.Title
 			targetKind = "permission"
@@ -818,7 +827,8 @@ func (s *shell) layoutBackgroundAttentionBanner(gtx layout.Context, state deskto
 	}
 	if targetSessionID == "" {
 		for _, q := range state.QuestionInbox {
-			if q.SessionID != currentSessionID {
+			if q.SessionID != currentSessionID || q.AgentID != "" && q.AgentID != currentAgentID {
+				targetAgentID = q.AgentID
 				targetSessionID = q.SessionID
 				if len(q.Questions) > 0 {
 					targetTitle = q.Questions[0].Question
@@ -833,10 +843,15 @@ func (s *shell) layoutBackgroundAttentionBanner(gtx layout.Context, state deskto
 	if targetSessionID == "" {
 		return layout.Dimensions{}
 	}
+	if targetAgentID == "" {
+		if session, ok := desktopSessionByID(state, targetSessionID); ok {
+			targetAgentID = session.AgentID
+		}
+	}
 
 	sessionName := sessionTitle(state, targetSessionID)
 	if s.backgroundAttentionButton.Clicked(gtx) {
-		s.onSelectSession(targetSessionID)
+		s.onSelectSession(targetAgentID, targetSessionID)
 	}
 
 	return layout.Stack{Alignment: layout.Center}.Layout(gtx, layout.Stacked(func(gtx layout.Context) layout.Dimensions {
@@ -853,7 +868,7 @@ func (s *shell) layoutBackgroundAttentionBanner(gtx layout.Context, state deskto
 						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 							return desktopInset{Left: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 								return s.layoutButton(gtx, &s.backgroundAttentionButton, "Jump to session", true, func() {
-									s.onSelectSession(targetSessionID)
+									s.onSelectSession(targetAgentID, targetSessionID)
 								})
 							})
 						}),

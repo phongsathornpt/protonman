@@ -42,6 +42,7 @@ type sidebarRow struct {
 	Kind           sidebarRowKind
 	ProjectID      string
 	SessionID      string
+	sessionKey     string
 	AgentID        string
 	Title          string
 	Subtitle       string
@@ -58,6 +59,7 @@ type sidebarProjectCache struct {
 
 type sidebarSessionCache struct {
 	id             string
+	key            string
 	projectID      string
 	agentID        string
 	title          string
@@ -69,11 +71,22 @@ type sidebarSessionCache struct {
 
 type sidebarRowsCache struct {
 	valid      bool
+	revision   uint64
 	rows       []sidebarRow
 	projects   []sidebarProjectCache
 	sessions   []sidebarSessionCache
 	filterMode string
 	pinned     []string
+}
+
+type sidebarDisplayCache struct {
+	valid            bool
+	rows             []sidebarRow
+	sourceRevision   uint64
+	collapseRevision uint64
+	query            string
+	filterMode       string
+	pinnedCollapsed  bool
 }
 
 // Sidebar vertical rhythm and glyph sizing. These keep row heights stable as
@@ -103,7 +116,7 @@ func (s *shell) layoutSidebar(gtx layout.Context, snapshot controllerSnapshot) l
 		}),
 		layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
 			allRows := s.sidebarRows(snapshot)
-			rows := s.sidebarDisplayRows(allRows, snapshot.FilterMode)
+			rows := s.sidebarDisplayRows(allRows, snapshot.FilterMode, snapshot.Revision)
 			if len(rows) == 0 {
 				emptyText := "No conversations yet. Start one from an existing workspace."
 				hasFilter := false
@@ -425,9 +438,18 @@ func (s *shell) layoutSidebarSearch(gtx layout.Context) layout.Dimensions {
 	})
 }
 
-func (s *shell) sidebarDisplayRows(rows []sidebarRow, filterMode string) []sidebarRow {
+func (s *shell) sidebarDisplayRows(rows []sidebarRow, filterMode string, sourceRevisions ...uint64) []sidebarRow {
 	query := strings.ToLower(strings.TrimSpace(s.sidebarSearchEditor.Text()))
 	filterMode = strings.ToLower(strings.TrimSpace(filterMode))
+	sourceRevision := uint64(0)
+	if len(sourceRevisions) > 0 {
+		sourceRevision = sourceRevisions[0]
+	}
+	cache := &s.sidebarDisplayCache
+	if cache.valid && cache.sourceRevision == sourceRevision && cache.collapseRevision == s.sidebarCollapseRevision &&
+		cache.query == query && cache.filterMode == filterMode && cache.pinnedCollapsed == s.pinnedCollapsed {
+		return cache.rows
+	}
 
 	display := make([]sidebarRow, 0, len(rows))
 	currentProjectCollapsed := false
@@ -507,18 +529,29 @@ func (s *shell) sidebarDisplayRows(rows []sidebarRow, filterMode string) []sideb
 				cleaned = append(cleaned, r)
 			}
 		}
-		return cleaned
+		display = cleaned
 	}
 
+	cache.valid = true
+	cache.rows = display
+	cache.sourceRevision = sourceRevision
+	cache.collapseRevision = s.sidebarCollapseRevision
+	cache.query = query
+	cache.filterMode = filterMode
+	cache.pinnedCollapsed = s.pinnedCollapsed
 	return display
 }
 
 func (s *shell) sidebarRows(snapshot controllerSnapshot) []sidebarRow {
+	if snapshot.Revision != 0 && s.sidebarRowsCache.valid && s.sidebarRowsCache.revision == snapshot.Revision {
+		return s.sidebarRowsCache.rows
+	}
 	if s.sidebarRowsCache.valid && s.sidebarRowsCache.matchesWithOptions(snapshot.State, snapshot.AgentProfiles, snapshot.FilterMode, snapshot.PinnedSessions, snapshot.CustomTitles) {
 		return s.sidebarRowsCache.rows
 	}
 	rows, cache := buildSidebarRowsWithOptions(snapshot.State, snapshot.AgentProfiles, snapshot.PinnedSessions, snapshot.CustomTitles)
 	cache.filterMode = snapshot.FilterMode
+	cache.revision = snapshot.Revision
 	s.sidebarRowsCache = cache
 	return rows
 }
@@ -550,14 +583,20 @@ func buildSidebarRowsWithOptions(state desktopstate.State, profiles []app.ACPAge
 	}
 
 	for _, session := range state.Sessions {
+		storageKey := sessionRefStorageKey(session.Ref())
 		title := session.Title
-		if custom, ok := customTitles[session.ID]; ok && custom != "" {
+		custom, ok := customTitles[storageKey]
+		if !ok && storageKey != session.ID {
+			custom = customTitles[session.ID]
+		}
+		if custom != "" {
 			title = custom
 		}
-		pinned := pinnedMap[session.ID]
+		pinned := pinnedMap[storageKey] || pinnedMap[session.ID]
 		subtitle := subtitleFor(session.AgentID)
 		sessions = append(sessions, sidebarSessionCache{
 			id:             session.ID,
+			key:            storageKey,
 			projectID:      session.ProjectID,
 			agentID:        session.AgentID,
 			title:          title,
@@ -570,6 +609,7 @@ func buildSidebarRowsWithOptions(state desktopstate.State, profiles []app.ACPAge
 			Kind:           sidebarSessionRow,
 			ProjectID:      session.ProjectID,
 			SessionID:      session.ID,
+			sessionKey:     storageKey,
 			AgentID:        session.AgentID,
 			Title:          title,
 			Subtitle:       subtitle,
@@ -661,8 +701,13 @@ func (cache sidebarRowsCache) matchesWithOptions(state desktopstate.State, profi
 	displayNames := make(map[string]string)
 	for sessionIndex, session := range state.Sessions {
 		cachedSession := cache.sessions[sessionIndex]
+		storageKey := cachedSession.key
 		expectedTitle := session.Title
-		if custom, ok := customTitles[session.ID]; ok && custom != "" {
+		custom, ok := customTitles[storageKey]
+		if !ok && storageKey != session.ID {
+			custom = customTitles[session.ID]
+		}
+		if custom != "" {
 			expectedTitle = custom
 		}
 		subtitle, ok := displayNames[session.AgentID]
@@ -688,6 +733,7 @@ func (s *shell) layoutSidebarRow(gtx layout.Context, row sidebarRow, state deskt
 		button := &s.pinnedButton
 		if button.Clicked(gtx) {
 			s.pinnedCollapsed = !s.pinnedCollapsed
+			s.sidebarCollapseRevision++
 		}
 		gtx.Constraints.Min.Y = gtx.Dp(32)
 		chevronKind := iconChevronDown
@@ -739,6 +785,7 @@ func (s *shell) layoutSidebarRow(gtx layout.Context, row sidebarRow, state deskt
 		isCollapsed := s.projectCollapsed[row.ProjectID]
 		if button.Clicked(gtx) {
 			s.projectCollapsed[row.ProjectID] = !isCollapsed
+			s.sidebarCollapseRevision++
 			s.onSelectProject(row.ProjectID)
 		}
 		gtx.Constraints.Min.Y = gtx.Dp(32)
@@ -796,31 +843,37 @@ func (s *shell) layoutSidebarRow(gtx layout.Context, row sidebarRow, state deskt
 		})
 	}
 
-	button := s.sessionButtons[row.SessionID]
-	pinBtn := s.sessionPinButton(row.SessionID)
-	renameBtn := s.sessionQuickRenameButton(row.SessionID)
-	deleteBtn := s.sessionQuickDeleteButton(row.SessionID)
-	menuBtn := s.sessionMenuButton(row.SessionID)
-	selected := state.ActiveSessionID == row.SessionID
-	isRenaming := s.editingSessionID == row.SessionID
-	menuOpen := s.menuSessionID == row.SessionID
+	widgetKey := row.sessionKey
+	if widgetKey == "" {
+		widgetKey = sidebarSessionWidgetKey(row.SessionID, row.AgentID)
+	}
+	button := s.sessionButtons[widgetKey]
+	pinBtn := s.sessionPinButton(row.SessionID, row.AgentID)
+	renameBtn := s.sessionQuickRenameButton(row.SessionID, row.AgentID)
+	deleteBtn := s.sessionQuickDeleteButton(row.SessionID, row.AgentID)
+	menuBtn := s.sessionMenuButton(row.SessionID, row.AgentID)
+	selected := state.ActiveSessionID == row.SessionID && (state.ActiveAgentID == "" || state.ActiveAgentID == row.AgentID)
+	isRenaming := s.editingSessionID == row.SessionID && s.editingSessionAgentID == row.AgentID
+	menuOpen := s.menuSessionID == row.SessionID && s.menuSessionAgentID == row.AgentID
 	isHovered := button != nil && button.Hovered()
 	isFocused := button != nil && gtx.Focused(button)
 	showActions := isHovered || selected || menuOpen || isFocused
 
 	if button != nil && button.Clicked(gtx) {
-		s.onSelectSession(row.SessionID)
+		s.onSelectSession(row.AgentID, row.SessionID)
 	}
 
 	if pinBtn.Clicked(gtx) {
-		s.onTogglePinSession(row.SessionID)
+		s.onTogglePinSession(row.AgentID, row.SessionID)
 	}
 	if renameBtn.Clicked(gtx) {
 		s.editingSessionID = row.SessionID
+		s.editingSessionAgentID = row.AgentID
 		s.sessionRenameEditor.SetText(row.Title)
 	}
 	if deleteBtn.Clicked(gtx) {
 		s.deletingSessionID = row.SessionID
+		s.deletingSessionAgentID = row.AgentID
 		s.deletingSessionTitle = row.Title
 	}
 
@@ -833,7 +886,7 @@ func (s *shell) layoutSidebarRow(gtx layout.Context, row sidebarRow, state deskt
 			if e, ok := evt.(key.Event); ok && e.State == key.Press {
 				newTitle := s.sessionRenameEditor.Text()
 				s.editingSessionID = ""
-				s.onRenameSession(row.SessionID, newTitle)
+				s.onRenameSession(row.AgentID, row.SessionID, newTitle)
 			}
 		}
 		for {
@@ -848,7 +901,7 @@ func (s *shell) layoutSidebarRow(gtx layout.Context, row sidebarRow, state deskt
 		if s.renameConfirmButton.Clicked(gtx) {
 			newTitle := s.sessionRenameEditor.Text()
 			s.editingSessionID = ""
-			s.onRenameSession(row.SessionID, newTitle)
+			s.onRenameSession(row.AgentID, row.SessionID, newTitle)
 		}
 		if s.renameCancelButton.Clicked(gtx) {
 			s.editingSessionID = ""
@@ -856,10 +909,12 @@ func (s *shell) layoutSidebarRow(gtx layout.Context, row sidebarRow, state deskt
 	}
 
 	if menuBtn.Clicked(gtx) {
-		if s.menuSessionID == row.SessionID {
+		if s.menuSessionID == row.SessionID && s.menuSessionAgentID == row.AgentID {
 			s.menuSessionID = ""
+			s.menuSessionAgentID = ""
 		} else {
 			s.menuSessionID = row.SessionID
+			s.menuSessionAgentID = row.AgentID
 		}
 	}
 
@@ -999,32 +1054,44 @@ func (s *shell) layoutSidebarRow(gtx layout.Context, row sidebarRow, state deskt
 	})
 }
 
-func (s *shell) sessionMenuButton(sessionID string) *widget.Clickable {
-	if s.sessionMenuButtons[sessionID] == nil {
-		s.sessionMenuButtons[sessionID] = new(widget.Clickable)
+func sidebarSessionWidgetKey(sessionID string, agentIDs ...string) string {
+	agentID := ""
+	if len(agentIDs) > 0 {
+		agentID = agentIDs[0]
 	}
-	return s.sessionMenuButtons[sessionID]
+	return sessionRefStorageKey(desktopstate.SessionRef{AgentID: agentID, SessionID: sessionID})
 }
 
-func (s *shell) sessionPinButton(sessionID string) *widget.Clickable {
-	if s.sessionPinButtons[sessionID] == nil {
-		s.sessionPinButtons[sessionID] = new(widget.Clickable)
+func (s *shell) sessionMenuButton(sessionID string, agentIDs ...string) *widget.Clickable {
+	key := sidebarSessionWidgetKey(sessionID, agentIDs...)
+	if s.sessionMenuButtons[key] == nil {
+		s.sessionMenuButtons[key] = new(widget.Clickable)
 	}
-	return s.sessionPinButtons[sessionID]
+	return s.sessionMenuButtons[key]
 }
 
-func (s *shell) sessionQuickRenameButton(sessionID string) *widget.Clickable {
-	if s.sessionQuickRenameButtons[sessionID] == nil {
-		s.sessionQuickRenameButtons[sessionID] = new(widget.Clickable)
+func (s *shell) sessionPinButton(sessionID string, agentIDs ...string) *widget.Clickable {
+	key := sidebarSessionWidgetKey(sessionID, agentIDs...)
+	if s.sessionPinButtons[key] == nil {
+		s.sessionPinButtons[key] = new(widget.Clickable)
 	}
-	return s.sessionQuickRenameButtons[sessionID]
+	return s.sessionPinButtons[key]
 }
 
-func (s *shell) sessionQuickDeleteButton(sessionID string) *widget.Clickable {
-	if s.sessionQuickDeleteButtons[sessionID] == nil {
-		s.sessionQuickDeleteButtons[sessionID] = new(widget.Clickable)
+func (s *shell) sessionQuickRenameButton(sessionID string, agentIDs ...string) *widget.Clickable {
+	key := sidebarSessionWidgetKey(sessionID, agentIDs...)
+	if s.sessionQuickRenameButtons[key] == nil {
+		s.sessionQuickRenameButtons[key] = new(widget.Clickable)
 	}
-	return s.sessionQuickDeleteButtons[sessionID]
+	return s.sessionQuickRenameButtons[key]
+}
+
+func (s *shell) sessionQuickDeleteButton(sessionID string, agentIDs ...string) *widget.Clickable {
+	key := sidebarSessionWidgetKey(sessionID, agentIDs...)
+	if s.sessionQuickDeleteButtons[key] == nil {
+		s.sessionQuickDeleteButtons[key] = new(widget.Clickable)
+	}
+	return s.sessionQuickDeleteButtons[key]
 }
 
 func (s *shell) layoutMiniMenuButton(gtx layout.Context, button *widget.Clickable, label string) layout.Dimensions {
@@ -1105,16 +1172,18 @@ func (s *shell) layoutSessionMenuPopover(gtx layout.Context, row sidebarRow) lay
 
 	if s.menuPinButton.Clicked(gtx) {
 		s.menuSessionID = ""
-		s.onTogglePinSession(row.SessionID)
+		s.onTogglePinSession(row.AgentID, row.SessionID)
 	}
 	if s.menuRenameButton.Clicked(gtx) {
 		s.menuSessionID = ""
 		s.editingSessionID = row.SessionID
+		s.editingSessionAgentID = row.AgentID
 		s.sessionRenameEditor.SetText(row.Title)
 	}
 	if s.menuDeleteButton.Clicked(gtx) {
 		s.menuSessionID = ""
 		s.deletingSessionID = row.SessionID
+		s.deletingSessionAgentID = row.AgentID
 		s.deletingSessionTitle = row.Title
 	}
 
@@ -1176,10 +1245,12 @@ func (s *shell) layoutDeleteModal(gtx layout.Context) layout.Dimensions {
 								layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 									return s.layoutDangerButton(gtx, &s.deleteModalConfirmButton, "Delete", true, func() {
 										id := s.deletingSessionID
+										agentID := s.deletingSessionAgentID
 										s.deletingSessionID = ""
+										s.deletingSessionAgentID = ""
 										s.deletingSessionTitle = ""
 										if s.onDeleteSession != nil && id != "" {
-											s.onDeleteSession(id)
+											s.onDeleteSession(agentID, id)
 										}
 									})
 								}),
@@ -1229,21 +1300,22 @@ func (s *shell) syncSessionButtons(state desktopstate.State, revision uint64) {
 	}
 	clear(live)
 	for _, session := range state.Sessions {
-		live[session.ID] = struct{}{}
-		if s.sessionButtons[session.ID] == nil {
-			s.sessionButtons[session.ID] = new(widget.Clickable)
+		key := sidebarSessionWidgetKey(session.ID, session.AgentID)
+		live[key] = struct{}{}
+		if s.sessionButtons[key] == nil {
+			s.sessionButtons[key] = new(widget.Clickable)
 		}
-		if s.sessionMenuButtons[session.ID] == nil {
-			s.sessionMenuButtons[session.ID] = new(widget.Clickable)
+		if s.sessionMenuButtons[key] == nil {
+			s.sessionMenuButtons[key] = new(widget.Clickable)
 		}
-		if s.sessionPinButtons[session.ID] == nil {
-			s.sessionPinButtons[session.ID] = new(widget.Clickable)
+		if s.sessionPinButtons[key] == nil {
+			s.sessionPinButtons[key] = new(widget.Clickable)
 		}
-		if s.sessionQuickRenameButtons[session.ID] == nil {
-			s.sessionQuickRenameButtons[session.ID] = new(widget.Clickable)
+		if s.sessionQuickRenameButtons[key] == nil {
+			s.sessionQuickRenameButtons[key] = new(widget.Clickable)
 		}
-		if s.sessionQuickDeleteButtons[session.ID] == nil {
-			s.sessionQuickDeleteButtons[session.ID] = new(widget.Clickable)
+		if s.sessionQuickDeleteButtons[key] == nil {
+			s.sessionQuickDeleteButtons[key] = new(widget.Clickable)
 		}
 	}
 	for sessionID := range s.sessionButtons {

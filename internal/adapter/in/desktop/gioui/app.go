@@ -69,12 +69,12 @@ func Run(ctx context.Context, agents application.ACPAgents, mcpIntegrations appl
 			}
 		}
 	}()
-	view.onSelectSession = controller.selectSession
+	view.onSelectSession = controller.selectSessionForAgent
 	view.onSelectProject = controller.selectProject
 	view.onNewSession = controller.newSession
-	view.onDeleteSession = controller.deleteSession
-	view.onRenameSession = controller.renameSession
-	view.onTogglePinSession = controller.togglePinSession
+	view.onDeleteSession = func(agentID, sessionID string) { controller.deleteSession(sessionID, agentID) }
+	view.onRenameSession = func(agentID, sessionID, title string) { controller.renameSession(sessionID, title, agentID) }
+	view.onTogglePinSession = func(agentID, sessionID string) { controller.togglePinSession(sessionID, agentID) }
 	view.onToggleSkill = controller.toggleSkill
 	view.onSetFilterMode = controller.setFilterMode
 	view.onSendPrompt = controller.sendExpandedPrompt

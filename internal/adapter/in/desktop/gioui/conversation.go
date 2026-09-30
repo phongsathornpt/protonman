@@ -44,14 +44,18 @@ const (
 type historyState uint8
 
 type sessionHistoryLoad struct {
-	cancel    context.CancelFunc
-	startedAt time.Time
+	agentID    string
+	sessionID  string
+	storageKey string
+	cancel     context.CancelFunc
+	startedAt  time.Time
 	// serverMeta carries the `_meta` returned by session/load so diagnostic
 	// timings emitted by the agent can be reported alongside the client timing.
 	serverMeta json.RawMessage
 }
 
 type messageStreamBuffer struct {
+	agentID   string
 	sessionID string
 	itemID    string
 	kind      desktopstate.TimelineKind
@@ -65,6 +69,7 @@ type messageStreamBuffer struct {
 }
 
 type messageStreamKey struct {
+	agentID   string
 	sessionID string
 	kind      string
 }
@@ -119,6 +124,7 @@ func (c *controller) handleACPEventFromAgent(agentID string, source *acpclient.C
 		return
 	}
 	update := desktopstate.SessionUpdate{
+		AgentID:    agentID,
 		SessionID:  payload.SessionID,
 		Kind:       payload.Update.Kind,
 		ToolCallID: payload.Update.ToolCallID,
@@ -136,7 +142,8 @@ func (c *controller) handleACPEventFromAgent(agentID string, source *acpclient.C
 		}
 		agentID = currentAgentID
 	}
-	session, sessionExists := desktopSessionByID(c.state, payload.SessionID)
+	update.AgentID = agentID
+	session, sessionExists := desktopSessionByID(c.state, payload.SessionID, agentID)
 	if !sessionExists || agentID != "" && session.AgentID != agentID {
 		c.mu.Unlock()
 		return
@@ -144,7 +151,7 @@ func (c *controller) handleACPEventFromAgent(agentID string, source *acpclient.C
 	if update.Kind == "current_mode_update" {
 		modeID := strings.TrimSpace(payload.Update.ModeID)
 		if modeID != "" {
-			if sess := desktopstateSessionPointer(&c.state, payload.SessionID); sess != nil {
+			if sess := desktopstateSessionPointer(&c.state, payload.SessionID, session.AgentID); sess != nil {
 				if isClineACPProfile(c.profiles[session.AgentID]) {
 					autoApprove := sess.Runtime.PermissionMode == "always-approve"
 					sess.Runtime.PermissionMode = clinePermissionMode(modeID, autoApprove)
@@ -161,7 +168,7 @@ func (c *controller) handleACPEventFromAgent(agentID string, source *acpclient.C
 		return
 	}
 	if update.Kind == "config_option_update" && isClineACPProfile(c.profiles[session.AgentID]) {
-		if sess := desktopstateSessionPointer(&c.state, payload.SessionID); sess != nil {
+		if sess := desktopstateSessionPointer(&c.state, payload.SessionID, session.AgentID); sess != nil {
 			modeID := clineModeID(payload.Update.ConfigOptions, sess.Runtime.PermissionMode)
 			autoApprove := clineAutoApproveValue(payload.Update.ConfigOptions, sess.Runtime.PermissionMode == "always-approve")
 			sess.Runtime.PermissionMode = clinePermissionMode(modeID, autoApprove)
@@ -171,7 +178,7 @@ func (c *controller) handleACPEventFromAgent(agentID string, source *acpclient.C
 		c.notify()
 		return
 	}
-	if payload.SessionID != c.state.ActiveSessionID {
+	if payload.SessionID != c.state.ActiveSessionID || c.state.ActiveAgentID != "" && agentID != "" && c.state.ActiveAgentID != agentID {
 		c.mu.Unlock()
 		return
 	}
@@ -180,7 +187,8 @@ func (c *controller) handleACPEventFromAgent(agentID string, source *acpclient.C
 		c.mu.Unlock()
 		return
 	}
-	if c.histories[payload.SessionID] == historyStateLoading {
+	sessionKey := desktopSessionStorageKey(c.state, session.Ref())
+	if c.histories[sessionKey] == historyStateLoading {
 		c.stageHistoryEventLocked(payload.SessionID, timelineEvent)
 		c.mu.Unlock()
 		return
@@ -195,38 +203,39 @@ func (c *controller) handleACPEventFromAgent(agentID string, source *acpclient.C
 	c.mu.Unlock()
 	c.notify()
 	if update.Kind == "tool_call_update" && terminalToolStatus(update.Status) {
-		c.refreshSessionContextFrom(source, payload.SessionID, false)
-		c.refreshSessionMemoryFrom(source, payload.SessionID, false)
+		c.refreshSessionContextFrom(source, payload.SessionID, false, agentID)
+		c.refreshSessionMemoryFrom(source, payload.SessionID, false, agentID)
 	}
 }
 
 func (c *controller) stageHistoryEventLocked(sessionID string, event desktopstate.Event) {
+	sessionKey := desktopSessionStorageKeyForID(c.state, sessionID, event.AgentID)
 	if c.historyStaging == nil {
 		c.historyStaging = make(map[string][]desktopstate.Event)
 	}
 	if c.historyStagingBytes == nil {
 		c.historyStagingBytes = make(map[string]int)
 	}
-	staged := c.historyStaging[sessionID]
+	staged := c.historyStaging[sessionKey]
 	event, eventTruncated, keep := boundSessionEvent(event, maxHistoryStagingBytes)
 	if eventTruncated {
 		if c.historyStagingTruncated == nil {
 			c.historyStagingTruncated = make(map[string]bool)
 		}
-		c.historyStagingTruncated[sessionID] = true
+		c.historyStagingTruncated[sessionKey] = true
 	}
 	if !keep {
 		return
 	}
 	size := historyEventSize(event)
-	c.historyStaging[sessionID] = append(staged, event)
-	c.historyStagingBytes[sessionID] += size
-	if c.historyStagingBytes[sessionID] <= maxHistoryStagingBytes && len(c.historyStaging[sessionID]) <= maxHistoryStagingEvents {
+	c.historyStaging[sessionKey] = append(staged, event)
+	c.historyStagingBytes[sessionKey] += size
+	if c.historyStagingBytes[sessionKey] <= maxHistoryStagingBytes && len(c.historyStaging[sessionKey]) <= maxHistoryStagingEvents {
 		return
 	}
-	staged = c.historyStaging[sessionID]
+	staged = c.historyStaging[sessionKey]
 	drop := 0
-	bytes := c.historyStagingBytes[sessionID]
+	bytes := c.historyStagingBytes[sessionKey]
 	for bytes > stagingTrimTargetBytes || len(staged)-drop > stagingTrimTargetEvents {
 		bytes -= historyEventSize(staged[drop])
 		staged[drop] = desktopstate.Event{}
@@ -237,10 +246,10 @@ func (c *controller) stageHistoryEventLocked(sessionID string, event desktopstat
 		for i := len(staged) - drop; i < len(staged); i++ {
 			staged[i] = desktopstate.Event{}
 		}
-		c.historyStaging[sessionID] = staged[:len(staged)-drop]
+		c.historyStaging[sessionKey] = staged[:len(staged)-drop]
 	}
-	c.historyStagingBytes[sessionID] = bytes
-	c.historyStagingTruncated[sessionID] = true
+	c.historyStagingBytes[sessionKey] = bytes
+	c.historyStagingTruncated[sessionKey] = true
 }
 
 func historyEventSize(event desktopstate.Event) int {
@@ -293,17 +302,17 @@ func timelineItemSize(item desktopstate.TimelineItem) int {
 }
 
 func (c *controller) appendMessageChunkLocked(sessionID, kind string, event desktopstate.Event) {
-	streamKey := messageStreamKey{sessionID: sessionID, kind: kind}
+	streamKey := messageStreamKey{agentID: event.AgentID, sessionID: sessionID, kind: kind}
 	chunkText := event.Item.Text
 	if c.messageStreamBuffers == nil {
 		c.messageStreamBuffers = make(map[messageStreamKey]*messageStreamBuffer)
 	}
 	buffer := c.messageStreamBuffers[streamKey]
 	if buffer == nil {
-		buffer = &messageStreamBuffer{sessionID: sessionID, itemID: event.Item.ID, kind: event.Item.Kind, index: -1}
+		buffer = &messageStreamBuffer{agentID: event.AgentID, sessionID: sessionID, itemID: event.Item.ID, kind: event.Item.Kind, index: -1}
 		c.messageStreamBuffers[streamKey] = buffer
 		found := false
-		if session := desktopstateSessionPointer(&c.state, sessionID); session != nil {
+		if session := desktopstateSessionPointer(&c.state, sessionID, event.AgentID); session != nil {
 			for _, item := range session.Timeline {
 				if item.ID == event.Item.ID && item.Kind == event.Item.Kind {
 					found = true
@@ -356,7 +365,7 @@ func (c *controller) flushMessageStream(streamKey messageStreamKey, expected *me
 	expected.timer = nil
 	if c.flushMessageStreamLocked(expected) {
 		c.revision++
-		if !c.advanceSnapshotCacheForTimelineLocked(expected.sessionID) {
+		if !c.advanceSnapshotCacheForTimelineLocked(expected.sessionID, expected.agentID) {
 			c.snapshotCache = controllerSnapshotCache{}
 		}
 		c.mu.Unlock()
@@ -367,10 +376,11 @@ func (c *controller) flushMessageStream(streamKey messageStreamKey, expected *me
 }
 
 func (c *controller) flushMessageStreamLocked(buffer *messageStreamBuffer) bool {
-	session := desktopstateSessionPointer(&c.state, buffer.sessionID)
+	session := desktopstateSessionPointer(&c.state, buffer.sessionID, buffer.agentID)
 	if session == nil {
 		return false
 	}
+	sessionKey := desktopSessionStorageKey(c.state, session.Ref())
 	index := timelineItemIndex(session, buffer)
 	if index < 0 {
 		return false
@@ -383,11 +393,11 @@ func (c *controller) flushMessageStreamLocked(buffer *messageStreamBuffer) bool 
 		if c.timelineBytes == nil {
 			c.timelineBytes = make(map[string]int)
 		}
-		if _, ok := c.timelineBytes[buffer.sessionID]; !ok {
-			c.timelineBytes[buffer.sessionID] = timelineSize(session.Timeline)
+		if _, ok := c.timelineBytes[sessionKey]; !ok {
+			c.timelineBytes[sessionKey] = timelineSize(session.Timeline)
 		}
 		grown = len(next) - len(item.Text)
-		c.timelineBytes[buffer.sessionID] += grown
+		c.timelineBytes[sessionKey] += grown
 		item.Text = next
 	}
 	if buffer.truncated && !session.HistoryTruncated {
@@ -396,7 +406,7 @@ func (c *controller) flushMessageStreamLocked(buffer *messageStreamBuffer) bool 
 	}
 	item.Streaming = true
 	if changed {
-		if grown > 4096 || c.timelineBytes[buffer.sessionID] > maxSessionTimelineBytes || len(session.Timeline) > maxSessionTimelineItems {
+		if grown > 4096 || c.timelineBytes[sessionKey] > maxSessionTimelineBytes || len(session.Timeline) > maxSessionTimelineItems {
 			c.pruneSessionTimelineTrustedLocked(session)
 		}
 	}
@@ -423,9 +433,9 @@ func timelineItemIndex(session *desktopstate.SessionState, buffer *messageStream
 	return -1
 }
 
-func (c *controller) flushMessageStreamsLocked(sessionID string) {
+func (c *controller) flushMessageStreamsLocked(sessionID string, agentIDs ...string) {
 	for streamKey, buffer := range c.messageStreamBuffers {
-		if streamKey.sessionID != sessionID {
+		if streamKey.sessionID != sessionID || len(agentIDs) > 0 && agentIDs[0] != "" && streamKey.agentID != agentIDs[0] {
 			continue
 		}
 		if buffer.timer != nil {
@@ -468,10 +478,11 @@ func coalesceStagedMessageChunks(events []desktopstate.Event) []desktopstate.Eve
 }
 
 func (c *controller) applyTimelineEventLocked(event desktopstate.Event) {
-	session := desktopstateSessionPointer(&c.state, event.SessionID)
+	session := desktopstateSessionPointer(&c.state, event.SessionID, event.AgentID)
 	if session == nil {
 		return
 	}
+	sessionKey := desktopSessionStorageKey(c.state, session.Ref())
 	bounded, truncated, keep := boundSessionEvent(event, maxSessionTimelineBytes)
 	if truncated {
 		session.HistoryTruncated = true
@@ -482,7 +493,7 @@ func (c *controller) applyTimelineEventLocked(event desktopstate.Event) {
 	event = bounded
 	if event.Kind == desktopstate.EventSubagentUpserted {
 		desktopstate.Apply(&c.state, event)
-		if session := desktopstateSessionPointer(&c.state, event.SessionID); session != nil && len(session.Subagents) > maxSessionSubagents {
+		if session := desktopstateSessionPointer(&c.state, event.SessionID, event.AgentID); session != nil && len(session.Subagents) > maxSessionSubagents {
 			drop := len(session.Subagents) - maxSessionSubagents*3/4
 			for index := 0; index < drop; index++ {
 				session.Subagents[index] = desktopstate.SubagentState{}
@@ -495,8 +506,8 @@ func (c *controller) applyTimelineEventLocked(event desktopstate.Event) {
 	if c.timelineBytes == nil {
 		c.timelineBytes = make(map[string]int)
 	}
-	if _, ok := c.timelineBytes[event.SessionID]; !ok {
-		c.timelineBytes[event.SessionID] = timelineSize(session.Timeline)
+	if _, ok := c.timelineBytes[sessionKey]; !ok {
+		c.timelineBytes[sessionKey] = timelineSize(session.Timeline)
 	}
 	var delta int
 	switch event.Kind {
@@ -508,7 +519,7 @@ func (c *controller) applyTimelineEventLocked(event desktopstate.Event) {
 	default:
 		return
 	}
-	c.timelineBytes[event.SessionID] += delta
+	c.timelineBytes[sessionKey] += delta
 	c.pruneSessionTimelineTrustedLocked(session)
 }
 
@@ -533,29 +544,37 @@ func upsertTimelineItemLocked(session *desktopstate.SessionState, item desktopst
 	return timelineItemSize(item)
 }
 
-func (c *controller) applyStagedHistoryEventsLocked(sessionID string, events []desktopstate.Event) {
-	session := desktopstateSessionPointer(&c.state, sessionID)
+func (c *controller) applyStagedHistoryEventsLocked(sessionID string, events []desktopstate.Event, agentIDs ...string) {
+	agentID := c.state.ActiveAgentID
+	if len(agentIDs) > 0 {
+		agentID = agentIDs[0]
+	}
+	session := desktopstateSessionPointer(&c.state, sessionID, agentID)
 	if session == nil {
 		return
 	}
+	sessionKey := desktopSessionStorageKey(c.state, session.Ref())
 	if c.timelineBytes == nil {
 		c.timelineBytes = make(map[string]int)
 	}
-	if _, ok := c.timelineBytes[sessionID]; !ok {
-		c.timelineBytes[sessionID] = timelineSize(session.Timeline)
+	if _, ok := c.timelineBytes[sessionKey]; !ok {
+		c.timelineBytes[sessionKey] = timelineSize(session.Timeline)
 	}
 
 	appendCount := 0
 	for _, event := range events {
-		if event.SessionID == sessionID && event.Kind == desktopstate.EventTimelineAppended {
+		if event.SessionID == sessionID && (event.AgentID == "" || event.AgentID == session.AgentID) && event.Kind == desktopstate.EventTimelineAppended {
 			appendCount++
 		}
 	}
 	session.Timeline = slices.Grow(session.Timeline, appendCount)
 
 	for _, event := range events {
-		if event.SessionID != sessionID {
+		if event.SessionID != sessionID || event.AgentID != "" && event.AgentID != session.AgentID {
 			continue
+		}
+		if event.AgentID == "" {
+			event.AgentID = session.AgentID
 		}
 		if event.Kind != desktopstate.EventTimelineAppended {
 			c.applyTimelineEventLocked(event)
@@ -569,7 +588,7 @@ func (c *controller) applyStagedHistoryEventsLocked(sessionID string, events []d
 			continue
 		}
 		session.Timeline = append(session.Timeline, bounded.Item)
-		c.timelineBytes[sessionID] += timelineItemSize(bounded.Item)
+		c.timelineBytes[sessionKey] += timelineItemSize(bounded.Item)
 	}
 	// Trim once after the batch rather than rescanning the retained timeline for
 	// every appended event, which kept bulk history application quadratic.
@@ -584,13 +603,17 @@ func timelineSize(items []desktopstate.TimelineItem) int {
 	return bytes
 }
 
-func (c *controller) pruneSessionTimelineLocked(sessionID string) {
-	session := desktopstateSessionPointer(&c.state, sessionID)
-	if session == nil || c.timelineBytes[sessionID] <= maxSessionTimelineBytes && len(session.Timeline) <= maxSessionTimelineItems {
+func (c *controller) pruneSessionTimelineLocked(sessionID string, agentIDs ...string) {
+	session := desktopstateSessionPointer(&c.state, sessionID, agentIDs...)
+	if session == nil {
+		return
+	}
+	sessionKey := desktopSessionStorageKey(c.state, session.Ref())
+	if c.timelineBytes[sessionKey] <= maxSessionTimelineBytes && len(session.Timeline) <= maxSessionTimelineItems {
 		return
 	}
 	if retained := retainedTimelineBytes(session.Timeline); retained <= maxSessionTimelineBytes {
-		c.timelineBytes[sessionID] = retained
+		c.timelineBytes[sessionKey] = retained
 		return
 	}
 	c.pruneSessionTimelineTrustedLocked(session)
@@ -602,10 +625,11 @@ func (c *controller) pruneSessionTimelineLocked(sessionID string) {
 // timeline size, which keeps bulk history application linear rather than
 // quadratic in the retained item count.
 func (c *controller) pruneSessionTimelineTrustedLocked(session *desktopstate.SessionState) {
-	if c.timelineBytes[session.ID] <= maxSessionTimelineBytes && len(session.Timeline) <= maxSessionTimelineItems {
+	sessionKey := desktopSessionStorageKey(c.state, session.Ref())
+	if c.timelineBytes[sessionKey] <= maxSessionTimelineBytes && len(session.Timeline) <= maxSessionTimelineItems {
 		return
 	}
-	bytes := c.timelineBytes[session.ID]
+	bytes := c.timelineBytes[sessionKey]
 	drop := 0
 	for drop < len(session.Timeline) && (bytes > timelineTrimTargetBytes || len(session.Timeline)-drop > timelineTrimTargetItems) {
 		if len(session.Timeline)-drop == 1 && bytes > timelineTrimTargetBytes {
@@ -627,11 +651,11 @@ func (c *controller) pruneSessionTimelineTrustedLocked(session *desktopstate.Ses
 		remaining := append([]desktopstate.TimelineItem(nil), session.Timeline[drop:]...)
 		session.Timeline = remaining
 	} else if bytes <= maxSessionTimelineBytes && len(session.Timeline) <= maxSessionTimelineItems {
-		c.timelineBytes[session.ID] = bytes
+		c.timelineBytes[sessionKey] = bytes
 		return
 	}
 	session.HistoryTruncated = true
-	c.timelineBytes[session.ID] = bytes
+	c.timelineBytes[sessionKey] = bytes
 }
 
 func retainedTimelineBytes(items []desktopstate.TimelineItem) int {
@@ -642,13 +666,38 @@ func retainedTimelineBytes(items []desktopstate.TimelineItem) int {
 	return bytes
 }
 
-func desktopstateSessionPointer(state *desktopstate.State, sessionID string) *desktopstate.SessionState {
+func desktopstateSessionPointer(state *desktopstate.State, sessionID string, agentIDs ...string) *desktopstate.SessionState {
 	for index := range state.Sessions {
-		if state.Sessions[index].ID == sessionID {
+		if state.Sessions[index].ID == sessionID && (len(agentIDs) == 0 || agentIDs[0] == "" || state.Sessions[index].AgentID == agentIDs[0]) {
 			return &state.Sessions[index]
 		}
 	}
 	return nil
+}
+
+func desktopSessionStorageKey(state desktopstate.State, ref desktopstate.SessionRef) string {
+	count := 0
+	for _, session := range state.Sessions {
+		if session.ID == ref.SessionID {
+			count++
+		}
+	}
+	if count < 2 || ref.AgentID == "" {
+		return ref.SessionID
+	}
+	return sessionRefStorageKey(ref)
+}
+
+func desktopSessionStorageKeyForID(state desktopstate.State, sessionID, agentID string) string {
+	if session, ok := desktopSessionByID(state, sessionID, agentID); ok {
+		return desktopSessionStorageKey(state, session.Ref())
+	}
+	return sessionID
+}
+
+func hasLiveSessionRef(state desktopstate.State, agentID, sessionID string) bool {
+	_, ok := desktopSessionByID(state, sessionID, agentID)
+	return ok
 }
 
 func suffixBytes(text string, maxBytes int) string {
@@ -673,6 +722,7 @@ func (c *controller) eventsForSessionUpdateLocked(payload sessionUpdatePayload, 
 		}
 		return desktopstate.Event{
 			Kind:      desktopstate.EventSubagentUpserted,
+			AgentID:   update.AgentID,
 			SessionID: update.SessionID,
 			Subagent: desktopstate.SubagentState{
 				ID:      agentID,
@@ -703,6 +753,7 @@ func (c *controller) eventsForSessionUpdateLocked(payload sessionUpdatePayload, 
 		}
 		return desktopstate.Event{
 			Kind:      eventKind,
+			AgentID:   update.AgentID,
 			SessionID: update.SessionID,
 			Item: desktopstate.TimelineItem{
 				Kind:      itemKind,
@@ -712,7 +763,7 @@ func (c *controller) eventsForSessionUpdateLocked(payload sessionUpdatePayload, 
 			},
 		}, true
 	case "tool_call", "tool_call_update":
-		c.clearMessageStreamsLocked(update.SessionID)
+		c.clearMessageStreamsLocked(update.SessionID, update.AgentID)
 		event, ok := desktopstate.TimelineEvent(update)
 		if !ok {
 			return desktopstate.Event{}, false
@@ -781,12 +832,15 @@ func (c *controller) loadSessionHistory(sessionID string) {
 		return
 	}
 	c.mu.Lock()
-	if state := c.histories[sessionID]; state == historyStateLoading || state == historyStateLoaded {
+	agentID := c.state.ActiveAgentID
+	session, ok := desktopSessionByID(c.state, sessionID, agentID)
+	if !ok {
 		c.mu.Unlock()
 		return
 	}
-	session, ok := desktopSessionByID(c.state, sessionID)
-	if !ok {
+	agentID = session.AgentID
+	storageKey := desktopSessionStorageKey(c.state, session.Ref())
+	if state := c.histories[storageKey]; state == historyStateLoading || state == historyStateLoaded {
 		c.mu.Unlock()
 		return
 	}
@@ -794,7 +848,7 @@ func (c *controller) loadSessionHistory(sessionID string) {
 	if workspace == "" {
 		if defaultWS, err := newSessionWorkspace(c.state); err == nil && defaultWS != "" {
 			workspace = defaultWS
-			if sess := desktopstateSessionPointer(&c.state, sessionID); sess != nil {
+			if sess := desktopstateSessionPointer(&c.state, sessionID, agentID); sess != nil {
 				sess.Workspace = defaultWS
 			}
 		}
@@ -803,7 +857,7 @@ func (c *controller) loadSessionHistory(sessionID string) {
 		c.mu.Unlock()
 		return
 	}
-	client, agentID := c.clientForSessionLocked(sessionID)
+	client, agentID := c.clientForSessionLocked(sessionID, agentID)
 	if client == nil || c.connections[agentID] != connectionConnected {
 		c.mu.Unlock()
 		return
@@ -813,24 +867,24 @@ func (c *controller) loadSessionHistory(sessionID string) {
 		base = context.Background()
 	}
 	callCtx, cancel := context.WithTimeout(base, historyLoadTimeout)
-	request := &sessionHistoryLoad{cancel: cancel}
+	request := &sessionHistoryLoad{agentID: agentID, sessionID: sessionID, storageKey: storageKey, cancel: cancel}
 	if c.historyLoads == nil {
 		c.historyLoads = make(map[string]*sessionHistoryLoad)
 	}
-	c.historyLoads[sessionID] = request
-	c.histories[sessionID] = historyStateLoading
-	c.historyStaging[sessionID] = nil
+	c.historyLoads[storageKey] = request
+	c.histories[storageKey] = historyStateLoading
+	c.historyStaging[storageKey] = nil
 	session.HistoryTruncated = false
 	if c.timelineBytes == nil {
 		c.timelineBytes = make(map[string]int)
 	}
-	c.timelineBytes[sessionID] = timelineSize(session.Timeline)
+	c.timelineBytes[storageKey] = timelineSize(session.Timeline)
 	if c.historyStagingBytes == nil {
 		c.historyStagingBytes = make(map[string]int)
 	}
-	c.historyStagingBytes[sessionID] = 0
-	delete(c.historyStagingTruncated, sessionID)
-	c.clearMessageStreamsLocked(sessionID)
+	c.historyStagingBytes[storageKey] = 0
+	delete(c.historyStagingTruncated, storageKey)
+	c.clearMessageStreamsLocked(sessionID, agentID)
 	c.revision++
 	c.mu.Unlock()
 	c.notify()
@@ -845,8 +899,8 @@ func (c *controller) loadSessionHistory(sessionID string) {
 		}
 		defer unlock()
 		c.mu.Lock()
-		currentRequest := c.historyLoads[sessionID] == request
-		activeSession := c.state.ActiveSessionID == sessionID
+		currentRequest := c.historyLoads[request.storageKey] == request
+		activeSession := c.state.ActiveSessionID == sessionID && c.state.ActiveAgentID == agentID
 		c.mu.Unlock()
 		if !currentRequest {
 			return
@@ -885,28 +939,36 @@ func (c *controller) finishSessionHistoryLoad(client *acpclient.Client, sessionI
 
 func (c *controller) finishSessionHistoryLoadRequest(client *acpclient.Client, sessionID string, request *sessionHistoryLoad, loadErr error, configOptions []acpConfigOption, modelsResult *acpModelsResult) {
 	c.mu.Lock()
+	agentID := c.state.ActiveAgentID
+	storageKey := desktopSessionStorageKeyForID(c.state, sessionID, agentID)
 	if request != nil {
-		if c.historyLoads[sessionID] != request {
+		agentID = request.agentID
+		storageKey = request.storageKey
+		if c.historyLoads[storageKey] != request {
 			c.mu.Unlock()
 			return
 		}
-		delete(c.historyLoads, sessionID)
+		delete(c.historyLoads, storageKey)
 		request.cancel()
 	}
-	current, agentID := c.clientForSessionLocked(sessionID)
+	current, currentAgentID := c.clientForSessionLocked(sessionID, agentID)
+	if currentAgentID != "" {
+		agentID = currentAgentID
+	}
 	currentClient := current != nil && current == client
 	if !currentClient {
 		loadErr = errSessionHistoryClientChanged
 	}
-	staged := c.historyStaging[sessionID]
-	truncated := c.historyStagingTruncated[sessionID]
-	delete(c.historyStaging, sessionID)
-	delete(c.historyStagingBytes, sessionID)
-	delete(c.historyStagingTruncated, sessionID)
-	c.clearMessageStreamsLocked(sessionID)
-	applyStaged := loadErr == nil && c.state.ActiveSessionID == sessionID
+	staged := c.historyStaging[storageKey]
+	truncated := c.historyStagingTruncated[storageKey]
+	delete(c.historyStaging, storageKey)
+	delete(c.historyStagingBytes, storageKey)
+	delete(c.historyStagingTruncated, storageKey)
+	c.clearMessageStreamsLocked(sessionID, agentID)
+	active := c.state.ActiveSessionID == sessionID && (c.state.ActiveAgentID == "" || c.state.ActiveAgentID == agentID)
+	applyStaged := loadErr == nil && active
 	if applyStaged {
-		if session := desktopstateSessionPointer(&c.state, sessionID); session != nil {
+		if session := desktopstateSessionPointer(&c.state, sessionID, agentID); session != nil {
 			session.HistoryTruncated = session.HistoryTruncated || truncated
 			if models, currentModel := extractModelsFromACP(configOptions, modelsResult); len(models) > 0 {
 				c.setAgentAvailableModelsLocked(session.AgentID, models)
@@ -921,15 +983,15 @@ func (c *controller) finishSessionHistoryLoadRequest(client *acpclient.Client, s
 	if applyStaged {
 		coalesced := coalesceStagedMessageChunks(staged)
 		c.mu.Lock()
-		if currentClient && loadErr == nil && c.state.ActiveSessionID == sessionID {
-			c.applyStagedHistoryEventsLocked(sessionID, coalesced)
-			c.clearMessageStreamsLocked(sessionID)
+		if currentClient && loadErr == nil && c.state.ActiveSessionID == sessionID && (c.state.ActiveAgentID == "" || c.state.ActiveAgentID == agentID) {
+			c.applyStagedHistoryEventsLocked(sessionID, coalesced, agentID)
+			c.clearMessageStreamsLocked(sessionID, agentID)
 		}
 		c.mu.Unlock()
 	}
 	c.mu.Lock()
-	if loadErr == nil && c.state.ActiveSessionID == sessionID {
-		if session := desktopstateSessionPointer(&c.state, sessionID); session != nil {
+	if loadErr == nil && c.state.ActiveSessionID == sessionID && (c.state.ActiveAgentID == "" || c.state.ActiveAgentID == agentID) {
+		if session := desktopstateSessionPointer(&c.state, sessionID, agentID); session != nil {
 			session.HistoryTruncated = session.HistoryTruncated || truncated
 			if models, currentModel := extractModelsFromACP(configOptions, modelsResult); len(models) > 0 {
 				if !applyStaged {
@@ -941,27 +1003,28 @@ func (c *controller) finishSessionHistoryLoadRequest(client *acpclient.Client, s
 				}
 			}
 		}
-		c.histories[sessionID] = historyStateLoaded
+		c.histories[storageKey] = historyStateLoaded
 		if truncated {
 			c.statuses[agentID] = "Connected · recent session history loaded"
 		} else {
 			c.statuses[agentID] = "Connected · session history loaded"
 		}
 	} else if loadErr == nil {
-		c.histories[sessionID] = historyStateUnloaded
+		c.histories[storageKey] = historyStateUnloaded
 	} else {
-		c.histories[sessionID] = historyStateUnloaded
+		c.histories[storageKey] = historyStateUnloaded
 		c.statuses[agentID] = "Session history failed · " + compactError(loadErr)
 	}
 	activeSessionID := c.state.ActiveSessionID
+	activeAgentID := c.state.ActiveAgentID
 	c.revision++
 	c.mu.Unlock()
 	c.notify()
 	logSessionLoadTiming(sessionID, request, loadErr)
-	if currentClient && loadErr == nil && activeSessionID == sessionID {
-		c.refreshSessionContext(sessionID, false)
-		c.refreshSessionMemory(sessionID, false)
-		c.refreshSessionRuntime(sessionID, false)
+	if currentClient && loadErr == nil && activeSessionID == sessionID && activeAgentID == agentID {
+		c.refreshSessionContextFrom(client, sessionID, false, agentID)
+		c.refreshSessionMemoryFrom(client, sessionID, false, agentID)
+		c.refreshSessionRuntime(sessionID, false, agentID)
 	}
 }
 
@@ -1054,28 +1117,31 @@ func (c *controller) sendExpandedPrompt(prompt ExpandedPrompt) {
 	mcpServers := c.mcpServersPayload()
 	c.mu.Lock()
 	sessionID := c.state.ActiveSessionID
-	session, ok := desktopSessionByID(c.state, sessionID)
+	agentID := c.state.ActiveAgentID
+	session, ok := desktopSessionByID(c.state, sessionID, agentID)
 	workspace := strings.TrimSpace(session.Workspace)
 	if workspace == "" {
 		if defaultWS, err := newSessionWorkspace(c.state); err == nil && defaultWS != "" {
 			workspace = defaultWS
-			if current := desktopstateSessionPointer(&c.state, sessionID); current != nil {
+			if current := desktopstateSessionPointer(&c.state, sessionID, agentID); current != nil {
 				current.Workspace = defaultWS
 			}
 		}
 	}
-	client, agentID := c.clientForSessionLocked(sessionID)
-	if !ok || client == nil || c.connections[agentID] != connectionConnected || sessionBusy(session.Status) || c.histories[sessionID] == historyStateLoading || workspace == "" {
+	client, agentID := c.clientForSessionLocked(sessionID, agentID)
+	storageKey := desktopSessionStorageKey(c.state, session.Ref())
+	if !ok || client == nil || c.connections[agentID] != connectionConnected || sessionBusy(session.Status) || c.histories[storageKey] == historyStateLoading || workspace == "" {
 		c.mu.Unlock()
 		return
 	}
 	c.clearMessageStreamsLocked(sessionID)
-	if current := desktopstateSessionPointer(&c.state, sessionID); current != nil {
+	if current := desktopstateSessionPointer(&c.state, sessionID, agentID); current != nil {
 		current.LastActivityAt = time.Now().UTC()
 	}
-	desktopstate.Apply(&c.state, desktopstate.Event{Kind: desktopstate.EventPromptStarted, SessionID: sessionID})
+	desktopstate.Apply(&c.state, desktopstate.Event{Kind: desktopstate.EventPromptStarted, AgentID: agentID, SessionID: sessionID})
 	c.applyTimelineEventLocked(desktopstate.Event{
 		Kind:      desktopstate.EventTimelineAppended,
+		AgentID:   agentID,
 		SessionID: sessionID,
 		Item: desktopstate.TimelineItem{
 			Kind: desktopstate.TimelineUser,
@@ -1146,9 +1212,10 @@ func (c *controller) runPrompt(client *acpclient.Client, session desktopstate.Se
 	}
 	c.clearMessageStreamsLocked(session.ID)
 	if err != nil {
-		desktopstate.Apply(&c.state, desktopstate.Event{Kind: desktopstate.EventPromptFailed, SessionID: session.ID})
+		desktopstate.Apply(&c.state, desktopstate.Event{Kind: desktopstate.EventPromptFailed, AgentID: session.AgentID, SessionID: session.ID})
 		c.applyTimelineEventLocked(desktopstate.Event{
 			Kind:      desktopstate.EventTimelineAppended,
+			AgentID:   session.AgentID,
 			SessionID: session.ID,
 			Item: desktopstate.TimelineItem{
 				Kind: desktopstate.TimelineStatus,
@@ -1158,7 +1225,7 @@ func (c *controller) runPrompt(client *acpclient.Client, session desktopstate.Se
 		})
 		c.statuses[session.AgentID] = "Prompt failed · " + compactError(err)
 	} else {
-		desktopstate.Apply(&c.state, desktopstate.Event{Kind: desktopstate.EventPromptCompleted, SessionID: session.ID})
+		desktopstate.Apply(&c.state, desktopstate.Event{Kind: desktopstate.EventPromptCompleted, AgentID: session.AgentID, SessionID: session.ID})
 		stopReason := strings.TrimSpace(result.StopReason)
 		if stopReason == "" {
 			stopReason = "completed"
@@ -1168,16 +1235,16 @@ func (c *controller) runPrompt(client *acpclient.Client, session desktopstate.Se
 	c.revision++
 	c.mu.Unlock()
 	c.notify()
-	c.refreshSessionContext(session.ID, false)
-	c.refreshSessionMemory(session.ID, false)
-	c.refreshSessionRuntime(session.ID, false)
+	c.refreshSessionContextFrom(client, session.ID, false, session.AgentID)
+	c.refreshSessionMemoryFrom(client, session.ID, false, session.AgentID)
+	c.refreshSessionRuntime(session.ID, false, session.AgentID)
 }
 
 func (c *controller) cancelPrompt() {
 	c.mu.RLock()
 	sessionID := c.state.ActiveSessionID
-	session, ok := desktopSessionByID(c.state, sessionID)
-	client, agentID := c.clientForSessionLocked(sessionID)
+	session, ok := desktopSessionByID(c.state, sessionID, c.state.ActiveAgentID)
+	client, agentID := c.clientForSessionLocked(sessionID, c.state.ActiveAgentID)
 	c.mu.RUnlock()
 	if !ok || client == nil || !sessionBusy(session.Status) {
 		return
@@ -1202,10 +1269,16 @@ func (c *controller) pruneSessionRuntimeLocked() {
 	live := make(map[string]struct{}, len(c.state.Sessions))
 	for _, session := range c.state.Sessions {
 		live[session.ID] = struct{}{}
+		live[sessionRefStorageKey(session.Ref())] = struct{}{}
+		live[desktopSessionStorageKey(c.state, session.Ref())] = struct{}{}
 	}
 	for sessionID := range c.histories {
 		if _, ok := live[sessionID]; !ok {
 			delete(c.histories, sessionID)
+		}
+	}
+	for sessionID := range c.timelineBytes {
+		if _, ok := live[sessionID]; !ok {
 			delete(c.timelineBytes, sessionID)
 		}
 	}
@@ -1227,24 +1300,41 @@ func (c *controller) pruneSessionRuntimeLocked() {
 			delete(c.historyStagingTruncated, sessionID)
 		}
 	}
+	for sessionID := range c.historyStagingBytes {
+		if _, ok := live[sessionID]; !ok {
+			delete(c.historyStagingBytes, sessionID)
+		}
+	}
 	for sessionID := range c.messageSequence {
 		if _, ok := live[sessionID]; !ok {
 			delete(c.messageSequence, sessionID)
 		}
 	}
-	for streamKey := range c.messageStreams {
-		if _, ok := live[streamKey.sessionID]; !ok {
-			if buffer := c.messageStreamBuffers[streamKey]; buffer != nil && buffer.timer != nil {
+	streamIsLive := func(key messageStreamKey) bool {
+		if key.agentID == "" {
+			_, ok := live[key.sessionID]
+			return ok
+		}
+		return hasLiveSessionRef(c.state, key.agentID, key.sessionID)
+	}
+	for streamKey, buffer := range c.messageStreamBuffers {
+		if !streamIsLive(streamKey) {
+			if buffer != nil && buffer.timer != nil {
 				buffer.timer.Stop()
 			}
 			delete(c.messageStreamBuffers, streamKey)
 			delete(c.messageStreams, streamKey)
 		}
 	}
+	for streamKey := range c.messageStreams {
+		if !streamIsLive(streamKey) {
+			delete(c.messageStreams, streamKey)
+		}
+	}
 	permissions := c.state.PermissionInbox[:0]
 	livePermissionRequests := make(map[string]struct{}, len(c.state.PermissionInbox))
 	for _, permission := range c.state.PermissionInbox {
-		if _, ok := live[permission.SessionID]; ok {
+		if _, ok := live[permission.SessionID]; ok && (permission.AgentID == "" || hasLiveSessionRef(c.state, permission.AgentID, permission.SessionID)) {
 			permissions = append(permissions, permission)
 			livePermissionRequests[permission.RequestID] = struct{}{}
 		}
@@ -1259,6 +1349,24 @@ func (c *controller) pruneSessionRuntimeLocked() {
 			delete(c.permissionWait, requestID)
 		}
 	}
+	questions := c.state.QuestionInbox[:0]
+	liveQuestionRequests := make(map[string]struct{}, len(c.state.QuestionInbox))
+	for _, question := range c.state.QuestionInbox {
+		if _, ok := live[question.SessionID]; ok && (question.AgentID == "" || hasLiveSessionRef(c.state, question.AgentID, question.SessionID)) {
+			questions = append(questions, question)
+			liveQuestionRequests[question.RequestID] = struct{}{}
+		}
+	}
+	c.state.QuestionInbox = questions
+	for requestID, waiter := range c.questionWait {
+		if _, ok := liveQuestionRequests[requestID]; !ok {
+			select {
+			case waiter <- desktopstate.QuestionResponse{Status: "declined", Answer: "session ended"}:
+			default:
+			}
+			delete(c.questionWait, requestID)
+		}
+	}
 	if _, ok := live[c.runtimeMutation]; !ok {
 		c.runtimeMutation = ""
 	}
@@ -1268,22 +1376,30 @@ func (c *controller) pruneSessionRuntimeLocked() {
 // pruneInactiveSessionHistoryLocked keeps the active and immediately previous
 // loaded idle transcripts resident. Inactive running sessions must reload because
 // their updates are not applied while another session is selected.
-func (c *controller) pruneInactiveSessionHistoryLocked(activeSessionID, previousSessionID string) {
+func (c *controller) pruneInactiveSessionHistoryLocked(activeSessionID, previousSessionID string, refs ...desktopstate.SessionRef) {
+	activeAgentID, previousAgentID := "", ""
+	if len(refs) > 0 {
+		activeAgentID = refs[0].AgentID
+	}
+	if len(refs) > 1 {
+		previousAgentID = refs[1].AgentID
+	}
 	for index := range c.state.Sessions {
 		session := &c.state.Sessions[index]
-		if session.ID == activeSessionID {
+		if session.ID == activeSessionID && (activeAgentID == "" || session.AgentID == activeAgentID) {
 			continue
 		}
-		if load := c.historyLoads[session.ID]; load != nil {
+		sessionKey := desktopSessionStorageKey(c.state, session.Ref())
+		if load := c.historyLoads[sessionKey]; load != nil {
 			load.cancel()
-			delete(c.historyLoads, session.ID)
-			c.histories[session.ID] = historyStateUnloaded
+			delete(c.historyLoads, sessionKey)
+			c.histories[sessionKey] = historyStateUnloaded
 		}
-		delete(c.historyStaging, session.ID)
-		delete(c.historyStagingBytes, session.ID)
-		delete(c.historyStagingTruncated, session.ID)
+		delete(c.historyStaging, sessionKey)
+		delete(c.historyStagingBytes, sessionKey)
+		delete(c.historyStagingTruncated, sessionKey)
 		for streamKey := range c.messageStreams {
-			if streamKey.sessionID == session.ID {
+			if streamKey.sessionID == session.ID && (streamKey.agentID == "" || streamKey.agentID == session.AgentID) {
 				if buffer := c.messageStreamBuffers[streamKey]; buffer != nil && buffer.timer != nil {
 					buffer.timer.Stop()
 				}
@@ -1291,7 +1407,7 @@ func (c *controller) pruneInactiveSessionHistoryLocked(activeSessionID, previous
 				delete(c.messageStreams, streamKey)
 			}
 		}
-		if session.ID == previousSessionID && c.histories[session.ID] == historyStateLoaded && !sessionBusy(session.Status) {
+		if session.ID == previousSessionID && (previousAgentID == "" || session.AgentID == previousAgentID) && c.histories[sessionKey] == historyStateLoaded && !sessionBusy(session.Status) {
 			continue
 		}
 		session.Timeline = nil
@@ -1299,8 +1415,8 @@ func (c *controller) pruneInactiveSessionHistoryLocked(activeSessionID, previous
 		session.Subagents = nil
 		session.Context = desktopstate.SessionContextState{}
 		session.Runtime = desktopstate.RuntimeSettingsState{}
-		delete(c.timelineBytes, session.ID)
-		c.histories[session.ID] = historyStateUnloaded
+		delete(c.timelineBytes, sessionKey)
+		c.histories[sessionKey] = historyStateUnloaded
 	}
 }
 
@@ -1336,24 +1452,26 @@ func (c *controller) resetAgentTransientSessionStateLocked(agentID string) {
 		if session.AgentID != agentID {
 			continue
 		}
-		if load := c.historyLoads[session.ID]; load != nil {
+		sessionKey := desktopSessionStorageKey(c.state, session.Ref())
+		if load := c.historyLoads[sessionKey]; load != nil {
 			load.cancel()
-			delete(c.historyLoads, session.ID)
+			delete(c.historyLoads, sessionKey)
+			c.histories[sessionKey] = historyStateUnloaded
 		}
-		if c.histories[session.ID] == historyStateLoading {
-			c.histories[session.ID] = historyStateUnloaded
+		if c.histories[sessionKey] == historyStateLoading {
+			c.histories[sessionKey] = historyStateUnloaded
 		}
-		delete(c.historyStaging, session.ID)
-		delete(c.historyStagingBytes, session.ID)
-		delete(c.historyStagingTruncated, session.ID)
-		c.clearMessageStreamsLocked(session.ID)
+		delete(c.historyStaging, sessionKey)
+		delete(c.historyStagingBytes, sessionKey)
+		delete(c.historyStagingTruncated, sessionKey)
+		c.clearMessageStreamsLocked(session.ID, session.AgentID)
 		for _, permission := range c.state.PermissionInbox {
-			if permission.SessionID != session.ID {
+			if permission.SessionID != session.ID || permission.AgentID != "" && permission.AgentID != agentID {
 				continue
 			}
 			delete(c.permissionWait, permission.RequestID)
 		}
-		if c.runtimeMutation == session.ID {
+		if c.runtimeMutation == session.ID || c.runtimeMutation == sessionRefStorageKey(session.Ref()) {
 			c.runtimeMutation = ""
 		}
 	}
@@ -1364,13 +1482,14 @@ func (c *controller) nextTimelineIDLocked(sessionID, prefix string) string {
 	return fmt.Sprintf("%s-%d", prefix, c.messageSequence[sessionID])
 }
 
-func (c *controller) clearMessageStreamsLocked(sessionID string) {
-	var session *desktopstate.SessionState
-	if index, found := sessionIndex(c.state.Sessions, sessionID); found {
-		session = &c.state.Sessions[index]
+func (c *controller) clearMessageStreamsLocked(sessionID string, agentIDs ...string) {
+	agentID := ""
+	if len(agentIDs) > 0 {
+		agentID = agentIDs[0]
 	}
+	session := desktopstateSessionPointer(&c.state, sessionID, agentID)
 	for streamKey := range c.messageStreams {
-		if streamKey.sessionID != sessionID {
+		if streamKey.sessionID != sessionID || agentID != "" && streamKey.agentID != "" && streamKey.agentID != agentID {
 			continue
 		}
 		itemID := c.messageStreams[streamKey]
@@ -1404,18 +1523,18 @@ func (c *controller) clearMessageStreamsLocked(sessionID string) {
 	}
 }
 
-func sessionIndex(sessions []desktopstate.SessionState, sessionID string) (int, bool) {
+func sessionIndex(sessions []desktopstate.SessionState, sessionID string, agentIDs ...string) (int, bool) {
 	for index := range sessions {
-		if sessions[index].ID == sessionID {
+		if sessions[index].ID == sessionID && (len(agentIDs) == 0 || agentIDs[0] == "" || sessions[index].AgentID == agentIDs[0]) {
 			return index, true
 		}
 	}
 	return 0, false
 }
 
-func desktopSessionByID(state desktopstate.State, sessionID string) (desktopstate.SessionState, bool) {
+func desktopSessionByID(state desktopstate.State, sessionID string, agentIDs ...string) (desktopstate.SessionState, bool) {
 	for _, session := range state.Sessions {
-		if session.ID == sessionID {
+		if session.ID == sessionID && (len(agentIDs) == 0 || agentIDs[0] == "" || session.AgentID == agentIDs[0]) {
 			return session, true
 		}
 	}

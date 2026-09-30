@@ -74,7 +74,9 @@ func (c *controller) handleQuestionRequestFromAgent(agentID string, source *acpc
 		}
 		agentID = currentAgentID
 	}
-	session, sessionExists := desktopSessionByID(c.state, params.SessionID)
+	item.AgentID = agentID
+	item.RequestID = sessionRefStorageKey(desktopstate.SessionRef{AgentID: agentID, SessionID: item.RequestID})
+	session, sessionExists := desktopSessionByID(c.state, params.SessionID, agentID)
 	if !sessionExists {
 		c.mu.Unlock()
 		return nil, errors.New("question request references an unknown session")
@@ -93,6 +95,7 @@ func (c *controller) handleQuestionRequestFromAgent(agentID string, source *acpc
 	c.questionWait[item.RequestID] = waiter
 	desktopstate.Apply(&c.state, desktopstate.Event{
 		Kind:      desktopstate.EventQuestionRequested,
+		AgentID:   agentID,
 		SessionID: params.SessionID,
 		Question:  item,
 	})
@@ -138,6 +141,7 @@ func (c *controller) finishQuestion(requestID, sessionID string, waiter chan des
 	delete(c.questionWait, requestID)
 	desktopstate.Apply(&c.state, desktopstate.Event{
 		Kind:      desktopstate.EventQuestionResolved,
+		AgentID:   question.AgentID,
 		SessionID: sessionID,
 		RequestID: requestID,
 	})
@@ -161,12 +165,13 @@ func (c *controller) finishQuestion(requestID, sessionID string, waiter chan des
 	}
 	desktopstate.Apply(&c.state, desktopstate.Event{
 		Kind:      desktopstate.EventTimelineAppended,
+		AgentID:   question.AgentID,
 		SessionID: sessionID,
 		Item:      auditItem,
 	})
 
 	agentID := ""
-	if session, ok := desktopSessionByID(c.state, sessionID); ok {
+	if session, ok := desktopSessionByID(c.state, sessionID, question.AgentID); ok {
 		agentID = session.AgentID
 	}
 	if agentID == "" {

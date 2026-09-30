@@ -350,6 +350,54 @@ func TestSidebarQuickActionButtons(t *testing.T) {
 	}
 }
 
+func TestSidebarSessionWidgetsAreScopedByAgent(t *testing.T) {
+	sh := newShell(newTheme("dark"))
+	state := desktopstate.State{Sessions: []desktopstate.SessionState{
+		{ID: "shared", AgentID: "protonman"},
+		{ID: "shared", AgentID: "cline"},
+	}}
+	sh.syncSessionButtons(state, 1)
+	protonButton := sh.sessionButtons[sidebarSessionWidgetKey("shared", "protonman")]
+	clineButton := sh.sessionButtons[sidebarSessionWidgetKey("shared", "cline")]
+	if protonButton == nil || clineButton == nil || protonButton == clineButton {
+		t.Fatal("same-ID sessions from different agents must own distinct sidebar widgets")
+	}
+	if sh.sessionPinButton("shared", "protonman") == sh.sessionPinButton("shared", "cline") {
+		t.Fatal("same-ID sessions from different agents must own distinct action widgets")
+	}
+}
+
+func TestSidebarDisplayRowsCachesAndInvalidatesPresentationInputs(t *testing.T) {
+	sh := newShell(newTheme("dark"))
+	rows := []sidebarRow{
+		{Kind: sidebarProjectRow, ProjectID: "p", Title: "Project"},
+		{Kind: sidebarSessionRow, ProjectID: "p", SessionID: "a", Title: "Alpha"},
+		{Kind: sidebarSessionRow, ProjectID: "p", SessionID: "b", Title: "Beta"},
+	}
+	first := sh.sidebarDisplayRows(rows, "all", 7)
+	second := sh.sidebarDisplayRows(rows, "all", 7)
+	if len(first) != 3 || len(second) != 3 || &first[0] != &second[0] {
+		t.Fatal("unchanged sidebar presentation should reuse its filtered row slice")
+	}
+
+	sh.sidebarSearchEditor.SetText("beta")
+	filtered := sh.sidebarDisplayRows(rows, "all", 7)
+	if len(filtered) != 2 || filtered[1].SessionID != "b" {
+		t.Fatalf("search change did not invalidate display rows: %#v", filtered)
+	}
+	filteredAgain := sh.sidebarDisplayRows(rows, "all", 7)
+	if &filtered[0] != &filteredAgain[0] {
+		t.Fatal("filtered sidebar rows were not reused for an unchanged query")
+	}
+	sh.sidebarSearchEditor.SetText("")
+	sh.projectCollapsed["p"] = true
+	sh.sidebarCollapseRevision++
+	collapsed := sh.sidebarDisplayRows(rows, "all", 7)
+	if len(collapsed) != 1 || collapsed[0].Kind != sidebarProjectRow {
+		t.Fatalf("collapse change did not invalidate display rows: %#v", collapsed)
+	}
+}
+
 func TestSidebarEmptyState_ClearFilter(t *testing.T) {
 	sh := newShell(newTheme("dark"))
 	filterModeSet := ""

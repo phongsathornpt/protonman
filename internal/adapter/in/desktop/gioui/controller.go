@@ -343,7 +343,8 @@ func (c *controller) snapshot() controllerSnapshot {
 	for agentID, models := range c.agentAvailableModels {
 		snapshot.AgentAvailableModels[agentID] = slices.Clone(models)
 	}
-	if state, ok := c.histories[snapshot.State.ActiveSessionID]; ok {
+	activeKey := desktopSessionStorageKey(snapshot.State, desktopstate.SessionRef{AgentID: snapshot.State.ActiveAgentID, SessionID: snapshot.State.ActiveSessionID})
+	if state, ok := c.histories[activeKey]; ok {
 		snapshot.HistoryState = state
 	}
 	c.snapshotCache.valid = true
@@ -376,16 +377,20 @@ func (c *controller) setAgentAvailableModelsLocked(agentID string, models []stri
 // when a stream flush changed only one session's timeline. It path-copies the
 // sessions slice and the active timeline, keeping snapshots already returned to
 // the UI immutable while avoiding clones of unrelated state.
-func (c *controller) advanceSnapshotCacheForTimelineLocked(sessionID string) bool {
+func (c *controller) advanceSnapshotCacheForTimelineLocked(sessionID string, agentIDs ...string) bool {
 	cache := &c.snapshotCache
-	if !cache.valid || cache.revision+1 != c.revision || cache.value.State.ActiveSessionID != sessionID {
+	agentID := c.state.ActiveAgentID
+	if len(agentIDs) > 0 && agentIDs[0] != "" {
+		agentID = agentIDs[0]
+	}
+	if !cache.valid || cache.revision+1 != c.revision || cache.value.State.ActiveSessionID != sessionID || cache.value.State.ActiveAgentID != agentID {
 		return false
 	}
-	index, ok := sessionIndex(cache.value.State.Sessions, sessionID)
+	index, ok := sessionIndex(cache.value.State.Sessions, sessionID, agentID)
 	if !ok {
 		return false
 	}
-	live := desktopstateSessionPointer(&c.state, sessionID)
+	live := desktopstateSessionPointer(&c.state, sessionID, agentID)
 	if live == nil {
 		return false
 	}
@@ -403,24 +408,30 @@ func (c *controller) advanceSnapshotCacheForTimelineLocked(sessionID string) boo
 }
 
 func (c *controller) selectSession(sessionID string) {
+	c.selectSessionForAgent("", sessionID)
+}
+
+func (c *controller) selectSessionForAgent(agentID, sessionID string) {
 	c.mu.Lock()
 	previousSessionID := c.state.ActiveSessionID
+	previousAgentID := c.state.ActiveAgentID
 	desktopstate.Apply(&c.state, desktopstate.Event{
 		Kind:      desktopstate.EventSessionSelected,
+		AgentID:   agentID,
 		SessionID: sessionID,
 	})
-	for _, session := range c.state.Sessions {
-		if session.ID == c.state.ActiveSessionID {
-			c.state.ActiveProjectID = session.ProjectID
-			if strings.TrimSpace(session.AgentID) != "" {
-				c.activeAgentID = session.AgentID
-			} else {
-				c.activeAgentID = controllerAgentID
-			}
-			break
+	if session, ok := desktopSessionByID(c.state, c.state.ActiveSessionID, c.state.ActiveAgentID); ok {
+		c.state.ActiveProjectID = session.ProjectID
+		if strings.TrimSpace(session.AgentID) != "" {
+			c.activeAgentID = session.AgentID
+		} else {
+			c.activeAgentID = controllerAgentID
 		}
 	}
-	c.pruneInactiveSessionHistoryLocked(c.state.ActiveSessionID, previousSessionID)
+	c.pruneInactiveSessionHistoryLocked(c.state.ActiveSessionID, previousSessionID,
+		desktopstate.SessionRef{AgentID: c.state.ActiveAgentID, SessionID: c.state.ActiveSessionID},
+		desktopstate.SessionRef{AgentID: previousAgentID, SessionID: previousSessionID},
+	)
 	c.revision++
 	c.snapshotCache = controllerSnapshotCache{}
 	activeSessionID := c.state.ActiveSessionID
@@ -430,7 +441,7 @@ func (c *controller) selectSession(sessionID string) {
 	c.refreshActiveSession(true)
 }
 
-func (c *controller) deleteSession(sessionID string) {
+func (c *controller) deleteSession(sessionID string, agentIDs ...string) {
 	sessionID = strings.TrimSpace(sessionID)
 	if sessionID == "" {
 		return
@@ -439,16 +450,25 @@ func (c *controller) deleteSession(sessionID string) {
 	var (
 		targetAgentID   string
 		targetProjectID string
+		storageKey      string
 	)
+	if len(agentIDs) > 0 {
+		targetAgentID = agentIDs[0]
+	}
 	for i := range c.state.Sessions {
-		if c.state.Sessions[i].ID == sessionID {
+		if c.state.Sessions[i].ID == sessionID && (targetAgentID == "" || c.state.Sessions[i].AgentID == targetAgentID) {
 			targetAgentID = c.state.Sessions[i].AgentID
 			targetProjectID = c.state.Sessions[i].ProjectID
+			storageKey = desktopSessionStorageKey(c.state, c.state.Sessions[i].Ref())
 			break
 		}
 	}
+	if storageKey == "" {
+		c.mu.Unlock()
+		return
+	}
 	client := c.clients[targetAgentID]
-	activeSessionDeleted := c.state.ActiveSessionID == sessionID
+	activeSessionDeleted := c.state.ActiveSessionID == sessionID && (c.state.ActiveAgentID == "" || c.state.ActiveAgentID == targetAgentID)
 	c.mu.Unlock()
 
 	if client != nil {
@@ -459,17 +479,18 @@ func (c *controller) deleteSession(sessionID string) {
 	}
 
 	if c.preferences != nil {
-		_ = c.preferences.RemoveSession(c.ctx, sessionID)
+		_ = c.preferences.RemoveSession(c.ctx, storageKey)
 	}
 
 	c.mu.Lock()
 	newSessions := make([]desktopstate.SessionState, 0, len(c.state.Sessions))
-	var fallbackSessionID string
+	var fallbackSessionID, fallbackAgentID string
 	for _, sess := range c.state.Sessions {
-		if sess.ID != sessionID {
+		if sess.ID != sessionID || sess.AgentID != targetAgentID {
 			newSessions = append(newSessions, sess)
-			if activeSessionDeleted && sess.ProjectID == targetProjectID && fallbackSessionID == "" {
+			if activeSessionDeleted && sess.AgentID == targetAgentID && sess.ProjectID == targetProjectID && fallbackSessionID == "" {
 				fallbackSessionID = sess.ID
+				fallbackAgentID = sess.AgentID
 			}
 		}
 	}
@@ -477,17 +498,18 @@ func (c *controller) deleteSession(sessionID string) {
 
 	if activeSessionDeleted {
 		c.state.ActiveSessionID = fallbackSessionID
+		c.state.ActiveAgentID = fallbackAgentID
 	}
 
-	if load, ok := c.historyLoads[sessionID]; ok {
+	if load, ok := c.historyLoads[storageKey]; ok {
 		load.cancel()
-		delete(c.historyLoads, sessionID)
+		delete(c.historyLoads, storageKey)
 	}
-	delete(c.histories, sessionID)
-	delete(c.historyStaging, sessionID)
-	delete(c.historyStagingBytes, sessionID)
-	delete(c.historyStagingTruncated, sessionID)
-	delete(c.timelineBytes, sessionID)
+	delete(c.histories, storageKey)
+	delete(c.historyStaging, storageKey)
+	delete(c.historyStagingBytes, storageKey)
+	delete(c.historyStagingTruncated, storageKey)
+	delete(c.timelineBytes, storageKey)
 
 	if c.preferences != nil {
 		snap := c.preferences.Snapshot()
@@ -500,20 +522,32 @@ func (c *controller) deleteSession(sessionID string) {
 	c.mu.Unlock()
 
 	if activeSessionDeleted && fallbackSessionID != "" {
-		c.selectSession(fallbackSessionID)
+		c.selectSessionForAgent(fallbackAgentID, fallbackSessionID)
 	} else {
 		c.notify()
 	}
 }
 
-func (c *controller) renameSession(sessionID, newTitle string) {
+func (c *controller) renameSession(sessionID, newTitle string, agentIDs ...string) {
 	sessionID = strings.TrimSpace(sessionID)
 	if sessionID == "" {
 		return
 	}
+	c.mu.Lock()
+	var storageKey string
+	for _, session := range c.state.Sessions {
+		if session.ID == sessionID && (len(agentIDs) == 0 || agentIDs[0] == "" || session.AgentID == agentIDs[0]) {
+			storageKey = desktopSessionStorageKey(c.state, session.Ref())
+			break
+		}
+	}
+	c.mu.Unlock()
+	if storageKey == "" {
+		return
+	}
 	newTitle = strings.TrimSpace(newTitle)
 	if c.preferences != nil {
-		_ = c.preferences.SetCustomTitle(c.ctx, sessionID, newTitle)
+		_ = c.preferences.SetCustomTitle(c.ctx, storageKey, newTitle)
 	}
 	c.mu.Lock()
 	if c.preferences != nil {
@@ -523,9 +557,9 @@ func (c *controller) renameSession(sessionID, newTitle string) {
 			c.customTitles = make(map[string]string)
 		}
 		if newTitle == "" {
-			delete(c.customTitles, sessionID)
+			delete(c.customTitles, storageKey)
 		} else {
-			c.customTitles[sessionID] = newTitle
+			c.customTitles[storageKey] = newTitle
 		}
 	}
 	c.revision++
@@ -540,7 +574,7 @@ func (c *controller) toggleSkill(sessionID string, skillName string) {
 		return
 	}
 	c.mu.Lock()
-	client, agentID := c.clientForSessionLocked(sessionID)
+	client, agentID := c.clientForSessionLocked(sessionID, c.state.ActiveAgentID)
 	if client == nil || c.connections[agentID] != connectionConnected {
 		c.mu.Unlock()
 		return
@@ -559,27 +593,39 @@ func (c *controller) toggleSkill(sessionID string, skillName string) {
 		}, &result); err != nil {
 			return
 		}
-		c.refreshSessionSkills(sessionID, true)
+		c.refreshSessionSkills(sessionID, true, agentID)
 	}()
 }
 
-func (c *controller) togglePinSession(sessionID string) {
+func (c *controller) togglePinSession(sessionID string, agentIDs ...string) {
 	sessionID = strings.TrimSpace(sessionID)
 	if sessionID == "" {
 		return
 	}
+	c.mu.Lock()
+	var storageKey string
+	for _, session := range c.state.Sessions {
+		if session.ID == sessionID && (len(agentIDs) == 0 || agentIDs[0] == "" || session.AgentID == agentIDs[0]) {
+			storageKey = desktopSessionStorageKey(c.state, session.Ref())
+			break
+		}
+	}
+	c.mu.Unlock()
+	if storageKey == "" {
+		return
+	}
 	if c.preferences != nil {
-		_, _ = c.preferences.TogglePin(c.ctx, sessionID)
+		_, _ = c.preferences.TogglePin(c.ctx, storageKey)
 	}
 	c.mu.Lock()
 	if c.preferences != nil {
 		c.pinnedSessions = slices.Clone(c.preferences.Snapshot().PinnedSessions)
 	} else {
-		idx := slices.Index(c.pinnedSessions, sessionID)
+		idx := slices.Index(c.pinnedSessions, storageKey)
 		if idx >= 0 {
 			c.pinnedSessions = slices.Delete(c.pinnedSessions, idx, idx+1)
 		} else {
-			c.pinnedSessions = append(c.pinnedSessions, sessionID)
+			c.pinnedSessions = append(c.pinnedSessions, storageKey)
 		}
 	}
 	c.revision++
@@ -738,7 +784,7 @@ func (c *controller) newSession() {
 		c.state = addLocalSession(c.state, result.SessionID, workspace, agentID)
 		if models, currentModel := extractModelsFromACP(result.ConfigOptions, result.Models); len(models) > 0 {
 			c.setAgentAvailableModelsLocked(agentID, models)
-			if sess := desktopstateSessionPointer(&c.state, result.SessionID); sess != nil {
+			if sess := desktopstateSessionPointer(&c.state, result.SessionID, agentID); sess != nil {
 				sess.AvailableModels = models
 				if currentModel != "" && sess.Runtime.Model == "" {
 					sess.Runtime.Model = currentModel
@@ -747,7 +793,7 @@ func (c *controller) newSession() {
 				}
 			}
 		} else if c.agentAvailableModels != nil && len(c.agentAvailableModels[agentID]) > 0 {
-			if sess := desktopstateSessionPointer(&c.state, result.SessionID); sess != nil {
+			if sess := desktopstateSessionPointer(&c.state, result.SessionID, agentID); sess != nil {
 				sess.AvailableModels = slices.Clone(c.agentAvailableModels[agentID])
 				if sess.Runtime.Model == "" && c.agentDefaultModels[agentID] != "" {
 					sess.Runtime.Model = c.agentDefaultModels[agentID]
@@ -755,7 +801,7 @@ func (c *controller) newSession() {
 			}
 		}
 		if result.Modes != nil && strings.TrimSpace(result.Modes.CurrentModeID) != "" {
-			if sess := desktopstateSessionPointer(&c.state, result.SessionID); sess != nil {
+			if sess := desktopstateSessionPointer(&c.state, result.SessionID, agentID); sess != nil {
 				modeID := strings.TrimSpace(result.Modes.CurrentModeID)
 				if isClineACPProfile(profile) {
 					sess.Runtime.PermissionMode = clinePermissionMode(modeID, clineAutoApproveValue(result.ConfigOptions, false))
@@ -765,9 +811,11 @@ func (c *controller) newSession() {
 			}
 		}
 		c.state.ActiveSessionID = result.SessionID
+		c.state.ActiveAgentID = agentID
 		c.state.ActiveProjectID = workspaceKey(workspace, result.SessionID)
-		c.histories[result.SessionID] = historyStateLoaded
-		c.clearMessageStreamsLocked(result.SessionID)
+		storageKey := desktopSessionStorageKey(c.state, desktopstate.SessionRef{AgentID: agentID, SessionID: result.SessionID})
+		c.histories[storageKey] = historyStateLoaded
+		c.clearMessageStreamsLocked(result.SessionID, agentID)
 		c.setProjectDefaultAgentLocked(c.state.ActiveProjectID, agentID)
 		c.statuses[agentID] = "Session created"
 		if len(requestedAdditionalDirectories) > 0 && !features.SupportsAdditionalDirectories {
@@ -1088,9 +1136,10 @@ func projectSessions(current desktopstate.State, agentID string, remoteSessions 
 	next.Projects = deriveProjectsPreserving(current.Projects, sessions)
 	if next.ActiveSessionID == "" && len(sessions) > 0 {
 		next.ActiveSessionID = sessions[0].ID
+		next.ActiveAgentID = sessions[0].AgentID
 	}
 	for _, session := range sessions {
-		if session.ID == next.ActiveSessionID {
+		if session.ID == next.ActiveSessionID && (next.ActiveAgentID == "" || session.AgentID == next.ActiveAgentID) {
 			next.ActiveProjectID = session.ProjectID
 			break
 		}

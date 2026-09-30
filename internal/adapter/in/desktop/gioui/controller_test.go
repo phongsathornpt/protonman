@@ -5,6 +5,7 @@ package gioui
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -69,6 +70,32 @@ func TestProjectSessionsReplacesMissingSelection(t *testing.T) {
 	}
 	if next.ActiveProjectID != "workspace:/workspace/remaining" {
 		t.Fatalf("active project = %q", next.ActiveProjectID)
+	}
+}
+
+func TestSessionActionsTargetAgentWhenACPIDsCollide(t *testing.T) {
+	ctrl := newTestController()
+	ctrl.state.Sessions = append(ctrl.state.Sessions, desktopstate.SessionState{
+		ID: "session-1", AgentID: "reviewer", ProjectID: "review-project", Title: "Reviewer session",
+	})
+	ref := desktopstate.SessionRef{AgentID: "reviewer", SessionID: "session-1"}
+	key := desktopSessionStorageKey(ctrl.state, ref)
+
+	ctrl.renameSession("session-1", "Scoped title", "reviewer")
+	if got := ctrl.customTitles[key]; got != "Scoped title" {
+		t.Fatalf("scoped title = %q, want Scoped title", got)
+	}
+	if _, ok := ctrl.customTitles["session-1"]; ok {
+		t.Fatal("renaming one agent's session must not set the colliding session title")
+	}
+	ctrl.togglePinSession("session-1", "reviewer")
+	if !slices.Contains(ctrl.pinnedSessions, key) || slices.Contains(ctrl.pinnedSessions, "session-1") {
+		t.Fatalf("pin state is not scoped to reviewer: %#v", ctrl.pinnedSessions)
+	}
+
+	ctrl.deleteSession("session-1", "reviewer")
+	if len(ctrl.state.Sessions) != 1 || ctrl.state.Sessions[0].AgentID != controllerAgentID {
+		t.Fatalf("delete removed the wrong session set: %#v", ctrl.state.Sessions)
 	}
 }
 

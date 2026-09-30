@@ -437,17 +437,28 @@ func TestPruneSessionRuntimeRemovesEveryTransientEntryForDeletedSessions(t *test
 	controller.state.PermissionInbox = []desktopstate.PermissionRequest{{RequestID: "live-permission", SessionID: "session-1"}}
 	controller.histories["session-1"] = historyStateLoaded
 	controller.histories["removed"] = historyStateLoaded
+	controller.timelineBytes["removed"] = 128
 	controller.historyLoads = make(map[string]*sessionHistoryLoad)
 	removedLoadCtx, cancelRemovedLoad := context.WithCancel(context.Background())
 	controller.historyLoads["removed"] = &sessionHistoryLoad{cancel: cancelRemovedLoad}
 	controller.historyStaging["removed"] = []desktopstate.Event{{Kind: desktopstate.EventTimelineAppended}}
+	controller.historyStagingBytes["removed"] = 128
 	controller.messageSequence["removed"] = 4
 	controller.messageSequence["session-1"] = 2
 	controller.messageStreams[messageStreamKey{sessionID: "removed", kind: "agent_message_chunk"}] = "old-stream"
 	controller.messageStreams[messageStreamKey{sessionID: "session-1", kind: "agent_message_chunk"}] = "live-stream"
+	controller.messageStreams[messageStreamKey{agentID: "reviewer", sessionID: "session-1", kind: "agent_message_chunk"}] = "orphaned-colliding-stream"
+	controller.messageStreamBuffers[messageStreamKey{agentID: "reviewer", sessionID: "session-1", kind: "agent_message_chunk"}] = &messageStreamBuffer{}
 	controller.permissionWait["live-permission"] = make(chan string, 1)
 	removedWaiter := make(chan string, 1)
 	controller.permissionWait["removed-permission"] = removedWaiter
+	questionKey := sessionRefStorageKey(desktopstate.SessionRef{AgentID: "reviewer", SessionID: "removed-question"})
+	controller.state.QuestionInbox = []desktopstate.QuestionRequest{{RequestID: questionKey, AgentID: "reviewer", SessionID: "session-1"}}
+	questionWaiter := make(chan desktopstate.QuestionResponse, 1)
+	if controller.questionWait == nil {
+		controller.questionWait = make(map[string]chan desktopstate.QuestionResponse)
+	}
+	controller.questionWait[questionKey] = questionWaiter
 	controller.runtimeMutation = "removed"
 
 	controller.mu.Lock()
@@ -459,6 +470,12 @@ func TestPruneSessionRuntimeRemovesEveryTransientEntryForDeletedSessions(t *test
 	}
 	if _, ok := controller.historyStaging["removed"]; ok {
 		t.Fatal("deleted session staged events were retained")
+	}
+	if _, ok := controller.historyStagingBytes["removed"]; ok {
+		t.Fatal("deleted session staging byte count was retained")
+	}
+	if _, ok := controller.timelineBytes["removed"]; ok {
+		t.Fatal("deleted session timeline byte count was retained")
 	}
 	if _, ok := controller.historyLoads["removed"]; ok {
 		t.Fatal("deleted session history load was retained")
@@ -477,6 +494,9 @@ func TestPruneSessionRuntimeRemovesEveryTransientEntryForDeletedSessions(t *test
 	if _, ok := controller.messageStreams[messageStreamKey{sessionID: "session-1", kind: "agent_message_chunk"}]; !ok {
 		t.Fatal("live session stream was pruned")
 	}
+	if _, ok := controller.messageStreams[messageStreamKey{agentID: "reviewer", sessionID: "session-1", kind: "agent_message_chunk"}]; ok {
+		t.Fatal("same-ID stream for a removed agent was retained")
+	}
 	if _, ok := controller.permissionWait["removed-permission"]; ok {
 		t.Fatal("orphaned permission waiter was retained")
 	}
@@ -485,6 +505,12 @@ func TestPruneSessionRuntimeRemovesEveryTransientEntryForDeletedSessions(t *test
 	}
 	if controller.permissionWait["live-permission"] == nil {
 		t.Fatal("live permission waiter was pruned")
+	}
+	if len(controller.state.QuestionInbox) != 0 || controller.questionWait[questionKey] != nil {
+		t.Fatal("question for a removed agent/session was retained")
+	}
+	if response := <-questionWaiter; response.Status != "declined" || response.Answer != "session ended" {
+		t.Fatalf("orphaned question response = %+v", response)
 	}
 	if controller.runtimeMutation != "" {
 		t.Fatalf("deleted session runtime mutation = %q", controller.runtimeMutation)
@@ -510,6 +536,33 @@ func TestSessionUpdatesRouteThroughOwningAgent(t *testing.T) {
 	}
 	if len(controller.state.Sessions[1].Timeline) != 1 || controller.state.Sessions[1].Timeline[0].Text != "owned" {
 		t.Fatalf("reviewer timeline = %#v", controller.state.Sessions[1].Timeline)
+	}
+}
+
+func TestPruneSessionRuntimeCleansQuestionsWithoutPermissionWaiters(t *testing.T) {
+	controller := newTestController()
+	requestID := sessionRefStorageKey(desktopstate.SessionRef{AgentID: "reviewer", SessionID: "removed"})
+	waiter := make(chan desktopstate.QuestionResponse, 1)
+	controller.state.QuestionInbox = []desktopstate.QuestionRequest{{RequestID: requestID, AgentID: "reviewer", SessionID: "removed"}}
+	controller.questionWait = map[string]chan desktopstate.QuestionResponse{requestID: waiter}
+
+	controller.mu.Lock()
+	controller.pruneSessionRuntimeLocked()
+	controller.mu.Unlock()
+
+	if len(controller.state.QuestionInbox) != 0 {
+		t.Fatalf("orphaned question inbox = %#v, want empty", controller.state.QuestionInbox)
+	}
+	if _, ok := controller.questionWait[requestID]; ok {
+		t.Fatal("orphaned question waiter was retained without permission waiters")
+	}
+	select {
+	case response := <-waiter:
+		if response.Status != "declined" || response.Answer != "session ended" {
+			t.Fatalf("orphaned question response = %+v, want session-ended decline", response)
+		}
+	default:
+		t.Fatal("orphaned question waiter was not released")
 	}
 }
 

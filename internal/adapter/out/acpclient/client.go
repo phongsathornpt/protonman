@@ -365,11 +365,8 @@ func (c *Client) write(v any) error {
 func (c *Client) readLoop(r io.Reader) {
 	reader := bufio.NewReaderSize(r, 64*1024)
 	for {
-		line, err := reader.ReadBytes('\n')
-		if len(line) > 0 {
-			if len(line) > maxACPMessageBytes {
-				continue
-			}
+		line, oversized, err := readBoundedLine(reader, maxACPMessageBytes)
+		if len(line) > 0 && !oversized {
 			var msg envelope
 			if jerr := json.Unmarshal(line, &msg); jerr != nil {
 				continue
@@ -402,16 +399,8 @@ func (c *Client) readLoop(r io.Reader) {
 					select {
 					case c.requests <- request:
 					default:
-						select {
-						case <-c.requests:
-						default:
-						}
-						select {
-						case c.requests <- request:
-						default:
-							c.shutdown(errIncomingRequestQueueFull)
-							return
-						}
+						c.shutdown(errIncomingRequestQueueFull)
+						return
 					}
 					continue
 				}
@@ -460,6 +449,26 @@ func (c *Client) readLoop(r io.Reader) {
 }
 
 const maxACPMessageBytes = 64 * 1024 * 1024
+
+// readBoundedLine reads one newline-delimited ACP message without retaining
+// more than max bytes. Once a message exceeds the limit, the rest of that line
+// is discarded so the caller can safely resume at the next message boundary.
+func readBoundedLine(reader *bufio.Reader, max int) (line []byte, oversized bool, err error) {
+	for {
+		fragment, readErr := reader.ReadSlice('\n')
+		if !oversized {
+			if len(fragment) > max-len(line) {
+				line = nil
+				oversized = true
+			} else {
+				line = append(line, fragment...)
+			}
+		}
+		if readErr == nil || !errors.Is(readErr, bufio.ErrBufferFull) {
+			return line, oversized, readErr
+		}
+	}
+}
 
 func checkEnvelopeSizes(msg *envelope) error {
 	if len(msg.Params)+len(msg.Result) > maxACPMessageBytes {

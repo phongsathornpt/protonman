@@ -18,7 +18,7 @@ func (c *controller) setRuntimeModel(provider, model string) {
 	}
 	c.mu.Lock()
 	sessionID := strings.TrimSpace(c.state.ActiveSessionID)
-	session, ok := desktopSessionByID(c.state, sessionID)
+	session, ok := desktopSessionByID(c.state, sessionID, c.state.ActiveAgentID)
 	agentID := controllerAgentID
 	if ok && strings.TrimSpace(session.AgentID) != "" {
 		agentID = strings.TrimSpace(session.AgentID)
@@ -35,6 +35,7 @@ func (c *controller) setRuntimeModel(provider, model string) {
 	if ok && session.AgentID != "" && session.AgentID != controllerAgentID {
 		desktopstate.Apply(&c.state, desktopstate.Event{
 			Kind:      desktopstate.EventSessionRuntimeUpdated,
+			AgentID:   session.AgentID,
 			SessionID: sessionID,
 			Runtime: desktopstate.RuntimeSettingsState{
 				Provider:       provider,
@@ -71,7 +72,7 @@ func (c *controller) setRuntimeModel(provider, model string) {
 					if models, currentModel := extractModelsFromACP(result.ConfigOptions, result.Models); len(models) > 0 {
 						c.mu.Lock()
 						c.setAgentAvailableModelsLocked(agentID, models)
-						if sess := desktopstateSessionPointer(&c.state, sessionID); sess != nil {
+						if sess := desktopstateSessionPointer(&c.state, sessionID, agentID); sess != nil {
 							sess.AvailableModels = models
 							if currentModel != "" {
 								sess.Runtime.Model = currentModel
@@ -115,7 +116,7 @@ func (c *controller) setRuntimePermissionMode(value string) {
 	}
 	c.mu.Lock()
 	sessionID := strings.TrimSpace(c.state.ActiveSessionID)
-	session, ok := desktopSessionByID(c.state, sessionID)
+	session, ok := desktopSessionByID(c.state, sessionID, c.state.ActiveAgentID)
 	if ok && session.AgentID != "" && session.AgentID != controllerAgentID {
 		agentID := session.AgentID
 		client := c.clients[agentID]
@@ -125,7 +126,7 @@ func (c *controller) setRuntimePermissionMode(value string) {
 				c.mu.Unlock()
 				return
 			}
-			c.runtimeMutation = sessionID
+			c.runtimeMutation = sessionRefStorageKey(desktopstate.SessionRef{AgentID: agentID, SessionID: sessionID})
 			c.statuses[agentID] = "Updating permission mode…"
 			c.revision++
 			c.mu.Unlock()
@@ -133,7 +134,7 @@ func (c *controller) setRuntimePermissionMode(value string) {
 			go c.updateClinePermissionMode(client, agentID, sessionID, value)
 			return
 		}
-		if sess := desktopstateSessionPointer(&c.state, sessionID); sess != nil {
+		if sess := desktopstateSessionPointer(&c.state, sessionID, session.AgentID); sess != nil {
 			sess.Runtime.PermissionMode = value
 			c.revision++
 		}
@@ -168,12 +169,12 @@ func (c *controller) updateClinePermissionMode(client *acpclient.Client, agentID
 	}
 
 	c.mu.Lock()
-	session, ok := desktopSessionByID(c.state, sessionID)
+	session, ok := desktopSessionByID(c.state, sessionID, agentID)
 	if !ok || session.AgentID != agentID || !c.clientCurrentLocked(agentID, client) {
 		c.mu.Unlock()
 		return
 	}
-	if current := desktopstateSessionPointer(&c.state, sessionID); current != nil {
+	if current := desktopstateSessionPointer(&c.state, sessionID, agentID); current != nil {
 		current.Runtime.PermissionMode = value
 		c.revision++
 	}
@@ -193,8 +194,8 @@ func (c *controller) setRuntimeChoice(method, field, value string) {
 func (c *controller) startRuntimeMutation(method string, values map[string]any) {
 	c.mu.Lock()
 	sessionID := strings.TrimSpace(c.state.ActiveSessionID)
-	session, ok := desktopSessionByID(c.state, sessionID)
-	client, agentID := c.clientForSessionLocked(sessionID)
+	session, ok := desktopSessionByID(c.state, sessionID, c.state.ActiveAgentID)
+	client, agentID := c.clientForSessionLocked(sessionID, c.state.ActiveAgentID)
 	if !ok || (session.AgentID != "" && session.AgentID != controllerAgentID) || sessionBusy(session.Status) || client == nil || c.connections[agentID] != connectionConnected || c.runtimeMutation != "" {
 		c.mu.Unlock()
 		return
@@ -204,7 +205,8 @@ func (c *controller) startRuntimeMutation(method string, values map[string]any) 
 		params[key] = value
 	}
 	params["sessionId"] = sessionID
-	c.runtimeMutation = sessionID
+	mutationKey := sessionRefStorageKey(desktopstate.SessionRef{AgentID: agentID, SessionID: sessionID})
+	c.runtimeMutation = mutationKey
 	c.statuses[agentID] = "Updating runtime…"
 	c.revision++
 	c.mu.Unlock()
@@ -217,10 +219,10 @@ func (c *controller) startRuntimeMutation(method string, values map[string]any) 
 			if c.ctx == nil || c.ctx.Err() == nil {
 				c.setRuntimeStatus(client, sessionID, "Runtime update failed · "+compactError(err))
 			}
-			c.refreshSessionRuntime(sessionID, true)
+			c.refreshSessionRuntime(sessionID, true, agentID)
 			return
 		}
-		if !c.applySessionRuntime(client, result) {
+		if !c.applySessionRuntimeForAgent(client, result, agentID) {
 			c.setRuntimeStatus(client, sessionID, "Runtime update returned an invalid session result")
 			return
 		}
@@ -230,7 +232,9 @@ func (c *controller) startRuntimeMutation(method string, values map[string]any) 
 
 func (c *controller) finishRuntimeMutation(client *acpclient.Client, sessionID string) {
 	c.mu.Lock()
-	if c.runtimeMutation == sessionID {
+	agentID := c.agentIDForClientLocked(client)
+	mutationKey := sessionRefStorageKey(desktopstate.SessionRef{AgentID: agentID, SessionID: sessionID})
+	if c.runtimeMutation == mutationKey || c.runtimeMutation == sessionID {
 		c.runtimeMutation = ""
 		c.revision++
 	}
@@ -240,12 +244,13 @@ func (c *controller) finishRuntimeMutation(client *acpclient.Client, sessionID s
 
 func (c *controller) setRuntimeStatus(client *acpclient.Client, sessionID, status string) {
 	c.mu.Lock()
-	session, ok := desktopSessionByID(c.state, sessionID)
+	agentID := c.agentIDForClientLocked(client)
+	session, ok := desktopSessionByID(c.state, sessionID, agentID)
 	if !ok || !c.clientCurrentLocked(session.AgentID, client) {
 		c.mu.Unlock()
 		return
 	}
-	agentID := session.AgentID
+	agentID = session.AgentID
 	if agentID == "" {
 		agentID = c.activeAgentID
 	}

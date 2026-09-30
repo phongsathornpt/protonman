@@ -97,7 +97,9 @@ func (c *controller) handlePermissionRequestFromAgent(agentID string, source *ac
 		}
 		agentID = currentAgentID
 	}
-	session, sessionExists := desktopSessionByID(c.state, params.SessionID)
+	item.AgentID = agentID
+	item.RequestID = sessionRefStorageKey(desktopstate.SessionRef{AgentID: agentID, SessionID: item.RequestID})
+	session, sessionExists := desktopSessionByID(c.state, params.SessionID, agentID)
 	if !sessionExists {
 		c.mu.Unlock()
 		return nil, errors.New("permission request references an unknown session")
@@ -116,6 +118,7 @@ func (c *controller) handlePermissionRequestFromAgent(agentID string, source *ac
 	c.permissionWait[item.RequestID] = waiter
 	desktopstate.Apply(&c.state, desktopstate.Event{
 		Kind:       desktopstate.EventPermissionRequested,
+		AgentID:    agentID,
 		SessionID:  params.SessionID,
 		Permission: item,
 	})
@@ -164,6 +167,7 @@ func (c *controller) finishPermission(requestID, sessionID string, waiter chan s
 	delete(c.permissionWait, requestID)
 	desktopstate.Apply(&c.state, desktopstate.Event{
 		Kind:      desktopstate.EventPermissionResolved,
+		AgentID:   perm.AgentID,
 		SessionID: sessionID,
 		RequestID: requestID,
 	})
@@ -189,12 +193,13 @@ func (c *controller) finishPermission(requestID, sessionID string, waiter chan s
 	}
 	desktopstate.Apply(&c.state, desktopstate.Event{
 		Kind:      desktopstate.EventTimelineAppended,
+		AgentID:   perm.AgentID,
 		SessionID: sessionID,
 		Item:      auditItem,
 	})
 
 	agentID := ""
-	if session, ok := desktopSessionByID(c.state, sessionID); ok {
+	if session, ok := desktopSessionByID(c.state, sessionID, perm.AgentID); ok {
 		agentID = session.AgentID
 	}
 	if agentID == "" {

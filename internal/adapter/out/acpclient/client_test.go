@@ -80,16 +80,30 @@ func TestReadLoopBoundsQueuedReverseRequests(t *testing.T) {
 	client.readLoop(input)
 
 	if got := len(client.requests); got != 1 {
-		t.Fatalf("queued reverse requests = %d, want bounded capacity 1", got)
+		t.Fatalf("queued reverse requests = %d, want the first queued request preserved", got)
 	}
 	queued := <-client.requests
-	if string(queued.request.ID) != "3" {
-		t.Fatalf("queued request ID = %s, want newest 3 after dropping oldest", queued.request.ID)
+	if string(queued.request.ID) != "1" {
+		t.Fatalf("queued request ID = %s, want oldest queued request 1 preserved", queued.request.ID)
 	}
 	select {
 	case <-client.closed:
 	default:
 		t.Fatal("queue overflow did not shut down the ACP connection")
+	}
+}
+
+func TestReadBoundedLineDiscardsOversizedInputAndResumesAtNextLine(t *testing.T) {
+	reader := bufio.NewReader(strings.NewReader("oversized-line\nnext\n"))
+
+	line, oversized, err := readBoundedLine(reader, len("large\n"))
+	if err != nil || !oversized || len(line) != 0 {
+		t.Fatalf("oversized line = %q, oversized=%v, err=%v", line, oversized, err)
+	}
+
+	line, oversized, err = readBoundedLine(reader, len("next\n"))
+	if err != nil || oversized || string(line) != "next\n" {
+		t.Fatalf("following line = %q, oversized=%v, err=%v", line, oversized, err)
 	}
 }
 

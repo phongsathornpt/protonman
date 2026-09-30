@@ -102,12 +102,12 @@ func (c *controller) agentSupportsSessionResume(agentID string) bool {
 
 func (c *controller) setClinePermissionModeFromACP(agentID, sessionID, modeID string, options []acpConfigOption) {
 	c.mu.Lock()
-	session, ok := desktopSessionByID(c.state, sessionID)
+	session, ok := desktopSessionByID(c.state, sessionID, agentID)
 	if !ok || session.AgentID != agentID || !isClineACPProfile(c.profiles[agentID]) {
 		c.mu.Unlock()
 		return
 	}
-	if current := desktopstateSessionPointer(&c.state, sessionID); current != nil {
+	if current := desktopstateSessionPointer(&c.state, sessionID, agentID); current != nil {
 		modeID = clineModeID(options, modeID)
 		autoApprove := clineAutoApproveValue(options, current.Runtime.PermissionMode == "always-approve")
 		current.Runtime.PermissionMode = clinePermissionMode(modeID, autoApprove)

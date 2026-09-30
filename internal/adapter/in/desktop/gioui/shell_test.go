@@ -351,6 +351,25 @@ func TestSyncConversationReleasesLargeMessageDisclosureState(t *testing.T) {
 	}
 }
 
+func TestSyncConversationRestoresBoundedSessionScrollPosition(t *testing.T) {
+	view := newShell(newTheme("light"))
+	view.activeSessionID = "first"
+	view.conversationList.Position = layout.Position{First: 17, Offset: 23, BeforeEnd: true}
+
+	view.syncConversation(desktopstate.State{ActiveSessionID: "second"})
+	if view.conversationList.Position != (layout.Position{}) {
+		t.Fatalf("new session position = %#v, want zero position", view.conversationList.Position)
+	}
+	view.conversationList.Position = layout.Position{First: 3, Offset: 8}
+	view.syncConversation(desktopstate.State{ActiveSessionID: "first"})
+	if got, want := view.conversationList.Position, (layout.Position{First: 17, Offset: 23, BeforeEnd: true}); got != want {
+		t.Fatalf("restored scroll position = %#v, want %#v", got, want)
+	}
+	if got, want := view.sessionScrollPositions.len(), 2; got != want {
+		t.Fatalf("cached session positions = %d, want %d", got, want)
+	}
+}
+
 func TestSyncConversationRetainsBoundedRenderCachesAcrossSessionSwitches(t *testing.T) {
 	view := newShell(newTheme("light"))
 	markdownKey := conversationCacheKey{sessionID: "old-session", itemID: "assistant", kind: desktopstate.TimelineAssistant}

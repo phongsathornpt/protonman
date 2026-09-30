@@ -119,7 +119,7 @@ func TestProjectSessionInspectorPayloads(t *testing.T) {
 func TestInspectorResultsRejectStaleClient(t *testing.T) {
 	controller := newTestController()
 	current := controller.clients[controllerAgentID]
-	if _, _, ok := controller.beginSessionRefresh("session-1", true, contextRefreshKind, &acpclient.Client{}); ok {
+	if _, _, _, _, ok := controller.beginSessionRefresh("session-1", true, contextRefreshKind, &acpclient.Client{}); ok {
 		t.Fatal("stale client was admitted for inspector refresh")
 	}
 	controller.state.Sessions[0].Context.Memory = desktopstate.MemoryState{Global: []desktopstate.MemoryEntryState{{ID: "keep"}}}
@@ -170,6 +170,28 @@ func TestInspectorResultsRejectStaleClient(t *testing.T) {
 	}
 	if controller.applySessionSkills(current, sessionSkillsResult{SessionID: "session-1"}) {
 		t.Fatal("inactive session skills result was retained")
+	}
+}
+
+func TestInspectorResultRoutesCollidingSessionIDToOwningAgent(t *testing.T) {
+	controller := newTestController()
+	reviewer := &acpclient.Client{}
+	controller.clients["reviewer"] = reviewer
+	controller.connections["reviewer"] = connectionConnected
+	controller.state.Sessions = append(controller.state.Sessions, desktopstate.SessionState{
+		ID: "session-1", AgentID: "reviewer", Context: desktopstate.SessionContextState{Goal: "old reviewer goal"},
+	})
+	controller.state.ActiveSessionID = "session-1"
+	controller.state.ActiveAgentID = "reviewer"
+
+	if !controller.applySessionContext(reviewer, sessionContextResult{SessionID: "session-1", Goal: "reviewer goal"}) {
+		t.Fatal("reviewer context result was not applied")
+	}
+	if got := controller.state.Sessions[1].Context.Goal; got != "reviewer goal" {
+		t.Fatalf("reviewer context = %q", got)
+	}
+	if got := controller.state.Sessions[0].Context.Goal; got != "" {
+		t.Fatalf("colliding Protonman session context changed to %q", got)
 	}
 }
 

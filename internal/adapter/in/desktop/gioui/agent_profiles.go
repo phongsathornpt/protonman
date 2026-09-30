@@ -181,8 +181,12 @@ func (c *controller) selectAgent(agentID string) {
 
 	if targetSession != nil {
 		previousSessionID := c.state.ActiveSessionID
+		previousAgentID := c.state.ActiveAgentID
 		c.state.ActiveSessionID = targetSession.ID
-		c.pruneInactiveSessionHistoryLocked(targetSession.ID, previousSessionID)
+		c.pruneInactiveSessionHistoryLocked(targetSession.ID, previousSessionID,
+			desktopstate.SessionRef{AgentID: targetSession.AgentID, SessionID: targetSession.ID},
+			desktopstate.SessionRef{AgentID: previousAgentID, SessionID: previousSessionID},
+		)
 		c.revision++
 		c.snapshotCache = controllerSnapshotCache{}
 		targetID := targetSession.ID
@@ -274,8 +278,8 @@ func projectByID(state desktopstate.State, projectID string) (desktopstate.Proje
 	return desktopstate.ProjectState{}, false
 }
 
-func (c *controller) clientForSessionLocked(sessionID string) (*acpclient.Client, string) {
-	session, ok := desktopSessionByID(c.state, sessionID)
+func (c *controller) clientForSessionLocked(sessionID string, agentIDs ...string) (*acpclient.Client, string) {
+	session, ok := desktopSessionByID(c.state, sessionID, agentIDs...)
 	if !ok {
 		return nil, ""
 	}

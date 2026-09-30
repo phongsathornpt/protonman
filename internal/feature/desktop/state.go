@@ -119,6 +119,13 @@ type SessionContextState struct {
 	Memory MemoryState
 }
 
+// SessionRef is the stable desktop identity for an ACP-owned session. ACP
+// session IDs are scoped to one agent process and may collide across agents.
+type SessionRef struct {
+	AgentID   string
+	SessionID string
+}
+
 // PermissionOption is one user-selectable decision for a pending permission request.
 type PermissionOption struct {
 	ID   string
@@ -129,6 +136,7 @@ type PermissionOption struct {
 // PermissionRequest is the desktop projection of an ACP server-to-client permission request.
 type PermissionRequest struct {
 	RequestID string
+	AgentID   string
 	SessionID string
 	Title     string
 	Detail    string
@@ -150,6 +158,7 @@ type QuestionItemState struct {
 // QuestionRequest is the desktop projection of an ACP server-to-client question request.
 type QuestionRequest struct {
 	RequestID string
+	AgentID   string
 	SessionID string
 	Questions []QuestionItemState
 }
@@ -201,9 +210,14 @@ type SessionState struct {
 	AvailableModels       []string
 }
 
+func (s SessionState) Ref() SessionRef {
+	return SessionRef{AgentID: s.AgentID, SessionID: s.ID}
+}
+
 // State owns desktop project and session state independently from UI widgets.
 type State struct {
 	ActiveSessionID string
+	ActiveAgentID   string
 	ActiveProjectID string
 	Projects        []ProjectState
 	Sessions        []SessionState
@@ -242,6 +256,7 @@ const (
 type Event struct {
 	Kind            EventKind
 	SessionID       string
+	AgentID         string
 	Sessions        []SessionState
 	Item            TimelineItem
 	Subagent        SubagentState
@@ -278,60 +293,67 @@ func applyEvent(state *State, event Event) {
 	switch event.Kind {
 	case EventSessionsReplaced:
 		state.Sessions = cloneSessions(event.Sessions)
-		if state.ActiveSessionID != "" && !hasSession(state.Sessions, state.ActiveSessionID) {
+		if state.ActiveSessionID != "" && !hasSession(state.Sessions, state.ActiveSessionID, state.ActiveAgentID) {
 			state.ActiveSessionID = ""
+			state.ActiveAgentID = ""
 		}
 	case EventSessionSelected:
-		if hasSession(state.Sessions, event.SessionID) {
+		if hasSession(state.Sessions, event.SessionID, event.AgentID) {
 			state.ActiveSessionID = event.SessionID
+			state.ActiveAgentID = event.AgentID
+			if state.ActiveAgentID == "" {
+				if session := sessionByID(state, event.SessionID, ""); session != nil {
+					state.ActiveAgentID = session.AgentID
+				}
+			}
 		}
 	case EventPromptQueued:
-		setStatus(state, event.SessionID, TaskQueued)
+		setStatus(state, event.AgentID, event.SessionID, TaskQueued)
 	case EventPromptStarted:
-		setStatus(state, event.SessionID, TaskRunning)
+		setStatus(state, event.AgentID, event.SessionID, TaskRunning)
 	case EventPromptCompleted:
-		setStatus(state, event.SessionID, TaskCompleted)
+		setStatus(state, event.AgentID, event.SessionID, TaskCompleted)
 	case EventPromptFailed:
-		setStatus(state, event.SessionID, TaskFailed)
+		setStatus(state, event.AgentID, event.SessionID, TaskFailed)
 	case EventPermissionRequested:
-		setStatus(state, event.SessionID, TaskWaitingPermission)
-		if event.Permission.RequestID != "" && !hasPermission(state.PermissionInbox, event.Permission.RequestID) {
+		setStatus(state, event.AgentID, event.SessionID, TaskWaitingPermission)
+		if event.Permission.RequestID != "" && !hasPermission(state.PermissionInbox, event.Permission.RequestID, event.AgentID) {
 			state.PermissionInbox = append(state.PermissionInbox, clonePermission(event.Permission))
 		}
 	case EventPermissionResolved:
-		setStatus(state, event.SessionID, TaskRunning)
-		state.PermissionInbox = removePermission(state.PermissionInbox, event.RequestID)
+		setStatus(state, event.AgentID, event.SessionID, TaskRunning)
+		state.PermissionInbox = removePermission(state.PermissionInbox, event.RequestID, event.AgentID)
 	case EventQuestionRequested:
-		setStatus(state, event.SessionID, TaskWaitingUser)
-		if event.Question.RequestID != "" && !hasQuestion(state.QuestionInbox, event.Question.RequestID) {
+		setStatus(state, event.AgentID, event.SessionID, TaskWaitingUser)
+		if event.Question.RequestID != "" && !hasQuestion(state.QuestionInbox, event.Question.RequestID, event.AgentID) {
 			state.QuestionInbox = append(state.QuestionInbox, cloneQuestion(event.Question))
 		}
 	case EventQuestionResolved:
-		setStatus(state, event.SessionID, TaskRunning)
-		state.QuestionInbox = removeQuestion(state.QuestionInbox, event.RequestID)
+		setStatus(state, event.AgentID, event.SessionID, TaskRunning)
+		state.QuestionInbox = removeQuestion(state.QuestionInbox, event.RequestID, event.AgentID)
 	case EventTimelineAppended:
-		if session := sessionByID(state, event.SessionID); session != nil {
+		if session := sessionByID(state, event.SessionID, event.AgentID); session != nil {
 			session.Timeline = append(session.Timeline, event.Item)
 		}
 	case EventTimelineUpserted:
-		if session := sessionByID(state, event.SessionID); session != nil {
+		if session := sessionByID(state, event.SessionID, event.AgentID); session != nil {
 			upsertTimeline(session, event.Item)
 		}
 	case EventSubagentUpserted:
-		if session := sessionByID(state, event.SessionID); session != nil {
+		if session := sessionByID(state, event.SessionID, event.AgentID); session != nil {
 			upsertSubagent(session, event.Subagent)
 		}
 	case EventSessionContextUpdated:
-		if session := sessionByID(state, event.SessionID); session != nil {
+		if session := sessionByID(state, event.SessionID, event.AgentID); session != nil {
 			session.Context.Goal = event.Context.Goal
 			session.Context.Todo = cloneTodoState(event.Context.Todo)
 		}
 	case EventSessionMemoryUpdated:
-		if session := sessionByID(state, event.SessionID); session != nil {
+		if session := sessionByID(state, event.SessionID, event.AgentID); session != nil {
 			session.Context.Memory = cloneMemoryState(event.Memory)
 		}
 	case EventSessionRuntimeUpdated:
-		if session := sessionByID(state, event.SessionID); session != nil {
+		if session := sessionByID(state, event.SessionID, event.AgentID); session != nil {
 			session.Runtime = event.Runtime
 			if len(event.AvailableModels) > 0 {
 				session.AvailableModels = slices.Clone(event.AvailableModels)
@@ -340,7 +362,7 @@ func applyEvent(state *State, event Event) {
 	case EventIntegrationsReplaced:
 		state.Integrations = cloneIntegrations(event.Integrations)
 	case EventSessionSkillsUpdated:
-		if session := sessionByID(state, event.SessionID); session != nil {
+		if session := sessionByID(state, event.SessionID, event.AgentID); session != nil {
 			session.Skills = cloneSkillStates(event.Skills)
 		}
 	case EventProvidersUpdated:
@@ -369,7 +391,7 @@ func CloneState(state State) State {
 func ClonePresentationState(state State) State {
 	next := state
 	next.Projects = cloneProjects(state.Projects)
-	next.Sessions = cloneSessionMetadata(state.Sessions, state.ActiveSessionID)
+	next.Sessions = cloneSessionMetadata(state.Sessions, state.ActiveSessionID, state.ActiveAgentID)
 	next.PermissionInbox = clonePermissions(state.PermissionInbox)
 	next.QuestionInbox = cloneQuestions(state.QuestionInbox)
 	next.Integrations = cloneIntegrations(state.Integrations)
@@ -432,11 +454,11 @@ func cloneSkillStates(skills []SkillState) []SkillState {
 	return out
 }
 
-func cloneSessionMetadata(sessions []SessionState, activeSessionID string) []SessionState {
+func cloneSessionMetadata(sessions []SessionState, activeSessionID, activeAgentID string) []SessionState {
 	out := slices.Clone(sessions)
 	for index := range out {
 		session := out[index]
-		if session.ID == activeSessionID {
+		if session.ID == activeSessionID && (activeAgentID == "" || session.AgentID == activeAgentID) {
 			out[index] = cloneSession(session)
 			continue
 		}
@@ -494,27 +516,27 @@ func clonePermission(item PermissionRequest) PermissionRequest {
 	return item
 }
 
-func hasSession(sessions []SessionState, id string) bool {
+func hasSession(sessions []SessionState, id string, agentIDs ...string) bool {
 	for i := range sessions {
-		if sessions[i].ID == id {
+		if sessions[i].ID == id && (len(agentIDs) == 0 || agentIDs[0] == "" || sessions[i].AgentID == agentIDs[0]) {
 			return true
 		}
 	}
 	return false
 }
 
-func hasPermission(items []PermissionRequest, id string) bool {
+func hasPermission(items []PermissionRequest, id string, agentIDs ...string) bool {
 	for i := range items {
-		if items[i].RequestID == id {
+		if items[i].RequestID == id && (len(agentIDs) == 0 || agentIDs[0] == "" || items[i].AgentID == agentIDs[0]) {
 			return true
 		}
 	}
 	return false
 }
 
-func removePermission(items []PermissionRequest, id string) []PermissionRequest {
+func removePermission(items []PermissionRequest, id string, agentIDs ...string) []PermissionRequest {
 	for i := range items {
-		if items[i].RequestID == id {
+		if items[i].RequestID == id && (len(agentIDs) == 0 || agentIDs[0] == "" || items[i].AgentID == agentIDs[0]) {
 			copy(items[i:], items[i+1:])
 			items[len(items)-1] = PermissionRequest{}
 			return items[:len(items)-1]
@@ -523,17 +545,17 @@ func removePermission(items []PermissionRequest, id string) []PermissionRequest 
 	return items
 }
 
-func sessionByID(state *State, id string) *SessionState {
+func sessionByID(state *State, id string, agentIDs ...string) *SessionState {
 	for i := range state.Sessions {
-		if state.Sessions[i].ID == id {
+		if state.Sessions[i].ID == id && (len(agentIDs) == 0 || agentIDs[0] == "" || state.Sessions[i].AgentID == agentIDs[0]) {
 			return &state.Sessions[i]
 		}
 	}
 	return nil
 }
 
-func setStatus(state *State, id string, status TaskStatus) {
-	if session := sessionByID(state, id); session != nil {
+func setStatus(state *State, agentID, id string, status TaskStatus) {
+	if session := sessionByID(state, id, agentID); session != nil {
 		session.Status = status
 	}
 }
@@ -575,18 +597,18 @@ func upsertSubagent(session *SessionState, next SubagentState) {
 	session.Subagents = append(session.Subagents, next)
 }
 
-func hasQuestion(items []QuestionRequest, id string) bool {
+func hasQuestion(items []QuestionRequest, id string, agentIDs ...string) bool {
 	for i := range items {
-		if items[i].RequestID == id {
+		if items[i].RequestID == id && (len(agentIDs) == 0 || agentIDs[0] == "" || items[i].AgentID == agentIDs[0]) {
 			return true
 		}
 	}
 	return false
 }
 
-func removeQuestion(items []QuestionRequest, id string) []QuestionRequest {
+func removeQuestion(items []QuestionRequest, id string, agentIDs ...string) []QuestionRequest {
 	for i := range items {
-		if items[i].RequestID == id {
+		if items[i].RequestID == id && (len(agentIDs) == 0 || agentIDs[0] == "" || items[i].AgentID == agentIDs[0]) {
 			copy(items[i:], items[i+1:])
 			items[len(items)-1] = QuestionRequest{}
 			return items[:len(items)-1]

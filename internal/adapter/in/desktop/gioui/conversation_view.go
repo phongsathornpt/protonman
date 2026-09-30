@@ -139,31 +139,39 @@ type conversationDisclosureButtons struct {
 }
 
 func (s *shell) syncConversation(state desktopstate.State) {
-	if state.ActiveSessionID == s.activeSessionID {
+	if state.ActiveSessionID == s.activeSessionID && state.ActiveAgentID == s.activeSessionAgentID {
 		s.syncPermissionButtons(state)
 		return
 	}
 	if s.activeSessionID != "" {
+		previousRef := desktopstate.SessionRef{AgentID: s.activeSessionAgentID, SessionID: s.activeSessionID}
+		s.sessionScrollPositions.put(previousRef, s.conversationList.Position)
 		if draft := s.composer.Text(); strings.TrimSpace(draft) != "" {
-			s.rememberComposerDraft(s.activeSessionID, draft)
+			s.rememberComposerDraft(sessionRefStorageKey(previousRef), draft)
 		} else {
-			s.forgetComposerDraft(s.activeSessionID)
+			s.forgetComposerDraft(sessionRefStorageKey(previousRef))
 		}
 	}
 	s.activeSessionID = state.ActiveSessionID
+	s.activeSessionAgentID = state.ActiveAgentID
 	if state.ActiveSessionID != "" {
 		rows, _ := buildSidebarRows(state, nil)
 		for index, row := range rows {
-			if row.Kind == sidebarSessionRow && row.SessionID == state.ActiveSessionID {
+			if row.Kind == sidebarSessionRow && row.SessionID == state.ActiveSessionID && (state.ActiveAgentID == "" || row.AgentID == state.ActiveAgentID) {
 				s.sidebarList.Position = layout.Position{First: max(0, index-1)}
 				break
 			}
 		}
 	}
-	s.setComposerText(s.takeComposerDraft(state.ActiveSessionID))
+	activeRef := desktopstate.SessionRef{AgentID: state.ActiveAgentID, SessionID: state.ActiveSessionID}
+	s.setComposerText(s.takeComposerDraft(sessionRefStorageKey(activeRef)))
 	s.closePopovers()
 	s.tailFollowBeforeOverlay = false
-	s.conversationList.Position = layout.Position{}
+	if position, ok := s.sessionScrollPositions.get(activeRef); ok {
+		s.conversationList.Position = position
+	} else {
+		s.conversationList.Position = layout.Position{}
+	}
 	s.inspectorList.Position = layout.Position{}
 	s.inspectorOverride = false
 	s.inspectorVisible = false
@@ -3137,7 +3145,7 @@ func (s *shell) submitComposer(text string) {
 	s.composerError = ""
 	s.onSendPrompt(expanded)
 	s.setComposerText("")
-	s.forgetComposerDraft(s.activeSessionID)
+	s.forgetComposerDraft(sessionRefStorageKey(desktopstate.SessionRef{AgentID: s.activeSessionAgentID, SessionID: s.activeSessionID}))
 	s.conversationList.ScrollToEnd = true
 	s.conversationList.Position = layout.Position{}
 }
@@ -3178,9 +3186,23 @@ func (s *shell) forgetComposerDraft(sessionID string) {
 	}
 }
 
-func activePermission(state desktopstate.State, sessionID string) *desktopstate.PermissionRequest {
+func sessionRefStorageKey(ref desktopstate.SessionRef) string {
+	if ref.AgentID == "" {
+		return ref.SessionID
+	}
+	key := make([]byte, 0, len(ref.AgentID)+len(ref.SessionID)+42)
+	key = strconv.AppendInt(key, int64(len(ref.AgentID)), 10)
+	key = append(key, ':')
+	key = append(key, ref.AgentID...)
+	key = strconv.AppendInt(key, int64(len(ref.SessionID)), 10)
+	key = append(key, ':')
+	key = append(key, ref.SessionID...)
+	return string(key)
+}
+
+func activePermission(state desktopstate.State, sessionID string, agentIDs ...string) *desktopstate.PermissionRequest {
 	for _, request := range state.PermissionInbox {
-		if request.SessionID == sessionID {
+		if request.SessionID == sessionID && (len(agentIDs) == 0 || agentIDs[0] == "" || request.AgentID == agentIDs[0]) {
 			item := request
 			item.Options = append([]desktopstate.PermissionOption(nil), request.Options...)
 			return &item
@@ -3189,9 +3211,9 @@ func activePermission(state desktopstate.State, sessionID string) *desktopstate.
 	return nil
 }
 
-func activeQuestion(state desktopstate.State, sessionID string) *desktopstate.QuestionRequest {
+func activeQuestion(state desktopstate.State, sessionID string, agentIDs ...string) *desktopstate.QuestionRequest {
 	for _, request := range state.QuestionInbox {
-		if request.SessionID == sessionID {
+		if request.SessionID == sessionID && (len(agentIDs) == 0 || agentIDs[0] == "" || request.AgentID == agentIDs[0]) {
 			item := request
 			return &item
 		}

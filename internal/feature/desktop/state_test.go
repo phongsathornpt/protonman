@@ -48,6 +48,37 @@ func TestReduceSessionSelectionRequiresKnownSession(t *testing.T) {
 	}
 }
 
+func TestApplyRoutesCollidingSessionIDsByAgent(t *testing.T) {
+	state := State{Sessions: []SessionState{
+		{ID: "shared", AgentID: "protonman", Status: TaskIdle},
+		{ID: "shared", AgentID: "cline", Status: TaskIdle},
+	}}
+
+	Apply(&state, Event{Kind: EventPromptStarted, AgentID: "cline", SessionID: "shared"})
+	Apply(&state, Event{
+		Kind:      EventTimelineAppended,
+		AgentID:   "cline",
+		SessionID: "shared",
+		Item:      TimelineItem{ID: "cline-message", Kind: TimelineAssistant, Text: "cline output"},
+	})
+
+	if state.Sessions[0].Status != TaskIdle || len(state.Sessions[0].Timeline) != 0 {
+		t.Fatalf("other agent session changed: %#v", state.Sessions[0])
+	}
+	if state.Sessions[1].Status != TaskRunning || len(state.Sessions[1].Timeline) != 1 || state.Sessions[1].Timeline[0].Text != "cline output" {
+		t.Fatalf("target agent session was not updated: %#v", state.Sessions[1])
+	}
+
+	Apply(&state, Event{Kind: EventSessionSelected, AgentID: "cline", SessionID: "shared"})
+	if state.ActiveSessionID != "shared" || state.ActiveAgentID != "cline" {
+		t.Fatalf("active session ref = (%q,%q), want (cline,shared)", state.ActiveAgentID, state.ActiveSessionID)
+	}
+	presentation := ClonePresentationState(state)
+	if len(presentation.Sessions[0].Timeline) != 0 || len(presentation.Sessions[1].Timeline) != 1 {
+		t.Fatalf("presentation detached wrong active session: %#v", presentation.Sessions)
+	}
+}
+
 func TestReduceDoesNotAliasTimeline(t *testing.T) {
 	original := State{Sessions: []SessionState{{
 		ID:       "s1",

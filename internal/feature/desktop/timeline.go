@@ -5,6 +5,7 @@ import "strings"
 // SessionUpdate is the presentation-neutral projection of an ACP session/update.
 // Adapters decode ACP wire payloads into this type before reducing desktop state.
 type SessionUpdate struct {
+	AgentID    string
 	SessionID  string
 	Kind       string
 	ToolCallID string
@@ -27,6 +28,7 @@ func TimelineEvent(update SessionUpdate) (Event, bool) {
 		}
 		return Event{
 			Kind:      EventTimelineAppended,
+			AgentID:   update.AgentID,
 			SessionID: update.SessionID,
 			Item: TimelineItem{
 				Kind: TimelineUser,
@@ -40,6 +42,7 @@ func TimelineEvent(update SessionUpdate) (Event, bool) {
 		}
 		return Event{
 			Kind:      EventTimelineAppended,
+			AgentID:   update.AgentID,
 			SessionID: update.SessionID,
 			Item: TimelineItem{
 				Kind: TimelineAssistant,
@@ -53,6 +56,7 @@ func TimelineEvent(update SessionUpdate) (Event, bool) {
 		}
 		return Event{
 			Kind:      EventTimelineUpserted,
+			AgentID:   update.AgentID,
 			SessionID: update.SessionID,
 			Item: TimelineItem{
 				Kind:   TimelineTool,

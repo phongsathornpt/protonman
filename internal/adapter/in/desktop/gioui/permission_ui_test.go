@@ -170,7 +170,7 @@ func TestQuestionPanelEnrichedRendering(t *testing.T) {
 func TestBackgroundAttentionBanner(t *testing.T) {
 	view := newShell(newTheme("dark"))
 	var selectedSession string
-	view.onSelectSession = func(s string) {
+	view.onSelectSession = func(_ string, s string) {
 		selectedSession = s
 	}
 
@@ -200,13 +200,13 @@ func TestBackgroundAttentionBanner(t *testing.T) {
 		Source:      router.Source(),
 	}
 
-	dims := view.layoutBackgroundAttentionBanner(gtx, state, "session-active")
+	dims := view.layoutBackgroundAttentionBanner(gtx, state, "", "session-active")
 	if dims.Size.Y <= 0 {
 		t.Fatalf("layoutBackgroundAttentionBanner expected positive height, got %v", dims.Size)
 	}
 
 	// When current session is the waiting one, banner should not appear
-	dimsCurrent := view.layoutBackgroundAttentionBanner(gtx, state, "session-bg")
+	dimsCurrent := view.layoutBackgroundAttentionBanner(gtx, state, "", "session-bg")
 	if dimsCurrent.Size.Y != 0 {
 		t.Fatalf("layoutBackgroundAttentionBanner expected zero height for active session, got %v", dimsCurrent.Size)
 	}
