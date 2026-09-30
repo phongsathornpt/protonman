@@ -262,21 +262,74 @@ func createACPSession(
 		if !ok {
 			return err
 		}
-		if onAuthenticating != nil {
-			onAuthenticating(method.Name)
-		}
-
-		authCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
-		authErr := client.Call(authCtx, "authenticate", map[string]any{"methodId": method.ID}, &struct{}{})
-		cancel()
-		if authErr != nil {
-			name := strings.TrimSpace(method.Name)
-			if name == "" {
-				name = method.ID
-			}
-			return fmt.Errorf("authenticate with %s: %w", name, authErr)
+		if authErr := authenticateACPMethod(ctx, client, method, onAuthenticating); authErr != nil {
+			return authErr
 		}
 		return callNewSession()
 	}
 	return nil
+}
+
+func promptACPWithReauthentication(
+	ctx context.Context,
+	client acpRPCClient,
+	profile app.ACPAgentProfile,
+	authMethods []acpAuthMethod,
+	params any,
+	result any,
+	onAuthenticating func(string),
+) error {
+	promptErr := client.Call(ctx, "session/prompt", params, result)
+	if promptErr == nil || !isClineACPProfile(profile) || !isACPReauthenticationRequired(promptErr) {
+		return promptErr
+	}
+	method, ok := preferredACPAuthMethod(profile, authMethods)
+	if !ok {
+		return promptErr
+	}
+	if err := authenticateACPMethod(ctx, client, method, onAuthenticating); err != nil {
+		return fmt.Errorf("prompt failed: %w; re-authentication failed: %v", promptErr, err)
+	}
+	return client.Call(ctx, "session/prompt", params, result)
+}
+
+func authenticateACPMethod(ctx context.Context, client acpRPCClient, method acpAuthMethod, onAuthenticating func(string)) error {
+	if onAuthenticating != nil {
+		onAuthenticating(method.Name)
+	}
+	authCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+	defer cancel()
+	if err := client.Call(authCtx, "authenticate", map[string]any{"methodId": method.ID}, &struct{}{}); err != nil {
+		name := strings.TrimSpace(method.Name)
+		if name == "" {
+			name = method.ID
+		}
+		return fmt.Errorf("authenticate with %s: %w", name, err)
+	}
+	return nil
+}
+
+func isACPReauthenticationRequired(err error) bool {
+	var rpcErr *acpclient.RPCError
+	if !errors.As(err, &rpcErr) {
+		return false
+	}
+	var data struct {
+		Details string `json:"details"`
+		Message string `json:"message"`
+	}
+	if len(rpcErr.Data) > 0 {
+		_ = json.Unmarshal(rpcErr.Data, &data)
+	}
+	detail := strings.ToLower(strings.TrimSpace(rpcErr.Message + " " + data.Details + " " + data.Message))
+	if rpcErr.Code == acpErrorAuthRequired {
+		return strings.Contains(detail, "authentication") || strings.Contains(detail, "credential") ||
+			strings.Contains(detail, "re-auth") || strings.Contains(detail, "reauth")
+	}
+	if rpcErr.Code != -32603 {
+		return false
+	}
+	return strings.Contains(detail, "re-auth") || strings.Contains(detail, "reauth") ||
+		strings.Contains(detail, "authentication expired") || strings.Contains(detail, "token expired") ||
+		strings.Contains(detail, "credential expired")
 }

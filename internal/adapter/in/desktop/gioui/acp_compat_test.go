@@ -22,6 +22,11 @@ type scriptedACPClient struct {
 	newSessionCalls int
 }
 
+type reauthACPClient struct {
+	calls       []scriptedACPCall
+	promptCalls int
+}
+
 func (c *scriptedACPClient) Call(_ context.Context, method string, params any, result any) error {
 	c.calls = append(c.calls, scriptedACPCall{method: method, params: params})
 	switch method {
@@ -32,6 +37,26 @@ func (c *scriptedACPClient) Call(_ context.Context, method string, params any, r
 		}
 		return decodeACPResult(map[string]any{"sessionId": "session-1"}, result)
 	case "authenticate", "session/set_mode", "session/set_config_option":
+		return nil
+	default:
+		return nil
+	}
+}
+
+func (c *reauthACPClient) Call(_ context.Context, method string, params any, result any) error {
+	c.calls = append(c.calls, scriptedACPCall{method: method, params: params})
+	switch method {
+	case "session/prompt":
+		c.promptCalls++
+		if c.promptCalls == 1 {
+			return &acpclient.RPCError{
+				Code:    -32603,
+				Message: "Internal error",
+				Data:    json.RawMessage(`{"details":"cline requires re-authentication."}`),
+			}
+		}
+		return decodeACPResult(map[string]any{"stopReason": "end_turn"}, result)
+	case "authenticate":
 		return nil
 	default:
 		return nil
@@ -89,6 +114,83 @@ func TestCreateACPSessionAuthenticatesAndRetries(t *testing.T) {
 	authParams, ok := client.calls[1].params.(map[string]any)
 	if !ok || authParams["methodId"] != "cline" {
 		t.Fatalf("authenticate params = %#v, want Cline default auth method", client.calls[1].params)
+	}
+}
+
+func TestPromptACPWithReauthenticationRetriesExplicitClineAuthFailure(t *testing.T) {
+	client := &reauthACPClient{}
+	profile := app.ACPAgentProfile{ID: "cline", DisplayName: "Cline", Command: "cline"}
+	methods := []acpAuthMethod{
+		{ID: "cline", Name: "Sign in with Cline"},
+		{ID: "cline-pass", Name: "Sign in with ClinePass"},
+	}
+	var result struct {
+		StopReason string `json:"stopReason"`
+	}
+	var authStatus string
+	err := promptACPWithReauthentication(
+		context.Background(),
+		client,
+		profile,
+		methods,
+		map[string]any{"sessionId": "session-1", "prompt": []any{}},
+		&result,
+		func(value string) { authStatus = value },
+	)
+	if err != nil {
+		t.Fatalf("prompt with Cline re-authentication: %v", err)
+	}
+	if result.StopReason != "end_turn" {
+		t.Fatalf("stop reason = %q, want end_turn", result.StopReason)
+	}
+	if authStatus != "Sign in with Cline" {
+		t.Fatalf("authentication status = %q", authStatus)
+	}
+	wantMethods := []string{"session/prompt", "authenticate", "session/prompt"}
+	var gotMethods []string
+	for _, call := range client.calls {
+		gotMethods = append(gotMethods, call.method)
+	}
+	if !reflect.DeepEqual(gotMethods, wantMethods) {
+		t.Fatalf("call order = %#v, want %#v", gotMethods, wantMethods)
+	}
+	if authParams, ok := client.calls[1].params.(map[string]any); !ok || authParams["methodId"] != "cline" {
+		t.Fatalf("authenticate params = %#v, want Cline method", client.calls[1].params)
+	}
+}
+
+func TestIsACPReauthenticationRequired(t *testing.T) {
+	for _, test := range []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{
+			name: "Cline internal error with re-authentication detail",
+			err:  &acpclient.RPCError{Code: -32603, Message: "Internal error", Data: json.RawMessage(`{"details":"cline requires re-authentication."}`)},
+			want: true,
+		},
+		{
+			name: "authentication required code",
+			err:  &acpclient.RPCError{Code: acpErrorAuthRequired, Message: "Authentication required"},
+			want: true,
+		},
+		{
+			name: "unrelated server error code",
+			err:  &acpclient.RPCError{Code: acpErrorAuthRequired, Message: "Session is busy"},
+			want: false,
+		},
+		{
+			name: "generic internal error",
+			err:  &acpclient.RPCError{Code: -32603, Message: "Internal error", Data: json.RawMessage(`{}`)},
+			want: false,
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if got := isACPReauthenticationRequired(test.err); got != test.want {
+				t.Fatalf("isACPReauthenticationRequired() = %t, want %t", got, test.want)
+			}
+		})
 	}
 }
 

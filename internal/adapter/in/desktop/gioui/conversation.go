@@ -1122,10 +1122,21 @@ func (c *controller) runPrompt(client *acpclient.Client, session desktopstate.Se
 				"data":     base64.StdEncoding.EncodeToString(imgBytes),
 			})
 		}
-		err = client.Call(c.ctx, "session/prompt", map[string]any{
+		promptParams := map[string]any{
 			"sessionId": session.ID,
 			"prompt":    promptBlocks,
-		}, &result)
+		}
+		c.mu.RLock()
+		profile := c.profiles[session.AgentID]
+		authMethods := slices.Clone(c.agentFeatures[session.AgentID].AuthMethods)
+		c.mu.RUnlock()
+		err = promptACPWithReauthentication(c.ctx, client, profile, authMethods, promptParams, &result, func(methodName string) {
+			name := strings.TrimSpace(methodName)
+			if name == "" {
+				name = "Cline"
+			}
+			c.setAgentStatus(session.AgentID, "Re-authenticating · "+name)
+		})
 	}
 
 	c.mu.Lock()

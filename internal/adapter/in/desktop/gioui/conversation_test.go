@@ -783,11 +783,12 @@ func TestSendPromptDoesNotMutateBusySession(t *testing.T) {
 
 func TestHandlePermissionRequestReturnsSelectedOutcome(t *testing.T) {
 	controller := newTestController()
+	controller.state.Sessions[0].Title = "Cline ACP"
 	controller.state.Sessions[0].Status = desktopstate.TaskRunning
 	request := acpclient.Request{
-		ID:     json.RawMessage("permission-1"),
+		ID:     json.RawMessage("7"),
 		Method: requestPermissionMethod,
-		Params: json.RawMessage(`{"sessionId":"session-1","toolCall":{"title":"Run tests"},"options":[{"optionId":"allow","name":"Allow once","kind":"allow_once"},{"optionId":"reject","name":"Reject","kind":"reject_once"}]}`),
+		Params: json.RawMessage(`{"sessionId":"session-1","toolCall":{"toolCallId":"tool-1","title":"Run command: go test ./...","kind":"execute","status":"pending","rawInput":{"command":"go test ./..."}},"options":[{"optionId":"allow_once","name":"Allow once","kind":"allow_once"},{"optionId":"allow_always","name":"Allow always","kind":"allow_always"},{"optionId":"reject_once","name":"Reject","kind":"reject_once"}]}`),
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
@@ -805,6 +806,19 @@ func TestHandlePermissionRequestReturnsSelectedOutcome(t *testing.T) {
 		ready := len(controller.state.PermissionInbox) == 1
 		controller.mu.RUnlock()
 		if ready {
+			controller.mu.RLock()
+			permission := controller.state.PermissionInbox[0]
+			status := controller.statuses[controllerAgentID]
+			controller.mu.RUnlock()
+			if permission.Title != "Run command: go test ./..." || permission.Command != "go test ./..." {
+				t.Fatalf("Cline permission details = title %q command %q", permission.Title, permission.Command)
+			}
+			if len(permission.Options) != 3 || permission.Options[0].ID != "allow_once" || permission.Options[1].ID != "allow_always" || permission.Options[2].ID != "reject_once" {
+				t.Fatalf("Cline permission options = %#v", permission.Options)
+			}
+			if status != "Permission required · Cline ACP" {
+				t.Fatalf("Cline permission status = %q", status)
+			}
 			break
 		}
 		if time.Now().After(deadline) {
@@ -813,7 +827,7 @@ func TestHandlePermissionRequestReturnsSelectedOutcome(t *testing.T) {
 		time.Sleep(time.Millisecond)
 	}
 
-	controller.resolvePermission("permission-1", "allow")
+	controller.resolvePermission("7", "allow_once")
 	select {
 	case err := <-errs:
 		if err != nil {
@@ -824,7 +838,7 @@ func TestHandlePermissionRequestReturnsSelectedOutcome(t *testing.T) {
 	}
 	value := <-result
 	outcome, ok := value.(map[string]any)["outcome"].(map[string]any)
-	if !ok || outcome["outcome"] != "selected" || outcome["optionId"] != "allow" {
+	if !ok || outcome["outcome"] != "selected" || outcome["optionId"] != "allow_once" {
 		t.Fatalf("permission response = %#v", value)
 	}
 	if len(controller.state.PermissionInbox) != 0 {
