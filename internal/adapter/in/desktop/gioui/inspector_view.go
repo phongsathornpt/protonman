@@ -26,6 +26,7 @@ const (
 var (
 	reasoningChoices      = []string{"auto", "none", "minimal", "low", "medium", "high", "xhigh", "max"}
 	lowConcurrencyChoices = []string{"auto", "on", "off"}
+	permissionModeChoices = []string{"ask", "plan", "always-approve"}
 )
 
 func (s *shell) shouldShowInspector(wide bool) bool {
@@ -655,6 +656,16 @@ func (s *shell) layoutRuntimePanel(gtx layout.Context, session desktopstate.Sess
 		}),
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 			return s.layoutChoiceGrid(gtx, lowConcurrencyChoices, session.Runtime.LowConcurrency, s.lowConcurrencyButtons, enabled, s.onSetRuntimeLow)
+		}),
+		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			return s.layoutLabel(gtx, "Permission mode", textLabelMedium, font.SemiBold, s.theme.onSurfaceVariant, 1)
+		}),
+		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			mode := session.Runtime.PermissionMode
+			if mode == "" {
+				mode = "ask"
+			}
+			return s.layoutChoiceGrid(gtx, permissionModeChoices, mode, s.permissionModeButtons, enabled, s.onSetRuntimePermissionMode)
 		}),
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 			return s.layoutLabel(gtx, status, textLabelMedium, font.Normal, s.theme.onSurfaceVariant, 2)

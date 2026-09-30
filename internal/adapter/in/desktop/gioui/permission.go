@@ -58,11 +58,16 @@ func (c *controller) handlePermissionRequestFromAgent(agentID string, source *ac
 	if strings.TrimSpace(params.SessionID) == "" || len(params.Options) == 0 {
 		return nil, errors.New("permission request must include a session ID and options")
 	}
+	toolName, command, risk, rawJSON := parsePermissionDetails(params.ToolCall)
 	item := desktopstate.PermissionRequest{
 		RequestID: string(request.ID),
 		SessionID: params.SessionID,
 		Title:     "Tool permission",
 		Detail:    permissionDetail(params.ToolCall),
+		ToolName:  toolName,
+		Command:   command,
+		Risk:      risk,
+		RawJSON:   rawJSON,
 	}
 	if item.RequestID == "" {
 		return nil, errors.New("permission request must include an ID")
@@ -125,10 +130,10 @@ func (c *controller) handlePermissionRequestFromAgent(agentID string, source *ac
 
 	select {
 	case <-ctx.Done():
-		c.finishPermission(item.RequestID, params.SessionID, waiter)
+		c.finishPermission(item.RequestID, params.SessionID, waiter, "cancelled", item)
 		return map[string]any{"outcome": map[string]any{"outcome": "cancelled"}}, nil
 	case optionID := <-waiter:
-		c.finishPermission(item.RequestID, params.SessionID, waiter)
+		c.finishPermission(item.RequestID, params.SessionID, waiter, optionID, item)
 		if optionID == "" {
 			return map[string]any{"outcome": map[string]any{"outcome": "cancelled"}}, nil
 		}
@@ -150,7 +155,7 @@ func (c *controller) resolvePermission(requestID, optionID string) {
 	}
 }
 
-func (c *controller) finishPermission(requestID, sessionID string, waiter chan string) {
+func (c *controller) finishPermission(requestID, sessionID string, waiter chan string, optionID string, perm desktopstate.PermissionRequest) {
 	c.mu.Lock()
 	if c.permissionWait[requestID] != waiter {
 		c.mu.Unlock()
@@ -162,6 +167,32 @@ func (c *controller) finishPermission(requestID, sessionID string, waiter chan s
 		SessionID: sessionID,
 		RequestID: requestID,
 	})
+
+	outcome := "Allowed once"
+	lowerOpt := strings.ToLower(optionID)
+	if strings.Contains(lowerOpt, "session") || strings.Contains(lowerOpt, "always") {
+		outcome = "Allowed for session"
+	} else if strings.Contains(lowerOpt, "reject") || strings.Contains(lowerOpt, "deny") || optionID == "cancelled" || optionID == "" {
+		outcome = "Denied"
+	}
+	targetDesc := perm.Title
+	if perm.Command != "" {
+		targetDesc = perm.Command
+	}
+	auditTitle := fmt.Sprintf("%s · %s", outcome, targetDesc)
+	auditItem := desktopstate.TimelineItem{
+		ID:     fmt.Sprintf("perm-audit-%s", requestID),
+		Kind:   desktopstate.TimelinePermission,
+		Title:  auditTitle,
+		Text:   fmt.Sprintf("Decision: %s", optionID),
+		Status: outcome,
+	}
+	desktopstate.Apply(&c.state, desktopstate.Event{
+		Kind:      desktopstate.EventTimelineAppended,
+		SessionID: sessionID,
+		Item:      auditItem,
+	})
+
 	agentID := ""
 	if session, ok := desktopSessionByID(c.state, sessionID); ok {
 		agentID = session.AgentID
@@ -173,6 +204,73 @@ func (c *controller) finishPermission(requestID, sessionID string, waiter chan s
 	c.revision++
 	c.mu.Unlock()
 	c.notify()
+}
+
+func parsePermissionDetails(toolCall map[string]any) (toolName, command, risk, rawJSON string) {
+	if len(toolCall) == 0 {
+		return "", "", "", ""
+	}
+	if name, ok := toolCall["name"].(string); ok && strings.TrimSpace(name) != "" {
+		toolName = strings.TrimSpace(name)
+	} else if kind, ok := toolCall["kind"].(string); ok && strings.TrimSpace(kind) != "" {
+		toolName = strings.TrimSpace(kind)
+	}
+
+	if r, ok := toolCall["risk"].(string); ok && strings.TrimSpace(r) != "" {
+		risk = strings.TrimSpace(r)
+	}
+
+	extractCommand := func(m map[string]any) string {
+		if cmd, ok := m["command"].(string); ok && strings.TrimSpace(cmd) != "" {
+			return strings.TrimSpace(cmd)
+		}
+		if fp, ok := m["filePath"].(string); ok && strings.TrimSpace(fp) != "" {
+			return strings.TrimSpace(fp)
+		}
+		if p, ok := m["path"].(string); ok && strings.TrimSpace(p) != "" {
+			return strings.TrimSpace(p)
+		}
+		if u, ok := m["url"].(string); ok && strings.TrimSpace(u) != "" {
+			return strings.TrimSpace(u)
+		}
+		if d, ok := m["detail"].(string); ok && strings.TrimSpace(d) != "" {
+			return strings.TrimSpace(d)
+		}
+		return ""
+	}
+
+	if rawInput, ok := toolCall["rawInput"].(map[string]any); ok {
+		command = extractCommand(rawInput)
+	}
+	if command == "" {
+		if args, ok := toolCall["arguments"].(map[string]any); ok {
+			command = extractCommand(args)
+		}
+	}
+
+	if risk == "" && isDestructiveCommand(command) {
+		risk = "destructive"
+	}
+
+	if payload, err := json.MarshalIndent(toolCall, "", "  "); err == nil {
+		rawJSON = string(payload)
+	}
+
+	return toolName, command, risk, rawJSON
+}
+
+func isDestructiveCommand(cmd string) bool {
+	lower := strings.ToLower(cmd)
+	destructivePatterns := []string{
+		"rm -r", "rm -f", "rm -rf", "delete", "drop database", "drop table", "truncate",
+		"git push --force", "git push -f", "git reset --hard", "format ", "mkfs",
+	}
+	for _, p := range destructivePatterns {
+		if strings.Contains(lower, p) {
+			return true
+		}
+	}
+	return false
 }
 
 func permissionDetail(toolCall map[string]any) string {

@@ -89,6 +89,7 @@ type sessionUpdatePayload struct {
 		Profile    string          `json:"profile"`
 		Task       string          `json:"task"`
 		Summary    string          `json:"summary"`
+		ModeID     string          `json:"modeId"`
 	} `json:"update"`
 }
 
@@ -136,6 +137,20 @@ func (c *controller) handleACPEventFromAgent(agentID string, source *acpclient.C
 	}
 	session, sessionExists := desktopSessionByID(c.state, payload.SessionID)
 	if !sessionExists || agentID != "" && session.AgentID != agentID {
+		c.mu.Unlock()
+		return
+	}
+	if update.Kind == "current_mode_update" {
+		modeID := strings.TrimSpace(payload.Update.ModeID)
+		if modeID != "" {
+			if sess := desktopstateSessionPointer(&c.state, payload.SessionID); sess != nil {
+				sess.Runtime.PermissionMode = modeID
+				c.revision++
+				c.mu.Unlock()
+				c.notify()
+				return
+			}
+		}
 		c.mu.Unlock()
 		return
 	}

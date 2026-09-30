@@ -14,6 +14,7 @@ import (
 	"gioui.org/layout"
 	"gioui.org/op"
 	"gioui.org/unit"
+	"gioui.org/widget"
 	"github.com/phongsathornpt/protonman/internal/app"
 	desktopstate "github.com/phongsathornpt/protonman/internal/feature/desktop"
 )
@@ -771,5 +772,191 @@ func TestModelPopoverNonProtonmanAgentScope(t *testing.T) {
 	// For non-Protonman agent, popoverActiveProviderTab should not be populated
 	if view.popoverActiveProviderTab != "" {
 		t.Fatalf("expected popoverActiveProviderTab to remain empty for non-protonman agent, got %q", view.popoverActiveProviderTab)
+	}
+}
+
+func TestPermissionModePopoverMutualExclusivity(t *testing.T) {
+	sh := newShell(newTheme("light"))
+	if sh.modelPopoverVisible || sh.reasoningPopoverVisible || sh.permissionModePopoverVisible {
+		t.Fatal("expected popovers initially closed")
+	}
+
+	sh.openPermissionModePopover()
+	if !sh.permissionModePopoverVisible || sh.modelPopoverVisible || sh.reasoningPopoverVisible {
+		t.Fatalf("expected only permission popover open, got perm=%v model=%v reasoning=%v",
+			sh.permissionModePopoverVisible, sh.modelPopoverVisible, sh.reasoningPopoverVisible)
+	}
+
+	sh.openModelPopover()
+	if !sh.modelPopoverVisible || sh.reasoningPopoverVisible || sh.permissionModePopoverVisible {
+		t.Fatalf("expected only model popover open, got perm=%v model=%v reasoning=%v",
+			sh.permissionModePopoverVisible, sh.modelPopoverVisible, sh.reasoningPopoverVisible)
+	}
+
+	sh.openReasoningPopover()
+	if !sh.reasoningPopoverVisible || sh.modelPopoverVisible || sh.permissionModePopoverVisible {
+		t.Fatalf("expected only reasoning popover open, got perm=%v model=%v reasoning=%v",
+			sh.permissionModePopoverVisible, sh.modelPopoverVisible, sh.reasoningPopoverVisible)
+	}
+
+	sh.closePopovers()
+	if sh.modelPopoverVisible || sh.reasoningPopoverVisible || sh.permissionModePopoverVisible {
+		t.Fatalf("expected all popovers closed, got perm=%v model=%v reasoning=%v",
+			sh.permissionModePopoverVisible, sh.modelPopoverVisible, sh.reasoningPopoverVisible)
+	}
+}
+
+func TestPermissionModePopoverShortcuts(t *testing.T) {
+	sh := newShell(newTheme("light"))
+	var ops op.Ops
+	var router input.Router
+	gtx := layout.Context{
+		Ops:         &ops,
+		Constraints: layout.Exact(image.Pt(1180, 760)),
+		Metric:      unit.Metric{PxPerDp: 1, PxPerSp: 1},
+		Now:         time.Now(),
+		Source:      router.Source(),
+	}
+	snapshot := controllerSnapshot{Connection: connectionConnected}
+
+	sh.handleGlobalShortcuts(gtx, snapshot)
+	router.Frame(gtx.Ops)
+
+	// Alt+P opens permission popover
+	router.Queue(key.Event{Name: "P", Modifiers: key.ModAlt, State: key.Press})
+	ops.Reset()
+	sh.handleGlobalShortcuts(gtx, snapshot)
+	router.Frame(gtx.Ops)
+	if !sh.permissionModePopoverVisible || sh.modelPopoverVisible || sh.reasoningPopoverVisible {
+		t.Fatalf("expected permission popover open after Alt+P, got perm=%v model=%v reasoning=%v",
+			sh.permissionModePopoverVisible, sh.modelPopoverVisible, sh.reasoningPopoverVisible)
+	}
+
+	// Escape closes it
+	router.Queue(key.Event{Name: key.NameEscape, State: key.Press})
+	ops.Reset()
+	sh.handleGlobalShortcuts(gtx, snapshot)
+	router.Frame(gtx.Ops)
+	if sh.permissionModePopoverVisible {
+		t.Fatal("expected permission popover closed after Escape")
+	}
+}
+
+func TestPermissionModeSelection(t *testing.T) {
+	sh := newShell(newTheme("light"))
+	var selectedMode string
+	sh.onSetRuntimePermissionMode = func(m string) {
+		selectedMode = m
+	}
+
+	session := desktopstate.SessionState{
+		ID: "sess-1",
+		Runtime: desktopstate.RuntimeSettingsState{
+			PermissionMode: "ask",
+		},
+	}
+
+	sh.openPermissionModePopover()
+	gtx := testLayoutContext()
+
+	sh.popoverPermissionModeButton("plan").Click()
+	sh.layoutPermissionModePopover(gtx, session, true)
+
+	if selectedMode != "plan" {
+		t.Fatalf("expected permission mode 'plan', got %q", selectedMode)
+	}
+	if sh.permissionModePopoverVisible {
+		t.Fatal("expected permission mode popover closed after selection")
+	}
+}
+
+func TestPermissionModeDisabledWhenBusy(t *testing.T) {
+	sh := newShell(newTheme("light"))
+	var modeChanged bool
+	sh.onSetRuntimePermissionMode = func(_ string) { modeChanged = true }
+
+	session := desktopstate.SessionState{
+		ID: "sess-1",
+		Runtime: desktopstate.RuntimeSettingsState{
+			PermissionMode: "ask",
+		},
+	}
+
+	gtx := testLayoutContext()
+	sh.popoverPermissionModeButton("plan").Click()
+	sh.layoutPermissionModePopover(gtx, session, false)
+
+	if modeChanged {
+		t.Fatal("permission mode should not change when popover is disabled")
+	}
+}
+
+func TestComposerContextChipsTogglePermissionPopover(t *testing.T) {
+	sh := newShell(newTheme("light"))
+	session := desktopstate.SessionState{
+		ID: "sess-1",
+		Runtime: desktopstate.RuntimeSettingsState{
+			Provider:       "protonman",
+			Model:          "claude-3-7-sonnet",
+			Reasoning:      "medium",
+			PermissionMode: "plan",
+		},
+	}
+
+	snapshot := controllerSnapshot{ActiveAgentID: "protonman"}
+	gtx := testLayoutContext()
+
+	// Click permission chip -> opens permission popover
+	sh.permissionModeChipButton.Click()
+	sh.layoutComposerContextChips(gtx, session, snapshot, true)
+	if !sh.permissionModePopoverVisible || sh.modelPopoverVisible || sh.reasoningPopoverVisible {
+		t.Fatalf("expected permission popover open, got perm=%v model=%v reasoning=%v",
+			sh.permissionModePopoverVisible, sh.modelPopoverVisible, sh.reasoningPopoverVisible)
+	}
+
+	// Click reasoning chip -> switches to reasoning popover
+	sh.reasoningChipButton.Click()
+	sh.layoutComposerContextChips(gtx, session, snapshot, true)
+	if sh.permissionModePopoverVisible || !sh.reasoningPopoverVisible {
+		t.Fatalf("expected reasoning popover open and permission closed, got perm=%v reasoning=%v",
+			sh.permissionModePopoverVisible, sh.reasoningPopoverVisible)
+	}
+}
+
+func TestPermissionModeInspectorChoiceGrid(t *testing.T) {
+	sh := newShell(newTheme("light"))
+	var selectedMode string
+	sh.onSetRuntimePermissionMode = func(m string) {
+		selectedMode = m
+	}
+
+	session := desktopstate.SessionState{
+		ID: "sess-1",
+		Runtime: desktopstate.RuntimeSettingsState{
+			Provider:       "protonman",
+			Model:          "claude-3-7-sonnet",
+			Reasoning:      "high",
+			LowConcurrency: "auto",
+			PermissionMode: "ask",
+		},
+	}
+
+	snapshot := controllerSnapshot{
+		Connection: connectionConnected,
+	}
+
+	gtx := testLayoutContext()
+
+	btn, ok := sh.permissionModeButtons["plan"]
+	if !ok {
+		btn = new(widget.Clickable)
+		sh.permissionModeButtons["plan"] = btn
+	}
+	btn.Click()
+
+	sh.layoutRuntimePanel(gtx, session, snapshot)
+
+	if selectedMode != "plan" {
+		t.Fatalf("expected selected mode 'plan' from inspector, got %q", selectedMode)
 	}
 }

@@ -3,6 +3,7 @@
 package gioui
 
 import (
+	"fmt"
 	"image"
 	"image/color"
 	"strings"
@@ -102,12 +103,16 @@ type shell struct {
 	permissionButtonLive         map[string]struct{}
 	permissionButtonRevision     uint64
 	permissionButtonRevisionSet  bool
+	permissionRawToggles         map[string]bool
+	permissionRawClickable       map[string]*widget.Clickable
+	permissionCopyButtons        map[string]*widget.Clickable
 	questionStates               map[string]*questionInteractionState
 	runtimeProviderEditor        widget.Editor
 	runtimeModelEditor           widget.Editor
 	runtimeApplyButton           widget.Clickable
 	reasoningButtons             map[string]*widget.Clickable
 	lowConcurrencyButtons        map[string]*widget.Clickable
+	permissionModeButtons        map[string]*widget.Clickable
 	runtimeEditorKey             string
 	runtimeEditorProvider        string
 	runtimeEditorModel           string
@@ -208,29 +213,33 @@ type shell struct {
 	settingsModalList     layout.List
 	onSetTheme            func(string)
 
-	modelChipButton           widget.Clickable
-	reasoningChipButton       widget.Clickable
-	modelPopoverVisible       bool
-	reasoningPopoverVisible   bool
-	tailFollowBeforeOverlay   bool
-	modelSearchFocusPending   bool
-	modelPopoverCloseButton   widget.Clickable
-	reasoningPopoverCloseBtn  widget.Clickable
-	modelSearchEditor         widget.Editor
-	modelSearchClearBtn       widget.Clickable
-	modelRefreshButton        widget.Clickable
-	popoverProviderEditor     widget.Editor
-	popoverModelEditor        widget.Editor
-	popoverApplyModelButton   widget.Clickable
-	popoverActiveProviderTab  string
-	popoverProviderTabButtons map[string]*widget.Clickable
-	popoverProviderTabList    layout.List
-	popoverManageProvidersBtn widget.Clickable
-	modelList                 layout.List
-	recentModels              []modelPresetRecord
-	agentModelButtons         map[string]*widget.Clickable
-	modelPresetButtons        map[string]*widget.Clickable
-	popoverReasoningButtons   map[string]*widget.Clickable
+	modelChipButton               widget.Clickable
+	reasoningChipButton           widget.Clickable
+	permissionModeChipButton      widget.Clickable
+	modelPopoverVisible           bool
+	reasoningPopoverVisible       bool
+	permissionModePopoverVisible  bool
+	tailFollowBeforeOverlay       bool
+	modelSearchFocusPending       bool
+	modelPopoverCloseButton       widget.Clickable
+	reasoningPopoverCloseBtn      widget.Clickable
+	permissionModePopoverCloseBtn widget.Clickable
+	modelSearchEditor             widget.Editor
+	modelSearchClearBtn           widget.Clickable
+	modelRefreshButton            widget.Clickable
+	popoverProviderEditor         widget.Editor
+	popoverModelEditor            widget.Editor
+	popoverApplyModelButton       widget.Clickable
+	popoverActiveProviderTab      string
+	popoverProviderTabButtons     map[string]*widget.Clickable
+	popoverProviderTabList        layout.List
+	popoverManageProvidersBtn     widget.Clickable
+	modelList                     layout.List
+	recentModels                  []modelPresetRecord
+	agentModelButtons             map[string]*widget.Clickable
+	modelPresetButtons            map[string]*widget.Clickable
+	popoverReasoningButtons       map[string]*widget.Clickable
+	popoverPermissionModeButtons  map[string]*widget.Clickable
 
 	// Settings Providers tab widgets
 	providerFormVisible        bool
@@ -258,34 +267,36 @@ type shell struct {
 	providerModelSelectBtns    map[string]*widget.Clickable
 	providerModelsDropdownOpen bool
 	providerModelsDropdownBtn  widget.Clickable
+	backgroundAttentionButton  widget.Clickable
 
-	onSelectSession        func(string)
-	onSelectProject        func(string)
-	onNewSession           func()
-	onDeleteSession        func(string)
-	onRenameSession        func(string, string)
-	onTogglePinSession     func(string)
-	onToggleSkill          func(string, string)
-	onSetFilterMode        func(string)
-	onSendPrompt           func(ExpandedPrompt)
-	onCancelPrompt         func()
-	onResolvePermission    func(string, string)
-	onResolveQuestion      func(string, desktopstate.QuestionResponse)
-	onSetRuntimeModel      func(string, string)
-	onSetRuntimeReasoning  func(string)
-	onSetRuntimeLow        func(string)
-	onRefreshRuntime       func()
-	onSaveMCPIntegration   func(string, string, string, string)
-	onRemoveMCPIntegration func(string)
-	onReconnectMCP         func()
-	onSelectAgent          func(string)
-	onSaveAgentProfile     func(string, string, string, string, string, string)
-	onRemoveAgentProfile   func(string)
-	onScanDeviceAgents     func()
-	onSaveProvider         func(acpProvidersSaveParams, func(error))
-	onDeleteProvider       func(string, func(error))
-	onFetchProviderModels  func(string, string, string, string, func([]string, error))
-	onRefreshProviders     func()
+	onSelectSession            func(string)
+	onSelectProject            func(string)
+	onNewSession               func()
+	onDeleteSession            func(string)
+	onRenameSession            func(string, string)
+	onTogglePinSession         func(string)
+	onToggleSkill              func(string, string)
+	onSetFilterMode            func(string)
+	onSendPrompt               func(ExpandedPrompt)
+	onCancelPrompt             func()
+	onResolvePermission        func(string, string)
+	onResolveQuestion          func(string, desktopstate.QuestionResponse)
+	onSetRuntimeModel          func(string, string)
+	onSetRuntimeReasoning      func(string)
+	onSetRuntimeLow            func(string)
+	onSetRuntimePermissionMode func(string)
+	onRefreshRuntime           func()
+	onSaveMCPIntegration       func(string, string, string, string)
+	onRemoveMCPIntegration     func(string)
+	onReconnectMCP             func()
+	onSelectAgent              func(string)
+	onSaveAgentProfile         func(string, string, string, string, string, string)
+	onRemoveAgentProfile       func(string)
+	onScanDeviceAgents         func()
+	onSaveProvider             func(acpProvidersSaveParams, func(error))
+	onDeleteProvider           func(string, func(error))
+	onFetchProviderModels      func(string, string, string, string, func([]string, error))
+	onRefreshProviders         func()
 }
 
 type modelPresetRecord struct {
@@ -336,6 +347,7 @@ func newShell(theme *theme) *shell {
 		agentModelButtons:            make(map[string]*widget.Clickable),
 		modelPresetButtons:           make(map[string]*widget.Clickable),
 		popoverReasoningButtons:      make(map[string]*widget.Clickable),
+		popoverPermissionModeButtons: make(map[string]*widget.Clickable),
 		runtimeProviderEditor:        widget.Editor{SingleLine: true, MaxLen: 512},
 		runtimeModelEditor:           widget.Editor{SingleLine: true, MaxLen: 512},
 		mcpNameEditor:                widget.Editor{SingleLine: true, MaxLen: 256},
@@ -367,9 +379,13 @@ func newShell(theme *theme) *shell {
 		conversationDescriptions:     newBoundedCache[conversationCacheKey, descriptionCacheEntry](maxConversationDescriptionCacheEntries),
 		permissionButtons:            make(map[string]map[string]*widget.Clickable),
 		permissionButtonLive:         make(map[string]struct{}),
+		permissionRawToggles:         make(map[string]bool),
+		permissionRawClickable:       make(map[string]*widget.Clickable),
+		permissionCopyButtons:        make(map[string]*widget.Clickable),
 		questionStates:               make(map[string]*questionInteractionState),
 		reasoningButtons:             make(map[string]*widget.Clickable),
 		lowConcurrencyButtons:        make(map[string]*widget.Clickable),
+		permissionModeButtons:        make(map[string]*widget.Clickable),
 		skillToggleButtons:           make(map[string]*widget.Clickable),
 		mentionButtons:               make(map[string]*widget.Clickable),
 		codeCopyButtons:              make(map[string]*widget.Clickable),
@@ -391,6 +407,7 @@ func newShell(theme *theme) *shell {
 		onSetRuntimeModel:            func(string, string) {},
 		onSetRuntimeReasoning:        func(string) {},
 		onSetRuntimeLow:              func(string) {},
+		onSetRuntimePermissionMode:   func(string) {},
 		onSaveMCPIntegration:         func(string, string, string, string) {},
 		onRemoveMCPIntegration:       func(string) {},
 		onReconnectMCP:               func() {},
@@ -422,6 +439,7 @@ func (s *shell) handleGlobalShortcuts(gtx layout.Context, snapshot controllerSna
 			key.Filter{Name: ",", Required: key.ModShortcut},
 			key.Filter{Name: "M", Required: key.ModAlt},
 			key.Filter{Name: "R", Required: key.ModAlt},
+			key.Filter{Name: "P", Required: key.ModAlt},
 			key.Filter{Name: key.NameEscape},
 		)
 		if !ok {
@@ -468,13 +486,20 @@ func (s *shell) handleGlobalShortcuts(gtx layout.Context, snapshot controllerSna
 					s.openReasoningPopover()
 					gtx.Execute(key.FocusCmd{Tag: &s.composer})
 				}
+			case "P":
+				if s.permissionModePopoverVisible {
+					s.closePopovers()
+				} else {
+					s.openPermissionModePopover()
+					gtx.Execute(key.FocusCmd{Tag: &s.composer})
+				}
 			case key.NameEscape:
 				if s.settingsModalOpen {
 					s.closeSettingsModal()
 					gtx.Execute(key.FocusCmd{Tag: &s.composer})
 					break
 				}
-				if s.modelPopoverVisible || s.reasoningPopoverVisible {
+				if s.modelPopoverVisible || s.reasoningPopoverVisible || s.permissionModePopoverVisible {
 					s.closePopovers()
 					gtx.Execute(key.FocusCmd{Tag: &s.composer})
 				}
@@ -732,7 +757,18 @@ func (s *shell) layoutMain(gtx layout.Context, snapshot controllerSnapshot) layo
 }
 
 func (s *shell) layoutConversationPane(gtx layout.Context, session desktopstate.SessionState, snapshot controllerSnapshot) layout.Dimensions {
-	children := make([]layout.FlexChild, 0, 4)
+	children := make([]layout.FlexChild, 0, 5)
+
+	if banner := s.layoutBackgroundAttentionBanner(gtx, snapshot.State, session.ID); banner.Size.Y > 0 {
+		children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			return banner
+		}))
+	}
+
+	children = append(children, layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+		return s.layoutConversation(gtx, session, snapshot.HistoryState)
+	}))
+
 	if permission := activePermission(snapshot.State, session.ID); permission != nil {
 		children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 			if gtx.Constraints.Max.X > 0 {
@@ -741,12 +777,13 @@ func (s *shell) layoutConversationPane(gtx layout.Context, session desktopstate.
 			return layout.Stack{Alignment: layout.Center}.Layout(gtx, layout.Stacked(func(gtx layout.Context) layout.Dimensions {
 				gtx.Constraints.Min = image.Point{}
 				gtx.Constraints.Max.X = min(gtx.Constraints.Max.X, gtx.Dp(960))
-				return desktopInset{Top: 8, Bottom: 8, Left: 16, Right: 16}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-					return s.layoutPermissionPanel(gtx, *permission)
+				return desktopInset{Top: 4, Bottom: 4, Left: 16, Right: 16}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+					return s.layoutPermissionPanel(gtx, snapshot.State, *permission)
 				})
 			}))
 		}))
 	}
+
 	if question := activeQuestion(snapshot.State, session.ID); question != nil {
 		children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 			if gtx.Constraints.Max.X > 0 {
@@ -755,28 +792,83 @@ func (s *shell) layoutConversationPane(gtx layout.Context, session desktopstate.
 			return layout.Stack{Alignment: layout.Center}.Layout(gtx, layout.Stacked(func(gtx layout.Context) layout.Dimensions {
 				gtx.Constraints.Min = image.Point{}
 				gtx.Constraints.Max.X = min(gtx.Constraints.Max.X, gtx.Dp(960))
-				return desktopInset{Top: 8, Bottom: 8, Left: 16, Right: 16}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-					return s.layoutQuestionPanel(gtx, *question)
+				return desktopInset{Top: 4, Bottom: 4, Left: 16, Right: 16}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+					return s.layoutQuestionPanel(gtx, snapshot.State, *question)
 				})
 			}))
 		}))
 	}
-	children = append(children,
-		layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-			return s.layoutConversation(gtx, session, snapshot.HistoryState)
-		}),
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return s.layoutComposer(gtx, session, snapshot)
-		}),
-	)
+
+	children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+		return s.layoutComposer(gtx, session, snapshot)
+	}))
+
 	return layout.Flex{Axis: layout.Vertical, Alignment: layout.Middle}.Layout(gtx, children...)
+}
+
+func (s *shell) layoutBackgroundAttentionBanner(gtx layout.Context, state desktopstate.State, currentSessionID string) layout.Dimensions {
+	var targetSessionID, targetTitle, targetKind string
+	for _, p := range state.PermissionInbox {
+		if p.SessionID != currentSessionID {
+			targetSessionID = p.SessionID
+			targetTitle = p.Title
+			targetKind = "permission"
+			break
+		}
+	}
+	if targetSessionID == "" {
+		for _, q := range state.QuestionInbox {
+			if q.SessionID != currentSessionID {
+				targetSessionID = q.SessionID
+				if len(q.Questions) > 0 {
+					targetTitle = q.Questions[0].Question
+				} else {
+					targetTitle = "question"
+				}
+				targetKind = "question"
+				break
+			}
+		}
+	}
+	if targetSessionID == "" {
+		return layout.Dimensions{}
+	}
+
+	sessionName := sessionTitle(state, targetSessionID)
+	if s.backgroundAttentionButton.Clicked(gtx) {
+		s.onSelectSession(targetSessionID)
+	}
+
+	return layout.Stack{Alignment: layout.Center}.Layout(gtx, layout.Stacked(func(gtx layout.Context) layout.Dimensions {
+		gtx.Constraints.Min.X = 0
+		gtx.Constraints.Max.X = min(gtx.Constraints.Max.X, gtx.Dp(960))
+		return desktopInset{Top: 6, Bottom: 4, Left: 16, Right: 16}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+			return s.roundedBorderSurface(gtx, shapeSmall, s.theme.warningContainer, s.theme.outlineVariant, 1, func(gtx layout.Context) layout.Dimensions {
+				return desktopInset{Top: 6, Bottom: 6, Left: 12, Right: 12}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+					return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle, Spacing: layout.SpaceBetween}.Layout(gtx,
+						layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+							msg := fmt.Sprintf("⚠️ Session %q is waiting for %s: %s", sessionName, targetKind, targetTitle)
+							return s.layoutLabel(gtx, msg, textBodySmall, font.Medium, s.theme.onWarningContainer, 1)
+						}),
+						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+							return desktopInset{Left: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+								return s.layoutButton(gtx, &s.backgroundAttentionButton, "Jump to session", true, func() {
+									s.onSelectSession(targetSessionID)
+								})
+							})
+						}),
+					)
+				})
+			})
+		})
+	}))
 }
 
 func (s *shell) taskStatusColors(status desktopstate.TaskStatus) (color.NRGBA, color.NRGBA) {
 	switch status {
 	case desktopstate.TaskRunning:
 		return s.theme.primaryContainer, s.theme.onPrimaryContainer
-	case desktopstate.TaskWaitingPermission:
+	case desktopstate.TaskWaitingPermission, desktopstate.TaskWaitingUser:
 		return s.theme.warningContainer, s.theme.onWarningContainer
 	case desktopstate.TaskCompleted:
 		return s.theme.successContainer, s.theme.onSuccessContainer

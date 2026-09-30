@@ -90,6 +90,12 @@ func TestQuestionRequestRoundTrip(t *testing.T) {
 	if got := controller.state.Sessions[0].Status; got != desktopstate.TaskRunning {
 		t.Fatalf("session status = %q, want running", got)
 	}
+	if len(controller.state.Sessions[0].Timeline) == 0 {
+		t.Fatal("expected audit timeline item after question resolved, got none")
+	}
+	if controller.state.Sessions[0].Timeline[0].Kind != desktopstate.TimelinePermission {
+		t.Fatalf("expected TimelinePermission, got %v", controller.state.Sessions[0].Timeline[0].Kind)
+	}
 }
 
 func TestQuestionRequestCancellation(t *testing.T) {

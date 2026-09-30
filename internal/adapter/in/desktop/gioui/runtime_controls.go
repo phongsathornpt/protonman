@@ -41,6 +41,7 @@ func (c *controller) setRuntimeModel(provider, model string) {
 				Model:          model,
 				Reasoning:      session.Runtime.Reasoning,
 				LowConcurrency: session.Runtime.LowConcurrency,
+				PermissionMode: session.Runtime.PermissionMode,
 			},
 		})
 		c.revision++
@@ -105,6 +106,40 @@ func (c *controller) setRuntimeReasoning(value string) {
 
 func (c *controller) setRuntimeLowConcurrency(value string) {
 	c.setRuntimeChoice("protonman/session/set_low_concurrency", "lowConcurrency", value)
+}
+
+func (c *controller) setRuntimePermissionMode(value string) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return
+	}
+	c.mu.Lock()
+	sessionID := strings.TrimSpace(c.state.ActiveSessionID)
+	session, ok := desktopSessionByID(c.state, sessionID)
+	if ok && session.AgentID != "" && session.AgentID != controllerAgentID {
+		agentID := session.AgentID
+		client := c.clients[agentID]
+		if sess := desktopstateSessionPointer(&c.state, sessionID); sess != nil {
+			sess.Runtime.PermissionMode = value
+			c.revision++
+		}
+		c.mu.Unlock()
+		c.notify()
+		if client != nil {
+			go func() {
+				callCtx, cancel := context.WithTimeout(c.ctx, reconnectRequestTimeout)
+				defer cancel()
+				var result struct{}
+				_ = client.Call(callCtx, "session/set_mode", map[string]any{
+					"sessionId": sessionID,
+					"modeId":    value,
+				}, &result)
+			}()
+		}
+		return
+	}
+	c.mu.Unlock()
+	c.setRuntimeChoice("protonman/session/set_permission_mode", "permissionMode", value)
 }
 
 func (c *controller) setRuntimeChoice(method, field, value string) {

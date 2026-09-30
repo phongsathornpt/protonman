@@ -121,6 +121,18 @@ func TestRuntimeSessionLoadsUnactivatedSessionFromStorage(t *testing.T) {
 	if !ok || protonmanResult.Provider != "protonman" || protonmanResult.Model != "proton/muse-spark-1.3-contributor" {
 		t.Fatalf("set_model with protonman result = %#v, want provider protonman and model proton/muse-spark-1.3-contributor", setProtonmanResult)
 	}
+
+	setModeResult, handled, err := server.dispatchSessionRuntime(ctx, RPCRequest{
+		Method: methodSessionSetPermissionMode,
+		Params: []byte(`{"sessionId":"` + sessionID + `","permissionMode":"plan"}`),
+	})
+	if err != nil || !handled {
+		t.Fatalf("dispatchSessionRuntime set_permission_mode error = %v, handled = %v", err, handled)
+	}
+	modeResult, ok := setModeResult.(ProtonmanSessionRuntimeResult)
+	if !ok || modeResult.PermissionMode != "plan" {
+		t.Fatalf("set_permission_mode result = %#v, want permissionMode plan", setModeResult)
+	}
 }
 
 type testMockConversation struct{}

@@ -180,6 +180,10 @@ func permissionToolCall(request permission.Request) map[string]any {
 		"toolCallId": request.CallID,
 		"title":      permissionTitle(request),
 		"kind":       permissionKindLabel(request),
+		"name":       request.ToolName,
+		"risk":       string(request.Risk),
+		"effect":     string(request.Effect),
+		"scope":      string(request.Scope),
 	}
 	if request.Detail != "" {
 		toolCall["rawInput"] = map[string]any{"detail": request.Detail}

@@ -107,10 +107,10 @@ func (c *controller) handleQuestionRequestFromAgent(agentID string, source *acpc
 
 	select {
 	case <-ctx.Done():
-		c.finishQuestion(item.RequestID, params.SessionID, waiter)
+		c.finishQuestion(item.RequestID, params.SessionID, waiter, desktopstate.QuestionResponse{Status: "declined", Answer: "cancelled"}, item)
 		return desktopstate.QuestionResponse{Status: "declined", Answer: "cancelled"}, nil
 	case resp := <-waiter:
-		c.finishQuestion(item.RequestID, params.SessionID, waiter)
+		c.finishQuestion(item.RequestID, params.SessionID, waiter, resp, item)
 		return resp, nil
 	}
 }
@@ -129,7 +129,7 @@ func (c *controller) resolveQuestion(requestID string, response desktopstate.Que
 	}
 }
 
-func (c *controller) finishQuestion(requestID, sessionID string, waiter chan desktopstate.QuestionResponse) {
+func (c *controller) finishQuestion(requestID, sessionID string, waiter chan desktopstate.QuestionResponse, resp desktopstate.QuestionResponse, question desktopstate.QuestionRequest) {
 	c.mu.Lock()
 	if c.questionWait[requestID] != waiter {
 		c.mu.Unlock()
@@ -141,6 +141,30 @@ func (c *controller) finishQuestion(requestID, sessionID string, waiter chan des
 		SessionID: sessionID,
 		RequestID: requestID,
 	})
+
+	var answerSummary string
+	if resp.Status == "answered" && strings.TrimSpace(resp.Answer) != "" {
+		answerSummary = "Answered: " + resp.Answer
+	} else {
+		answerSummary = "Declined question"
+	}
+	qTitle := "Question"
+	if len(question.Questions) > 0 && question.Questions[0].Question != "" {
+		qTitle = question.Questions[0].Question
+	}
+	auditItem := desktopstate.TimelineItem{
+		ID:     fmt.Sprintf("question-audit-%s", requestID),
+		Kind:   desktopstate.TimelinePermission,
+		Title:  answerSummary,
+		Text:   qTitle,
+		Status: resp.Status,
+	}
+	desktopstate.Apply(&c.state, desktopstate.Event{
+		Kind:      desktopstate.EventTimelineAppended,
+		SessionID: sessionID,
+		Item:      auditItem,
+	})
+
 	agentID := ""
 	if session, ok := desktopSessionByID(c.state, sessionID); ok {
 		agentID = session.AgentID

@@ -87,6 +87,7 @@ type RuntimeSettingsState struct {
 	Model          string
 	Reasoning      string
 	LowConcurrency string
+	PermissionMode string
 }
 
 // MCPIntegrationState is one Desktop-managed ACP MCP server definition.
@@ -131,6 +132,10 @@ type PermissionRequest struct {
 	SessionID string
 	Title     string
 	Detail    string
+	ToolName  string
+	Command   string
+	Risk      string
+	RawJSON   string
 	Options   []PermissionOption
 }
 

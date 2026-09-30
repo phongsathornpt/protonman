@@ -151,10 +151,20 @@ func (s *Server) dispatch(ctx context.Context, request RPCRequest, output io.Wri
 		if err := sess.service.SetMode(mode); err != nil {
 			return nil, nil, fmt.Errorf("set session mode: %w", err)
 		}
+		sess.agents.SetPermissionMode(mode)
+		sess.mu.Lock()
+		settings := sessionRuntimeForLocked(sess)
+		modeID := mode.String()
+		if mode == permission.ModeDeny {
+			modeID = "plan"
+		}
+		settings.PermissionMode = modeID
+		storeSessionRuntime(sess, settings)
+		sess.mu.Unlock()
 		if err := sess.saveStateDetached(ctx); err != nil {
 			return nil, nil, fmt.Errorf("save session %q: %w", params.SessionID, err)
 		}
-		notify := &RPCNotification{JSONRPC: "2.0", Method: "session/update", Params: map[string]any{"sessionId": params.SessionID, "update": map[string]any{"sessionUpdate": "current_mode_update", "modeId": mode.String()}}}
+		notify := &RPCNotification{JSONRPC: "2.0", Method: "session/update", Params: map[string]any{"sessionId": params.SessionID, "update": map[string]any{"sessionUpdate": "current_mode_update", "modeId": modeID}}}
 		return nil, notify, nil
 	case "session/cancel":
 		var params SessionCancelParams

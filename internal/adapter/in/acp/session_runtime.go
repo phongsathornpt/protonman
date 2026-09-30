@@ -11,6 +11,7 @@ import (
 
 	"github.com/phongsathornpt/protonman/internal/app"
 	"github.com/phongsathornpt/protonman/internal/core/modelconfig"
+	"github.com/phongsathornpt/protonman/internal/core/permission"
 	"github.com/phongsathornpt/protonman/internal/core/session"
 	"github.com/phongsathornpt/protonman/internal/engine/toolcall"
 	"github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
@@ -22,6 +23,7 @@ const (
 	methodSessionSetModel          = "protonman/session/set_model"
 	methodSessionSetReasoning      = "protonman/session/set_reasoning"
 	methodSessionSetLowConcurrency = "protonman/session/set_low_concurrency"
+	methodSessionSetPermissionMode = "protonman/session/set_permission_mode"
 )
 
 // SessionRuntimeSettings is the typed, session-local runtime selection exposed
@@ -31,6 +33,7 @@ type SessionRuntimeSettings struct {
 	Model          string `json:"model"`
 	Reasoning      string `json:"reasoning"`
 	LowConcurrency string `json:"lowConcurrency"`
+	PermissionMode string `json:"permissionMode,omitempty"`
 }
 
 // SessionRuntimeBuilder rebuilds a primary session conversation when model or
@@ -94,6 +97,11 @@ type ProtonmanSessionSetLowConcurrencyParams struct {
 	LowConcurrency string `json:"lowConcurrency"`
 }
 
+type ProtonmanSessionSetPermissionModeParams struct {
+	SessionID      string `json:"sessionId"`
+	PermissionMode string `json:"permissionMode"`
+}
+
 func (s *Server) dispatchSessionRuntime(ctx context.Context, request RPCRequest) (any, bool, error) {
 	switch request.Method {
 	case methodSessionRuntime, methodSessionModels:
@@ -141,6 +149,24 @@ func (s *Server) dispatchSessionRuntime(ctx context.Context, request RPCRequest)
 		if err := s.updateSessionRuntime(ctx, sess, func(next *SessionRuntimeSettings) {
 			next.LowConcurrency = setting.String()
 		}); err != nil {
+			return nil, true, err
+		}
+		return s.runtimeResult(ctx, sess), true, nil
+
+	case methodSessionSetPermissionMode:
+		var params ProtonmanSessionSetPermissionModeParams
+		if err := json.Unmarshal(request.Params, &params); err != nil {
+			return nil, true, fmt.Errorf("decode %s: %w", methodSessionSetPermissionMode, err)
+		}
+		sess, err := s.runtimeSession(ctx, params.SessionID)
+		if err != nil {
+			return nil, true, err
+		}
+		mode, err := permission.ParseMode(params.PermissionMode)
+		if err != nil {
+			return nil, true, err
+		}
+		if err := s.setSessionPermissionMode(ctx, sess, mode); err != nil {
 			return nil, true, err
 		}
 		return s.runtimeResult(ctx, sess), true, nil
@@ -218,6 +244,33 @@ func (s *Server) setSessionReasoning(ctx context.Context, sess *Session, effort 
 	return sess.saveStateDetached(ctx)
 }
 
+func (s *Server) setSessionPermissionMode(ctx context.Context, sess *Session, mode permission.Mode) error {
+	if !mode.Valid() {
+		return fmt.Errorf("invalid permission mode %q", mode)
+	}
+	sess.mu.Lock()
+	if sess.active {
+		sess.mu.Unlock()
+		return fmt.Errorf("session %q has an active prompt", sess.id)
+	}
+	if sess.service != nil {
+		if err := sess.service.SetMode(mode); err != nil {
+			sess.mu.Unlock()
+			return err
+		}
+	}
+	sess.agents.SetPermissionMode(mode)
+	settings := sessionRuntimeForLocked(sess)
+	modeID := mode.String()
+	if mode == permission.ModeDeny {
+		modeID = "plan"
+	}
+	settings.PermissionMode = modeID
+	storeSessionRuntime(sess, settings)
+	sess.mu.Unlock()
+	return sess.saveStateDetached(ctx)
+}
+
 func (s *Server) updateSessionRuntime(ctx context.Context, sess *Session, mutate func(*SessionRuntimeSettings)) error {
 	control, ok := sessionRuntimeControlFor(s)
 	if !ok || control.build == nil {
@@ -279,6 +332,14 @@ func bindSessionRuntime(server *Server, sess *Session) {
 	}, key)
 	settings := control.defaults
 	settings.Reasoning = reasoningSetting(sess.ReasoningEffort())
+	if sess.service != nil {
+		mode := sess.service.Mode()
+		if mode == permission.ModeDeny {
+			settings.PermissionMode = "plan"
+		} else {
+			settings.PermissionMode = mode.String()
+		}
+	}
 	storeSessionRuntime(sess, settings)
 	runtime.KeepAlive(sess)
 }
@@ -298,6 +359,15 @@ func restoreSessionRuntime(ctx context.Context, server *Server, sess *Session, p
 			return err
 		}
 		settings.LowConcurrency = setting.String()
+	}
+	if strings.TrimSpace(persisted.PermissionMode) != "" {
+		if mode, err := permission.ParseMode(persisted.PermissionMode); err == nil {
+			if mode == permission.ModeDeny {
+				settings.PermissionMode = "plan"
+			} else {
+				settings.PermissionMode = mode.String()
+			}
+		}
 	}
 	settings.Reasoning = reasoningSetting(sess.ReasoningEffort())
 	if _, ok := sessionRuntimeControlFor(server); !ok {
@@ -327,13 +397,22 @@ func sessionRuntimeFor(sess *Session) SessionRuntimeSettings {
 }
 
 func sessionRuntimeForLocked(sess *Session) SessionRuntimeSettings {
+	settings := SessionRuntimeSettings{Reasoning: reasoningSetting(sess.reasoningEffort), LowConcurrency: "auto", PermissionMode: "ask"}
 	if value, ok := sessionRuntimeSelections.Load(weak.Make(sess)); ok {
-		if settings, ok := value.(SessionRuntimeSettings); ok {
+		if s, ok := value.(SessionRuntimeSettings); ok {
+			settings = s
 			settings.Reasoning = reasoningSetting(sess.reasoningEffort)
-			return normalizeSessionRuntime(settings)
 		}
 	}
-	return SessionRuntimeSettings{Reasoning: reasoningSetting(sess.reasoningEffort), LowConcurrency: "auto"}
+	if sess.service != nil {
+		mode := sess.service.Mode()
+		if mode == permission.ModeDeny {
+			settings.PermissionMode = "plan"
+		} else {
+			settings.PermissionMode = mode.String()
+		}
+	}
+	return normalizeSessionRuntime(settings)
 }
 
 func storeSessionRuntime(sess *Session, settings SessionRuntimeSettings) {
@@ -374,6 +453,15 @@ func normalizeSessionRuntime(settings SessionRuntimeSettings) SessionRuntimeSett
 		settings.LowConcurrency = low.String()
 	} else {
 		settings.LowConcurrency = strings.TrimSpace(settings.LowConcurrency)
+	}
+	if mode, err := permission.ParseMode(settings.PermissionMode); err == nil {
+		if mode == permission.ModeDeny {
+			settings.PermissionMode = "plan"
+		} else {
+			settings.PermissionMode = mode.String()
+		}
+	} else {
+		settings.PermissionMode = "ask"
 	}
 	return settings
 }

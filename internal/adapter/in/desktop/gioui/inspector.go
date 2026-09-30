@@ -144,6 +144,7 @@ type sessionRuntimeResult struct {
 	Model           string          `json:"model"`
 	Reasoning       string          `json:"reasoning"`
 	LowConcurrency  string          `json:"lowConcurrency"`
+	PermissionMode  string          `json:"permissionMode,omitempty"`
 	AvailableModels json.RawMessage `json:"availableModels,omitempty"`
 }
 
@@ -433,6 +434,7 @@ func projectSessionRuntime(result sessionRuntimeResult) desktopstate.RuntimeSett
 		Model:          strings.TrimSpace(result.Model),
 		Reasoning:      strings.TrimSpace(result.Reasoning),
 		LowConcurrency: strings.TrimSpace(result.LowConcurrency),
+		PermissionMode: strings.TrimSpace(result.PermissionMode),
 	}
 }
 

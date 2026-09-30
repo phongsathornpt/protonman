@@ -32,12 +32,23 @@ var popoverReasoningOptions = []struct {
 	{Level: "none", Label: "None", Desc: "Disable reasoning effort"},
 }
 
+var popoverPermissionModeOptions = []struct {
+	Mode  string
+	Label string
+	Desc  string
+}{
+	{Mode: "ask", Label: "Ask (Default)", Desc: "Interactive prompts for tool calls and sensitive operations"},
+	{Mode: "plan", Label: "Plan (Read-only)", Desc: "Read-only inspection; mutating tools and commands blocked"},
+	{Mode: "always-approve", Label: "Always Approve", Desc: "Autonomous execution without confirmation prompts"},
+}
+
 func (s *shell) openModelPopover() {
-	if !s.modelPopoverVisible && !s.reasoningPopoverVisible && !s.conversationList.Position.BeforeEnd {
+	if !s.modelPopoverVisible && !s.reasoningPopoverVisible && !s.permissionModePopoverVisible && !s.conversationList.Position.BeforeEnd {
 		s.tailFollowBeforeOverlay = true
 	}
 	s.modelPopoverVisible = true
 	s.reasoningPopoverVisible = false
+	s.permissionModePopoverVisible = false
 	s.modelSearchFocusPending = true
 	s.mentionActive = false
 	s.popoverActiveProviderTab = ""
@@ -59,15 +70,38 @@ func (s *shell) openReasoningPopover() {
 	s.mentionActive = false
 }
 
+func (s *shell) openPermissionModePopover() {
+	wasAtTail := !s.conversationList.Position.BeforeEnd
+	s.closePopovers()
+	if wasAtTail {
+		s.tailFollowBeforeOverlay = true
+	}
+	s.permissionModePopoverVisible = true
+	s.mentionActive = false
+}
+
 func (s *shell) closePopovers() {
 	s.modelPopoverVisible = false
 	s.reasoningPopoverVisible = false
+	s.permissionModePopoverVisible = false
 	s.modelSearchFocusPending = false
 	if s.tailFollowBeforeOverlay && !s.mentionActive {
 		s.conversationList.ScrollToEnd = true
 		s.conversationList.Position = layout.Position{}
 		s.tailFollowBeforeOverlay = false
 	}
+}
+
+func (s *shell) popoverPermissionModeButton(mode string) *widget.Clickable {
+	btn, ok := s.popoverPermissionModeButtons[mode]
+	if !ok {
+		btn = new(widget.Clickable)
+		if s.popoverPermissionModeButtons == nil {
+			s.popoverPermissionModeButtons = make(map[string]*widget.Clickable)
+		}
+		s.popoverPermissionModeButtons[mode] = btn
+	}
+	return btn
 }
 
 func (s *shell) agentModelButton(name string) *widget.Clickable {
@@ -917,6 +951,119 @@ func (s *shell) layoutReasoningPopover(gtx layout.Context, session desktopstate.
 							btn := s.popoverReasoningButton(o.Level)
 							if enabled && btn.Clicked(gtx) {
 								s.onSetRuntimeReasoning(o.Level)
+								s.closePopovers()
+								gtx.Execute(key.FocusCmd{Tag: &s.composer})
+							}
+							rows = append(rows, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+								return desktopInset{Bottom: 3}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+									bg := s.theme.surfaceContainerLow
+									fg := s.theme.onSurface
+									descFg := s.theme.onSurfaceVariant
+									if selected {
+										bg = s.theme.primaryContainer
+										fg = s.theme.onPrimaryContainer
+										descFg = s.theme.onPrimaryContainer
+									} else if enabled && btn.Hovered() {
+										bg = s.theme.surfaceContainerHighest
+									}
+									return btn.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+										dims := s.roundedSurface(gtx, shapeSmall, bg, func(gtx layout.Context) layout.Dimensions {
+											return desktopInset{Top: 5, Bottom: 5, Left: 8, Right: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+												return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
+													layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+														if selected {
+															return desktopInset{Right: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+																return s.layoutLabel(gtx, "✓", textLabelSmall, font.Bold, fg, 1)
+															})
+														}
+														return desktopInset{Right: 14}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+															return layout.Spacer{}.Layout(gtx)
+														})
+													}),
+													layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+														return s.layoutLabel(gtx, o.Label, textLabelMedium, font.SemiBold, fg, 1)
+													}),
+													layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+														return desktopInset{Left: 10}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+															return s.layoutLabel(gtx, o.Desc, textLabelSmall, font.Normal, descFg, 1)
+														})
+													}),
+												)
+											})
+										})
+										if selected {
+											widget.Border{Color: s.theme.primary, CornerRadius: shapeSmall, Width: 1}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+												return layout.Dimensions{Size: dims.Size}
+											})
+										}
+										return dims
+									})
+								})
+							}))
+						}
+						return layout.Flex{Axis: layout.Vertical}.Layout(gtx, rows...)
+					}),
+				)
+			})
+		})
+	})
+}
+
+func (s *shell) layoutPermissionModePopover(gtx layout.Context, session desktopstate.SessionState, enabled bool) layout.Dimensions {
+	if s.permissionModePopoverCloseBtn.Clicked(gtx) {
+		s.closePopovers()
+		gtx.Execute(key.FocusCmd{Tag: &s.composer})
+		return layout.Dimensions{}
+	}
+
+	currentMode := strings.TrimSpace(session.Runtime.PermissionMode)
+	if currentMode == "" {
+		currentMode = "ask"
+	}
+
+	return desktopInset{Bottom: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+		return s.roundedBorderSurface(gtx, shapeMedium, s.theme.surfaceContainerHigh, s.theme.outlineVariant, 1, func(gtx layout.Context) layout.Dimensions {
+			return desktopInset{Top: 8, Bottom: 8, Left: 10, Right: 10}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+				return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
+					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+						return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
+							layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+								return s.layoutLabel(gtx, "Permission Mode", textLabelLarge, font.SemiBold, s.theme.onSurface, 1)
+							}),
+							layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+								return desktopInset{Left: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+									return s.layoutLabel(gtx, "Alt+P · Esc", textLabelSmall, font.Normal, s.theme.onSurfaceVariant, 1)
+								})
+							}),
+							layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+								btn := &s.permissionModePopoverCloseBtn
+								semantic.Button.Add(gtx.Ops)
+								semantic.DescriptionOp("Close permission mode selector").Add(gtx.Ops)
+								return btn.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+									fg := s.theme.onSurfaceVariant
+									if btn.Hovered() {
+										fg = s.theme.onSurface
+									}
+									return desktopInset{Left: 4, Right: 4}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+										return s.layoutActionIcon(gtx, iconClose, 12, fg)
+									})
+								})
+							}),
+						)
+					}),
+					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+						return desktopInset{Top: 4, Bottom: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+							return s.layoutHorizontalDivider(gtx)
+						})
+					}),
+					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+						rows := make([]layout.FlexChild, 0, len(popoverPermissionModeOptions))
+						for _, opt := range popoverPermissionModeOptions {
+							o := opt
+							selected := o.Mode == currentMode
+							btn := s.popoverPermissionModeButton(o.Mode)
+							if enabled && btn.Clicked(gtx) {
+								s.onSetRuntimePermissionMode(o.Mode)
 								s.closePopovers()
 								gtx.Execute(key.FocusCmd{Tag: &s.composer})
 							}

@@ -689,7 +689,10 @@ func (c *controller) newSession() {
 		callCtx, cancel := context.WithTimeout(c.ctx, newSessionTimeout)
 		defer cancel()
 		var result struct {
-			SessionID     string            `json:"sessionId"`
+			SessionID string `json:"sessionId"`
+			Modes     *struct {
+				CurrentModeID string `json:"currentModeId"`
+			} `json:"modes,omitempty"`
 			ConfigOptions []acpConfigOption `json:"configOptions,omitempty"`
 			Models        *acpModelsResult  `json:"models,omitempty"`
 		}
@@ -725,6 +728,11 @@ func (c *controller) newSession() {
 				if sess.Runtime.Model == "" && c.agentDefaultModels[agentID] != "" {
 					sess.Runtime.Model = c.agentDefaultModels[agentID]
 				}
+			}
+		}
+		if result.Modes != nil && strings.TrimSpace(result.Modes.CurrentModeID) != "" {
+			if sess := desktopstateSessionPointer(&c.state, result.SessionID); sess != nil {
+				sess.Runtime.PermissionMode = strings.TrimSpace(result.Modes.CurrentModeID)
 			}
 		}
 		c.state.ActiveSessionID = result.SessionID

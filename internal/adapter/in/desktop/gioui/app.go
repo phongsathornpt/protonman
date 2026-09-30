@@ -84,6 +84,7 @@ func Run(ctx context.Context, agents application.ACPAgents, mcpIntegrations appl
 	view.onSetRuntimeModel = controller.setRuntimeModel
 	view.onSetRuntimeReasoning = controller.setRuntimeReasoning
 	view.onSetRuntimeLow = controller.setRuntimeLowConcurrency
+	view.onSetRuntimePermissionMode = controller.setRuntimePermissionMode
 	view.onRefreshRuntime = func() {
 		controller.refreshActiveSession(true)
 	}
