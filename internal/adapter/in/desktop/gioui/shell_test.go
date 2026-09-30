@@ -12,6 +12,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"gioui.org/gpu/headless"
 	"gioui.org/io/input"
 	"gioui.org/layout"
 	"gioui.org/op"
@@ -49,6 +50,133 @@ func TestMainEmptyStateCopy(t *testing.T) {
 				t.Fatalf("no-project guidance omits setup limitation: %q", body)
 			}
 		})
+	}
+}
+
+func TestMainEmptyStateWorkspaceReadyCentering(t *testing.T) {
+	view := newShell(newTheme("dark"))
+	snapshot := controllerSnapshot{
+		State: desktopstate.State{
+			ActiveProjectID: "proj-1",
+			Projects: []desktopstate.ProjectState{
+				{ID: "proj-1", Name: "Protonman"},
+			},
+			Sessions: nil,
+		},
+		Connection: connectionConnected,
+	}
+
+	const width, height = 1200, 800
+	win, err := headless.NewWindow(width, height)
+	if err != nil {
+		t.Fatalf("headless.NewWindow failed: %v", err)
+	}
+	defer win.Release()
+
+	var ops op.Ops
+	var router input.Router
+	gtx := layout.Context{
+		Ops:         &ops,
+		Constraints: layout.Exact(image.Pt(width, height)),
+		Metric:      unit.Metric{PxPerDp: 1, PxPerSp: 1},
+		Now:         time.Unix(1, 0),
+		Source:      router.Source(),
+	}
+
+	dims := view.layoutMain(gtx, snapshot)
+	if dims.Size.X != width || dims.Size.Y != height {
+		t.Fatalf("layoutMain returned dims = %v, want %dx%d", dims.Size, width, height)
+	}
+
+	if err := win.Frame(gtx.Ops); err != nil {
+		t.Fatalf("win.Frame failed: %v", err)
+	}
+
+	img := image.NewRGBA(image.Rect(0, 0, width, height))
+	if err := win.Screenshot(img); err != nil {
+		t.Fatalf("win.Screenshot failed: %v", err)
+	}
+
+	// In dark theme, surface is #1e1e20, surfaceContainer is #252527.
+	// When properly centered, the left margin and right margin outside the card must be surface color.
+	leftColor := img.RGBAAt(50, height/2)
+	rightColor := img.RGBAAt(width-50, height/2)
+	centerColor := img.RGBAAt(width/2, height/2)
+
+	surfaceNRGBA := view.theme.surface
+	surfaceColor := color.RGBA{R: surfaceNRGBA.R, G: surfaceNRGBA.G, B: surfaceNRGBA.B, A: surfaceNRGBA.A}
+	if leftColor != surfaceColor {
+		t.Fatalf("left margin pixel at (50, %d) = %+v, want surface %+v (card is not centered)", height/2, leftColor, surfaceColor)
+	}
+	if rightColor != surfaceColor {
+		t.Fatalf("right margin pixel at (%d, %d) = %+v, want surface %+v (card is not centered)", width-50, height/2, rightColor, surfaceColor)
+	}
+	if centerColor == surfaceColor {
+		t.Fatalf("center pixel at (%d, %d) matches surface %+v, expected card surfaceContainer", width/2, height/2, centerColor)
+	}
+}
+
+func TestMainEmptyStateWorkspaceReadyFullShellCentering(t *testing.T) {
+	view := newShell(newTheme("dark"))
+	snapshot := controllerSnapshot{
+		State: desktopstate.State{
+			ActiveProjectID: "proj-1",
+			Projects: []desktopstate.ProjectState{
+				{ID: "proj-1", Name: "Protonman"},
+			},
+			Sessions: nil,
+		},
+		Connection: connectionConnected,
+	}
+
+	const width, height = 1200, 800
+	win, err := headless.NewWindow(width, height)
+	if err != nil {
+		t.Fatalf("headless.NewWindow failed: %v", err)
+	}
+	defer win.Release()
+
+	var ops op.Ops
+	var router input.Router
+	gtx := layout.Context{
+		Ops:         &ops,
+		Constraints: layout.Exact(image.Pt(width, height)),
+		Metric:      unit.Metric{PxPerDp: 1, PxPerSp: 1},
+		Now:         time.Unix(1, 0),
+		Source:      router.Source(),
+	}
+
+	dims := view.layout(gtx, snapshot)
+	if dims.Size.X != width || dims.Size.Y != height {
+		t.Fatalf("view.layout returned dims = %v, want %dx%d", dims.Size, width, height)
+	}
+
+	if err := win.Frame(gtx.Ops); err != nil {
+		t.Fatalf("win.Frame failed: %v", err)
+	}
+
+	img := image.NewRGBA(image.Rect(0, 0, width, height))
+	if err := win.Screenshot(img); err != nil {
+		t.Fatalf("win.Screenshot failed: %v", err)
+	}
+
+	// Main pane starts after sidebar (280dp) + divider (1dp) = 281px.
+	// Main pane width = 1200 - 281 = 919px. Center of main pane = 281 + 919/2 = 740px.
+	// Check left of card in main pane (X = 320, Y = 400), center (X = 740, Y = 400), right of card (X = 1150, Y = 400).
+	leftColor := img.RGBAAt(320, 400)
+	centerColor := img.RGBAAt(740, 400)
+	rightColor := img.RGBAAt(1150, 400)
+
+	surfaceNRGBA := view.theme.surface
+	surfaceColor := color.RGBA{R: surfaceNRGBA.R, G: surfaceNRGBA.G, B: surfaceNRGBA.B, A: surfaceNRGBA.A}
+	if leftColor != surfaceColor {
+		t.Fatalf("main pane left margin pixel at (320, 400) = %+v, want surface %+v", leftColor, surfaceColor)
+	}
+	if rightColor != surfaceColor {
+		t.Fatalf("main pane right margin pixel at (1150, 400) = %+v, want surface %+v", rightColor, surfaceColor)
+	}
+	if centerColor == surfaceColor {
+		t.Fatalf("main pane center pixel at (740, 400) matches surface %+v, expected card surfaceContainer", centerColor)
 	}
 }
 

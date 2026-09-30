@@ -181,6 +181,9 @@ func TestHelperACPProcess(t *testing.T) {
 		fmt.Fprint(os.Stderr, "create ACP server: config load failed")
 		bufio.NewReader(os.Stdin).ReadString('\n')
 		os.Exit(1)
+	case "exit_without_stderr":
+		bufio.NewReader(os.Stdin).ReadString('\n')
+		os.Exit(2)
 	case "rpc_error":
 		reader := bufio.NewReader(os.Stdin)
 		if _, err := reader.ReadString('\n'); err != nil {
@@ -251,6 +254,29 @@ func TestStderrTailIsReportedOnAbnormalExit(t *testing.T) {
 
 	if tail := client.stderrTail(); !strings.Contains(tail, "create ACP server: config load failed") {
 		t.Fatalf("stderr tail = %q, want the child's diagnostics", tail)
+	}
+}
+
+func TestProcessExitErrorIsReportedWhenStderrIsEmpty(t *testing.T) {
+	client := startHelperClient(t, "exit_without_stderr")
+
+	type outcome struct{ err error }
+	result := make(chan outcome, 1)
+	go func() {
+		var payload map[string]any
+		result <- outcome{err: client.Call(context.Background(), "initialize", map[string]any{}, &payload)}
+	}()
+
+	select {
+	case got := <-result:
+		if got.err == nil {
+			t.Fatal("expected error, got nil")
+		}
+		if errors.Is(got.err, io.EOF) || !strings.Contains(got.err.Error(), "exit status 2") {
+			t.Fatalf("call error = %v, want exit status 2 rather than bare EOF", got.err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("call did not return after the child exited")
 	}
 }
 

@@ -273,7 +273,18 @@ func (s *shell) layoutAgentProfilesPanel(gtx layout.Context, snapshot controller
 	if !s.agentEditorVisible {
 		children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 			return desktopInset{Top: 6, Bottom: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-				return s.layoutButton(gtx, &s.agentFormToggleButton, "+ Add ACP Agent", enabled, nil)
+				return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
+					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+						return s.layoutButton(gtx, &s.agentFormToggleButton, "+ Add ACP Agent", enabled, nil)
+					}),
+					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+						return desktopInset{Left: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+							return s.layoutButton(gtx, &s.agentScanDeviceBtn, "Scan Device", enabled, func() {
+								s.onScanDeviceAgents()
+							})
+						})
+					}),
+				)
 			})
 		}))
 	}

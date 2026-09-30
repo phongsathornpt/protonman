@@ -105,6 +105,22 @@ PROTONMAN_ACP_AGENTS_JSON='[
 - **Cause**: Subprocess printed banner text or prompted for interactive login before JSON-RPC initialize.
 - **Fix**: Ensure the agent is logged in before starting the ACP daemon, or verify arguments suppress interactive prompts.
 
+#### 4. macOS Code Signing / AMFI Kill (`signal: killed` or `initializeACP failed: EOF`)
+- **Symptom**: Agent card displays `Connection failed · signal: killed` (or `initializeACP failed: EOF` in console logs), and `log show --predicate 'process == "kernel"'` shows `CODE SIGNING: cs_invalid_page ... denying page sending SIGKILL`.
+- **Cause**: On macOS Apple Silicon (arm64), Node/Bun packaged CLIs (e.g. `cline` or standalone binaries) may lose code signature validity during npm install or bundle generation. AMFI kills the binary on launch via SIGKILL before it can write to stderr.
+- **Fix**: Re-sign the executable ad-hoc with `codesign`:
+  ```bash
+  codesign -s - -f "$(which cline)"
+  # Also re-sign embedded binaries if using npm/nvm:
+  codesign -s - -f ~/.nvm/versions/node/$(node -v)/lib/node_modules/cline/bin/.cline
+  codesign -s - -f ~/.nvm/versions/node/$(node -v)/lib/node_modules/cline/node_modules/@cline/cli-darwin-arm64/bin/cline
+  ```
+
+#### 5. Method Not Found: `session/list` (`ACP error -32601`)
+- **Symptom**: Console logs show `[superviseAgent <id>] refreshSessions failed: ACP error -32601: "Method not found": session/list`, and card status reads `Connected · session list unavailable`.
+- **Cause**: `session/list` is a Protonman ACP extension for server-side session enumeration. Third-party agents (such as Cline or OpenCode) only implement the standard ACP lifecycle (`initialize`, `session/new`, `session/prompt`, `session/cancel`).
+- **Impact & Fix**: Non-fatal. The agent is successfully connected. Protonman Desktop falls back to local session state, and the agent is ready to spawn sessions via `session/new`. No fix is required.
+
 ### Manual Verification in Terminal
 To test whether an agent executable correctly implements ACP JSON-RPC over stdio:
 

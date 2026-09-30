@@ -81,6 +81,11 @@ type Client struct {
 	// uses it to avoid reporting a partial stderr tail while the drain is still
 	// reading the last bytes of a dead process.
 	stderrDone chan struct{}
+	// waitDone is non-nil only for clients started by StartCommand. readLoop
+	// checks it when encountering EOF to report the actual process exit or
+	// termination signal rather than a bare EOF.
+	waitDone chan struct{}
+	waitErr  error
 }
 
 const (
@@ -212,6 +217,7 @@ func StartCommand(ctx context.Context, spec CommandSpec, onEvent func(Event)) (*
 		pending: make(map[uint64]chan response), requests: make(chan incomingRequest, incomingRequestQueueCapacity),
 		closed:     make(chan struct{}),
 		stderrDone: make(chan struct{}),
+		waitDone:   make(chan struct{}),
 	}
 	for range incomingRequestWorkers {
 		go client.requestLoop()
@@ -223,6 +229,8 @@ func StartCommand(ctx context.Context, spec CommandSpec, onEvent func(Event)) (*
 	}()
 	go func() {
 		err := cmd.Wait()
+		client.waitErr = err
+		close(client.waitDone)
 		// Wait() closes the stderr pipe, but the drain may not have consumed the
 		// final chunk yet. Block briefly so the reported tail is complete.
 		client.waitForStderrDrain()
@@ -394,11 +402,21 @@ func (c *Client) readLoop(r io.Reader) {
 		}
 		if err != nil {
 			c.waitForStderrDrain()
+			cause := err
 			if errors.Is(err, io.EOF) {
-				c.shutdown(io.EOF)
+				if c.waitDone != nil {
+					select {
+					case <-c.waitDone:
+						if c.waitErr != nil {
+							cause = c.waitErr
+						}
+					case <-time.After(200 * time.Millisecond):
+					}
+				}
 			} else {
-				c.shutdown(fmt.Errorf("read ACP stream: %w", err))
+				cause = fmt.Errorf("read ACP stream: %w", err)
 			}
+			c.shutdown(cause)
 			return
 		}
 	}

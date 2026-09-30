@@ -18,6 +18,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"gioui.org/gpu/headless"
 	"gioui.org/layout"
 	"gioui.org/op"
 	"gioui.org/unit"
@@ -1182,5 +1183,117 @@ func TestConversationPositioningAndAlignment(t *testing.T) {
 	narrowDims := sh.layoutConversation(narrowGtx, session, historyStateLoaded)
 	if narrowDims.Size.X != 280 {
 		t.Fatalf("narrow conversation width = %d, want 280", narrowDims.Size.X)
+	}
+}
+
+func TestUserMessageBubbleHugsContent(t *testing.T) {
+	sh := newShell(newTheme("dark"))
+	sessionID := "user-bubble-test"
+	shortItem := desktopstate.TimelineItem{
+		ID:   "u1",
+		Kind: desktopstate.TimelineUser,
+		Text: "Hi",
+	}
+
+	const width, height = 1000, 300
+	win, err := headless.NewWindow(width, height)
+	if err != nil {
+		t.Fatalf("headless.NewWindow failed: %v", err)
+	}
+	defer win.Release()
+
+	var ops op.Ops
+	gtx := layout.Context{
+		Ops:         &ops,
+		Constraints: layout.Exact(image.Pt(width, height)),
+		Metric:      unit.Metric{PxPerDp: 1, PxPerSp: 1},
+		Now:         time.Unix(1, 0),
+	}
+
+	dims := sh.layoutTimelineItem(gtx, sessionID, 0, shortItem)
+	if dims.Size.X <= 0 {
+		t.Fatalf("layoutTimelineItem returned zero width for short message")
+	}
+
+	if err := win.Frame(gtx.Ops); err != nil {
+		t.Fatalf("win.Frame failed: %v", err)
+	}
+
+	img := image.NewRGBA(image.Rect(0, 0, width, height))
+	if err := win.Screenshot(img); err != nil {
+		t.Fatalf("win.Screenshot failed: %v", err)
+	}
+
+	// For a short message ("Hi"), the bubble on the right side should hug the content (~120-180px wide).
+	// In a 1000px window, the bubble sits on the right (e.g. from X=800 to X=984).
+	// The area to the left (X=500, Y=20) must NOT be covered by the user card container (0x2c2c2e).
+	leftPixel := img.RGBAAt(500, 20)
+	cardColor := sh.theme.surfaceContainerHigh
+	if leftPixel.R == cardColor.R && leftPixel.G == cardColor.G && leftPixel.B == cardColor.B {
+		t.Fatalf("pixel at (500, 20) is card color %+v; user bubble overstretched for short message", leftPixel)
+	}
+
+	// The area inside the bubble near the right margin (X=960, Y=20) should have card content.
+	rightPixel := img.RGBAAt(960, 20)
+	if rightPixel.R != cardColor.R || rightPixel.G != cardColor.G || rightPixel.B != cardColor.B {
+		t.Fatalf("pixel at (960, 20) = %+v, expected user card color %+v", rightPixel, cardColor)
+	}
+}
+
+func TestComposerContextChipsResponsiveBoundaries(t *testing.T) {
+	sh := newShell(newTheme("dark"))
+	session := desktopstate.SessionState{
+		ID: "chip-boundary-test",
+		Context: desktopstate.SessionContextState{
+			Goal: "Refactor architecture and add extensive tests",
+		},
+		Runtime: desktopstate.RuntimeSettingsState{
+			Model:     "claude-3-7-sonnet-thought",
+			Reasoning: "high",
+		},
+	}
+	snap := controllerSnapshot{
+		State: desktopstate.State{
+			ActiveSessionID: "chip-boundary-test",
+			Sessions:        []desktopstate.SessionState{session},
+		},
+	}
+
+	// Test intermediate breakpoints to ensure chips never overflow container width.
+	for _, width := range []int{360, 480, 560, 640, 720, 800, 960} {
+		var ops op.Ops
+		gtx := layout.Context{
+			Ops:         &ops,
+			Constraints: layout.Constraints{Min: image.Pt(0, 0), Max: image.Pt(width, 100)},
+			Metric:      unit.Metric{PxPerDp: 1, PxPerSp: 1},
+			Now:         time.Unix(1, 0),
+		}
+
+		dims := sh.layoutComposerContextChips(gtx, session, snap, true)
+		if dims.Size.X > width {
+			t.Fatalf("context chips overflowed: width = %d, container max = %d", dims.Size.X, width)
+		}
+	}
+}
+
+func TestEmptyStateCenteredInActiveSession(t *testing.T) {
+	sh := newShell(newTheme("dark"))
+	session := desktopstate.SessionState{
+		ID:        "empty-session",
+		Workspace: "/path/to/project",
+		AgentID:   "Protonman",
+	}
+
+	var ops op.Ops
+	gtx := layout.Context{
+		Ops:         &ops,
+		Constraints: layout.Exact(image.Pt(1200, 600)),
+		Metric:      unit.Metric{PxPerDp: 1, PxPerSp: 1},
+		Now:         time.Unix(1, 0),
+	}
+
+	dims := sh.layoutEmptyState(gtx, session)
+	if dims.Size.X != 1200 {
+		t.Fatalf("layoutEmptyState width = %d, want 1200 (must fill pane to allow horizontal centering)", dims.Size.X)
 	}
 }

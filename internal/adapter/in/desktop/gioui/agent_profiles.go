@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"slices"
 	"sort"
 	"strings"
@@ -500,4 +502,160 @@ func acpaentProfileFromEditor(id, displayName, command, argsJSON, envJSON string
 func equalDesktopAgentProfile(left, right app.ACPAgentProfile) bool {
 	return left.ID == right.ID && left.DisplayName == right.DisplayName && left.Command == right.Command &&
 		slices.Equal(left.Args, right.Args) && slices.Equal(left.Env, right.Env)
+}
+
+type knownACPAgentSpec struct {
+	ID          string
+	DisplayName string
+	BinaryNames []string
+	Args        []string
+}
+
+var knownACPAgentSpecs = []knownACPAgentSpec{
+	{
+		ID:          controllerAgentID,
+		DisplayName: "Protonman",
+		BinaryNames: []string{"protonman"},
+		Args:        []string{"--acp"},
+	},
+	{
+		ID:          "cline",
+		DisplayName: "Cline",
+		BinaryNames: []string{"cline"},
+		Args:        []string{"--acp"},
+	},
+	{
+		ID:          "opencode",
+		DisplayName: "OpenCode",
+		BinaryNames: []string{"opencode"},
+		Args:        []string{"acp"},
+	},
+	{
+		ID:          "antigravity",
+		DisplayName: "Antigravity",
+		BinaryNames: []string{"agy_acp_server.par", "agy"},
+		Args:        []string{"--acp"},
+	},
+	{
+		ID:          "claude",
+		DisplayName: "Claude Code",
+		BinaryNames: []string{"claude"},
+		Args:        []string{"--acp"},
+	},
+}
+
+func isExecutableOnDevice(command string, lookPath func(string) (string, error)) bool {
+	command = strings.TrimSpace(command)
+	if command == "" {
+		return false
+	}
+	if filepath.IsAbs(command) {
+		info, err := os.Stat(command)
+		return err == nil && !info.IsDir()
+	}
+	if lookPath == nil {
+		lookPath = exec.LookPath
+	}
+	path, err := lookPath(command)
+	return err == nil && path != ""
+}
+
+func scanDeviceACPAgents(lookPath func(string) (string, error)) []app.ACPAgentProfile {
+	if lookPath == nil {
+		lookPath = exec.LookPath
+	}
+	var detected []app.ACPAgentProfile
+
+	// 1. Protonman: prefer resolveACPBinary() if valid on disk, else check LookPath
+	pmBinary := resolveACPBinary()
+	if isExecutableOnDevice(pmBinary, lookPath) {
+		detected = append(detected, app.ACPAgentProfile{
+			ID:          controllerAgentID,
+			DisplayName: "Protonman",
+			Command:     pmBinary,
+			Args:        []string{"--acp"},
+		})
+	} else if path, err := lookPath("protonman"); err == nil && path != "" {
+		detected = append(detected, app.ACPAgentProfile{
+			ID:          controllerAgentID,
+			DisplayName: "Protonman",
+			Command:     path,
+			Args:        []string{"--acp"},
+		})
+	}
+
+	// 2. Scan other known agents
+	for _, spec := range knownACPAgentSpecs {
+		if spec.ID == controllerAgentID {
+			continue
+		}
+		for _, bin := range spec.BinaryNames {
+			if path, err := lookPath(bin); err == nil && path != "" {
+				detected = append(detected, app.ACPAgentProfile{
+					ID:          spec.ID,
+					DisplayName: spec.DisplayName,
+					Command:     bin,
+					Args:        slices.Clone(spec.Args),
+				})
+				break
+			}
+		}
+	}
+	return detected
+}
+
+func (c *controller) scanDeviceAgents() {
+	c.mu.Lock()
+	if c.agentMutation {
+		c.mu.Unlock()
+		c.setStatus("ACP agent settings update already in progress")
+		return
+	}
+	if !c.agentProfiles.Available() {
+		c.mu.Unlock()
+		c.setStatus("ACP agent settings repository is unavailable")
+		return
+	}
+	currentProfiles := cloneACPAgentProfiles(c.profiles)
+	c.mu.Unlock()
+
+	detected := scanDeviceACPAgents(exec.LookPath)
+	next := make(map[string]app.ACPAgentProfile, len(detected))
+
+	// Retain previously configured profiles ONLY if their executable exists on the device.
+	// This cleans up stale / pre-existing uninstalled agents (e.g. opencode).
+	for _, existing := range currentProfiles {
+		if isExecutableOnDevice(existing.Command, exec.LookPath) {
+			next[existing.ID] = cloneACPAgentProfile(existing)
+		}
+	}
+
+	// Add/merge newly detected agents from the device
+	for _, prof := range detected {
+		if _, exists := next[prof.ID]; !exists {
+			next[prof.ID] = prof
+		}
+	}
+
+	// Ensure Protonman is always present
+	if _, exists := next[controllerAgentID]; !exists {
+		pm := defaultACPAgentProfile()
+		next[pm.ID] = pm
+	}
+
+	var names []string
+	for _, p := range next {
+		names = append(names, p.DisplayName)
+	}
+	sort.Strings(names)
+
+	c.mu.Lock()
+	c.agentMutation = true
+	c.statuses[c.activeAgentID] = "Scanning device for ACP agents…"
+	c.revision++
+	c.mu.Unlock()
+	c.notify()
+
+	statusMsg := fmt.Sprintf("Scanned device · configured %d agent(s): %s · restart Desktop to apply", len(next), strings.Join(names, ", "))
+	go c.persistAgentProfiles(next, app.ACPAgentProfile{}, statusMsg)
 }

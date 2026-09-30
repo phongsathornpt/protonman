@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"slices"
@@ -774,10 +775,10 @@ func (c *controller) superviseAgent(profile app.ACPAgentProfile) {
 		c.setClient(profile.ID, client)
 		delay = reconnectInitialDelay
 		if err := c.refreshSessions(profile.ID, client); err != nil {
-			fmt.Printf("[superviseAgent %s] refreshSessions failed: %v\n", profile.ID, err)
 			if isACPMethodNotFound(err) {
 				c.setAgentStatus(profile.ID, "Connected · session list unavailable")
 			} else {
+				fmt.Printf("[superviseAgent %s] refreshSessions failed: %v\n", profile.ID, err)
 				c.setAgentStatus(profile.ID, "Connected · session refresh failed")
 			}
 		}
@@ -918,6 +919,9 @@ func initializeACP(ctx context.Context, client *acpclient.Client) error {
 		"clientCapabilities": map[string]any{},
 	}, &result)
 	if err != nil {
+		if errors.Is(err, io.EOF) {
+			return errors.New("connection closed unexpectedly (EOF)")
+		}
 		return err
 	}
 	if result.ProtocolVersion != 1 {

@@ -347,7 +347,11 @@ func (s *shell) layoutEmptyState(gtx layout.Context, session desktopstate.Sessio
 		agentName = session.AgentID
 	}
 
+	if gtx.Constraints.Max.X > 0 {
+		gtx.Constraints.Min.X = gtx.Constraints.Max.X
+	}
 	return layout.Stack{Alignment: layout.Center}.Layout(gtx, layout.Stacked(func(gtx layout.Context) layout.Dimensions {
+		gtx.Constraints.Min = image.Point{}
 		gtx.Constraints.Max.X = min(gtx.Constraints.Max.X, gtx.Dp(660))
 		return desktopInset{Top: 24, Bottom: 16, Left: 16, Right: 16}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 			return layout.Flex{Axis: layout.Vertical, Alignment: layout.Middle}.Layout(gtx,
@@ -840,11 +844,10 @@ func (s *shell) layoutTimelineItem(gtx layout.Context, sessionID string, index i
 										layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 											return s.layoutLabel(gtx, "You", textLabelSmall, font.SemiBold, s.theme.primary, 1)
 										}),
-										layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-											return layout.Spacer{}.Layout(gtx)
-										}),
 										layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-											return s.layoutUserRetryButton(gtx, msgKey, item.Text)
+											return desktopInset{Left: 12}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+												return s.layoutUserRetryButton(gtx, msgKey, item.Text)
+											})
 										}),
 										layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 											return desktopInset{Left: 4}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
@@ -2471,23 +2474,21 @@ func (s *shell) layoutComposerContextChips(gtx layout.Context, session desktopst
 	chips := make([]layout.FlexChild, 0, 3)
 	goalLimit, modelLimit := 36, 28
 	reasoningLabel := "Reasoning: "
-	if gtx.Constraints.Max.X < gtx.Dp(720) {
-		goalLimit, modelLimit = 24, 20
+	if gtx.Constraints.Max.X < gtx.Dp(760) {
+		goalLimit, modelLimit = 22, 18
 		reasoningLabel = "Effort: "
 	}
-	if gtx.Constraints.Max.X < gtx.Dp(600) {
-		goalLimit = 20
-		modelLimit = 18
+	if gtx.Constraints.Max.X < gtx.Dp(640) {
+		goalLimit, modelLimit = 16, 14
 		reasoningLabel = "Effort: "
 	}
-	if gtx.Constraints.Max.X < gtx.Dp(480) {
-		goalLimit = 14
-		modelLimit = 16
-		reasoningLabel = "Effort: "
+	if gtx.Constraints.Max.X < gtx.Dp(520) {
+		goalLimit, modelLimit = 12, 12
+		reasoningLabel = ""
 	}
 	if gtx.Constraints.Max.X < gtx.Dp(380) {
 		goalLimit = 8
-		modelLimit = 14
+		modelLimit = 10
 		reasoningLabel = ""
 	}
 	var contextDescription strings.Builder

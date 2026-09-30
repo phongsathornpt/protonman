@@ -153,6 +153,7 @@ type shell struct {
 	agentEditorOriginalID        string
 	agentEditorKey               string
 	agentFormToggleButton        widget.Clickable
+	agentScanDeviceBtn           widget.Clickable
 	agentSaveButton              widget.Clickable
 	agentRemoveButton            widget.Clickable
 	agentCloseButton             widget.Clickable
@@ -249,6 +250,7 @@ type shell struct {
 	onSelectAgent          func(string)
 	onSaveAgentProfile     func(string, string, string, string, string, string)
 	onRemoveAgentProfile   func(string)
+	onScanDeviceAgents     func()
 }
 
 type modelPresetRecord struct {
@@ -360,6 +362,7 @@ func newShell(theme *theme) *shell {
 		onSelectAgent:                func(string) {},
 		onSaveAgentProfile:           func(string, string, string, string, string, string) {},
 		onRemoveAgentProfile:         func(string) {},
+		onScanDeviceAgents:           func() {},
 		settingsThemeButtons:         make(map[string]*widget.Clickable),
 		onSetTheme:                   func(string) {},
 	}
@@ -689,7 +692,11 @@ func (s *shell) layoutConversationPane(gtx layout.Context, session desktopstate.
 	children := make([]layout.FlexChild, 0, 4)
 	if permission := activePermission(snapshot.State, session.ID); permission != nil {
 		children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			if gtx.Constraints.Max.X > 0 {
+				gtx.Constraints.Min.X = gtx.Constraints.Max.X
+			}
 			return layout.Stack{Alignment: layout.Center}.Layout(gtx, layout.Stacked(func(gtx layout.Context) layout.Dimensions {
+				gtx.Constraints.Min = image.Point{}
 				gtx.Constraints.Max.X = min(gtx.Constraints.Max.X, gtx.Dp(960))
 				return desktopInset{Top: 8, Bottom: 8, Left: 16, Right: 16}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 					return s.layoutPermissionPanel(gtx, *permission)
@@ -699,7 +706,11 @@ func (s *shell) layoutConversationPane(gtx layout.Context, session desktopstate.
 	}
 	if question := activeQuestion(snapshot.State, session.ID); question != nil {
 		children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			if gtx.Constraints.Max.X > 0 {
+				gtx.Constraints.Min.X = gtx.Constraints.Max.X
+			}
 			return layout.Stack{Alignment: layout.Center}.Layout(gtx, layout.Stacked(func(gtx layout.Context) layout.Dimensions {
+				gtx.Constraints.Min = image.Point{}
 				gtx.Constraints.Max.X = min(gtx.Constraints.Max.X, gtx.Dp(960))
 				return desktopInset{Top: 8, Bottom: 8, Left: 16, Right: 16}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 					return s.layoutQuestionPanel(gtx, *question)
@@ -716,88 +727,6 @@ func (s *shell) layoutConversationPane(gtx layout.Context, session desktopstate.
 		}),
 	)
 	return layout.Flex{Axis: layout.Vertical, Alignment: layout.Middle}.Layout(gtx, children...)
-}
-
-func (s *shell) layoutSessionHeader(gtx layout.Context, session desktopstate.SessionState, snapshot controllerSnapshot, wideInspector, showInspector bool) layout.Dimensions {
-	gtx.Constraints.Min.Y = gtx.Dp(76)
-	return s.roundedBorderSurface(gtx, shapeLarge, s.theme.surfaceContainer, s.theme.outlineVariant, 1, func(gtx layout.Context) layout.Dimensions {
-		gtx.Constraints.Min.X = gtx.Constraints.Max.X
-		return desktopInset{Top: 12, Bottom: 12, Left: 20, Right: 20}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-			if gtx.Constraints.Max.X < gtx.Dp(640) {
-				return s.layoutCompactSessionHeader(gtx, session, snapshot, showInspector)
-			}
-			return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
-				layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-					return s.layoutSessionHeaderIdentity(gtx, session, snapshot)
-				}),
-				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-					return s.layoutSessionHeaderActions(gtx, session, wideInspector, showInspector)
-				}),
-			)
-		})
-	})
-}
-
-func (s *shell) layoutCompactSessionHeader(gtx layout.Context, session desktopstate.SessionState, snapshot controllerSnapshot, showInspector bool) layout.Dimensions {
-	return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return s.layoutSessionHeaderIdentity(gtx, session, snapshot)
-		}),
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return s.layoutSessionHeaderActions(gtx, session, false, showInspector)
-		}),
-	)
-}
-
-func (s *shell) layoutSessionHeaderIdentity(gtx layout.Context, session desktopstate.SessionState, snapshot controllerSnapshot) layout.Dimensions {
-	workspace := session.Workspace
-	if strings.TrimSpace(workspace) == "" {
-		workspace = session.WorkspaceName
-	}
-	agentID := session.AgentID
-	if strings.TrimSpace(agentID) == "" {
-		agentID = controllerAgentID
-	}
-	return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return s.layoutLabel(gtx, session.Title, textHeadlineSmall, font.SemiBold, s.theme.onSurface, 1)
-		}),
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return s.layoutLabel(gtx, workspace+" · "+agentDisplayName(snapshot.AgentProfiles, agentID), textBodyMedium, font.Normal, s.theme.onSurfaceVariant, 1)
-		}),
-	)
-}
-
-func (s *shell) layoutSessionHeaderActions(gtx layout.Context, session desktopstate.SessionState, wideInspector, showInspector bool) layout.Dimensions {
-	label := "Inspector"
-	if wideInspector && showInspector {
-		label = "Hide inspector"
-	} else if !wideInspector && showInspector {
-		label = "Conversation"
-	}
-	return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			gtx.Constraints.Min.Y = gtx.Dp(36)
-			return s.layoutTaskStatus(gtx, displayStatus(session.Status), session.Status)
-		}),
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return desktopUniformInset(4).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-				return s.layoutButton(gtx, &s.inspectorToggle, label, true, func() {
-					s.inspectorOverride = true
-					s.inspectorVisible = !showInspector
-				})
-			})
-		}),
-	)
-}
-
-func (s *shell) layoutTaskStatus(gtx layout.Context, label string, status desktopstate.TaskStatus) layout.Dimensions {
-	background, foreground := s.taskStatusColors(status)
-	return s.roundedSurface(gtx, shapeSmall, background, func(gtx layout.Context) layout.Dimensions {
-		return desktopInset{Top: 5, Bottom: 5, Left: 8, Right: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-			return s.layoutLabel(gtx, label, textLabelMedium, font.Medium, foreground, 1)
-		})
-	})
 }
 
 func (s *shell) taskStatusColors(status desktopstate.TaskStatus) (color.NRGBA, color.NRGBA) {
@@ -910,9 +839,14 @@ func (s *shell) layoutDetailRow(gtx layout.Context, label, value string) layout.
 }
 
 func (s *shell) layoutCenteredCard(gtx layout.Context, content layout.Widget) layout.Dimensions {
-	gtx.Constraints.Max.X = min(gtx.Constraints.Max.X, gtx.Dp(680))
-	gtx.Constraints.Min.X = 0
+	if gtx.Constraints.Max.X > 0 {
+		gtx.Constraints.Min.X = gtx.Constraints.Max.X
+	}
+	if gtx.Constraints.Max.Y > 0 && gtx.Constraints.Max.Y < 30000 {
+		gtx.Constraints.Min.Y = gtx.Constraints.Max.Y
+	}
 	return layout.Stack{Alignment: layout.Center}.Layout(gtx, layout.Stacked(func(gtx layout.Context) layout.Dimensions {
+		gtx.Constraints.Min = image.Point{}
 		gtx.Constraints.Max.X = min(gtx.Constraints.Max.X, gtx.Dp(680))
 		return s.roundedSurface(gtx, shapeExtraLarge, s.theme.surfaceContainer, func(gtx layout.Context) layout.Dimensions {
 			return desktopInset{Top: 24, Bottom: 24, Left: 28, Right: 28}.Layout(gtx, content)

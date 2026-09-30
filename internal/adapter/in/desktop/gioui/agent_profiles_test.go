@@ -4,6 +4,7 @@ package gioui
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"image"
 	"slices"
@@ -793,5 +794,87 @@ func TestAddACPAgentSaveFlowAndModalResponsiveness(t *testing.T) {
 	}
 	if view.agentIDEditor.Text() != "" || view.agentCommandEditor.Text() != "" {
 		t.Fatalf("editors were not cleared after save: id=%q cmd=%q", view.agentIDEditor.Text(), view.agentCommandEditor.Text())
+	}
+}
+
+func TestScanDeviceACPAgents(t *testing.T) {
+	mockLookPath := func(cmd string) (string, error) {
+		switch cmd {
+		case "protonman":
+			return "/usr/local/bin/protonman", nil
+		case "cline":
+			return "/home/user/.nvm/bin/cline", nil
+		default:
+			return "", errors.New("not found")
+		}
+	}
+
+	detected := scanDeviceACPAgents(mockLookPath)
+	if len(detected) != 2 {
+		t.Fatalf("detected %d agents, want 2", len(detected))
+	}
+
+	var foundProtonman, foundCline bool
+	for _, a := range detected {
+		if a.ID == "protonman" {
+			foundProtonman = true
+		}
+		if a.ID == "cline" {
+			foundCline = true
+			if a.Command != "cline" {
+				t.Fatalf("cline command = %q, want cline", a.Command)
+			}
+			if len(a.Args) != 1 || a.Args[0] != "--acp" {
+				t.Fatalf("cline args = %v, want [--acp]", a.Args)
+			}
+		}
+	}
+	if !foundProtonman || !foundCline {
+		t.Fatalf("expected protonman and cline, got %+v", detected)
+	}
+}
+
+func TestAgentProfilesScanDeviceButtonClick(t *testing.T) {
+	theme := newTheme("dark")
+	view := newShell(theme)
+	router := input.Router{}
+
+	var scanCalled bool
+	view.onScanDeviceAgents = func() {
+		scanCalled = true
+	}
+
+	snapshot := controllerSnapshot{
+		AgentProfiles: []app.ACPAgentProfile{defaultACPAgentProfile()},
+		ActiveAgentID: controllerAgentID,
+	}
+
+	var ops op.Ops
+	gtx := layout.Context{
+		Ops:         &ops,
+		Constraints: layout.Exact(image.Point{X: 800, Y: 600}),
+		Metric:      unit.Metric{PxPerDp: 1, PxPerSp: 1},
+		Now:         time.Unix(1, 0),
+		Source:      router.Source(),
+	}
+
+	view.layoutAgentProfilesPanel(gtx, snapshot)
+	router.Frame(gtx.Ops)
+
+	view.agentScanDeviceBtn.Click()
+
+	var opClick op.Ops
+	gtxClick := layout.Context{
+		Ops:         &opClick,
+		Constraints: layout.Exact(image.Point{X: 800, Y: 600}),
+		Metric:      unit.Metric{PxPerDp: 1, PxPerSp: 1},
+		Now:         time.Unix(1, 0),
+		Source:      router.Source(),
+	}
+	view.layoutAgentProfilesPanel(gtxClick, snapshot)
+	router.Frame(gtxClick.Ops)
+
+	if !scanCalled {
+		t.Fatal("onScanDeviceAgents was not called when clicking Scan Device button")
 	}
 }
