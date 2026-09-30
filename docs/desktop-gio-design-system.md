@@ -31,9 +31,11 @@ notifications remain a follow-up capability.
 
 Protonman Desktop is a focused developer workbench. It uses a modern integrated
 IDE-style layout with docked edge-to-edge panels and 1px hairline dividers
-(`outlineVariant`), replacing isolated floating card islands. The theme follows
-the "Refined Developer Slate" palette with deep charcoal surfaces, GitHub/VSCode-inspired
-syntax and diff highlighting, and Dota-style attribute accents for delegated subagents.
+(`outlineVariant`), replacing isolated floating card islands. The appearance
+selector offers macOS Light/Dark palettes and optional Developer Slate Light/Dark
+palettes. System Default follows the host appearance and uses the macOS palette.
+All themes share semantic color roles, GitHub/VSCode-inspired syntax and diff
+highlighting, and Dota-style attribute accents for delegated subagents.
 
 The following patterns are intentionally rejected:
 
@@ -47,7 +49,9 @@ The following patterns are intentionally rejected:
 
 ## Developer Slate Tokens
 
-The palette uses dark and light charcoal/slate tones optimized for contrast and readability. Light and dark modes share the same semantic roles and guarantee > 4.5:1 contrast for all text pairs.
+These tokens define the optional Slate palette. The macOS Light/Dark themes use
+the corresponding native palette in `internal/adapter/in/desktop/gioui/theme.go`.
+The palettes share semantic roles and retain at least 4.5:1 contrast for text.
 
 | Role | Light | Dark |
 | --- | --- | --- |
@@ -93,16 +97,17 @@ must retain at least 4.5:1 contrast in both themes.
 
 ## Typography
 
-The client requests `Roboto, Arial, sans-serif` through Gio's system-font
-shaper and uses developer-oriented typographic hierarchy:
+The client requests `SF Pro, -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Inter, system-ui, sans-serif`
+through Gio's system-font shaper and uses developer-oriented typographic hierarchy:
 
 - display small: 30sp semibold for empty-state titles;
 - headline small: 20sp semibold for pane and section titles;
-- title medium: 15sp semibold for cards, headers, and tabs;
-- body large: 15sp regular for primary conversation text;
-- body medium: 13sp regular for metadata and supporting content;
+- title medium: 16sp semibold for cards, headers, and tabs;
+- body large: 16sp regular for primary conversation text;
+- body medium: 14sp regular for metadata and supporting content;
 - body small: 12sp regular for diff content, code snippets, and logs;
-- label large: 14sp semibold for buttons; and
+- label large: 14sp semibold for buttons;
+- label medium: 12sp regular for supporting controls; and
 - label small: 11sp semibold for status pills and diff badges.
 
 Long workspace paths and titles use deterministic truncation rather than
@@ -112,13 +117,12 @@ forcing horizontal overflow.
 
 The desktop application is structured as a native macOS 3-column split-view workbench adhering to Apple Human Interface Guidelines:
 
-1. **Unified Top Toolbar (52dp)**: Aligned across panes with standard macOS window titlebar height. Contains icon-driven sidebar toggle (`◧`), project/session breadcrumb context, prominent active session title, pop-up capsule button for active agent selector (`▾`), connection status pill, and inspector toggle (`◨`). When the sidebar is collapsed, window traffic lights sit on the far left of this toolbar.
-2. **Left Sidebar (260dp, full-height, collapsible)**:
+1. **Unified Top Toolbar (60dp)**: Aligned across panes with the native window titlebar. Contains icon-driven sidebar toggle (`◧`), project/session context, active session title, active agent selector (`▾`), connection status pill, and inspector toggle (`◨`).
+2. **Left Sidebar (260dp, 220dp below a 900dp window width, full-height and collapsible)**:
    - Extends the full window height in a quiet `surfaceDim` background.
-   - 52dp header row housing window traffic lights (close, minimize, zoom) at the top-left, "Protonman" brand title, filter mode dropdown, and a clean `+` icon button for creating sessions.
-   - Embedded macOS pill search capsule with `⌕` search glyph.
+   - Stacked header with the Protonman brand, New chat action, thread search, and Projects label.
    - Collapsible project directory groups with toggle chevrons (`▾`/`▸`).
-   - Inset capsule session selection: 8dp rounded selection pills (`primaryContainer` / `surfaceContainerHigh`) with 8dp horizontal gutter, compact 36dp row height, colored status dots, and relative timestamps.
+   - Inset capsule session selection: 8dp rounded selection pills (`primaryContainer` / `surfaceContainerHigh`) with 8dp horizontal gutter, 44dp minimum row height, colored status dots, and relative timestamps.
 3. **Center Conversation Pane (Flexible width, max 840dp text constraint)**:
    - Clean canvas stream: AI assistant messages flow directly onto the canvas (`surface`) without enclosing card borders.
    - User prompts rendered as refined rounded speech bubbles (`shapeLarge` / 12-14dp radius) in elevated `secondaryContainer`.
@@ -129,7 +133,7 @@ The desktop application is structured as a native macOS 3-column split-view work
    - Floating composer card: elevated container with 16dp corner radius (`shapeExtraLarge`) floating above the bottom, circular Apple-style action button (`↑` send / `■` stop), capsule context chips (Goal, Model), and multiline editor.
 4. **Right Inspector Drawer (336dp, collapsible)**:
    - Recessed capsule segmented control tab bar (macOS `NSSegmentedControl` style) in `surfaceContainerLow` with an elevated active tab pill (`surface`).
-   - Docked tabs: `[Plan]`, `[Memory]`, `[Skills]`, `[Settings]`.
+   - Docked tabs: `[Plan]`, `[Memory]`, and `[Skills]`. General application settings open separately from the sidebar.
    - Grouped cards: 8dp rounded containers (`shapeMedium`) in `surfaceContainer` for Goal, session tasks (TODO checklist), Memory facts, and runtime settings.
 5. **Hairline Dividers**: 1px subtle dividers (`outlineVariant`) separate columns cleanly.
 

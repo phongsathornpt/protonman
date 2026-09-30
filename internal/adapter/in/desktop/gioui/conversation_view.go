@@ -31,11 +31,12 @@ import (
 )
 
 const (
-	maxComposerDrafts            = 32
-	maxStreamingTextBytes        = 1 << 10
-	maxConversationCacheEntries  = 512
-	maxConversationCacheBytes    = 4 << 20
-	maxConversationExpansionKeys = 256
+	maxComposerDrafts                    = 32
+	maxStreamingTextBytes                = 1 << 10
+	maxConversationCacheEntries          = 512
+	maxConversationCacheBytes            = 4 << 20
+	maxConversationTextWidth     unit.Dp = 840
+	maxConversationExpansionKeys         = 256
 	// maxMarkdownRenderBytes bounds what gets shaped through the markdown
 	// richtext path. Text shaping cost scales with total message length even
 	// though only a viewport is visible, so anything larger renders through
@@ -228,8 +229,8 @@ func (s *shell) syncPermissionButtons(state desktopstate.State) {
 func (s *shell) layoutConversation(gtx layout.Context, session desktopstate.SessionState, history historyState) layout.Dimensions {
 	return layout.Stack{Alignment: layout.Center}.Layout(gtx, layout.Stacked(func(gtx layout.Context) layout.Dimensions {
 		gtx.Constraints.Min.X = 0
-		gtx.Constraints.Max.X = min(gtx.Constraints.Max.X, gtx.Dp(960))
-		children := make([]layout.FlexChild, 0, 2)
+		gtx.Constraints.Max.X = min(gtx.Constraints.Max.X, gtx.Dp(maxConversationTextWidth))
+		children := make([]layout.FlexChild, 0, 3)
 		if history == historyStateLoading || session.HistoryTruncated {
 			children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 				return desktopInset{Top: 8, Bottom: 8, Left: 16, Right: 16}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
@@ -249,40 +250,45 @@ func (s *shell) layoutConversation(gtx layout.Context, session desktopstate.Sess
 			// Extra clearance item at the bottom of the conversation stream
 			itemCount++
 
-			return layout.Stack{Alignment: layout.S}.Layout(gtx,
-				layout.Stacked(func(gtx layout.Context) layout.Dimensions {
-					dims := s.conversationList.Layout(gtx, itemCount, func(gtx layout.Context, index int) layout.Dimensions {
-						if index < len(session.Timeline) {
-							return s.layoutTimelineItem(gtx, session.ID, index, session.Timeline[index])
-						}
-						subagentIdx := index - len(session.Timeline)
-						if subagentIdx < len(session.Subagents) {
-							return s.layoutSubagentItem(gtx, session.Subagents[subagentIdx])
-						}
-						if runningActive && index == len(session.Timeline)+len(session.Subagents) {
-							return s.layoutActiveThinkingIndicator(gtx, session)
-						}
-						return layout.Spacer{Height: 48}.Layout(gtx)
-					})
-					composerOverlayOpen := s.modelPopoverVisible || s.reasoningPopoverVisible || s.permissionModePopoverVisible || (s.mentionActive && len(s.mentionItems) > 0)
-					if s.conversationList.Position.BeforeEnd {
-						s.conversationList.ScrollToEnd = false
-					} else if !composerOverlayOpen {
-						s.conversationList.ScrollToEnd = true
-					} else {
-						s.conversationList.ScrollToEnd = false
-					}
-					return dims
-				}),
-				layout.Stacked(func(gtx layout.Context) layout.Dimensions {
-					if !s.conversationList.Position.BeforeEnd || len(session.Timeline) <= 2 {
-						return layout.Dimensions{}
-					}
-					return desktopInset{Bottom: 12}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+			dims := s.conversationList.Layout(gtx, itemCount, func(gtx layout.Context, index int) layout.Dimensions {
+				if index < len(session.Timeline) {
+					return s.layoutTimelineItem(gtx, session.ID, index, session.Timeline[index])
+				}
+				subagentIdx := index - len(session.Timeline)
+				if subagentIdx < len(session.Subagents) {
+					return s.layoutSubagentItem(gtx, session.Subagents[subagentIdx])
+				}
+				if runningActive && index == len(session.Timeline)+len(session.Subagents) {
+					return s.layoutActiveThinkingIndicator(gtx, session)
+				}
+				return layout.Spacer{Height: 48}.Layout(gtx)
+			})
+			composerOverlayOpen := s.modelPopoverVisible || s.reasoningPopoverVisible || s.permissionModePopoverVisible || (s.mentionActive && len(s.mentionItems) > 0)
+			if s.conversationList.Position.BeforeEnd {
+				s.conversationList.ScrollToEnd = false
+			} else if !composerOverlayOpen {
+				s.conversationList.ScrollToEnd = true
+			} else {
+				s.conversationList.ScrollToEnd = false
+			}
+			return dims
+		}))
+		children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			if !s.conversationList.Position.BeforeEnd || len(session.Timeline) <= 2 {
+				return layout.Dimensions{}
+			}
+			return desktopInset{Top: 4, Bottom: 8, Left: 16, Right: 16}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+				gtx.Constraints.Min.Y = gtx.Dp(40)
+				gtx.Constraints.Max.Y = gtx.Dp(40)
+				return layout.Stack{Alignment: layout.E}.Layout(gtx,
+					layout.Expanded(func(gtx layout.Context) layout.Dimensions {
+						return layout.Dimensions{Size: gtx.Constraints.Max}
+					}),
+					layout.Stacked(func(gtx layout.Context) layout.Dimensions {
 						return s.layoutJumpToBottomButton(gtx)
-					})
-				}),
-			)
+					}),
+				)
+			})
 		}))
 		return layout.Flex{Axis: layout.Vertical}.Layout(gtx, children...)
 	}))

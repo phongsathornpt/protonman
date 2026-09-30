@@ -33,7 +33,7 @@ func TestDesktopComponentCaptures(t *testing.T) {
 	}
 	for _, mode := range []string{"light", "dark"} {
 		for _, width := range []int{640, 760, 1180} {
-			for _, scene := range []string{"conversation", "tools", "subagents", "permission", "empty", "disconnected", "inspector", "selector"} {
+			for _, scene := range []string{"conversation", "scrolled", "tools", "subagents", "permission", "empty", "disconnected", "inspector", "selector"} {
 				t.Run(mode+"/"+strconv.Itoa(width)+"/"+scene, func(t *testing.T) {
 					snapshot := desktopCaptureSnapshot()
 					view := newShell(newTheme(mode))
@@ -47,6 +47,8 @@ func TestDesktopComponentCaptures(t *testing.T) {
 					switch scene {
 					case "tools":
 						session.Timeline = session.Timeline[2:]
+					case "scrolled":
+						view.conversationList.Position = layout.Position{BeforeEnd: true}
 					case "subagents":
 						session.Timeline = nil
 						session.Status = desktopstate.TaskRunning

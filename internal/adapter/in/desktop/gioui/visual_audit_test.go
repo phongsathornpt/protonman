@@ -15,6 +15,7 @@ import (
 	"gioui.org/op"
 	"gioui.org/unit"
 
+	"github.com/phongsathornpt/protonman/internal/app"
 	desktopstate "github.com/phongsathornpt/protonman/internal/feature/desktop"
 )
 
@@ -22,6 +23,14 @@ func TestRenderDesktopScreenshots(t *testing.T) {
 	for _, mode := range []string{"light", "dark"} {
 		view := newShell(newTheme(mode))
 		snapshot := controllerSnapshot{
+			ActiveAgentID: controllerAgentID,
+			AgentProfiles: []app.ACPAgentProfile{{
+				ID:          controllerAgentID,
+				DisplayName: "Protonman",
+				Command:     "protonman",
+				Args:        []string{"--acp"},
+			}},
+			AgentConnections: map[string]connectionPhase{controllerAgentID: connectionConnected},
 			State: desktopstate.State{
 				ActiveSessionID: "ai-chat-1",
 				ActiveProjectID: "proj-1",
@@ -32,6 +41,7 @@ func TestRenderDesktopScreenshots(t *testing.T) {
 					{
 						ID:        "ai-chat-1",
 						ProjectID: "proj-1",
+						AgentID:   controllerAgentID,
 						Title:     "Material 3 AI Chat",
 						Status:    desktopstate.TaskRunning,
 						Timeline: []desktopstate.TimelineItem{
@@ -119,10 +129,11 @@ func TestRenderDesktopScreenshots(t *testing.T) {
 			Revision:   1,
 		}
 
+		view.syncConversation(snapshot.State)
 		view.inspectorOverride = true
 		view.inspectorVisible = true
 
-		width, height := 1180, 760
+		width, height := 1440, 900
 		win, err := headless.NewWindow(width, height)
 		if err != nil {
 			t.Fatalf("headless.NewWindow failed: %v", err)

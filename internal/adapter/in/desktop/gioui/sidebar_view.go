@@ -244,7 +244,7 @@ func (s *shell) layoutSidebarFooter(gtx layout.Context, snapshot controllerSnaps
 								fg = s.theme.onSurface
 							}
 							semantic.Button.Add(btnGtx.Ops)
-							semantic.DescriptionOp("Toggle Starred Filter").Add(btnGtx.Ops)
+							semantic.DescriptionOp("Toggle pinned conversations filter").Add(btnGtx.Ops)
 							return s.sidebarPinnedFilterButton.Layout(btnGtx, func(gtx layout.Context) layout.Dimensions {
 								return s.roundedSurface(gtx, shapeSmall, bg, func(gtx layout.Context) layout.Dimensions {
 									return desktopUniformInset(6).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
@@ -415,6 +415,8 @@ func (s *shell) layoutSidebarSearch(gtx layout.Context) layout.Dimensions {
 						return layout.Dimensions{}
 					}
 					return desktopInset{Left: 4}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+						semantic.Button.Add(gtx.Ops)
+						semantic.DescriptionOp("Clear conversation search").Add(gtx.Ops)
 						return s.layoutMiniIconButton(gtx, &s.sidebarSearchClearButton, "×", s.theme.onSurfaceVariant)
 					})
 				}),
@@ -803,7 +805,8 @@ func (s *shell) layoutSidebarRow(gtx layout.Context, row sidebarRow, state deskt
 	isRenaming := s.editingSessionID == row.SessionID
 	menuOpen := s.menuSessionID == row.SessionID
 	isHovered := button != nil && button.Hovered()
-	showActions := isHovered || selected || menuOpen
+	isFocused := button != nil && gtx.Focused(button)
+	showActions := isHovered || selected || menuOpen || isFocused
 
 	if button != nil && button.Clicked(gtx) {
 		s.onSelectSession(row.SessionID)
@@ -982,7 +985,7 @@ func (s *shell) layoutSidebarRow(gtx layout.Context, row sidebarRow, state deskt
 			)
 		})
 	})
-	if gtx.Focused(button) {
+	if isFocused {
 		widget.Border{Color: s.theme.primary, CornerRadius: shapeMedium, Width: 1}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 			return layout.Dimensions{Size: dims.Size}
 		})
@@ -1025,6 +1028,8 @@ func (s *shell) sessionQuickDeleteButton(sessionID string) *widget.Clickable {
 }
 
 func (s *shell) layoutMiniMenuButton(gtx layout.Context, button *widget.Clickable, label string) layout.Dimensions {
+	semantic.Button.Add(gtx.Ops)
+	semantic.DescriptionOp("Open conversation actions").Add(gtx.Ops)
 	background := color.NRGBA{}
 	foreground := s.theme.onSurfaceVariant
 	if button.Hovered() {
