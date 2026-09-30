@@ -551,11 +551,11 @@ func BenchmarkConversationFrameMixedProse(b *testing.B) {
 			}
 		default:
 			timeline[index] = desktopstate.TimelineItem{
-				Kind:  desktopstate.TimelineTool,
-				ID:    "tool-" + strconv.Itoa(index),
-				Title: "bash",
+				Kind:   desktopstate.TimelineTool,
+				ID:     "tool-" + strconv.Itoa(index),
+				Title:  "bash",
 				Status: "completed",
-				Text:  "exit 0\n" + strings.Repeat("output line\n", 60),
+				Text:   "exit 0\n" + strings.Repeat("output line\n", 60),
 			}
 		}
 	}

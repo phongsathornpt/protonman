@@ -31,32 +31,38 @@ import (
 )
 
 const (
-	maxComposerDrafts             = 32
-	maxStreamingTextBytes         = 1 << 10
-	maxConversationCacheEntries   = 512
-	maxConversationCacheBytes     = 4 << 20
-	maxCachedMarkdownItemBytes    = 256 << 10
-	maxConversationExpansionKeys  = 256
-	largeMessagePreviewBytes      = 32 << 10
-	largeMessagePageBytes         = 32 << 10
-	largeMessagePreviewLines      = 48
-	markdownSpanRetainedEstimate  = 192
-	minCachedResponseSplitBytes   = 512
-	maxCachedResponseSplitBytes   = 256 << 10
+	maxComposerDrafts            = 32
+	maxStreamingTextBytes        = 1 << 10
+	maxConversationCacheEntries  = 512
+	maxConversationCacheBytes    = 4 << 20
+	maxConversationExpansionKeys = 256
+	// maxMarkdownRenderBytes bounds what gets shaped through the markdown
+	// richtext path. Text shaping cost scales with total message length even
+	// though only a viewport is visible, so anything larger renders through
+	// the paged plain-text path instead; profiling showed a 100 KiB message
+	// shaping every frame dominated mixed-prose frame time.
+	maxMarkdownRenderBytes        = 16 << 10
 	maxResponseSplitCacheEntries  = 128
 	maxResponseSplitCacheBytes    = 2 << 20
+	maxResponseSplitSourceBytes   = 256 << 10
 	responseSplitRetainedEstimate = 96
+	markdownSpanRetainedEstimate  = 192
 	maxToolDiffCacheEntries       = 512
 	maxThinkingParseCacheEntries  = 512
+	// Caps the per-item accessibility description memo; conversation frames
+	// rebuild visible descriptions every redraw, which dominated frame
+	// allocations in tool-heavy sessions.
+	maxConversationDescriptionCacheEntries = 512
+	// Paged large-message geometry. Previews and pages stay small so a fully
+	// expanded message shapes at most one bounded page per frame.
+	maxMessagePreviewBytes   = 8 << 10
+	messagePageBytes         = 8 << 10
+	largeMessagePreviewLines = 48
 	// Tool outputs above this threshold render through the paged large-message
 	// pattern instead of laying out the full text every frame. Expanded tool
 	// bodies (terminal dumps in particular) previously laid out unbounded text
 	// on every scroll frame.
 	maxToolOutputUnpagedBytes = 8 << 10
-	// Caps the per-item accessibility description memo; conversation frames
-	// rebuild visible descriptions every redraw, which dominated frame
-	// allocations in tool-heavy sessions.
-	maxConversationDescriptionCacheEntries = 512
 )
 
 // descriptionCacheEntry memoizes conversationItemDescription for one timeline
@@ -155,6 +161,7 @@ func (s *shell) syncConversation(state desktopstate.State) {
 	}
 	s.setComposerText(s.takeComposerDraft(state.ActiveSessionID))
 	s.closePopovers()
+	s.tailFollowBeforeOverlay = false
 	s.conversationList.Position = layout.Position{}
 	s.inspectorList.Position = layout.Position{}
 	s.inspectorOverride = false
@@ -215,9 +222,8 @@ func (s *shell) syncPermissionButtons(state desktopstate.State) {
 }
 
 func (s *shell) layoutConversation(gtx layout.Context, session desktopstate.SessionState, history historyState) layout.Dimensions {
-	gtx.Constraints.Min.X = 0
-	gtx.Constraints.Max.X = min(gtx.Constraints.Max.X, gtx.Dp(960))
 	return layout.Stack{Alignment: layout.Center}.Layout(gtx, layout.Stacked(func(gtx layout.Context) layout.Dimensions {
+		gtx.Constraints.Min.X = 0
 		gtx.Constraints.Max.X = min(gtx.Constraints.Max.X, gtx.Dp(960))
 		children := make([]layout.FlexChild, 0, 2)
 		if history == historyStateLoading || session.HistoryTruncated {
@@ -252,7 +258,7 @@ func (s *shell) layoutConversation(gtx layout.Context, session desktopstate.Sess
 						if runningActive && index == len(session.Timeline)+len(session.Subagents) {
 							return s.layoutActiveThinkingIndicator(gtx, session)
 						}
-						return layout.Spacer{Height: 16}.Layout(gtx)
+						return layout.Spacer{Height: 48}.Layout(gtx)
 					})
 					composerOverlayOpen := s.modelPopoverVisible || s.reasoningPopoverVisible || (s.mentionActive && len(s.mentionItems) > 0)
 					if s.conversationList.Position.BeforeEnd {
@@ -569,6 +575,15 @@ func (s *shell) layoutThinkingBlock(gtx layout.Context, key conversationCacheKey
 		expanded = !parsed.thinkingDone
 	}
 
+	// An in-progress thinking block auto-expands, so it would shape its full
+	// reasoning text on every frame; cap the live view to the streaming tail.
+	// Once thinking completes the block starts collapsed, so the full text
+	// only shapes when the user explicitly expands it.
+	thinkingText := parsed.thinkingText
+	if !parsed.thinkingDone {
+		thinkingText = streamingText(parsed.thinkingText)
+	}
+
 	statusLabel := "Thought process"
 	if !parsed.thinkingDone {
 		statusLabel = "Thinking in progress…"
@@ -621,7 +636,7 @@ func (s *shell) layoutThinkingBlock(gtx layout.Context, key conversationCacheKey
 				return desktopInset{Top: 4}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 					return s.roundedBorderSurface(gtx, shapeSmall, s.theme.surfaceContainerLowest, s.theme.outlineVariant, 1, func(gtx layout.Context) layout.Dimensions {
 						return desktopInset{Top: 8, Bottom: 8, Left: 12, Right: 12}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-							return s.layoutLabel(gtx, parsed.thinkingText, textBodySmall, font.Normal, s.theme.onSurfaceVariant, 0)
+							return s.layoutLabel(gtx, thinkingText, textBodySmall, font.Normal, s.theme.onSurfaceVariant, 0)
 						})
 					})
 				})
@@ -913,7 +928,6 @@ func (s *shell) layoutTimelineItem(gtx layout.Context, sessionID string, index i
 
 		if parsed.hasThinking {
 			children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				gtx.Constraints.Max.X = min(gtx.Constraints.Max.X, gtx.Dp(800))
 				return desktopInset{Top: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 					return s.layoutThinkingBlock(gtx, key, parsed)
 				})
@@ -922,12 +936,11 @@ func (s *shell) layoutTimelineItem(gtx layout.Context, sessionID string, index i
 
 		if parsed.responseText != "" {
 			children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				gtx.Constraints.Max.X = min(gtx.Constraints.Max.X, gtx.Dp(800))
 				return desktopInset{Top: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 					if item.Streaming {
 						return s.layoutLabel(gtx, streamingText(parsed.responseText), textBodyMedium, font.Normal, foreground, 6)
 					}
-					if len(parsed.responseText) > maxCachedMarkdownItemBytes {
+					if len(parsed.responseText) > maxMarkdownRenderBytes {
 						return s.layoutLargeMessage(gtx, key, parsed.responseText, foreground)
 					}
 					return s.layoutRichResponse(gtx, key, s.responseBlocks(key, parsed.responseText), foreground)
@@ -935,7 +948,6 @@ func (s *shell) layoutTimelineItem(gtx layout.Context, sessionID string, index i
 			}))
 		} else if parsed.hasThinking && !parsed.thinkingDone {
 			children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				gtx.Constraints.Max.X = min(gtx.Constraints.Max.X, gtx.Dp(800))
 				return desktopInset{Top: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 					return s.layoutLabel(gtx, "Thinking and reasoning…", textLabelMedium, font.Normal, s.theme.onSurfaceVariant, 1)
 				})
@@ -964,7 +976,7 @@ func (s *shell) layoutLargeMessage(gtx layout.Context, key conversationCacheKey,
 	}
 
 	page := s.conversationPage[key]
-	pageCount := (len(source) + largeMessagePageBytes - 1) / largeMessagePageBytes
+	pageCount := (len(source) + messagePageBytes - 1) / messagePageBytes
 	if page < 0 {
 		page = 0
 	} else if page >= pageCount {
@@ -998,9 +1010,11 @@ func (s *shell) layoutLargeMessage(gtx layout.Context, key conversationCacheKey,
 					})
 				}),
 				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-					return s.layoutButton(gtx, &buttons.collapse, "Show less", true, func() {
-						s.conversationExpanded[key] = false
-						s.conversationPage[key] = 0
+					return desktopInset{Left: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+						return s.layoutButton(gtx, &buttons.collapse, "Show less", true, func() {
+							s.conversationExpanded[key] = false
+							s.conversationPage[key] = 0
+						})
 					})
 				}),
 			)
@@ -1041,17 +1055,17 @@ func (s *shell) admitExpansionKey(key conversationCacheKey) {
 }
 
 func largeMessageWindow(source string, page int) (string, int, int) {
-	pageCount := (len(source) + largeMessagePageBytes - 1) / largeMessagePageBytes
+	pageCount := (len(source) + messagePageBytes - 1) / messagePageBytes
 	if page < 0 {
 		page = 0
 	} else if page >= pageCount {
 		page = pageCount - 1
 	}
-	start := page * largeMessagePageBytes
+	start := page * messagePageBytes
 	for start > 0 && start < len(source) && !utf8.RuneStart(source[start]) {
 		start--
 	}
-	end := min((page+1)*largeMessagePageBytes, len(source))
+	end := min((page+1)*messagePageBytes, len(source))
 	for end > start && end < len(source) && !utf8.RuneStart(source[end]) {
 		end--
 	}
@@ -1059,10 +1073,10 @@ func largeMessageWindow(source string, page int) (string, int, int) {
 }
 
 func largeMessagePreview(source string) string {
-	if len(source) <= largeMessagePreviewBytes {
+	if len(source) <= maxMessagePreviewBytes {
 		return source
 	}
-	end := largeMessagePreviewBytes
+	end := maxMessagePreviewBytes
 	for end > 0 && !utf8.RuneStart(source[end]) {
 		end--
 	}
@@ -1243,13 +1257,10 @@ func (s *shell) layoutToolItem(gtx layout.Context, sessionID string, index int, 
 								layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 									return s.layoutActionIcon(gtx, icon, 16, s.theme.primary)
 								}),
-								layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-									return desktopInset{Left: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+								layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+									return desktopInset{Left: 8, Right: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 										return s.layoutLabel(gtx, item.Title, textBodyMedium, font.SemiBold, s.theme.onSurface, 1)
 									})
-								}),
-								layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-									return layout.Spacer{}.Layout(gtx)
 								}),
 								layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 									return s.roundedSurface(gtx, shapeSmall, statusBg, func(gtx layout.Context) layout.Dimensions {
@@ -1304,17 +1315,17 @@ func (s *shell) toolOutputPageState(key conversationCacheKey) *toolOutputPageBut
 // toolOutputWindow returns the visible page text and paging facts for a tool
 // output. Pure so pagination behavior is testable without a frame.
 func toolOutputWindow(source string, page int) (text string, pageCount, current int) {
-	pageCount = (len(source) + largeMessagePageBytes - 1) / largeMessagePageBytes
+	pageCount = (len(source) + messagePageBytes - 1) / messagePageBytes
 	if page < 0 {
 		page = 0
 	} else if page >= pageCount {
 		page = pageCount - 1
 	}
-	start := page * largeMessagePageBytes
+	start := page * messagePageBytes
 	for start > 0 && start < len(source) && !utf8.RuneStart(source[start]) {
 		start--
 	}
-	end := min((page+1)*largeMessagePageBytes, len(source))
+	end := min((page+1)*messagePageBytes, len(source))
 	for end > start && end < len(source) && !utf8.RuneStart(source[end]) {
 		end--
 	}
@@ -1404,9 +1415,11 @@ func (s *shell) layoutToolOutputBody(gtx layout.Context, key conversationCacheKe
 					})
 				}),
 				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-					return s.layoutButton(gtx, &pages.collapse, "Show less", true, func() {
-						s.conversationExpanded[key] = false
-						s.conversationPage[key] = 0
+					return desktopInset{Left: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+						return s.layoutButton(gtx, &pages.collapse, "Show less", true, func() {
+							s.conversationExpanded[key] = false
+							s.conversationPage[key] = 0
+						})
 					})
 				}),
 			)
@@ -1464,13 +1477,10 @@ func (s *shell) layoutDiffToolItem(gtx layout.Context, cacheKey conversationCach
 								layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 									return s.layoutActionIcon(gtx, iconCompose, 16, s.theme.primary)
 								}),
-								layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-									return desktopInset{Left: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+								layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+									return desktopInset{Left: 8, Right: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 										return s.layoutLabel(gtx, displayTitle, textBodyMedium, font.SemiBold, s.theme.onSurface, 1)
 									})
-								}),
-								layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-									return layout.Spacer{}.Layout(gtx)
 								}),
 								layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 									if adds == 0 {
@@ -1688,7 +1698,7 @@ func (s *shell) layoutSubagentItem(gtx layout.Context, subagent desktopstate.Sub
 					}.Push(gtx.Ops)
 					paint.Fill(gtx.Ops, accentColor)
 					stack.Pop()
-					return layout.Dimensions{Size: image.Point{X: stripeWidth, Y: gtx.Constraints.Max.Y}}
+					return layout.Dimensions{Size: gtx.Constraints.Min}
 				}),
 			)
 		})
@@ -1700,7 +1710,7 @@ func (s *shell) layoutMarkdown(gtx layout.Context, key conversationCacheKey, sou
 		s.dropMarkdownCache(key)
 		return layout.Dimensions{}
 	}
-	if len(source) > maxCachedMarkdownItemBytes {
+	if len(source) > maxMarkdownRenderBytes {
 		s.dropMarkdownCache(key)
 		return s.layoutLabel(gtx, source, textBodyMedium, font.Normal, fallback, 0)
 	}
@@ -1736,7 +1746,7 @@ func (s *shell) responseBlocks(key conversationCacheKey, source string) []markdo
 		return cached.blocks
 	}
 	blocks := splitMarkdownCodeBlocks(source)
-	if source == "" || len(source) < minCachedResponseSplitBytes || len(source) > maxCachedResponseSplitBytes {
+	if source == "" || len(source) > maxResponseSplitSourceBytes {
 		return blocks
 	}
 	if s.conversationResponseCache == nil {
@@ -2314,7 +2324,7 @@ func (s *shell) layoutComposer(gtx layout.Context, session desktopstate.SessionS
 	}
 
 	return layout.Stack{Alignment: layout.Center}.Layout(gtx, layout.Stacked(func(gtx layout.Context) layout.Dimensions {
-		gtx.Constraints.Max.X = min(gtx.Constraints.Max.X, gtx.Dp(840))
+		gtx.Constraints.Max.X = min(gtx.Constraints.Max.X, gtx.Dp(960))
 		return outerInset.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 			containerChildren := make([]layout.FlexChild, 0, 2)
 			if s.mentionActive && len(s.mentionItems) > 0 {
@@ -2461,18 +2471,23 @@ func (s *shell) layoutComposerContextChips(gtx layout.Context, session desktopst
 	chips := make([]layout.FlexChild, 0, 3)
 	goalLimit, modelLimit := 36, 28
 	reasoningLabel := "Reasoning: "
+	if gtx.Constraints.Max.X < gtx.Dp(720) {
+		goalLimit, modelLimit = 24, 20
+		reasoningLabel = "Effort: "
+	}
 	if gtx.Constraints.Max.X < gtx.Dp(600) {
-		goalLimit = 22
+		goalLimit = 20
+		modelLimit = 18
 		reasoningLabel = "Effort: "
 	}
 	if gtx.Constraints.Max.X < gtx.Dp(480) {
 		goalLimit = 14
-		modelLimit = 20
+		modelLimit = 16
 		reasoningLabel = "Effort: "
 	}
 	if gtx.Constraints.Max.X < gtx.Dp(380) {
 		goalLimit = 8
-		modelLimit = 16
+		modelLimit = 14
 		reasoningLabel = ""
 	}
 	var contextDescription strings.Builder

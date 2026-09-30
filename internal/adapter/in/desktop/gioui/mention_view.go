@@ -26,11 +26,17 @@ func (s *shell) updateMentionStateForText(workDir, text string) {
 	textBeforeCaret := string(runes[:end])
 	ctx, ok := parseMentionContext(textBeforeCaret)
 	if !ok {
+		wasMention := s.mentionActive
 		s.mentionActive = false
 		s.mentionDismissed = false
 		s.mentionDismissedQuery = ""
 		s.mentionItems = nil
 		s.mentionContext = MentionContext{}
+		if wasMention && s.tailFollowBeforeOverlay && !s.modelPopoverVisible && !s.reasoningPopoverVisible {
+			s.conversationList.ScrollToEnd = true
+			s.conversationList.Position = layout.Position{}
+			s.tailFollowBeforeOverlay = false
+		}
 		return
 	}
 	if s.mentionDismissed && ctx.Query == s.mentionDismissedQuery {
@@ -40,6 +46,9 @@ func (s *shell) updateMentionStateForText(workDir, text string) {
 	s.mentionDismissed = false
 	wasActive := s.mentionActive
 	previousItems := s.mentionItems
+	if !wasActive && !s.conversationList.Position.BeforeEnd {
+		s.tailFollowBeforeOverlay = true
+	}
 	s.mentionActive = true
 	s.mentionContext = ctx
 	s.closePopovers()
@@ -114,6 +123,11 @@ func (s *shell) insertMention(item MentionItem) {
 	s.mentionDismissedQuery = ""
 	s.mentionItems = nil
 	s.mentionContext = MentionContext{}
+	if s.tailFollowBeforeOverlay && !s.modelPopoverVisible && !s.reasoningPopoverVisible {
+		s.conversationList.ScrollToEnd = true
+		s.conversationList.Position = layout.Position{}
+		s.tailFollowBeforeOverlay = false
+	}
 }
 
 func (s *shell) layoutMentionPopup(gtx layout.Context) layout.Dimensions {

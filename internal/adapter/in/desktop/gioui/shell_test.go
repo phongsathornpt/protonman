@@ -172,13 +172,13 @@ func TestDesktopCompletedOversizedMessageRenderRetentionSoak(t *testing.T) {
 }
 
 func TestLargeMessagePreviewIsBoundedAndUTF8Safe(t *testing.T) {
-	source := strings.Repeat("界", largeMessagePreviewBytes)
+	source := strings.Repeat("界", maxMessagePreviewBytes)
 	preview := largeMessagePreview(source)
 	if !utf8.ValidString(preview) {
 		t.Fatal("large message preview contains invalid UTF-8")
 	}
-	if len(preview) > largeMessagePreviewBytes {
-		t.Fatalf("preview bytes = %d, limit = %d", len(preview), largeMessagePreviewBytes)
+	if len(preview) > maxMessagePreviewBytes {
+		t.Fatalf("preview bytes = %d, limit = %d", len(preview), maxMessagePreviewBytes)
 	}
 	// The preview is a zero-copy substring of the source; truncation is
 	// signaled by the "Show full message" affordance rather than an appended
@@ -190,13 +190,13 @@ func TestLargeMessagePreviewIsBoundedAndUTF8Safe(t *testing.T) {
 		t.Fatalf("short preview = %q", got)
 	}
 
-	windowSource := strings.Repeat("界", largeMessagePageBytes*2) + " tail"
-	pageCount := (len(windowSource) + largeMessagePageBytes - 1) / largeMessagePageBytes
+	windowSource := strings.Repeat("界", messagePageBytes*2) + " tail"
+	pageCount := (len(windowSource) + messagePageBytes - 1) / messagePageBytes
 	var reconstructed strings.Builder
 	previousEnd := 0
 	for page := range pageCount {
 		window, start, end := largeMessageWindow(windowSource, page)
-		if start != previousEnd || end < start || end-start > largeMessagePageBytes+utf8.UTFMax {
+		if start != previousEnd || end < start || end-start > messagePageBytes+utf8.UTFMax {
 			t.Fatalf("page %d bounds = (%d,%d), previous end = %d", page, start, end, previousEnd)
 		}
 		if !utf8.ValidString(window) {
@@ -253,7 +253,7 @@ func TestSyncConversationRetainsBoundedRenderCachesAcrossSessionSwitches(t *test
 func TestLargeMessageDisclosurePagesContentOnDemand(t *testing.T) {
 	view := newShell(newTheme("light"))
 	key := conversationCacheKey{sessionID: "session", itemID: "large-message", kind: desktopstate.TimelineAssistant}
-	source := strings.Repeat("界", largeMessagePageBytes*2)
+	source := strings.Repeat("界", messagePageBytes*2)
 	var operations op.Ops
 	var router input.Router
 	gtx := layout.Context{
@@ -553,7 +553,7 @@ func TestMarkdownCacheDropsStaleEntryForOversizedSource(t *testing.T) {
 		Now:         time.Unix(1, 0),
 		Source:      router.Source(),
 	}
-	view.layoutMarkdown(gtx, key, strings.Repeat("x", maxCachedMarkdownItemBytes+1), color.NRGBA{})
+	view.layoutMarkdown(gtx, key, strings.Repeat("x", maxMarkdownRenderBytes+1), color.NRGBA{})
 	if len(view.conversationCache) != 0 || view.conversationCacheBytes != 0 {
 		t.Fatalf("stale markdown entry retained after source grew: entries=%d bytes=%d", len(view.conversationCache), view.conversationCacheBytes)
 	}
@@ -596,7 +596,7 @@ func TestMarkdownCacheBypassesOversizedMessages(t *testing.T) {
 		Now:         time.Unix(1, 0),
 		Source:      router.Source(),
 	}
-	source := strings.Repeat("x", maxCachedMarkdownItemBytes+1)
+	source := strings.Repeat("x", maxMarkdownRenderBytes+1)
 	view.layoutMarkdown(gtx, conversationCacheKey{sessionID: "session", itemID: "large"}, source, color.NRGBA{})
 	if len(view.conversationCache) != 0 || view.conversationCacheBytes != 0 {
 		t.Fatalf("oversized markdown was cached: entries=%d bytes=%d", len(view.conversationCache), view.conversationCacheBytes)
@@ -623,7 +623,7 @@ func TestResponseSplitCacheReusesStableSource(t *testing.T) {
 		t.Fatalf("response split cache leaked entries: entries=%d", len(view.conversationResponseCache))
 	}
 
-	oversized := strings.Repeat("x", maxCachedResponseSplitBytes+1)
+	oversized := strings.Repeat("x", maxResponseSplitSourceBytes+1)
 	view.responseBlocks(conversationCacheKey{sessionID: "session", itemID: "huge"}, oversized)
 	if _, ok := view.conversationResponseCache[conversationCacheKey{sessionID: "session", itemID: "huge"}]; ok {
 		t.Fatal("oversized response split was cached")

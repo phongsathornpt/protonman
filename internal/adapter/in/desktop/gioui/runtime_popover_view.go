@@ -33,6 +33,9 @@ var popoverReasoningOptions = []struct {
 }
 
 func (s *shell) openModelPopover() {
+	if !s.modelPopoverVisible && !s.reasoningPopoverVisible && !s.conversationList.Position.BeforeEnd {
+		s.tailFollowBeforeOverlay = true
+	}
 	s.modelPopoverVisible = true
 	s.reasoningPopoverVisible = false
 	s.modelSearchFocusPending = true
@@ -43,7 +46,11 @@ func (s *shell) openModelPopover() {
 }
 
 func (s *shell) openReasoningPopover() {
+	wasAtTail := !s.conversationList.Position.BeforeEnd
 	s.closePopovers()
+	if wasAtTail {
+		s.tailFollowBeforeOverlay = true
+	}
 	s.reasoningPopoverVisible = true
 	s.mentionActive = false
 }
@@ -52,6 +59,11 @@ func (s *shell) closePopovers() {
 	s.modelPopoverVisible = false
 	s.reasoningPopoverVisible = false
 	s.modelSearchFocusPending = false
+	if s.tailFollowBeforeOverlay && !s.mentionActive {
+		s.conversationList.ScrollToEnd = true
+		s.conversationList.Position = layout.Position{}
+		s.tailFollowBeforeOverlay = false
+	}
 }
 
 func (s *shell) agentModelButton(name string) *widget.Clickable {

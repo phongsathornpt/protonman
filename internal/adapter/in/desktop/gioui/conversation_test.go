@@ -1113,3 +1113,74 @@ func TestUpsertTimelineItemLockedMergeAndAppend(t *testing.T) {
 		t.Fatalf("appended timeline = %#v", session.Timeline)
 	}
 }
+
+func TestConversationPositioningAndAlignment(t *testing.T) {
+	sh := newShell(newTheme("dark"))
+	session := desktopstate.SessionState{
+		ID:     "align-session",
+		Status: desktopstate.TaskIdle,
+		Timeline: []desktopstate.TimelineItem{
+			{Kind: desktopstate.TimelineUser, Text: "Test"},
+			{
+				Kind:   desktopstate.TimelineTool,
+				Title:  "bash: very long command that should truncate nicely instead of pushing badges off-screen",
+				Status: "completed",
+				Text:   "output",
+			},
+			{Kind: desktopstate.TimelineAssistant, Text: "Response"},
+		},
+	}
+	snap := controllerSnapshot{
+		State: desktopstate.State{
+			ActiveSessionID: "align-session",
+			Sessions:        []desktopstate.SessionState{session},
+		},
+		Connection: connectionConnected,
+	}
+
+	var ops op.Ops
+	gtx := layout.Context{
+		Ops:         &ops,
+		Constraints: layout.Exact(image.Pt(1200, 800)),
+		Metric:      unit.Metric{PxPerDp: 1, PxPerSp: 1},
+		Now:         time.Unix(1, 0),
+	}
+
+	// 1. Check layoutConversationPane dimensions in a 1200px wide pane
+	paneDims := sh.layoutConversationPane(gtx, session, snap)
+	if paneDims.Size.X != 1200 {
+		t.Fatalf("conversation pane width = %d, want 1200", paneDims.Size.X)
+	}
+
+	// 2. Check layoutConversation fills 1200 width for centering
+	convDims := sh.layoutConversation(gtx, session, historyStateLoaded)
+	if convDims.Size.X != 1200 {
+		t.Fatalf("conversation stream width = %d, want 1200 to allow horizontal centering", convDims.Size.X)
+	}
+
+	// 3. Check layoutComposer fills 1200 width for centering
+	compDims := sh.layoutComposer(gtx, session, snap)
+	if compDims.Size.X != 1200 {
+		t.Fatalf("composer width = %d, want 1200 to allow horizontal centering", compDims.Size.X)
+	}
+
+	// 4. Test overlay open & close scroll restoration
+	sh.conversationList.ScrollToEnd = true
+	sh.conversationList.Position = layout.Position{BeforeEnd: false}
+	sh.openModelPopover()
+	if !sh.tailFollowBeforeOverlay {
+		t.Fatal("opening model popover while at tail must set tailFollowBeforeOverlay")
+	}
+	sh.closePopovers()
+	if !sh.conversationList.ScrollToEnd {
+		t.Fatal("closing popover must restore ScrollToEnd when user was at tail")
+	}
+
+	// 5. Test narrow tool rendering doesn't panic or return 0 width
+	narrowGtx := gtx
+	narrowGtx.Constraints = layout.Exact(image.Pt(280, 500))
+	narrowDims := sh.layoutConversation(narrowGtx, session, historyStateLoaded)
+	if narrowDims.Size.X != 280 {
+		t.Fatalf("narrow conversation width = %d, want 280", narrowDims.Size.X)
+	}
+}

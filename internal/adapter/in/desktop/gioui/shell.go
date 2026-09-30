@@ -211,6 +211,7 @@ type shell struct {
 	reasoningChipButton      widget.Clickable
 	modelPopoverVisible      bool
 	reasoningPopoverVisible  bool
+	tailFollowBeforeOverlay  bool
 	modelSearchFocusPending  bool
 	modelPopoverCloseButton  widget.Clickable
 	reasoningPopoverCloseBtn widget.Clickable
@@ -714,7 +715,7 @@ func (s *shell) layoutConversationPane(gtx layout.Context, session desktopstate.
 			return s.layoutComposer(gtx, session, snapshot)
 		}),
 	)
-	return layout.Flex{Axis: layout.Vertical}.Layout(gtx, children...)
+	return layout.Flex{Axis: layout.Vertical, Alignment: layout.Middle}.Layout(gtx, children...)
 }
 
 func (s *shell) layoutSessionHeader(gtx layout.Context, session desktopstate.SessionState, snapshot controllerSnapshot, wideInspector, showInspector bool) layout.Dimensions {

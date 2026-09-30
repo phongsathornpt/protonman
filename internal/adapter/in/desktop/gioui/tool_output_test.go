@@ -67,7 +67,7 @@ func TestDiffToolItemKeepsExplicitExpansion(t *testing.T) {
 }
 
 func TestToolOutputWindowPagesClampAndAdvance(t *testing.T) {
-	text := strings.Repeat("x", int(largeMessagePageBytes)*2+16)
+	text := strings.Repeat("x", int(messagePageBytes)*2+16)
 
 	if _, pageCount, current := toolOutputWindow(text, -1); pageCount != 3 || current != 0 {
 		t.Fatalf("negative page must clamp to 0: pages=%d current=%d", pageCount, current)
@@ -90,7 +90,7 @@ func TestToolOutputWindowPagesClampAndAdvance(t *testing.T) {
 }
 
 func TestToolOutputWindowPreservesRuneBoundaries(t *testing.T) {
-	text := strings.Repeat("é", int(largeMessagePageBytes)) // 2 bytes per rune
+	text := strings.Repeat("é", int(messagePageBytes)) // 2 bytes per rune
 
 	paged, pageCount, _ := toolOutputWindow(text, 1)
 	if pageCount != 2 {
@@ -99,7 +99,7 @@ func TestToolOutputWindowPreservesRuneBoundaries(t *testing.T) {
 	if !utf8.ValidString(paged) {
 		t.Fatal("paged output must stay valid UTF-8")
 	}
-	if want := largeMessagePageBytes; len(paged) != want {
+	if want := messagePageBytes; len(paged) != want {
 		t.Fatalf("page size = %d, want %d", len(paged), want)
 	}
 }
