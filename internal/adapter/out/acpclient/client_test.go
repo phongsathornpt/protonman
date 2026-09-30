@@ -307,6 +307,17 @@ func TestRPCErrorIncludesBoundedDetails(t *testing.T) {
 		}
 	})
 
+	t.Run("message field", func(t *testing.T) {
+		err := (&RPCError{
+			Code:    -32603,
+			Message: "Internal error",
+			Data:    json.RawMessage(`{"message":"provider request failed"}`),
+		}).Error()
+		if want := "ACP error -32603: Internal error: provider request failed"; err != want {
+			t.Fatalf("error = %q, want %q", err, want)
+		}
+	})
+
 	t.Run("oversized details", func(t *testing.T) {
 		detail := strings.Repeat("x", 600)
 		err := (&RPCError{
