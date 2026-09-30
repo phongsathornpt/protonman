@@ -32,7 +32,44 @@ func (e *RPCError) Error() string {
 	if e == nil {
 		return ""
 	}
-	return fmt.Sprintf("ACP error %d: %s", e.Code, e.Message)
+	message := fmt.Sprintf("ACP error %d: %s", e.Code, e.Message)
+	if detail := e.detail(); detail != "" {
+		message += ": " + detail
+	}
+	return message
+}
+
+// detail returns a bounded human-readable diagnostic without dumping arbitrary
+// error.data into logs or UI. ACP leaves data implementation-defined; Cline
+// uses a details field for errors that otherwise collapse to "Internal error".
+func (e *RPCError) detail() string {
+	if e == nil || len(e.Data) == 0 {
+		return ""
+	}
+	var data struct {
+		Details string `json:"details"`
+		Message string `json:"message"`
+	}
+	if err := json.Unmarshal(e.Data, &data); err != nil {
+		return ""
+	}
+	detail := data.Details
+	if strings.TrimSpace(detail) == "" {
+		detail = data.Message
+	}
+	detail = strings.Join(strings.Fields(detail), " ")
+	if detail == "" {
+		return ""
+	}
+	if detail == strings.TrimSpace(e.Message) {
+		return ""
+	}
+	const maxDetailRunes = 512
+	runes := []rune(detail)
+	if len(runes) > maxDetailRunes {
+		return string(runes[:maxDetailRunes-1]) + "…"
+	}
+	return detail
 }
 
 type Event struct {

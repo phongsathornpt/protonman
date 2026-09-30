@@ -119,6 +119,20 @@ func (c *controller) setRuntimePermissionMode(value string) {
 	if ok && session.AgentID != "" && session.AgentID != controllerAgentID {
 		agentID := session.AgentID
 		client := c.clients[agentID]
+		profile := c.profiles[agentID]
+		if isClineACPProfile(profile) {
+			if client == nil || c.connections[agentID] != connectionConnected || sessionBusy(session.Status) || c.runtimeMutation != "" {
+				c.mu.Unlock()
+				return
+			}
+			c.runtimeMutation = sessionID
+			c.statuses[agentID] = "Updating permission mode…"
+			c.revision++
+			c.mu.Unlock()
+			c.notify()
+			go c.updateClinePermissionMode(client, agentID, sessionID, value)
+			return
+		}
 		if sess := desktopstateSessionPointer(&c.state, sessionID); sess != nil {
 			sess.Runtime.PermissionMode = value
 			c.revision++
@@ -140,6 +154,32 @@ func (c *controller) setRuntimePermissionMode(value string) {
 	}
 	c.mu.Unlock()
 	c.setRuntimeChoice("protonman/session/set_permission_mode", "permissionMode", value)
+}
+
+func (c *controller) updateClinePermissionMode(client *acpclient.Client, agentID, sessionID, value string) {
+	defer c.finishRuntimeMutation(client, sessionID)
+	callCtx, cancel := context.WithTimeout(c.ctx, reconnectRequestTimeout)
+	defer cancel()
+	if err := setClinePermissionMode(callCtx, client, sessionID, value); err != nil {
+		if c.ctx == nil || c.ctx.Err() == nil {
+			c.setRuntimeStatus(client, sessionID, "Permission mode update failed · "+compactError(err))
+		}
+		return
+	}
+
+	c.mu.Lock()
+	session, ok := desktopSessionByID(c.state, sessionID)
+	if !ok || session.AgentID != agentID || !c.clientCurrentLocked(agentID, client) {
+		c.mu.Unlock()
+		return
+	}
+	if current := desktopstateSessionPointer(&c.state, sessionID); current != nil {
+		current.Runtime.PermissionMode = value
+		c.revision++
+	}
+	c.statuses[agentID] = "Permission mode updated"
+	c.mu.Unlock()
+	c.notify()
 }
 
 func (c *controller) setRuntimeChoice(method, field, value string) {

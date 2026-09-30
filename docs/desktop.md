@@ -72,11 +72,16 @@ project. Existing sessions are migrated into a project derived from their
 workspace path.
 
 A project can contain multiple folders. The primary folder is sent as ACP
-`cwd`; the remaining available folders are sent as
-`additionalDirectories` when a new session is created or an existing session
-is resumed. Folder paths are retained in Desktop preferences when a checkout is
-temporarily unavailable, but Desktop refuses to execute a session until its
-primary folder exists again.
+`cwd`; remaining available folders are sent as `additionalDirectories` only
+when the connected agent advertises that session capability. Agents without
+that capability receive the primary folder only, and Desktop reports this when
+creating the session. Folder paths are retained in Desktop preferences when a
+checkout is temporarily unavailable, but Desktop refuses to execute a session
+until its primary folder exists again.
+
+Desktop calls optional ACP session-list and session-resume methods only when
+the agent advertises those capabilities. Agents without session listing use
+Desktop's locally retained sessions.
 
 Project identity is separate from Protonman's workspace key. Workspace-keyed
 runtime state such as memories and checkpoints remains unchanged by the
@@ -85,6 +90,12 @@ project navigation layer.
 ## Permissions
 
 ACP reverse requests are rendered inline and added to a cross-session permission inbox. Permission decisions are returned using the original JSON-RPC request ID and ACP permission option ID.
+
+When Cline requires authentication, Desktop calls its advertised `cline`
+authentication method and lets Cline open its browser sign-in flow. Desktop's
+Plan choice maps to Cline's `plan` mode. Ask maps to `act` with auto-approval
+disabled; Always Approve maps to `act` with Cline's separate `auto_approve`
+session option enabled.
 
 ## Tool and subagent activity
 

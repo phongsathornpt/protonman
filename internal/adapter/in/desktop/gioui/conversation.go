@@ -80,16 +80,17 @@ var errSessionHistoryClientChanged = errors.New("ACP client changed during histo
 type sessionUpdatePayload struct {
 	SessionID string `json:"sessionId"`
 	Update    struct {
-		Kind       string          `json:"sessionUpdate"`
-		ToolCallID string          `json:"toolCallId"`
-		Title      string          `json:"title"`
-		Status     string          `json:"status"`
-		Content    json.RawMessage `json:"content"`
-		AgentID    string          `json:"agentId"`
-		Profile    string          `json:"profile"`
-		Task       string          `json:"task"`
-		Summary    string          `json:"summary"`
-		ModeID     string          `json:"modeId"`
+		Kind          string            `json:"sessionUpdate"`
+		ToolCallID    string            `json:"toolCallId"`
+		Title         string            `json:"title"`
+		Status        string            `json:"status"`
+		Content       json.RawMessage   `json:"content"`
+		AgentID       string            `json:"agentId"`
+		Profile       string            `json:"profile"`
+		Task          string            `json:"task"`
+		Summary       string            `json:"summary"`
+		ModeID        string            `json:"modeId"`
+		ConfigOptions []acpConfigOption `json:"configOptions"`
 	} `json:"update"`
 }
 
@@ -144,7 +145,12 @@ func (c *controller) handleACPEventFromAgent(agentID string, source *acpclient.C
 		modeID := strings.TrimSpace(payload.Update.ModeID)
 		if modeID != "" {
 			if sess := desktopstateSessionPointer(&c.state, payload.SessionID); sess != nil {
-				sess.Runtime.PermissionMode = modeID
+				if isClineACPProfile(c.profiles[session.AgentID]) {
+					autoApprove := sess.Runtime.PermissionMode == "always-approve"
+					sess.Runtime.PermissionMode = clinePermissionMode(modeID, autoApprove)
+				} else {
+					sess.Runtime.PermissionMode = modeID
+				}
 				c.revision++
 				c.mu.Unlock()
 				c.notify()
@@ -152,6 +158,17 @@ func (c *controller) handleACPEventFromAgent(agentID string, source *acpclient.C
 			}
 		}
 		c.mu.Unlock()
+		return
+	}
+	if update.Kind == "config_option_update" && isClineACPProfile(c.profiles[session.AgentID]) {
+		if sess := desktopstateSessionPointer(&c.state, payload.SessionID); sess != nil {
+			modeID := clineModeID(payload.Update.ConfigOptions, sess.Runtime.PermissionMode)
+			autoApprove := clineAutoApproveValue(payload.Update.ConfigOptions, sess.Runtime.PermissionMode == "always-approve")
+			sess.Runtime.PermissionMode = clinePermissionMode(modeID, autoApprove)
+			c.revision++
+		}
+		c.mu.Unlock()
+		c.notify()
 		return
 	}
 	if payload.SessionID != c.state.ActiveSessionID {
@@ -817,7 +834,8 @@ func (c *controller) loadSessionHistory(sessionID string) {
 	c.revision++
 	c.mu.Unlock()
 	c.notify()
-	params := c.sessionHistoryLoadParams(sessionID, workspace, session.AdditionalDirectories)
+	additionalDirectories := c.additionalDirectoriesForAgent(agentID, session.AdditionalDirectories)
+	params := c.sessionHistoryLoadParams(sessionID, workspace, additionalDirectories)
 
 	go func() {
 		unlock, acquired := c.lockAgentSessionContext(callCtx, agentID)
@@ -948,6 +966,9 @@ func (c *controller) finishSessionHistoryLoadRequest(client *acpclient.Client, s
 }
 
 func (c *controller) resumeKnownSessions(agentID string, client *acpclient.Client) {
+	if !c.agentSupportsSessionResume(agentID) {
+		return
+	}
 	c.mu.RLock()
 	sessions := append([]desktopstate.SessionState(nil), c.state.Sessions...)
 	activeSessionID := c.state.ActiveSessionID
@@ -979,13 +1000,17 @@ func (c *controller) resumeKnownSessions(agentID string, client *acpclient.Clien
 				continue
 			}
 		}
-		params := c.mcpSessionParams(session.ID, workspace, session.AdditionalDirectories)
+		additionalDirectories := c.additionalDirectoriesForAgent(agentID, session.AdditionalDirectories)
+		params := c.mcpSessionParams(session.ID, workspace, additionalDirectories)
 		unlock, acquired := c.lockAgentSessionContext(c.ctx, agentID)
 		if !acquired {
 			return
 		}
 		callCtx, cancel := context.WithTimeout(c.ctx, reconnectRequestTimeout)
 		var resumeResult struct {
+			Modes *struct {
+				CurrentModeID string `json:"currentModeId"`
+			} `json:"modes,omitempty"`
 			ConfigOptions []acpConfigOption `json:"configOptions"`
 			Models        *acpModelsResult  `json:"models,omitempty"`
 		}
@@ -1009,6 +1034,9 @@ func (c *controller) resumeKnownSessions(agentID string, client *acpclient.Clien
 				}
 				c.mu.Unlock()
 				c.notify()
+			}
+			if resumeResult.Modes != nil && c.isClineAgent(agentID) {
+				c.setClinePermissionModeFromACP(agentID, session.ID, resumeResult.Modes.CurrentModeID, resumeResult.ConfigOptions)
 			}
 		}
 	}
@@ -1066,15 +1094,15 @@ func (c *controller) sendExpandedPrompt(prompt ExpandedPrompt) {
 func (c *controller) runPrompt(client *acpclient.Client, session desktopstate.SessionState, prompt ExpandedPrompt, mcpServers []map[string]any) {
 	defer c.lockAgentSession(session.AgentID)()
 	params := map[string]any{"sessionId": session.ID, "cwd": session.Workspace}
-	if len(session.AdditionalDirectories) > 0 {
-		params["additionalDirectories"] = session.AdditionalDirectories
+	if additionalDirectories := c.additionalDirectoriesForAgent(session.AgentID, session.AdditionalDirectories); len(additionalDirectories) > 0 {
+		params["additionalDirectories"] = additionalDirectories
 	}
 	if len(mcpServers) > 0 {
 		params["mcpServers"] = mcpServers
 	}
-	err := client.Call(c.ctx, "session/resume", params, nil)
-	if err != nil && isACPMethodNotFound(err) {
-		err = nil
+	var err error
+	if c.agentSupportsSessionResume(session.AgentID) {
+		err = client.Call(c.ctx, "session/resume", params, nil)
 	}
 	var result struct {
 		StopReason string `json:"stopReason"`

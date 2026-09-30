@@ -100,6 +100,7 @@ type controller struct {
 	state         desktopstate.State
 	profiles      map[string]app.ACPAgentProfile
 	clients       map[string]*acpclient.Client
+	agentFeatures map[string]acpAgentFeatures
 	connections   map[string]connectionPhase
 	statuses      map[string]string
 	activeAgentID string
@@ -165,6 +166,7 @@ func newController(parent context.Context, onChange func(), agents app.ACPAgents
 		onChange:                onChange,
 		profiles:                make(map[string]app.ACPAgentProfile, len(profiles)),
 		clients:                 make(map[string]*acpclient.Client, len(profiles)),
+		agentFeatures:           make(map[string]acpAgentFeatures, len(profiles)),
 		connections:             make(map[string]connectionPhase, len(profiles)),
 		statuses:                make(map[string]string, len(profiles)),
 		histories:               make(map[string]historyState),
@@ -603,7 +605,7 @@ func (c *controller) setFilterMode(mode string) {
 type acpConfigOption struct {
 	ID           string `json:"id"`
 	Name         string `json:"name"`
-	CurrentValue string `json:"currentValue"`
+	CurrentValue any    `json:"currentValue"`
 	Options      []struct {
 		Value string `json:"value"`
 		Name  string `json:"name"`
@@ -613,7 +615,7 @@ type acpConfigOption struct {
 func extractModelsFromConfigOptions(options []acpConfigOption) (models []string, currentModel string) {
 	for _, opt := range options {
 		if strings.TrimSpace(opt.ID) == "model" {
-			currentModel = strings.TrimSpace(opt.CurrentValue)
+			currentModel = acpConfigStringValue(opt.CurrentValue)
 			for _, o := range opt.Options {
 				val := strings.TrimSpace(o.Value)
 				if val != "" {
@@ -671,7 +673,13 @@ func (c *controller) newSession() {
 	c.creatingSession = true
 	c.statuses[agentID] = "Creating session…"
 	c.revision++
-	additionalDirectories := c.projectAdditionalDirectoriesLocked(c.state.ActiveProjectID, workspace)
+	requestedAdditionalDirectories := c.projectAdditionalDirectoriesLocked(c.state.ActiveProjectID, workspace)
+	features := c.agentFeatures[agentID]
+	profile := c.profiles[agentID]
+	additionalDirectories := requestedAdditionalDirectories
+	if !features.SupportsAdditionalDirectories {
+		additionalDirectories = nil
+	}
 	c.mu.Unlock()
 	c.notify()
 	params := c.mcpNewSessionParams(workspace, additionalDirectories)
@@ -686,8 +694,6 @@ func (c *controller) newSession() {
 		}()
 
 		defer c.lockAgentSession(agentID)()
-		callCtx, cancel := context.WithTimeout(c.ctx, newSessionTimeout)
-		defer cancel()
 		var result struct {
 			SessionID string `json:"sessionId"`
 			Modes     *struct {
@@ -696,7 +702,25 @@ func (c *controller) newSession() {
 			ConfigOptions []acpConfigOption `json:"configOptions,omitempty"`
 			Models        *acpModelsResult  `json:"models,omitempty"`
 		}
-		err := client.Call(callCtx, "session/new", params, &result)
+		err := createACPSession(
+			c.ctx,
+			client,
+			profile,
+			features.AuthMethods,
+			params,
+			&result,
+			func(methodName string) {
+				methodName = strings.TrimSpace(methodName)
+				if methodName == "" {
+					methodName = "agent"
+				}
+				if strings.HasPrefix(strings.ToLower(methodName), "sign in with ") {
+					c.setAgentStatus(agentID, methodName+"…")
+					return
+				}
+				c.setAgentStatus(agentID, "Signing in with "+methodName+"…")
+			},
+		)
 		if err == nil && strings.TrimSpace(result.SessionID) == "" {
 			err = errors.New("ACP returned an empty session ID")
 		}
@@ -732,7 +756,12 @@ func (c *controller) newSession() {
 		}
 		if result.Modes != nil && strings.TrimSpace(result.Modes.CurrentModeID) != "" {
 			if sess := desktopstateSessionPointer(&c.state, result.SessionID); sess != nil {
-				sess.Runtime.PermissionMode = strings.TrimSpace(result.Modes.CurrentModeID)
+				modeID := strings.TrimSpace(result.Modes.CurrentModeID)
+				if isClineACPProfile(profile) {
+					sess.Runtime.PermissionMode = clinePermissionMode(modeID, clineAutoApproveValue(result.ConfigOptions, false))
+				} else {
+					sess.Runtime.PermissionMode = modeID
+				}
 			}
 		}
 		c.state.ActiveSessionID = result.SessionID
@@ -741,6 +770,9 @@ func (c *controller) newSession() {
 		c.clearMessageStreamsLocked(result.SessionID)
 		c.setProjectDefaultAgentLocked(c.state.ActiveProjectID, agentID)
 		c.statuses[agentID] = "Session created"
+		if len(requestedAdditionalDirectories) > 0 && !features.SupportsAdditionalDirectories {
+			c.statuses[agentID] = "Session created · agent uses the primary folder only"
+		}
 		c.revision++
 		c.mu.Unlock()
 		c.refreshActiveSession(true)
@@ -778,7 +810,8 @@ func (c *controller) superviseAgent(profile app.ACPAgentProfile) {
 		}
 		startedClient.Store(client)
 
-		if err := initializeACP(c.ctx, client); err != nil {
+		features, err := initializeACP(c.ctx, client)
+		if err != nil {
 			fmt.Printf("[superviseAgent %s] initializeACP failed: %v\n", profile.ID, err)
 			_ = client.Close()
 			if c.ctx.Err() != nil {
@@ -791,6 +824,7 @@ func (c *controller) superviseAgent(profile app.ACPAgentProfile) {
 			delay = nextReconnectDelay(delay)
 			continue
 		}
+		c.setAgentFeatures(profile.ID, features)
 		client.SetRequestHandler(func(requestCtx context.Context, request acpclient.Request) (any, error) {
 			switch request.Method {
 			case requestPermissionMethod:
@@ -833,6 +867,10 @@ func (c *controller) superviseAgent(profile app.ACPAgentProfile) {
 }
 
 func (c *controller) refreshSessions(agentID string, client *acpclient.Client) error {
+	if !c.agentSupportsSessionList(agentID) {
+		c.setAgentStatus(agentID, "Connected · session list unavailable")
+		return nil
+	}
 	defer c.lockAgentSession(agentID)()
 	callCtx, cancel := context.WithTimeout(c.ctx, reconnectRequestTimeout)
 	defer cancel()
@@ -921,6 +959,7 @@ func (c *controller) markAgentDisconnected(agentID string, client *acpclient.Cli
 		return
 	}
 	delete(c.clients, agentID)
+	delete(c.agentFeatures, agentID)
 	c.connections[agentID] = connectionReconnecting
 	c.statuses[agentID] = "Disconnected · retrying"
 	c.resetAgentTransientSessionStateLocked(agentID)
@@ -936,12 +975,10 @@ func (c *controller) notify() {
 	}
 }
 
-func initializeACP(ctx context.Context, client *acpclient.Client) error {
+func initializeACP(ctx context.Context, client *acpclient.Client) (acpAgentFeatures, error) {
 	callCtx, cancel := context.WithTimeout(ctx, reconnectRequestTimeout)
 	defer cancel()
-	var result struct {
-		ProtocolVersion int `json:"protocolVersion"`
-	}
+	var result initializeACPResponse
 	err := client.Call(callCtx, "initialize", map[string]any{
 		"protocolVersion": 1,
 		"clientInfo": map[string]any{
@@ -953,14 +990,14 @@ func initializeACP(ctx context.Context, client *acpclient.Client) error {
 	}, &result)
 	if err != nil {
 		if errors.Is(err, io.EOF) {
-			return errors.New("connection closed unexpectedly (EOF)")
+			return acpAgentFeatures{}, errors.New("connection closed unexpectedly (EOF)")
 		}
-		return err
+		return acpAgentFeatures{}, err
 	}
 	if result.ProtocolVersion != 1 {
-		return fmt.Errorf("unsupported ACP v%d", result.ProtocolVersion)
+		return acpAgentFeatures{}, fmt.Errorf("unsupported ACP v%d", result.ProtocolVersion)
 	}
-	return nil
+	return result.features(), nil
 }
 
 func projectSessions(current desktopstate.State, agentID string, remoteSessions []acpSession) desktopstate.State {

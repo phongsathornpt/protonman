@@ -295,6 +295,42 @@ func TestJSONRPCErrorResponsePropagates(t *testing.T) {
 	}
 }
 
+func TestRPCErrorIncludesBoundedDetails(t *testing.T) {
+	t.Run("details field", func(t *testing.T) {
+		err := (&RPCError{
+			Code:    -32603,
+			Message: "Internal error",
+			Data:    json.RawMessage(`{"details":"provider rejected request\ncheck credentials"}`),
+		}).Error()
+		if want := "ACP error -32603: Internal error: provider rejected request check credentials"; err != want {
+			t.Fatalf("error = %q, want %q", err, want)
+		}
+	})
+
+	t.Run("oversized details", func(t *testing.T) {
+		detail := strings.Repeat("x", 600)
+		err := (&RPCError{
+			Code:    -32603,
+			Message: "Internal error",
+			Data:    json.RawMessage(`{"details":"` + detail + `"}`),
+		}).Error()
+		if got, want := len([]rune(err)), len("ACP error -32603: Internal error: ")+512; got != want {
+			t.Fatalf("error rune count = %d, want %d", got, want)
+		}
+	})
+
+	t.Run("other data is not dumped", func(t *testing.T) {
+		err := (&RPCError{
+			Code:    -32603,
+			Message: "Internal error",
+			Data:    json.RawMessage(`{"trace":"private implementation detail"}`),
+		}).Error()
+		if strings.Contains(err, "private implementation detail") {
+			t.Fatalf("error leaked arbitrary data: %q", err)
+		}
+	})
+}
+
 func TestMalformedStdoutLineDoesNotBreakFraming(t *testing.T) {
 	client := startHelperClient(t, "noisy_then_error")
 

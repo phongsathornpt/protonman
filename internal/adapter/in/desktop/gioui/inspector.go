@@ -316,10 +316,17 @@ func (c *controller) refreshSessionRuntime(sessionID string, force bool) {
 			return
 		}
 		if session.AgentID != "" && session.AgentID != controllerAgentID {
-			params := c.mcpSessionParams(session.ID, session.Workspace, session.AdditionalDirectories)
+			if !c.agentSupportsSessionResume(session.AgentID) {
+				return
+			}
+			additionalDirectories := c.additionalDirectoriesForAgent(session.AgentID, session.AdditionalDirectories)
+			params := c.mcpSessionParams(session.ID, session.Workspace, additionalDirectories)
 			callCtx, cancel := context.WithTimeout(c.ctx, reconnectRequestTimeout)
 			defer cancel()
 			var resumeResult struct {
+				Modes *struct {
+					CurrentModeID string `json:"currentModeId"`
+				} `json:"modes,omitempty"`
 				ConfigOptions []acpConfigOption `json:"configOptions"`
 				Models        *acpModelsResult  `json:"models,omitempty"`
 			}
@@ -336,6 +343,9 @@ func (c *controller) refreshSessionRuntime(sessionID string, force bool) {
 					}
 					c.mu.Unlock()
 					c.notify()
+				}
+				if resumeResult.Modes != nil && c.isClineAgent(session.AgentID) {
+					c.setClinePermissionModeFromACP(session.AgentID, session.ID, resumeResult.Modes.CurrentModeID, resumeResult.ConfigOptions)
 				}
 			}
 			return
