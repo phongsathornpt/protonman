@@ -703,7 +703,7 @@ func TestAddACPAgentSaveFlowAndModalResponsiveness(t *testing.T) {
 
 	// 1. Initial render with settings modal open on ACP Agents tab
 	view.openSettingsModal()
-	view.settingsActiveTab = 2
+	view.settingsActiveTab = 3
 	if view.agentEditorVisible {
 		t.Fatal("agent editor should start hidden")
 	}

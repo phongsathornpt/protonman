@@ -247,6 +247,9 @@ func (s *Server) handleRequest(ctx context.Context, request RPCRequest, output i
 	if result, handled, err := s.dispatchSessionRuntime(ctx, request); handled {
 		return s.writeResponse(output, request.ID, result, nil, err)
 	}
+	if result, handled, err := s.dispatchProviders(ctx, request); handled {
+		return s.writeResponse(output, request.ID, result, nil, err)
+	}
 	result, notify, err := s.dispatch(ctx, request, output)
 	return s.writeResponse(output, request.ID, result, notify, err)
 }

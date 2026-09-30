@@ -111,8 +111,10 @@ func (s *shell) layoutSettingsModal(gtx layout.Context, snapshot controllerSnaps
 									}
 									switch s.settingsActiveTab {
 									case 1:
-										return s.layoutMCPIntegrationsPanel(gtx, snapshot)
+										return s.layoutProvidersPanel(gtx, snapshot)
 									case 2:
+										return s.layoutMCPIntegrationsPanel(gtx, snapshot)
+									case 3:
 										return s.layoutAgentProfilesPanel(gtx, snapshot)
 									default:
 										return s.layoutSettingsGeneralTab(gtx, snapshot)
@@ -128,7 +130,7 @@ func (s *shell) layoutSettingsModal(gtx layout.Context, snapshot controllerSnaps
 }
 
 func (s *shell) layoutSettingsTabBar(gtx layout.Context) layout.Dimensions {
-	tabs := []string{"General", "MCP Integrations", "ACP Agents"}
+	tabs := []string{"General", "Model Providers", "MCP Integrations", "ACP Agents"}
 	return s.roundedSurface(gtx, shapeMedium, s.theme.surfaceContainerLow, func(gtx layout.Context) layout.Dimensions {
 		return desktopUniformInset(3).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 			children := make([]layout.FlexChild, 0, len(tabs))

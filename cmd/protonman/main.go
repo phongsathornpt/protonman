@@ -110,6 +110,7 @@ func run(ctx context.Context, args []string) error {
 			acp.WithAgents(app.NewAgents(runtimeState.coordinator)),
 			acpSessionRuntimeOption(runtimeState),
 			acp.WithSessionConfigModelOptions(acpSessionModelOptionsProvider(runtimeState)),
+			acp.WithProvidersControl(acpProvidersControl(runtimeState)),
 			acp.WithSessionRegistryFactory(func(sessionID, cwd string, additionalDirectories []string) (tool.Registry, error) {
 				return runtimeState.registryForACPSession(sessionID, cwd, additionalDirectories)
 			}),

@@ -203,30 +203,61 @@ type shell struct {
 	settingsModalCard     widget.Clickable
 	settingsModalCloseBtn widget.Clickable
 	settingsActiveTab     int
-	settingsTabButtons    [3]widget.Clickable
+	settingsTabButtons    [4]widget.Clickable
 	settingsThemeButtons  map[string]*widget.Clickable
 	settingsModalList     layout.List
 	onSetTheme            func(string)
 
-	modelChipButton          widget.Clickable
-	reasoningChipButton      widget.Clickable
-	modelPopoverVisible      bool
-	reasoningPopoverVisible  bool
-	tailFollowBeforeOverlay  bool
-	modelSearchFocusPending  bool
-	modelPopoverCloseButton  widget.Clickable
-	reasoningPopoverCloseBtn widget.Clickable
-	modelSearchEditor        widget.Editor
-	modelSearchClearBtn      widget.Clickable
-	modelRefreshButton       widget.Clickable
-	popoverProviderEditor    widget.Editor
-	popoverModelEditor       widget.Editor
-	popoverApplyModelButton  widget.Clickable
-	modelList                layout.List
-	recentModels             []modelPresetRecord
-	agentModelButtons        map[string]*widget.Clickable
-	modelPresetButtons       map[string]*widget.Clickable
-	popoverReasoningButtons  map[string]*widget.Clickable
+	modelChipButton           widget.Clickable
+	reasoningChipButton       widget.Clickable
+	modelPopoverVisible       bool
+	reasoningPopoverVisible   bool
+	tailFollowBeforeOverlay   bool
+	modelSearchFocusPending   bool
+	modelPopoverCloseButton   widget.Clickable
+	reasoningPopoverCloseBtn  widget.Clickable
+	modelSearchEditor         widget.Editor
+	modelSearchClearBtn       widget.Clickable
+	modelRefreshButton        widget.Clickable
+	popoverProviderEditor     widget.Editor
+	popoverModelEditor        widget.Editor
+	popoverApplyModelButton   widget.Clickable
+	popoverActiveProviderTab  string
+	popoverProviderTabButtons map[string]*widget.Clickable
+	popoverProviderTabList    layout.List
+	popoverManageProvidersBtn widget.Clickable
+	modelList                 layout.List
+	recentModels              []modelPresetRecord
+	agentModelButtons         map[string]*widget.Clickable
+	modelPresetButtons        map[string]*widget.Clickable
+	popoverReasoningButtons   map[string]*widget.Clickable
+
+	// Settings Providers tab widgets
+	providerFormVisible        bool
+	providerFormSelectedID     string
+	providerNameEditor         widget.Editor
+	providerEndpointEditor     widget.Editor
+	providerAPIKeyEditor       widget.Editor
+	providerTypeOpenAIBtn      widget.Clickable
+	providerTypeAnthropicBtn   widget.Clickable
+	providerSelectedType       string
+	providerShowKey            bool
+	providerShowKeyBtn         widget.Clickable
+	providerTestBtn            widget.Clickable
+	providerSaveBtn            widget.Clickable
+	providerSaveActivateBtn    widget.Clickable
+	providerDeleteBtn          widget.Clickable
+	providerCancelBtn          widget.Clickable
+	providerAddCustomBtn       widget.Clickable
+	providerPresetCards        map[string]*widget.Clickable
+	providerCardButtons        map[string]*widget.Clickable
+	providerTestStatus         string
+	providerTestError          string
+	providerDiscoveredModels   []string
+	providerSelectedModel      string
+	providerModelSelectBtns    map[string]*widget.Clickable
+	providerModelsDropdownOpen bool
+	providerModelsDropdownBtn  widget.Clickable
 
 	onSelectSession        func(string)
 	onSelectProject        func(string)
@@ -251,6 +282,10 @@ type shell struct {
 	onSaveAgentProfile     func(string, string, string, string, string, string)
 	onRemoveAgentProfile   func(string)
 	onScanDeviceAgents     func()
+	onSaveProvider         func(acpProvidersSaveParams, func(error))
+	onDeleteProvider       func(string, func(error))
+	onFetchProviderModels  func(string, string, string, string, func([]string, error))
+	onRefreshProviders     func()
 }
 
 type modelPresetRecord struct {
@@ -363,6 +398,14 @@ func newShell(theme *theme) *shell {
 		onSaveAgentProfile:           func(string, string, string, string, string, string) {},
 		onRemoveAgentProfile:         func(string) {},
 		onScanDeviceAgents:           func() {},
+		onSaveProvider:               func(acpProvidersSaveParams, func(error)) {},
+		onDeleteProvider:             func(string, func(error)) {},
+		onFetchProviderModels:        func(string, string, string, string, func([]string, error)) {},
+		onRefreshProviders:           func() {},
+		popoverProviderTabButtons:    make(map[string]*widget.Clickable),
+		providerPresetCards:          make(map[string]*widget.Clickable),
+		providerCardButtons:          make(map[string]*widget.Clickable),
+		providerModelSelectBtns:      make(map[string]*widget.Clickable),
 		settingsThemeButtons:         make(map[string]*widget.Clickable),
 		onSetTheme:                   func(string) {},
 	}

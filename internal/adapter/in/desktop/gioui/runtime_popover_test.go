@@ -600,3 +600,176 @@ func TestProtonmanHasNoFreeModels(t *testing.T) {
 		})
 	}
 }
+
+func TestModelPopoverProviderTabsAndManageButton(t *testing.T) {
+	view := newShell(newTheme("dark"))
+
+	session := desktopstate.SessionState{
+		ID:      "session-1",
+		AgentID: controllerAgentID,
+		Runtime: desktopstate.RuntimeSettingsState{
+			Provider: "protonman",
+			Model:    "claude-3-7-sonnet-20250219",
+		},
+		AvailableModels: []string{"claude-3-7-sonnet-20250219", "gpt-4o"},
+	}
+
+	snapshot := controllerSnapshot{
+		ActiveAgentID:  controllerAgentID,
+		ActiveProvider: "protonman",
+		Providers: []desktopstate.ProviderState{
+			{ID: "protonman", Name: "Protonman", IsActive: true},
+			{ID: "opencode", Name: "OpenCode Free", IsFree: true},
+			{ID: "ollama", Name: "Ollama"},
+		},
+		ProviderModels: map[string][]string{
+			"ollama": {"llama3.3", "qwen2.5-coder"},
+		},
+		State: desktopstate.State{
+			ActiveSessionID: "session-1",
+			Sessions:        []desktopstate.SessionState{session},
+		},
+	}
+
+	// 1. Open model popover
+	view.openModelPopover()
+	if !view.modelPopoverVisible {
+		t.Fatal("model popover should be visible")
+	}
+
+	var op1 op.Ops
+	var router input.Router
+	gtx1 := layout.Context{
+		Ops:         &op1,
+		Constraints: layout.Exact(image.Point{X: 1180, Y: 760}),
+		Metric:      unit.Metric{PxPerDp: 1, PxPerSp: 1},
+		Now:         time.Unix(1, 0),
+		Source:      router.Source(),
+	}
+	view.layoutModelPopover(gtx1, session, snapshot, true)
+	router.Frame(gtx1.Ops)
+
+	if view.popoverActiveProviderTab != "protonman" {
+		t.Fatalf("expected popoverActiveProviderTab to default to protonman, got %q", view.popoverActiveProviderTab)
+	}
+
+	// 2. Switch provider tab to Ollama
+	var fetchedProvider string
+	view.onFetchProviderModels = func(id, baseURL, apiKey, pType string, onDone func([]string, error)) {
+		fetchedProvider = id
+	}
+
+	ollamaBtn := view.popoverProviderTabButton("ollama")
+	ollamaBtn.Click()
+
+	var op2 op.Ops
+	gtx2 := layout.Context{
+		Ops:         &op2,
+		Constraints: layout.Exact(image.Point{X: 1180, Y: 760}),
+		Metric:      unit.Metric{PxPerDp: 1, PxPerSp: 1},
+		Now:         time.Unix(2, 0),
+		Source:      router.Source(),
+	}
+	view.layoutModelPopover(gtx2, session, snapshot, true)
+	router.Frame(gtx2.Ops)
+
+	if view.popoverActiveProviderTab != "ollama" {
+		t.Fatalf("expected popoverActiveProviderTab to switch to ollama, got %q", view.popoverActiveProviderTab)
+	}
+	if fetchedProvider != "ollama" {
+		t.Fatalf("expected onFetchProviderModels called for ollama, got %q", fetchedProvider)
+	}
+
+	// 3. Select a model from the active provider
+	var setProvider, setModel string
+	view.onSetRuntimeModel = func(p, m string) {
+		setProvider = p
+		setModel = m
+	}
+
+	llamaBtn := view.agentModelButton("llama3.3")
+	llamaBtn.Click()
+
+	var op3 op.Ops
+	gtx3 := layout.Context{
+		Ops:         &op3,
+		Constraints: layout.Exact(image.Point{X: 1180, Y: 760}),
+		Metric:      unit.Metric{PxPerDp: 1, PxPerSp: 1},
+		Now:         time.Unix(3, 0),
+		Source:      router.Source(),
+	}
+	view.layoutModelPopover(gtx3, session, snapshot, true)
+	router.Frame(gtx3.Ops)
+
+	if setProvider != "ollama" || setModel != "llama3.3" {
+		t.Fatalf("expected onSetRuntimeModel(ollama, llama3.3), got %s, %s", setProvider, setModel)
+	}
+	if view.modelPopoverVisible {
+		t.Fatal("popover should close after selecting model")
+	}
+
+	// 4. Test "+ Manage" button opens Settings Model Providers tab
+	view.openModelPopover()
+	view.popoverManageProvidersBtn.Click()
+
+	var op4 op.Ops
+	gtx4 := layout.Context{
+		Ops:         &op4,
+		Constraints: layout.Exact(image.Point{X: 1180, Y: 760}),
+		Metric:      unit.Metric{PxPerDp: 1, PxPerSp: 1},
+		Now:         time.Unix(4, 0),
+		Source:      router.Source(),
+	}
+	view.layoutModelPopover(gtx4, session, snapshot, true)
+	router.Frame(gtx4.Ops)
+
+	if view.modelPopoverVisible {
+		t.Fatal("model popover should close when clicking + Manage")
+	}
+	if !view.settingsModalOpen {
+		t.Fatal("settings modal should open when clicking + Manage")
+	}
+	if view.settingsActiveTab != 1 {
+		t.Fatalf("settingsActiveTab should be 1 (Model Providers), got %d", view.settingsActiveTab)
+	}
+}
+
+func TestModelPopoverNonProtonmanAgentScope(t *testing.T) {
+	view := newShell(newTheme("dark"))
+
+	session := desktopstate.SessionState{
+		ID:      "session-cline",
+		AgentID: "cline",
+		Runtime: desktopstate.RuntimeSettingsState{
+			Model: "cline/sonnet",
+		},
+		AvailableModels: []string{"cline/sonnet", "cline-free/deepseek-v4.1-flash"},
+	}
+
+	snapshot := controllerSnapshot{
+		ActiveAgentID: "cline",
+		State: desktopstate.State{
+			ActiveSessionID: "session-cline",
+			Sessions:        []desktopstate.SessionState{session},
+		},
+	}
+
+	view.openModelPopover()
+
+	var op1 op.Ops
+	var router input.Router
+	gtx1 := layout.Context{
+		Ops:         &op1,
+		Constraints: layout.Exact(image.Point{X: 1180, Y: 760}),
+		Metric:      unit.Metric{PxPerDp: 1, PxPerSp: 1},
+		Now:         time.Unix(1, 0),
+		Source:      router.Source(),
+	}
+	view.layoutModelPopover(gtx1, session, snapshot, true)
+	router.Frame(gtx1.Ops)
+
+	// For non-Protonman agent, popoverActiveProviderTab should not be populated
+	if view.popoverActiveProviderTab != "" {
+		t.Fatalf("expected popoverActiveProviderTab to remain empty for non-protonman agent, got %q", view.popoverActiveProviderTab)
+	}
+}

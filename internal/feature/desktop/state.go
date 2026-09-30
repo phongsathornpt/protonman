@@ -97,6 +97,20 @@ type MCPIntegrationState struct {
 	Env     []string
 }
 
+// ProviderState is the desktop projection of a model provider.
+type ProviderState struct {
+	ID           string
+	Name         string
+	Protocol     string
+	BaseURL      string
+	RequiresKey  bool
+	IsConfigured bool
+	IsActive     bool
+	IsFree       bool
+	HasKey       bool
+	DefaultModel string
+}
+
 // SessionContextState contains inspectable durable goal, TODO, and memory state.
 type SessionContextState struct {
 	Goal   string
@@ -191,6 +205,7 @@ type State struct {
 	PermissionInbox []PermissionRequest
 	QuestionInbox   []QuestionRequest
 	Integrations    []MCPIntegrationState
+	Providers       []ProviderState
 }
 
 // EventKind identifies a reducer transition.
@@ -215,6 +230,7 @@ const (
 	EventSessionRuntimeUpdated
 	EventIntegrationsReplaced
 	EventSessionSkillsUpdated
+	EventProvidersUpdated
 )
 
 // Event is a typed reducer input. Only fields relevant to Kind are consumed.
@@ -233,6 +249,7 @@ type Event struct {
 	Question        QuestionRequest
 	RequestID       string
 	AvailableModels []string
+	Providers       []ProviderState
 }
 
 // Reduce applies one event and returns a new state without aliasing caller-owned slices.
@@ -321,6 +338,8 @@ func applyEvent(state *State, event Event) {
 		if session := sessionByID(state, event.SessionID); session != nil {
 			session.Skills = cloneSkillStates(event.Skills)
 		}
+	case EventProvidersUpdated:
+		state.Providers = cloneProviders(event.Providers)
 	}
 }
 
@@ -330,6 +349,7 @@ func cloneState(state State) State {
 	state.PermissionInbox = clonePermissions(state.PermissionInbox)
 	state.QuestionInbox = cloneQuestions(state.QuestionInbox)
 	state.Integrations = cloneIntegrations(state.Integrations)
+	state.Providers = cloneProviders(state.Providers)
 	return state
 }
 
@@ -348,7 +368,12 @@ func ClonePresentationState(state State) State {
 	next.PermissionInbox = clonePermissions(state.PermissionInbox)
 	next.QuestionInbox = cloneQuestions(state.QuestionInbox)
 	next.Integrations = cloneIntegrations(state.Integrations)
+	next.Providers = cloneProviders(state.Providers)
 	return next
+}
+
+func cloneProviders(items []ProviderState) []ProviderState {
+	return slices.Clone(items)
 }
 
 type ProjectFolder struct {

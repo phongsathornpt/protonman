@@ -229,22 +229,28 @@ func TestApplyCopiesEventOwnedSlices(t *testing.T) {
 		RequestID: "permission",
 		Options:   []PermissionOption{{ID: "allow", Name: "Allow"}},
 	}
+	providers := []ProviderState{
+		{ID: "protonman", Name: "Protonman"},
+	}
 
 	Apply(&state, Event{Kind: EventSessionContextUpdated, SessionID: "s1", Context: SessionContextState{Todo: todo}})
 	Apply(&state, Event{Kind: EventSessionMemoryUpdated, SessionID: "s1", Memory: memory})
 	Apply(&state, Event{Kind: EventIntegrationsReplaced, Integrations: integrations})
 	Apply(&state, Event{Kind: EventPermissionRequested, SessionID: "s1", Permission: permission})
+	Apply(&state, Event{Kind: EventProvidersUpdated, Providers: providers})
 
 	todo.Items[0].Text = "changed"
 	memory.Workspace[0].Value = "changed"
 	integrations[0].Args[0] = "changed"
 	permission.Options[0].Name = "changed"
+	providers[0].Name = "changed"
 
 	session := state.Sessions[0]
 	if session.Context.Todo.Items[0].Text != "ship" ||
 		session.Context.Memory.Workspace[0].Value != "keep" ||
 		state.Integrations[0].Args[0] != "--stdio" ||
-		state.PermissionInbox[0].Options[0].Name != "Allow" {
+		state.PermissionInbox[0].Options[0].Name != "Allow" ||
+		state.Providers[0].Name != "Protonman" {
 		t.Fatalf("Apply retained event-owned slices: %#v", state)
 	}
 }

@@ -102,7 +102,7 @@ func TestSettingsModalOpenCloseAndLayout(t *testing.T) {
 		t.Fatal("openSettingsModal did not set settingsModalOpen")
 	}
 
-	for _, tab := range []int{0, 1, 2} {
+	for _, tab := range []int{0, 1, 2, 3} {
 		view.settingsActiveTab = tab
 		var operations op.Ops
 		var router input.Router
@@ -248,7 +248,7 @@ func TestInspectorProtonmanStreamlinedTabs(t *testing.T) {
 func TestSettingsModalPointerRouting(t *testing.T) {
 	view := newShell(newTheme("dark"))
 	view.openSettingsModal()
-	view.settingsActiveTab = 2 // ACP tab
+	view.settingsActiveTab = 3 // ACP tab
 
 	snapshot := controllerSnapshot{
 		AgentProfiles: []app.ACPAgentProfile{
@@ -301,7 +301,7 @@ func TestSettingsModalPointerRouting(t *testing.T) {
 func TestSettingsModalAddACPAgentClick(t *testing.T) {
 	view := newShell(newTheme("dark"))
 	view.openSettingsModal()
-	view.settingsActiveTab = 2 // ACP tab
+	view.settingsActiveTab = 3 // ACP tab
 
 	snapshot := controllerSnapshot{
 		AgentProfiles: []app.ACPAgentProfile{
@@ -359,7 +359,7 @@ func TestSettingsModalAddACPAgentClick(t *testing.T) {
 func TestAddACPAgentHeadlessFrame(t *testing.T) {
 	view := newShell(newTheme("dark"))
 	view.openSettingsModal()
-	view.settingsActiveTab = 2 // ACP tab
+	view.settingsActiveTab = 3 // ACP tab
 	view.agentEditorVisible = true
 
 	snapshot := controllerSnapshot{
@@ -393,7 +393,7 @@ func TestAddACPAgentHeadlessFrame(t *testing.T) {
 func TestSettingsModalAddMCPIntegrationClick(t *testing.T) {
 	view := newShell(newTheme("dark"))
 	view.openSettingsModal()
-	view.settingsActiveTab = 1 // MCP tab
+	view.settingsActiveTab = 2 // MCP tab
 
 	snapshot := controllerSnapshot{
 		State: desktopstate.State{

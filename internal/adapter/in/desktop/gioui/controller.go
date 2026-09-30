@@ -75,6 +75,13 @@ type controllerSnapshot struct {
 	Theme                 string
 	AgentDefaultModels    map[string]string
 	AgentAvailableModels  map[string][]string
+	Providers             []desktopstate.ProviderState
+	ActiveProvider        string
+	ActiveModel           string
+	ProviderModels        map[string][]string
+	ProviderModelsLoading map[string]bool
+	ProviderUpdating      bool
+	ProviderError         string
 }
 
 type controllerSnapshotCache struct {
@@ -97,13 +104,19 @@ type controller struct {
 	statuses      map[string]string
 	activeAgentID string
 
-	preferences          *app.DesktopPreferences
-	pinnedSessions       []string
-	customTitles         map[string]string
-	agentDefaultModels   map[string]string
-	agentAvailableModels map[string][]string
-	filterMode           string
-	theme                string
+	preferences           *app.DesktopPreferences
+	pinnedSessions        []string
+	customTitles          map[string]string
+	agentDefaultModels    map[string]string
+	agentAvailableModels  map[string][]string
+	activeProvider        string
+	activeModel           string
+	providerModelsCache   map[string][]string
+	providerModelsLoading map[string]bool
+	providerUpdating      bool
+	providerError         string
+	filterMode            string
+	theme                 string
 
 	histories               map[string]historyState
 	historyLoads            map[string]*sessionHistoryLoad
@@ -177,6 +190,8 @@ func newController(parent context.Context, onChange func(), agents app.ACPAgents
 		customTitles:            make(map[string]string),
 		agentDefaultModels:      make(map[string]string),
 		agentAvailableModels:    make(map[string][]string),
+		providerModelsCache:     make(map[string][]string),
+		providerModelsLoading:   make(map[string]bool),
 		filterMode:              "all",
 		theme:                   "system",
 	}
@@ -306,6 +321,13 @@ func (c *controller) snapshot() controllerSnapshot {
 		Theme:                 c.theme,
 		AgentDefaultModels:    make(map[string]string, len(c.agentDefaultModels)),
 		AgentAvailableModels:  make(map[string][]string, len(c.agentAvailableModels)),
+		Providers:             slices.Clone(c.state.Providers),
+		ActiveProvider:        c.activeProvider,
+		ActiveModel:           c.activeModel,
+		ProviderModels:        cloneProviderModels(c.providerModelsCache),
+		ProviderModelsLoading: cloneBoolMap(c.providerModelsLoading),
+		ProviderUpdating:      c.providerUpdating,
+		ProviderError:         c.providerError,
 	}
 	for agentID, phase := range c.connections {
 		snapshot.AgentConnections[agentID] = phase
@@ -879,6 +901,9 @@ func (c *controller) setClient(agentID string, client *acpclient.Client) {
 	c.revision++
 	c.mu.Unlock()
 	c.notify()
+	if isProtonmanAgent(agentID) {
+		go c.refreshProviders()
+	}
 }
 
 func (c *controller) markAgentDisconnected(agentID string, client *acpclient.Client) {

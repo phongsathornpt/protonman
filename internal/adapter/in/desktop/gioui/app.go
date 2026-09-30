@@ -94,6 +94,10 @@ func Run(ctx context.Context, agents application.ACPAgents, mcpIntegrations appl
 	view.onSaveAgentProfile = controller.saveAgentProfile
 	view.onRemoveAgentProfile = controller.removeAgentProfile
 	view.onScanDeviceAgents = controller.scanDeviceAgents
+	view.onSaveProvider = controller.saveProvider
+	view.onDeleteProvider = controller.deleteProvider
+	view.onFetchProviderModels = controller.fetchProviderModels
+	view.onRefreshProviders = controller.refreshProviders
 	var operations op.Ops
 	for {
 		switch event := window.Event().(type) {
