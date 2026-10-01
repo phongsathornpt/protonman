@@ -2,14 +2,49 @@ package diagnostic
 
 import (
 	"bytes"
-	"flag"
 	"errors"
+	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
+
+var unreachableKinds = []Kind{
+	KindInvalidPrompt,
+}
+
+var reachableKinds = []Kind{
+	KindModelNotFound,
+	KindContextOverflow,
+	KindAuthentication,
+	KindForbidden,
+	KindRateLimit,
+	KindQuotaExceeded,
+	KindServerOverloaded,
+	KindStreamTimeout,
+	KindStreamIncomplete,
+	KindEmptyResponse,
+	KindRuntimeTimeout,
+	KindMCPFailed,
+	KindConfigInvalid,
+	KindConfigTypo,
+	KindToolFailed,
+	KindToolDispatch,
+	KindPermissionDenied,
+	KindCancelled,
+	KindGeneric,
+}
+
+func allKinds() []Kind {
+	return append(append([]Kind(nil), reachableKinds...), unreachableKinds...)
+}
+
+func sortStrings(s []string) {
+	slices.Sort(s)
+}
 
 // regenerateGolden lets a deliberate, reviewed behavior change refresh the frozen
 // classification table. The refreshed file must always be read back in a diff: the
@@ -82,8 +117,15 @@ func TestClassifyReachableKinds(t *testing.T) {
 			t.Errorf("corpus no longer produces kind %q; add a case so the precedence ladder stays pinned", kind)
 		}
 	}
+	accounted := map[Kind]bool{}
+	for _, kind := range reachableKinds {
+		accounted[kind] = true
+	}
+	for _, kind := range unreachableKinds {
+		accounted[kind] = true
+	}
 	for _, kind := range allKinds() {
-		if !produced[kind] {
+		if !accounted[kind] {
 			t.Errorf("kind %q is in neither reachableKinds nor unreachableKinds", kind)
 		}
 	}

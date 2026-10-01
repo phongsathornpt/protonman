@@ -24,11 +24,12 @@ func Classify(err error, activeProvider string, activeModel string) Error {
 	// 1. Cancellation check
 	if errors.Is(err, context.Canceled) || strings.Contains(err.Error(), "context canceled") || strings.Contains(err.Error(), "UICancelledError") {
 		return Error{
-			Kind:      KindCancelled,
-			Title:     "Turn Cancelled",
-			Badge:     "CANCELLED",
-			Message:   "The turn was cancelled by the user.",
-			Retryable: true,
+			Kind:       KindCancelled,
+			Title:      "Turn Cancelled",
+			Badge:      "CANCELLED",
+			Message:    "The turn was cancelled by the user.",
+			RawDetails: err.Error(),
+			Retryable:  true,
 		}
 	}
 

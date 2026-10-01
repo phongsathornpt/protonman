@@ -5,7 +5,6 @@ package gioui
 import (
 	"context"
 	"os"
-	"strings"
 	"time"
 
 	"gioui.org/app"
@@ -14,6 +13,10 @@ import (
 	"gioui.org/unit"
 
 	application "github.com/phongsathornpt/protonman/internal/app"
+
+	"github.com/phongsathornpt/protonman/internal/adapter/in/desktop/gioui/component/uikit"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/desktop/gioui/controller"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/desktop/gioui/shell"
 )
 
 func Run(ctx context.Context, agents application.ACPAgents, mcpIntegrations application.MCPIntegrations, preferences *application.DesktopPreferences) error {
@@ -31,30 +34,68 @@ func Run(ctx context.Context, agents application.ACPAgents, mcpIntegrations appl
 		window.Perform(system.ActionClose)
 	}()
 
-	controller := newController(windowContext, window.Invalidate, agents, mcpIntegrations, preferences)
-	defer controller.close()
-	configuredTheme := normalizedThemeMode(os.Getenv("PROTONMAN_GIO_THEME"))
-	if preferences != nil && preferences.Snapshot().Theme != "" {
-		configuredTheme = normalizedThemeMode(preferences.Snapshot().Theme)
-	}
-	currentResolved := resolveThemeMode(configuredTheme, isSystemDarkMode())
-	view := newShell(newTheme(currentResolved))
+	ctrl := controller.New(windowContext, window.Invalidate, agents, mcpIntegrations, preferences)
+	defer ctrl.Close()
 
-	updateTheme := func(newConfigured string) {
-		configuredTheme = normalizedThemeMode(newConfigured)
-		resolved := resolveThemeMode(configuredTheme, isSystemDarkMode())
+	configuredTheme := uikit.NormalizeThemeMode(os.Getenv("PROTONMAN_GIO_THEME"))
+	if preferences != nil && preferences.Snapshot().Theme != "" {
+		configuredTheme = uikit.NormalizeThemeMode(preferences.Snapshot().Theme)
+	}
+	currentResolved := uikit.ResolveThemeMode(configuredTheme, uikit.IsSystemDarkMode())
+
+	// applyTheme resolves the configured mode and repaints when it actually
+	// changed, so a repeated "system" poll does not thrash the window. view is
+	// assigned immediately after construction, before any binding can fire.
+	var view *shell.Shell
+	applyTheme := func(newConfigured string) {
+		configuredTheme = uikit.NormalizeThemeMode(newConfigured)
+		resolved := uikit.ResolveThemeMode(configuredTheme, uikit.IsSystemDarkMode())
 		if resolved != currentResolved {
 			currentResolved = resolved
-			view.theme = newTheme(resolved)
+			view.SetTheme(shell.NewTheme(resolved))
 			window.Invalidate()
 		}
 	}
 
-	view.onSetTheme = func(themeMode string) {
-		controller.setTheme(themeMode)
-		updateTheme(themeMode)
-	}
+	// The shell owns presentation only: every action below routes into the
+	// controller, and the controller never reaches back into the shell.
+	view = shell.New(shell.NewTheme(currentResolved), shell.Bindings{
+		SetTheme: func(themeMode string) {
+			ctrl.SetTheme(themeMode)
+			applyTheme(themeMode)
+		},
+		SelectSession:            ctrl.SelectSessionForAgent,
+		SelectProject:            ctrl.SelectProject,
+		NewSession:               ctrl.NewSession,
+		DeleteSession:            func(agentID, sessionID string) { ctrl.DeleteSession(sessionID, agentID) },
+		RenameSession:            func(agentID, sessionID, title string) { ctrl.RenameSession(sessionID, title, agentID) },
+		TogglePinSession:         func(agentID, sessionID string) { ctrl.TogglePinSession(sessionID, agentID) },
+		ToggleSkill:              ctrl.ToggleSkill,
+		SetFilterMode:            ctrl.SetFilterMode,
+		SendPrompt:               ctrl.SendExpandedPrompt,
+		CancelPrompt:             ctrl.CancelPrompt,
+		ResolvePermission:        ctrl.ResolvePermission,
+		ResolveQuestion:          ctrl.ResolveQuestion,
+		SetRuntimeModel:          ctrl.SetRuntimeModel,
+		SetRuntimeReasoning:      ctrl.SetRuntimeReasoning,
+		SetRuntimeLow:            ctrl.SetRuntimeLowConcurrency,
+		SetRuntimePermissionMode: ctrl.SetRuntimePermissionMode,
+		RefreshRuntime:           func() { ctrl.RefreshActiveSession(true) },
+		SaveMCPIntegration:       ctrl.SaveMCPIntegration,
+		RemoveMCPIntegration:     ctrl.RemoveMCPIntegration,
+		ReconnectMCP:             ctrl.ReconnectMCP,
+		SelectAgent:              ctrl.SelectAgent,
+		SaveAgentProfile:         ctrl.SaveAgentProfile,
+		RemoveAgentProfile:       ctrl.RemoveAgentProfile,
+		ScanDeviceAgents:         ctrl.ScanDeviceAgents,
+		SaveProvider:             ctrl.SaveProvider,
+		DeleteProvider:           ctrl.DeleteProvider,
+		FetchProviderModels:      ctrl.FetchProviderModels,
+		RefreshProviders:         ctrl.RefreshProviders,
+	})
 
+	// A "system" theme follows the OS appearance, so poll for changes the way the
+	// ACP/TUI frontends do rather than only reacting to window config events.
 	go func() {
 		ticker := time.NewTicker(3 * time.Second)
 		defer ticker.Stop()
@@ -64,41 +105,11 @@ func Run(ctx context.Context, agents application.ACPAgents, mcpIntegrations appl
 				return
 			case <-ticker.C:
 				if configuredTheme == "system" {
-					updateTheme("system")
+					applyTheme("system")
 				}
 			}
 		}
 	}()
-	view.onSelectSession = controller.selectSessionForAgent
-	view.onSelectProject = controller.selectProject
-	view.onNewSession = controller.newSession
-	view.onDeleteSession = func(agentID, sessionID string) { controller.deleteSession(sessionID, agentID) }
-	view.onRenameSession = func(agentID, sessionID, title string) { controller.renameSession(sessionID, title, agentID) }
-	view.onTogglePinSession = func(agentID, sessionID string) { controller.togglePinSession(sessionID, agentID) }
-	view.onToggleSkill = controller.toggleSkill
-	view.onSetFilterMode = controller.setFilterMode
-	view.onSendPrompt = controller.sendExpandedPrompt
-	view.onCancelPrompt = controller.cancelPrompt
-	view.onResolvePermission = controller.resolvePermission
-	view.onResolveQuestion = controller.resolveQuestion
-	view.onSetRuntimeModel = controller.setRuntimeModel
-	view.onSetRuntimeReasoning = controller.setRuntimeReasoning
-	view.onSetRuntimeLow = controller.setRuntimeLowConcurrency
-	view.onSetRuntimePermissionMode = controller.setRuntimePermissionMode
-	view.onRefreshRuntime = func() {
-		controller.refreshActiveSession(true)
-	}
-	view.onSaveMCPIntegration = controller.saveMCPIntegration
-	view.onRemoveMCPIntegration = controller.removeMCPIntegration
-	view.onReconnectMCP = controller.reconnectMCP
-	view.onSelectAgent = controller.selectAgent
-	view.onSaveAgentProfile = controller.saveAgentProfile
-	view.onRemoveAgentProfile = controller.removeAgentProfile
-	view.onScanDeviceAgents = controller.scanDeviceAgents
-	view.onSaveProvider = controller.saveProvider
-	view.onDeleteProvider = controller.deleteProvider
-	view.onFetchProviderModels = controller.fetchProviderModels
-	view.onRefreshProviders = controller.refreshProviders
 	var operations op.Ops
 	for {
 		switch event := window.Event().(type) {
@@ -106,11 +117,11 @@ func Run(ctx context.Context, agents application.ACPAgents, mcpIntegrations appl
 			return event.Err
 		case app.ConfigEvent:
 			if configuredTheme == "system" {
-				updateTheme("system")
+				applyTheme("system")
 			}
 		case app.FrameEvent:
 			gtx := app.NewContext(&operations, event)
-			view.layout(gtx, controller.snapshot())
+			view.Layout(gtx, ctrl.Snapshot())
 			event.Frame(gtx.Ops)
 		}
 	}
@@ -120,21 +131,4 @@ func Run(ctx context.Context, agents application.ACPAgents, mcpIntegrations appl
 // On macOS and mobile platforms, it must be called from the main goroutine.
 func Main() {
 	app.Main()
-}
-
-func normalizedThemeMode(value string) string {
-	value = strings.ToLower(strings.TrimSpace(value))
-	switch value {
-	case "system", "auto", "device", "":
-		return "system"
-	case "dark", "light", "slate-dark", "slate-light":
-		return value
-	}
-	if strings.Contains(value, "dark") {
-		return "dark"
-	}
-	if strings.Contains(value, "light") {
-		return "light"
-	}
-	return "system"
 }

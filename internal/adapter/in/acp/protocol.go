@@ -82,6 +82,7 @@ type PromptCapabilities struct {
 
 type SessionCapabilities struct {
 	MetaCarrier
+	List                  *struct{} `json:"list,omitempty"`
 	Resume                *struct{} `json:"resume,omitempty"`
 	Delete                *struct{} `json:"delete,omitempty"`
 	Close                 *struct{} `json:"close,omitempty"`

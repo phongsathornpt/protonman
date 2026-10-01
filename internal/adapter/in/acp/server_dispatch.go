@@ -16,6 +16,7 @@ import (
 
 func (s *Server) advertisedSessionCapabilities() SessionCapabilities {
 	capabilities := SessionCapabilities{
+		List:   &struct{}{},
 		Resume: &struct{}{},
 		Delete: &struct{}{},
 		Close:  &struct{}{},

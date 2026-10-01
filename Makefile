@@ -88,7 +88,7 @@ test-architecture-desktop:
 
 ## test-desktop: Run the Gio desktop frontend tests (build-tag gated)
 test-desktop:
-	go test -tags desktop ./internal/feature/desktop ./internal/adapter/in/desktop/gioui ./cmd/protonman-desktop-gio
+	go test -tags desktop ./internal/feature/desktop ./internal/adapter/in/desktop/gioui/... ./cmd/protonman-desktop-gio
 
 ## test-desktop-gio: Alias for the Gio desktop tests
 test-desktop-gio: test-desktop

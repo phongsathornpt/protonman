@@ -774,6 +774,57 @@ the bug was observable. Examples:
 - MCP discovery -> catalog atomicity, contract, and concurrency tests
 - filesystem security -> boundary-focused tool/workspace tests
 
+### Desktop frontend verification
+
+`make test-desktop` and `make test-architecture-desktop` are the gate for the Gio
+frontend. Because that subsystem is build-tag gated, `make lint` and `make test`
+(untagged `go vet ./...` and `go test ./...`) do **not** cover it. Always run
+both tagged targets after touching `internal/adapter/in/desktop/**`.
+
+For editor-level diagnostics, note that `gopls check` does not accept a `-tags`
+flag; pass build flags through the environment:
+
+```sh
+GOFLAGS=-tags=desktop gopls check -severity=error $(find internal/adapter/in/desktop -name '*.go')
+```
+
+Two known false positives, both unrelated to repository code:
+
+- A repo-wide `gopls check -tags desktop` reports
+  `error while importing gioui.org/app: build constraints exclude all Go files in
+  gioui.org/internal/vk [linux,amd64]`. That module is `//go:build linux || freebsd`
+  and gopls cannot resolve it from a macOS host. Scope the check to the desktop
+  subsystem, or rely on `go build`/`go vet`, which handle it correctly.
+- An empty result means nothing was loaded, so confirm coverage with a deliberate
+  injection before trusting a clean run.
+
+### Desktop frontend test-coverage debt
+
+The Gio frontend was split from one package into `gioui/` (composition root),
+`gioui/shell/`, `gioui/controller/`, and `gioui/component/*`. During that split,
+123 desktop tests went missing: 70 were dropped outright because they asserted on
+`shell` struct fields that an earlier in-flight refactor had already deleted
+(`settingsModalOpen`, `modelPopoverVisible`, `reasoningPopoverVisible`,
+`permissionModePopoverVisible`, `agentEditorVisible`, `composer`, `conversationList`,
+`inspectorOverride`, `providerFormVisible`, the MCP form widgets, and others), and
+the rest were relocated. Those fields now live behind component APIs
+(`settingsComponent.IsOpen()`, `runtimeComponent.Widgets()`,
+`settingsComponent.AgentWidgets()`, `conversationUI.Editor()`,
+`conversationUI.Timeline()`).
+
+Most of that coverage was relocated into `controller/`. Roughly twenty were
+restored by porting them to the component APIs (the desktop tree now holds 200
+tests, up from 185 at the start of the effort). The remainder — 60 tests covering
+the runtime popovers, agent editor widgets, inspector visibility, and the MCP and
+provider forms — is still unported. **Do not treat the current desktop test
+count as complete.**
+
+When restoring one of these, take the original from git history
+(`git show HEAD:internal/adapter/in/desktop/gioui/<file>_test.go`), retarget it
+to the component API, and mutation-verify the new assertion: break the
+production code, confirm the test fails, then revert. A relocated test that only
+compiles is not coverage.
+
 ## Change Placement Guide
 
 When implementing a change, place it according to ownership:

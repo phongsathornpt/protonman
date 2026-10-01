@@ -1,0 +1,798 @@
+### nil-error
+kind="generic" title="" badge=""
+message="Unknown error"
+code="" retryable=false usercode="ERROR"
+suggestions=<none>
+
+### empty-message
+kind="generic" title="Operation Failed" badge="ERROR"
+message=""
+code="" retryable=false usercode="ERROR"
+suggestions="Review the error details above, then retry"
+
+### cancelled-sentinel
+kind="cancelled" title="Turn Cancelled" badge="CANCELLED"
+message="The turn was cancelled by the user."
+code="" retryable=true usercode="CANCELLED"
+suggestions=<none>
+
+### cancelled-wrapped
+kind="cancelled" title="Turn Cancelled" badge="CANCELLED"
+message="The turn was cancelled by the user."
+code="" retryable=true usercode="CANCELLED"
+suggestions=<none>
+
+### cancelled-text
+kind="cancelled" title="Turn Cancelled" badge="CANCELLED"
+message="The turn was cancelled by the user."
+code="" retryable=true usercode="CANCELLED"
+suggestions=<none>
+
+### cancelled-ui
+kind="cancelled" title="Turn Cancelled" badge="CANCELLED"
+message="The turn was cancelled by the user."
+code="" retryable=true usercode="CANCELLED"
+suggestions=<none>
+
+### empty-response
+kind="empty_response" title="Provider Returned No Output" badge="EMPTY_RESPONSE"
+message="The provider completed the request without returning text or a tool call after bounded recovery attempts."
+code="" retryable=true usercode="EMPTY_RESPONSE"
+suggestions="Retry the request; transient free-model streams can recover on a later call" | "Switch models if the provider repeatedly returns an empty response"
+
+### empty-response-bare
+kind="empty_response" title="Provider Returned No Output" badge="EMPTY_RESPONSE"
+message="The provider completed the request without returning text or a tool call after bounded recovery attempts."
+code="" retryable=true usercode="EMPTY_RESPONSE"
+suggestions="Retry the request; transient free-model streams can recover on a later call" | "Switch models if the provider repeatedly returns an empty response"
+
+### stream-incomplete
+kind="stream_incomplete" title="Provider Stream Ended Early" badge="STREAM_INCOMPLETE"
+message="The provider closed the response stream before sending a terminal completion event."
+code="" retryable=true usercode="STREAM_INCOMPLETE"
+suggestions="Retry the request; transient provider disconnects can recover" | "Switch models if the stream repeatedly closes early"
+
+### stream-incomplete-idle
+kind="stream_timeout" title="Provider Stream Timed Out" badge="STREAM_TIMEOUT"
+message="The provider stream exceeded its bounded response window before completing."
+code="" retryable=true usercode="STREAM_TIMEOUT"
+suggestions="Retry the request; transient provider stalls can recover" | "Switch models if stream timeouts keep recurring"
+
+### stream-incomplete-no-output
+kind="stream_timeout" title="Provider Stream Timed Out" badge="STREAM_TIMEOUT"
+message="The provider stream exceeded its bounded response window before completing."
+code="" retryable=true usercode="STREAM_TIMEOUT"
+suggestions="Retry the request; transient provider stalls can recover" | "Switch models if stream timeouts keep recurring"
+
+### stream-incomplete-max-duration
+kind="stream_timeout" title="Provider Stream Timed Out" badge="STREAM_TIMEOUT"
+message="The provider stream exceeded its bounded response window before completing."
+code="" retryable=true usercode="STREAM_TIMEOUT"
+suggestions="Retry the request; transient provider stalls can recover" | "Switch models if stream timeouts keep recurring"
+
+### tool-dispatch-unavailable
+kind="tool_dispatch" title="Tool Dispatch Unavailable" badge="TOOL_DISPATCH"
+message="The model requested a tool, but no tools were available for this turn."
+code="" retryable=true usercode="TOOL_DISPATCH"
+suggestions="Check that the active runner has a registered tool set" | "Verify the selected provider/model supports the configured tools" | "Retry after correcting the tool configuration"
+
+### tool-dispatch-wrapped
+kind="tool_dispatch" title="Tool Dispatch Unavailable" badge="TOOL_DISPATCH"
+message="The model requested a tool, but no tools were available for this turn."
+code="" retryable=true usercode="TOOL_DISPATCH"
+suggestions="Check that the active runner has a registered tool set" | "Verify the selected provider/model supports the configured tools" | "Retry after correcting the tool configuration"
+
+### unresolved-tool-call
+kind="tool_dispatch" title="Unresolved Tool Call" badge="TOOL_PROTOCOL"
+message="The model returned a tool call that the turn loop could not resolve."
+code="" retryable=true usercode="TOOL_DISPATCH"
+suggestions="Retry the request in a fresh turn" | "Retry with a model that supports the configured tool protocol"
+
+### unresolved-tool-call-wrapped
+kind="tool_dispatch" title="Unresolved Tool Call" badge="TOOL_PROTOCOL"
+message="The model returned a tool call that the turn loop could not resolve."
+code="" retryable=true usercode="TOOL_DISPATCH"
+suggestions="Retry the request in a fresh turn" | "Retry with a model that supports the configured tool protocol"
+
+### permission-denied
+kind="permission_denied" title="Permission Denied" badge="DENIED"
+message="Execution was blocked by permission policy or user rejection."
+code="" retryable=false usercode="PERMISSION_DENIED"
+suggestions="Change permission mode using Shift+Tab"
+
+### permission-question-rejected
+kind="permission_denied" title="Permission Denied" badge="DENIED"
+message="Execution was blocked by permission policy or user rejection."
+code="" retryable=false usercode="PERMISSION_DENIED"
+suggestions="Change permission mode using Shift+Tab"
+
+### permission-rule
+kind="permission_denied" title="Permission Denied" badge="DENIED"
+message="Execution was blocked by permission policy or user rejection."
+code="" retryable=false usercode="PERMISSION_DENIED"
+suggestions="Change permission mode using Shift+Tab"
+
+### auth-401-status
+kind="authentication" title="Authentication Required" badge="401 UNAUTHORIZED"
+message="Provider authentication failed. The API key is missing, invalid, or expired."
+code="401" retryable=false usercode="AUTH_FAILED"
+suggestions="Run /provider to configure your API key" | "Switch to OpenCode Free tier models (no key required): /provider opencode"
+
+### auth-invalid-key
+kind="authentication" title="Authentication Required" badge="401 UNAUTHORIZED"
+message="Provider authentication failed. The API key is missing, invalid, or expired."
+code="401" retryable=false usercode="AUTH_FAILED"
+suggestions="Run /provider to configure your API key" | "Switch to OpenCode Free tier models (no key required): /provider opencode"
+
+### auth-code-equals
+kind="authentication" title="Authentication Required" badge="401 UNAUTHORIZED"
+message="Provider authentication failed. The API key is missing, invalid, or expired."
+code="401" retryable=false usercode="AUTH_FAILED"
+suggestions="Run /provider to configure your API key" | "Switch to OpenCode Free tier models (no key required): /provider opencode"
+
+### forbidden-403
+kind="forbidden" title="Access Forbidden" badge="403 FORBIDDEN"
+message="Access to the requested model or API resource is forbidden for your account."
+code="403" retryable=false usercode="FORBIDDEN"
+suggestions="Check your account permissions or billing tier" | "Switch to an available free model via /provider"
+
+### forbidden-word
+kind="forbidden" title="Access Forbidden" badge="403 FORBIDDEN"
+message="Access to the requested model or API resource is forbidden for your account."
+code="403" retryable=false usercode="FORBIDDEN"
+suggestions="Check your account permissions or billing tier" | "Switch to an available free model via /provider"
+
+### forbidden-access-denied
+kind="forbidden" title="Access Forbidden" badge="403 FORBIDDEN"
+message="Access to the requested model or API resource is forbidden for your account."
+code="403" retryable=false usercode="FORBIDDEN"
+suggestions="Check your account permissions or billing tier" | "Switch to an available free model via /provider"
+
+### quota-code
+kind="quota_exceeded" title="Quota Exceeded" badge="QUOTA_EXCEEDED"
+message="Your account quota has been exhausted. Check your plan and billing details."
+code="429" retryable=false usercode="QUOTA_EXCEEDED"
+suggestions="Check billing details on your provider dashboard" | "Switch to OpenCode free models: /provider opencode"
+
+### quota-words
+kind="generic" title="Operation Failed" badge="ERROR"
+message="Quota exceeded. Check your plan and billing details."
+code="" retryable=false usercode="ERROR"
+suggestions="Review the error details above, then retry"
+
+### ratelimit-429
+kind="rate_limit" title="Rate Limit Exceeded" badge="429 RATE_LIMIT"
+message="Too many requests sent to the model provider in a short period."
+code="429" retryable=true usercode="RATE_LIMITED"
+suggestions="Wait a few moments before sending another prompt" | "Switch to another provider via /provider if limits persist"
+
+### ratelimit-words
+kind="rate_limit" title="Rate Limit Exceeded" badge="429 RATE_LIMIT"
+message="Too many requests sent to the model provider in a short period."
+code="429" retryable=true usercode="RATE_LIMITED"
+suggestions="Wait a few moments before sending another prompt" | "Switch to another provider via /provider if limits persist"
+
+### ratelimit-too-many
+kind="rate_limit" title="Rate Limit Exceeded" badge="429 RATE_LIMIT"
+message="Too many requests sent to the model provider in a short period."
+code="429" retryable=true usercode="RATE_LIMITED"
+suggestions="Wait a few moments before sending another prompt" | "Switch to another provider via /provider if limits persist"
+
+### server-500
+kind="server_overloaded" title="Provider Server Overloaded" badge="500 SERVER_ERROR"
+message="The OpenCode upstream provider is temporarily overloaded or experiencing an outage."
+code="500" retryable=true usercode="PROVIDER_OVERLOADED"
+suggestions="This is usually a temporary outage — please retry in a moment" | "Switch to an alternative model or provider using /provider"
+
+### server-502
+kind="server_overloaded" title="Provider Server Overloaded" badge="502 SERVER_ERROR"
+message="The OpenCode upstream provider is temporarily overloaded or experiencing an outage."
+code="502" retryable=true usercode="PROVIDER_OVERLOADED"
+suggestions="This is usually a temporary outage — please retry in a moment" | "Switch to an alternative model or provider using /provider"
+
+### server-503
+kind="server_overloaded" title="Provider Server Overloaded" badge="5xx SERVER_ERROR"
+message="The OpenCode upstream provider is temporarily overloaded or experiencing an outage."
+code="5xx" retryable=true usercode="PROVIDER_OVERLOADED"
+suggestions="This is usually a temporary outage — please retry in a moment" | "Switch to an alternative model or provider using /provider"
+
+### server-504
+kind="server_overloaded" title="Provider Server Overloaded" badge="504 SERVER_ERROR"
+message="The OpenCode upstream provider is temporarily overloaded or experiencing an outage."
+code="504" retryable=true usercode="PROVIDER_OVERLOADED"
+suggestions="This is usually a temporary outage — please retry in a moment" | "Switch to an alternative model or provider using /provider"
+
+### server-overloaded-flag
+kind="server_overloaded" title="Provider Server Overloaded" badge="5xx SERVER_ERROR"
+message="The OpenCode upstream provider is temporarily overloaded or experiencing an outage."
+code="5xx" retryable=true usercode="PROVIDER_OVERLOADED"
+suggestions="This is usually a temporary outage — please retry in a moment" | "Switch to an alternative model or provider using /provider"
+
+### server-error-flag
+kind="server_overloaded" title="Provider Server Overloaded" badge="5xx SERVER_ERROR"
+message="The OpenCode upstream provider is temporarily overloaded or experiencing an outage."
+code="5xx" retryable=true usercode="PROVIDER_OVERLOADED"
+suggestions="This is usually a temporary outage — please retry in a moment" | "Switch to an alternative model or provider using /provider"
+
+### server-upstream-failed
+kind="server_overloaded" title="Provider Server Overloaded" badge="5xx SERVER_ERROR"
+message="The OpenCode upstream provider is temporarily overloaded or experiencing an outage."
+code="5xx" retryable=true usercode="PROVIDER_OVERLOADED"
+suggestions="This is usually a temporary outage — please retry in a moment" | "Switch to an alternative model or provider using /provider"
+
+### transport-header-timeout
+kind="stream_timeout" title="Connection / Stream Timeout" badge="TIMEOUT"
+message="The network connection timed out or the provider stream disconnected unexpectedly."
+code="" retryable=true usercode="STREAM_TIMEOUT"
+suggestions="Check endpoint availability and provider status" | "Retry the request"
+
+### transport-stream-error
+kind="stream_timeout" title="Connection / Stream Timeout" badge="TIMEOUT"
+message="The network connection timed out or the provider stream disconnected unexpectedly."
+code="" retryable=true usercode="STREAM_TIMEOUT"
+suggestions="Check endpoint availability and provider status" | "Retry the request"
+
+### transport-client-timeout
+kind="stream_timeout" title="Connection / Stream Timeout" badge="TIMEOUT"
+message="The network connection timed out or the provider stream disconnected unexpectedly."
+code="" retryable=true usercode="STREAM_TIMEOUT"
+suggestions="Check endpoint availability and provider status" | "Retry the request"
+
+### transport-io-timeout
+kind="stream_timeout" title="Connection / Stream Timeout" badge="TIMEOUT"
+message="The network connection timed out or the provider stream disconnected unexpectedly."
+code="" retryable=true usercode="STREAM_TIMEOUT"
+suggestions="Check endpoint availability and provider status" | "Retry the request"
+
+### transport-tls-timeout
+kind="stream_timeout" title="Connection / Stream Timeout" badge="TIMEOUT"
+message="The network connection timed out or the provider stream disconnected unexpectedly."
+code="" retryable=true usercode="STREAM_TIMEOUT"
+suggestions="Check endpoint availability and provider status" | "Retry the request"
+
+### transport-dial-tcp
+kind="runtime_timeout" title="Operation Timeout" badge="TIMEOUT"
+message="A bounded operation reached its execution deadline."
+code="" retryable=true usercode="OPERATION_TIMEOUT"
+suggestions="Retry the operation if it is still required" | "Inspect the active tool or agent state before repeating work"
+
+### transport-unexpected-eof
+kind="stream_timeout" title="Connection / Stream Timeout" badge="TIMEOUT"
+message="The network connection timed out or the provider stream disconnected unexpectedly."
+code="" retryable=true usercode="STREAM_TIMEOUT"
+suggestions="Check endpoint availability and provider status" | "Retry the request"
+
+### transport-connection-reset
+kind="stream_timeout" title="Connection / Stream Timeout" badge="TIMEOUT"
+message="The network connection timed out or the provider stream disconnected unexpectedly."
+code="" retryable=true usercode="STREAM_TIMEOUT"
+suggestions="Check endpoint availability and provider status" | "Retry the request"
+
+### runtime-deadline-sentinel
+kind="runtime_timeout" title="Operation Timeout" badge="TIMEOUT"
+message="A bounded operation reached its execution deadline."
+code="" retryable=true usercode="OPERATION_TIMEOUT"
+suggestions="Retry the operation if it is still required" | "Inspect the active tool or agent state before repeating work"
+
+### runtime-deadline-wrapped
+kind="runtime_timeout" title="Operation Timeout" badge="TIMEOUT"
+message="A bounded operation reached its execution deadline."
+code="" retryable=true usercode="OPERATION_TIMEOUT"
+suggestions="Retry the operation if it is still required" | "Inspect the active tool or agent state before repeating work"
+
+### runtime-deadline-text
+kind="runtime_timeout" title="Operation Timeout" badge="TIMEOUT"
+message="A bounded operation reached its execution deadline."
+code="" retryable=true usercode="OPERATION_TIMEOUT"
+suggestions="Retry the operation if it is still required" | "Inspect the active tool or agent state before repeating work"
+
+### runtime-timed-out
+kind="runtime_timeout" title="Operation Timeout" badge="TIMEOUT"
+message="A bounded operation reached its execution deadline."
+code="" retryable=true usercode="OPERATION_TIMEOUT"
+suggestions="Retry the operation if it is still required" | "Inspect the active tool or agent state before repeating work"
+
+### runtime-timeout-word
+kind="runtime_timeout" title="Operation Timeout" badge="TIMEOUT"
+message="A bounded operation reached its execution deadline."
+code="" retryable=true usercode="OPERATION_TIMEOUT"
+suggestions="Retry the operation if it is still required" | "Inspect the active tool or agent state before repeating work"
+
+### mcp-failed-flag
+kind="mcp_failed" title="MCP Server Failed" badge="MCP_ERROR"
+message="MCP server \"server\" encountered a fatal failure. Note: MCP authentication is not supported yet."
+code="" retryable=false usercode="MCP_FAILED"
+suggestions="Check MCP server configuration and process logs in ~/.protonman/logs/mcp/" | "Verify that all required environment variables for the MCP server are set"
+
+### mcp-server-generic
+kind="mcp_failed" title="MCP Server Failed" badge="MCP_ERROR"
+message="MCP server \"server\" encountered a fatal failure. Note: MCP authentication is not supported yet."
+code="" retryable=false usercode="MCP_FAILED"
+suggestions="Check MCP server configuration and process logs in ~/.protonman/logs/mcp/" | "Verify that all required environment variables for the MCP server are set"
+
+### mcp-server-named-double
+kind="mcp_failed" title="MCP Server Failed" badge="MCP_ERROR"
+message="MCP server \"github\" encountered a fatal failure. Note: MCP authentication is not supported yet."
+code="" retryable=false usercode="MCP_FAILED"
+suggestions="Check MCP server configuration and process logs in ~/.protonman/logs/mcp/" | "Verify that all required environment variables for the MCP server are set"
+
+### mcp-server-named-single
+kind="mcp_failed" title="MCP Server Failed" badge="MCP_ERROR"
+message="MCP server \"weather\" encountered a fatal failure. Note: MCP authentication is not supported yet."
+code="" retryable=false usercode="MCP_FAILED"
+suggestions="Check MCP server configuration and process logs in ~/.protonman/logs/mcp/" | "Verify that all required environment variables for the MCP server are set"
+
+### mcp-server-named-bare
+kind="mcp_failed" title="MCP Server Failed" badge="MCP_ERROR"
+message="MCP server \"fetch\" encountered a fatal failure. Note: MCP authentication is not supported yet."
+code="" retryable=false usercode="MCP_FAILED"
+suggestions="Check MCP server configuration and process logs in ~/.protonman/logs/mcp/" | "Verify that all required environment variables for the MCP server are set"
+
+### config-typo-flag
+kind="config_typo" title="Config Directory Typo" badge="CONFIG_TYPO"
+message="ConfigDirectoryTypoError: ~/.opencode is not valid. Rename the directory"
+code="" retryable=false usercode="CONFIG_TYPO"
+suggestions="Rename the invalid directory as indicated in the error message"
+
+### config-typo-words
+kind="config_typo" title="Config Directory Typo" badge="CONFIG_TYPO"
+message="directory .openecode is not valid. Rename the directory"
+code="" retryable=false usercode="CONFIG_TYPO"
+suggestions="Rename the invalid directory as indicated in the error message"
+
+### config-json
+kind="config_invalid" title="Configuration Invalid" badge="CONFIG_ERROR"
+message="ConfigJsonError: invalid character '}' looking for beginning of value"
+code="" retryable=false usercode="CONFIG_INVALID"
+suggestions="Check your configuration file syntax (.protonman/config.json or opencode.json)" | "Ensure all provider keys and model configurations are properly structured"
+
+### config-invalid
+kind="config_invalid" title="Configuration Invalid" badge="CONFIG_ERROR"
+message="ConfigInvalidError: unknown field \"model\""
+code="" retryable=false usercode="CONFIG_INVALID"
+suggestions="Check your configuration file syntax (.protonman/config.json or opencode.json)" | "Ensure all provider keys and model configurations are properly structured"
+
+### config-invalid-words
+kind="config_invalid" title="Configuration Invalid" badge="CONFIG_ERROR"
+message="Configuration is invalid: provider missing baseUrl"
+code="" retryable=false usercode="CONFIG_INVALID"
+suggestions="Check your configuration file syntax (.protonman/config.json or opencode.json)" | "Ensure all provider keys and model configurations are properly structured"
+
+### tool-failed-words
+kind="tool_failed" title="Tool Execution Error" badge="TOOL_FAILED"
+message="tool execution failed: bash"
+code="" retryable=false usercode="TOOL_FAILED"
+suggestions=<none>
+
+### tool-failed-command
+kind="tool_failed" title="Tool Execution Error" badge="TOOL_FAILED"
+message="[COMMAND_FAILED] exit status 1"
+code="" retryable=false usercode="TOOL_FAILED"
+suggestions=<none>
+
+### tool-failed-notfound
+kind="tool_failed" title="Tool Execution Error" badge="TOOL_FAILED"
+message="[FILE_NOT_FOUND] internal/nope.go"
+code="" retryable=false usercode="TOOL_FAILED"
+suggestions=<none>
+
+### model-not-supported
+kind="model_not_found" title="Model Not Supported" badge="MODEL_NOT_FOUND"
+message="Model \"nemotron-3.5-lightning-free\" is not supported by provider \"opencode\"."
+code="404" retryable=false usercode="MODEL_NOT_FOUND"
+suggestions="Run /model to refresh the provider model catalog" | "Run /provider to select or reconfigure the active provider"
+
+### model-not-supported-no-provider
+kind="model_not_found" title="Model Not Supported" badge="MODEL_NOT_FOUND"
+message="Model \"gpt-9\" is not supported by the active provider."
+code="404" retryable=false usercode="MODEL_NOT_FOUND"
+suggestions="Run /model to refresh the provider model catalog" | "Run /provider to select or reconfigure the active provider"
+
+### model-provider-not-found
+kind="model_not_found" title="Model Not Supported" badge="MODEL_NOT_FOUND"
+message="Model \"\" is not supported by provider \"anthropic\"."
+code="404" retryable=false usercode="MODEL_NOT_FOUND"
+suggestions="Run /model to refresh the provider model catalog" | "Run /provider to select or reconfigure the active provider"
+
+### model-quoted-not-found
+kind="generic" title="Operation Failed" badge="ERROR"
+message="model 'claude-y' not found in catalog"
+code="" retryable=false usercode="ERROR"
+suggestions="Review the error details above, then retry"
+
+### model-does-not-exist
+kind="generic" title="Operation Failed" badge="ERROR"
+message="model deepseek-v4 does not exist"
+code="" retryable=false usercode="ERROR"
+suggestions="Review the error details above, then retry"
+
+### model-404-with-word
+kind="model_not_found" title="Model Not Supported" badge="MODEL_NOT_FOUND"
+message="Model \"\" is not supported by provider \"opencode\"."
+code="404" retryable=false usercode="MODEL_NOT_FOUND"
+suggestions="Run /model to refresh the provider model catalog" | "Run /provider to select or reconfigure the active provider"
+
+### notfound-404-no-model
+kind="generic" title="Operation Failed" badge="ERROR"
+message="status 404: workspace resource missing"
+code="" retryable=false usercode="ERROR"
+suggestions="Review the error details above, then retry"
+
+### context-413
+kind="context_overflow" title="Context Window Overflow" badge="CONTEXT_OVERFLOW"
+message="Input token count exceeds the maximum context length for this model."
+code="413" retryable=false usercode="CONTEXT_OVERFLOW"
+suggestions="Run /clear to start a fresh conversation while preserving session settings" | "Switch to a high-context model via /provider (e.g. muse-spark or deepseek-v4)"
+
+### generic-turn-prefix
+kind="generic" title="Operation Failed" badge="ERROR"
+message="something completely unexpected"
+code="" retryable=false usercode="ERROR"
+suggestions="Review the error details above, then retry"
+
+### generic-multibyte
+kind="generic" title="Operation Failed" badge="ERROR"
+message="完全未知的錯誤：模型拒絕回應"
+code="" retryable=false usercode="ERROR"
+suggestions="Review the error details above, then retry"
+
+### generic-emoji
+kind="generic" title="Operation Failed" badge="ERROR"
+message="provider shrugged 🤷 no known code"
+code="" retryable=false usercode="ERROR"
+suggestions="Review the error details above, then retry"
+
+### generic-long-tail
+kind="generic" title="Operation Failed" badge="ERROR"
+message="unknown failure padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token padding-token "
+code="" retryable=false usercode="ERROR"
+suggestions="Review the error details above, then retry"
+
+### status-four-digits
+kind="generic" title="Operation Failed" badge="ERROR"
+message="provider code 4041 rejected"
+code="" retryable=false usercode="ERROR"
+suggestions="Review the error details above, then retry"
+
+### overflow-rate-limit-exclusion
+kind="rate_limit" title="Rate Limit Exceeded" badge="429 RATE_LIMIT"
+message="Too many requests sent to the model provider in a short period."
+code="429" retryable=true usercode="RATE_LIMITED"
+suggestions="Wait a few moments before sending another prompt" | "Switch to another provider via /provider if limits persist"
+
+### overflow-parsed-message-beats-exclusion
+kind="context_overflow" title="Context Window Overflow" badge="CONTEXT_OVERFLOW"
+message="Input token count exceeds the maximum context length for this model."
+code="413" retryable=false usercode="CONTEXT_OVERFLOW"
+suggestions="Run /clear to start a fresh conversation while preserving session settings" | "Switch to a high-context model via /provider (e.g. muse-spark or deepseek-v4)"
+
+### payload-'type''error','error''type''ModelError','message
+kind="model_not_found" title="Model Not Supported" badge="MODEL_NOT_FOUND"
+message="Model \"foo\" is not supported by provider \"opencode\"."
+code="404" retryable=false usercode="MODEL_NOT_FOUND"
+suggestions="Run /model to refresh the provider model catalog" | "Run /provider to select or reconfigure the active provider"
+
+### payload-'type''error','error''type''AuthError','message'
+kind="authentication" title="Authentication Required" badge="401 UNAUTHORIZED"
+message="Provider authentication failed. The API key is missing, invalid, or expired."
+code="401" retryable=false usercode="AUTH_FAILED"
+suggestions="Run /provider to configure your API key" | "Switch to OpenCode Free tier models (no key required): /provider opencode"
+
+### payload-'type''error','error''type''RateLimitError','mes
+kind="rate_limit" title="Rate Limit Exceeded" badge="429 RATE_LIMIT"
+message="Too many requests sent to the model provider in a short period."
+code="429" retryable=true usercode="RATE_LIMITED"
+suggestions="Wait a few moments before sending another prompt" | "Switch to another provider via /provider if limits persist"
+
+### payload-'type''error','error''type''invalid_request_erro
+kind="context_overflow" title="Context Window Overflow" badge="CONTEXT_OVERFLOW"
+message="Input token count exceeds the maximum context length for this model."
+code="413" retryable=false usercode="CONTEXT_OVERFLOW"
+suggestions="Run /clear to start a fresh conversation while preserving session settings" | "Switch to a high-context model via /provider (e.g. muse-spark or deepseek-v4)"
+
+### payload-'error''message''Invalid-API-key','type''authent
+kind="authentication" title="Authentication Required" badge="401 UNAUTHORIZED"
+message="Provider authentication failed. The API key is missing, invalid, or expired."
+code="401" retryable=false usercode="AUTH_FAILED"
+suggestions="Run /provider to configure your API key" | "Switch to OpenCode Free tier models (no key required): /provider opencode"
+
+### payload-'error''message''Quota-exceeded.','type''insuffi
+kind="quota_exceeded" title="Quota Exceeded" badge="QUOTA_EXCEEDED"
+message="Your account quota has been exhausted. Check your plan and billing details."
+code="429" retryable=false usercode="QUOTA_EXCEEDED"
+suggestions="Check billing details on your provider dashboard" | "Switch to OpenCode free models: /provider opencode"
+
+### payload-'error''message''Context-Window-Overflow-Detecte
+kind="context_overflow" title="Context Window Overflow" badge="CONTEXT_OVERFLOW"
+message="Input token count exceeds the maximum context length for this model."
+code="413" retryable=false usercode="CONTEXT_OVERFLOW"
+suggestions="Run /clear to start a fresh conversation while preserving session settings" | "Switch to a high-context model via /provider (e.g. muse-spark or deepseek-v4)"
+
+### payload-'error''message''','type''empty_message'
+kind="generic" title="Operation Failed" badge="ERROR"
+message="provider rejected request: {\"error\":{\"message\":\"\",\"type\":\"empty_message\"}}"
+code="" retryable=false usercode="ERROR"
+suggestions="Review the error details above, then retry"
+
+### payload-'message''Something-went-sideways'
+kind="generic" title="Operation Failed" badge="ERROR"
+message="Something went sideways"
+code="" retryable=false usercode="ERROR"
+suggestions="Review the error details above, then retry"
+
+### payload-'detail''Bad-thing-happened'
+kind="generic" title="Operation Failed" badge="ERROR"
+message="Bad thing happened"
+code="" retryable=false usercode="ERROR"
+suggestions="Review the error details above, then retry"
+
+### payload-'error''plain-string-error'
+kind="generic" title="Operation Failed" badge="ERROR"
+message="plain string error"
+code="" retryable=false usercode="ERROR"
+suggestions="Review the error details above, then retry"
+
+### payload-'error'
+kind="generic" title="Operation Failed" badge="ERROR"
+message="provider rejected request: {\"error\":"
+code="" retryable=false usercode="ERROR"
+suggestions="Review the error details above, then retry"
+
+### payload-not-json
+kind="generic" title="Operation Failed" badge="ERROR"
+message="provider rejected request: {not json}"
+code="" retryable=false usercode="ERROR"
+suggestions="Review the error details above, then retry"
+
+### payload-[]
+kind="generic" title="Operation Failed" badge="ERROR"
+message="provider rejected request: []"
+code="" retryable=false usercode="ERROR"
+suggestions="Review the error details above, then retry"
+
+### payload-'just-a-string'
+kind="generic" title="Operation Failed" badge="ERROR"
+message="provider rejected request: \"just a string\""
+code="" retryable=false usercode="ERROR"
+suggestions="Review the error details above, then retry"
+
+### payload-prefix-'error''message''inner-payload'-suffix
+kind="generic" title="Operation Failed" badge="ERROR"
+message="inner payload"
+code="" retryable=false usercode="ERROR"
+suggestions="Review the error details above, then retry"
+
+### payload-'error''message''[FILE_NOT_FOUND]-missing','type
+kind="tool_failed" title="Tool Execution Error" badge="TOOL_FAILED"
+message="[FILE_NOT_FOUND] missing"
+code="" retryable=false usercode="TOOL_FAILED"
+suggestions=<none>
+
+### payload-'error''message''permission-denied-while-reading
+kind="permission_denied" title="Permission Denied" badge="DENIED"
+message="Execution was blocked by permission policy or user rejection."
+code="" retryable=false usercode="PERMISSION_DENIED"
+suggestions="Change permission mode using Shift+Tab"
+
+### gateway-<!doctype-html><html><title>401-Unauthorized<-ti
+kind="authentication" title="Gateway Authentication Required" badge="401 UNAUTHORIZED"
+message="Request was blocked by an upstream gateway or proxy. Your API key or session token is missing or expired."
+code="401" retryable=false usercode="AUTH_FAILED"
+suggestions="Run /provider to configure your API key" | "Or switch to OpenCode Free tier models: /provider opencode"
+
+### gateway-<html><body>Forbidden<-body><-html>-status-403
+kind="forbidden" title="Gateway Access Forbidden" badge="403 FORBIDDEN"
+message="Request was blocked by an upstream gateway or Cloudflare security policy."
+code="403" retryable=false usercode="FORBIDDEN"
+suggestions="Check your provider account and network settings" | "Switch to an alternative model via /provider"
+
+### gateway-<!DOCTYPE-html><html>cloudflare<-html>-status-50
+kind="server_overloaded" title="Gateway Error" badge="500 GATEWAY"
+message="The proxy gateway returned an HTML error page instead of an API response."
+code="500" retryable=true usercode="PROVIDER_OVERLOADED"
+suggestions="Wait a moment and retry" | "Switch model provider using /provider"
+
+### gateway-<html><body>no-status-marker<-body><-html>
+kind="server_overloaded" title="Gateway Error" badge="0 GATEWAY"
+message="The proxy gateway returned an HTML error page instead of an API response."
+code="0" retryable=true usercode="PROVIDER_OVERLOADED"
+suggestions="Wait a moment and retry" | "Switch model provider using /provider"
+
+### overflow-00
+kind="context_overflow" title="Context Window Overflow" badge="CONTEXT_OVERFLOW"
+message="Input token count exceeds the maximum context length for this model."
+code="413" retryable=false usercode="CONTEXT_OVERFLOW"
+suggestions="Run /clear to start a fresh conversation while preserving session settings" | "Switch to a high-context model via /provider (e.g. muse-spark or deepseek-v4)"
+
+### overflow-01
+kind="context_overflow" title="Context Window Overflow" badge="CONTEXT_OVERFLOW"
+message="Input token count exceeds the maximum context length for this model."
+code="413" retryable=false usercode="CONTEXT_OVERFLOW"
+suggestions="Run /clear to start a fresh conversation while preserving session settings" | "Switch to a high-context model via /provider (e.g. muse-spark or deepseek-v4)"
+
+### overflow-02
+kind="context_overflow" title="Context Window Overflow" badge="CONTEXT_OVERFLOW"
+message="Input token count exceeds the maximum context length for this model."
+code="413" retryable=false usercode="CONTEXT_OVERFLOW"
+suggestions="Run /clear to start a fresh conversation while preserving session settings" | "Switch to a high-context model via /provider (e.g. muse-spark or deepseek-v4)"
+
+### overflow-03
+kind="context_overflow" title="Context Window Overflow" badge="CONTEXT_OVERFLOW"
+message="Input token count exceeds the maximum context length for this model."
+code="413" retryable=false usercode="CONTEXT_OVERFLOW"
+suggestions="Run /clear to start a fresh conversation while preserving session settings" | "Switch to a high-context model via /provider (e.g. muse-spark or deepseek-v4)"
+
+### overflow-04
+kind="context_overflow" title="Context Window Overflow" badge="CONTEXT_OVERFLOW"
+message="Input token count exceeds the maximum context length for this model."
+code="413" retryable=false usercode="CONTEXT_OVERFLOW"
+suggestions="Run /clear to start a fresh conversation while preserving session settings" | "Switch to a high-context model via /provider (e.g. muse-spark or deepseek-v4)"
+
+### overflow-05
+kind="context_overflow" title="Context Window Overflow" badge="CONTEXT_OVERFLOW"
+message="Input token count exceeds the maximum context length for this model."
+code="413" retryable=false usercode="CONTEXT_OVERFLOW"
+suggestions="Run /clear to start a fresh conversation while preserving session settings" | "Switch to a high-context model via /provider (e.g. muse-spark or deepseek-v4)"
+
+### overflow-06
+kind="context_overflow" title="Context Window Overflow" badge="CONTEXT_OVERFLOW"
+message="Input token count exceeds the maximum context length for this model."
+code="413" retryable=false usercode="CONTEXT_OVERFLOW"
+suggestions="Run /clear to start a fresh conversation while preserving session settings" | "Switch to a high-context model via /provider (e.g. muse-spark or deepseek-v4)"
+
+### overflow-07
+kind="context_overflow" title="Context Window Overflow" badge="CONTEXT_OVERFLOW"
+message="Input token count exceeds the maximum context length for this model."
+code="413" retryable=false usercode="CONTEXT_OVERFLOW"
+suggestions="Run /clear to start a fresh conversation while preserving session settings" | "Switch to a high-context model via /provider (e.g. muse-spark or deepseek-v4)"
+
+### overflow-08
+kind="context_overflow" title="Context Window Overflow" badge="CONTEXT_OVERFLOW"
+message="Input token count exceeds the maximum context length for this model."
+code="413" retryable=false usercode="CONTEXT_OVERFLOW"
+suggestions="Run /clear to start a fresh conversation while preserving session settings" | "Switch to a high-context model via /provider (e.g. muse-spark or deepseek-v4)"
+
+### overflow-09
+kind="context_overflow" title="Context Window Overflow" badge="CONTEXT_OVERFLOW"
+message="Input token count exceeds the maximum context length for this model."
+code="413" retryable=false usercode="CONTEXT_OVERFLOW"
+suggestions="Run /clear to start a fresh conversation while preserving session settings" | "Switch to a high-context model via /provider (e.g. muse-spark or deepseek-v4)"
+
+### overflow-10
+kind="context_overflow" title="Context Window Overflow" badge="CONTEXT_OVERFLOW"
+message="Input token count exceeds the maximum context length for this model."
+code="413" retryable=false usercode="CONTEXT_OVERFLOW"
+suggestions="Run /clear to start a fresh conversation while preserving session settings" | "Switch to a high-context model via /provider (e.g. muse-spark or deepseek-v4)"
+
+### overflow-11
+kind="context_overflow" title="Context Window Overflow" badge="CONTEXT_OVERFLOW"
+message="Input token count exceeds the maximum context length for this model."
+code="413" retryable=false usercode="CONTEXT_OVERFLOW"
+suggestions="Run /clear to start a fresh conversation while preserving session settings" | "Switch to a high-context model via /provider (e.g. muse-spark or deepseek-v4)"
+
+### overflow-12
+kind="context_overflow" title="Context Window Overflow" badge="CONTEXT_OVERFLOW"
+message="Input token count exceeds the maximum context length for this model."
+code="413" retryable=false usercode="CONTEXT_OVERFLOW"
+suggestions="Run /clear to start a fresh conversation while preserving session settings" | "Switch to a high-context model via /provider (e.g. muse-spark or deepseek-v4)"
+
+### overflow-13
+kind="context_overflow" title="Context Window Overflow" badge="CONTEXT_OVERFLOW"
+message="Input token count exceeds the maximum context length for this model."
+code="413" retryable=false usercode="CONTEXT_OVERFLOW"
+suggestions="Run /clear to start a fresh conversation while preserving session settings" | "Switch to a high-context model via /provider (e.g. muse-spark or deepseek-v4)"
+
+### overflow-14
+kind="context_overflow" title="Context Window Overflow" badge="CONTEXT_OVERFLOW"
+message="Input token count exceeds the maximum context length for this model."
+code="413" retryable=false usercode="CONTEXT_OVERFLOW"
+suggestions="Run /clear to start a fresh conversation while preserving session settings" | "Switch to a high-context model via /provider (e.g. muse-spark or deepseek-v4)"
+
+### overflow-15
+kind="context_overflow" title="Context Window Overflow" badge="CONTEXT_OVERFLOW"
+message="Input token count exceeds the maximum context length for this model."
+code="413" retryable=false usercode="CONTEXT_OVERFLOW"
+suggestions="Run /clear to start a fresh conversation while preserving session settings" | "Switch to a high-context model via /provider (e.g. muse-spark or deepseek-v4)"
+
+### overflow-16
+kind="context_overflow" title="Context Window Overflow" badge="CONTEXT_OVERFLOW"
+message="Input token count exceeds the maximum context length for this model."
+code="413" retryable=false usercode="CONTEXT_OVERFLOW"
+suggestions="Run /clear to start a fresh conversation while preserving session settings" | "Switch to a high-context model via /provider (e.g. muse-spark or deepseek-v4)"
+
+### overflow-17
+kind="context_overflow" title="Context Window Overflow" badge="CONTEXT_OVERFLOW"
+message="Input token count exceeds the maximum context length for this model."
+code="413" retryable=false usercode="CONTEXT_OVERFLOW"
+suggestions="Run /clear to start a fresh conversation while preserving session settings" | "Switch to a high-context model via /provider (e.g. muse-spark or deepseek-v4)"
+
+### overflow-18
+kind="context_overflow" title="Context Window Overflow" badge="CONTEXT_OVERFLOW"
+message="Input token count exceeds the maximum context length for this model."
+code="413" retryable=false usercode="CONTEXT_OVERFLOW"
+suggestions="Run /clear to start a fresh conversation while preserving session settings" | "Switch to a high-context model via /provider (e.g. muse-spark or deepseek-v4)"
+
+### overflow-19
+kind="context_overflow" title="Context Window Overflow" badge="CONTEXT_OVERFLOW"
+message="Input token count exceeds the maximum context length for this model."
+code="413" retryable=false usercode="CONTEXT_OVERFLOW"
+suggestions="Run /clear to start a fresh conversation while preserving session settings" | "Switch to a high-context model via /provider (e.g. muse-spark or deepseek-v4)"
+
+### overflow-20
+kind="context_overflow" title="Context Window Overflow" badge="CONTEXT_OVERFLOW"
+message="Input token count exceeds the maximum context length for this model."
+code="413" retryable=false usercode="CONTEXT_OVERFLOW"
+suggestions="Run /clear to start a fresh conversation while preserving session settings" | "Switch to a high-context model via /provider (e.g. muse-spark or deepseek-v4)"
+
+### overflow-21
+kind="context_overflow" title="Context Window Overflow" badge="CONTEXT_OVERFLOW"
+message="Input token count exceeds the maximum context length for this model."
+code="413" retryable=false usercode="CONTEXT_OVERFLOW"
+suggestions="Run /clear to start a fresh conversation while preserving session settings" | "Switch to a high-context model via /provider (e.g. muse-spark or deepseek-v4)"
+
+### overflow-22
+kind="context_overflow" title="Context Window Overflow" badge="CONTEXT_OVERFLOW"
+message="Input token count exceeds the maximum context length for this model."
+code="413" retryable=false usercode="CONTEXT_OVERFLOW"
+suggestions="Run /clear to start a fresh conversation while preserving session settings" | "Switch to a high-context model via /provider (e.g. muse-spark or deepseek-v4)"
+
+### overflow-23
+kind="context_overflow" title="Context Window Overflow" badge="CONTEXT_OVERFLOW"
+message="Input token count exceeds the maximum context length for this model."
+code="413" retryable=false usercode="CONTEXT_OVERFLOW"
+suggestions="Run /clear to start a fresh conversation while preserving session settings" | "Switch to a high-context model via /provider (e.g. muse-spark or deepseek-v4)"
+
+### overflow-24
+kind="context_overflow" title="Context Window Overflow" badge="CONTEXT_OVERFLOW"
+message="Input token count exceeds the maximum context length for this model."
+code="413" retryable=false usercode="CONTEXT_OVERFLOW"
+suggestions="Run /clear to start a fresh conversation while preserving session settings" | "Switch to a high-context model via /provider (e.g. muse-spark or deepseek-v4)"
+
+### overflow-25
+kind="context_overflow" title="Context Window Overflow" badge="CONTEXT_OVERFLOW"
+message="Input token count exceeds the maximum context length for this model."
+code="413" retryable=false usercode="CONTEXT_OVERFLOW"
+suggestions="Run /clear to start a fresh conversation while preserving session settings" | "Switch to a high-context model via /provider (e.g. muse-spark or deepseek-v4)"
+
+### overflow-26
+kind="context_overflow" title="Context Window Overflow" badge="CONTEXT_OVERFLOW"
+message="Input token count exceeds the maximum context length for this model."
+code="413" retryable=false usercode="CONTEXT_OVERFLOW"
+suggestions="Run /clear to start a fresh conversation while preserving session settings" | "Switch to a high-context model via /provider (e.g. muse-spark or deepseek-v4)"
+
+### overflow-27
+kind="context_overflow" title="Context Window Overflow" badge="CONTEXT_OVERFLOW"
+message="Input token count exceeds the maximum context length for this model."
+code="413" retryable=false usercode="CONTEXT_OVERFLOW"
+suggestions="Run /clear to start a fresh conversation while preserving session settings" | "Switch to a high-context model via /provider (e.g. muse-spark or deepseek-v4)"
+
+### overflow-28
+kind="context_overflow" title="Context Window Overflow" badge="CONTEXT_OVERFLOW"
+message="Input token count exceeds the maximum context length for this model."
+code="413" retryable=false usercode="CONTEXT_OVERFLOW"
+suggestions="Run /clear to start a fresh conversation while preserving session settings" | "Switch to a high-context model via /provider (e.g. muse-spark or deepseek-v4)"
+
+### overflow-excluded-00
+kind="generic" title="Operation Failed" badge="ERROR"
+message="Throttling Error: too many tokens"
+code="" retryable=false usercode="ERROR"
+suggestions="Review the error details above, then retry"
+
+### overflow-excluded-01
+kind="server_overloaded" title="Provider Server Overloaded" badge="5xx SERVER_ERROR"
+message="The OpenCode upstream provider is temporarily overloaded or experiencing an outage."
+code="5xx" retryable=true usercode="PROVIDER_OVERLOADED"
+suggestions="This is usually a temporary outage — please retry in a moment" | "Switch to an alternative model or provider using /provider"
+
+### overflow-excluded-02
+kind="rate_limit" title="Rate Limit Exceeded" badge="429 RATE_LIMIT"
+message="Too many requests sent to the model provider in a short period."
+code="429" retryable=true usercode="RATE_LIMITED"
+suggestions="Wait a few moments before sending another prompt" | "Switch to another provider via /provider if limits persist"
+
+### overflow-excluded-03
+kind="rate_limit" title="Rate Limit Exceeded" badge="429 RATE_LIMIT"
+message="Too many requests sent to the model provider in a short period."
+code="429" retryable=true usercode="RATE_LIMITED"
+suggestions="Wait a few moments before sending another prompt" | "Switch to another provider via /provider if limits persist"
+

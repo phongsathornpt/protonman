@@ -10,6 +10,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/adapter/in/acp"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/app"
+	"github.com/phongsathornpt/protonman/internal/base/modelcatalogpolicy"
 	"github.com/phongsathornpt/protonman/internal/core/modelcatalog"
 	"github.com/phongsathornpt/protonman/internal/core/modelconfig"
 	"github.com/phongsathornpt/protonman/internal/engine/toolcall"
@@ -201,57 +202,12 @@ func acpSessionModelOptionsProvider(runtimeState *appRuntime) acp.SessionModelOp
 }
 
 func providerFallbackModels(provider string) []acp.SessionConfigSelectOption {
-	switch strings.ToLower(strings.TrimSpace(provider)) {
-	case "protonman":
-		return []acp.SessionConfigSelectOption{
-			{Value: "claude-3-7-sonnet-20250219", Name: "Claude 3.7 Sonnet"},
-			{Value: "claude-3-5-sonnet-20241022", Name: "Claude 3.5 Sonnet"},
-			{Value: "gpt-4o", Name: "GPT-4o"},
-			{Value: "o3-mini", Name: "o3-mini"},
-			{Value: "deepseek-reasoner", Name: "DeepSeek-R1"},
-		}
-	case "openai":
-		return []acp.SessionConfigSelectOption{
-			{Value: "gpt-4o", Name: "GPT-4o"},
-			{Value: "gpt-4o-mini", Name: "GPT-4o Mini"},
-			{Value: "o3-mini", Name: "o3-mini"},
-			{Value: "o1", Name: "o1"},
-		}
-	case "anthropic":
-		return []acp.SessionConfigSelectOption{
-			{Value: "claude-3-7-sonnet-20250219", Name: "Claude 3.7 Sonnet"},
-			{Value: "claude-3-5-sonnet-20241022", Name: "Claude 3.5 Sonnet"},
-			{Value: "claude-3-5-haiku-20241022", Name: "Claude 3.5 Haiku"},
-		}
-	case "opencode":
-		return []acp.SessionConfigSelectOption{
-			{Value: "nemotron-3-super-free", Name: "Nemotron 3 Super Free"},
-			{Value: "big-pickle", Name: "Big Pickle"},
-			{Value: "mimo-v2.5-free", Name: "MiMo V2.5 Free"},
-		}
-	case "opencode-zen":
-		return []acp.SessionConfigSelectOption{
-			{Value: "claude-3-7-sonnet-20250219", Name: "Claude 3.7 Sonnet"},
-			{Value: "gpt-4o", Name: "GPT-4o"},
-			{Value: "o3-mini", Name: "o3-mini"},
-		}
-	case "opencode-go":
-		return []acp.SessionConfigSelectOption{
-			{Value: "claude-3-7-sonnet-20250219", Name: "Claude 3.7 Sonnet"},
-			{Value: "gpt-4o", Name: "GPT-4o"},
-		}
-	case "ollama":
-		return []acp.SessionConfigSelectOption{
-			{Value: "llama3.3", Name: "Llama 3.3"},
-			{Value: "qwen2.5-coder", Name: "Qwen 2.5 Coder"},
-			{Value: "deepseek-r1", Name: "DeepSeek R1"},
-		}
-	default:
-		return []acp.SessionConfigSelectOption{
-			{Value: "claude-3-7-sonnet-20250219", Name: "Claude 3.7 Sonnet"},
-			{Value: "gpt-4o", Name: "GPT-4o"},
-		}
+	presets := modelcatalogpolicy.LabeledModels(provider)
+	options := make([]acp.SessionConfigSelectOption, 0, len(presets))
+	for _, preset := range presets {
+		options = append(options, acp.SessionConfigSelectOption{Value: preset.Model, Name: preset.Name})
 	}
+	return options
 }
 
 func acpProvidersControl(runtimeState *appRuntime) acp.ProvidersControl {

@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"testing"
 
 	"github.com/phongsathornpt/protonman/internal/app"
 	domain "github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
