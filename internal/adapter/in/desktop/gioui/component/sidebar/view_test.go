@@ -140,6 +140,36 @@ func TestUnselectedSessionRowHidesQuickActionsAndActivePill(t *testing.T) {
 	}
 }
 
+// In a vertical layout.List, items receive unconstrained Max.Y (e.g. 800+ px).
+// An active session row must never stretch vertically to fill Max.Y or push
+// its contents offscreen.
+func TestSelectedSessionRowHeightIsBoundedAndDoesNotStretch(t *testing.T) {
+	component := New()
+	component.view = ViewInput{
+		Actions: withDefaultActions(Actions{}),
+		Chrome:  (&recordingChrome{}).chrome(),
+	}
+	row := Row{Kind: SessionRow, SessionID: "s1", AgentID: "protonman", Title: "Active Thread", Status: "Running"}
+
+	var ops op.Ops
+	var router input.Router
+	gtx := layout.Context{
+		Ops:         &ops,
+		Constraints: layout.Constraints{Min: image.Pt(260, 0), Max: image.Pt(260, 900)},
+		Metric:      unit.Metric{PxPerDp: 1, PxPerSp: 1},
+		Now:         time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC),
+		Source:      router.Source(),
+	}
+
+	dims := component.layoutSidebarRow(gtx, row, desktopstate.State{ActiveSessionID: "s1"})
+	if dims.Size.Y >= 100 {
+		t.Fatalf("selected session row height = %d, expected bounded height (< 100) instead of stretching to viewport Max.Y (900)", dims.Size.Y)
+	}
+	if dims.Size.Y < sidebarSessionRowMinHeight {
+		t.Fatalf("selected session row height = %d, expected at least min height %d", dims.Size.Y, sidebarSessionRowMinHeight)
+	}
+}
+
 // A pinned but resting row still shows the star as a status indicator.
 func TestPinnedSessionRowShowsStarWithoutQuickActions(t *testing.T) {
 	row := Row{Kind: SessionRow, SessionID: "s1", AgentID: "protonman", Title: "Refactor", Pinned: true}

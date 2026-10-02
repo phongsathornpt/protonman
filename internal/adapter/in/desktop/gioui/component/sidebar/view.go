@@ -483,47 +483,45 @@ func (c *Component) layoutSidebarRow(gtx layout.Context, row Row, state desktops
 		if button.Clicked(gtx) {
 			c.TogglePinned()
 		}
-		gtx.Constraints.Min.Y = gtx.Dp(32)
 		chevronKind := uikit.IconChevronDown
 		if c.PinnedCollapsed() {
 			chevronKind = uikit.IconChevronRight
 		}
-		dims := button.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-			gtx.Constraints.Min.Y = gtx.Dp(28)
-			background := color.NRGBA{}
-			foreground := c.view.Chrome.Colors.OnSurfaceVariant
-			if button.Hovered() {
-				background = c.view.Chrome.Colors.SurfaceContainerHigh
-				foreground = c.view.Chrome.Colors.OnSurface
-			}
-			return c.view.Chrome.RoundedSurface(gtx, uikit.ShapeSmall, background, func(gtx layout.Context) layout.Dimensions {
-				return uikit.Inset{Top: 4, Bottom: 4, Left: 8, Right: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-					return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
-						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-							return uikit.Inset{Right: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-								return c.view.Chrome.ActionIcon(gtx, chevronKind, RowGlyphSize, c.view.Chrome.Colors.OnSurfaceVariant)
-							})
-						}),
-						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-							return uikit.Inset{Right: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-								return c.view.Chrome.ActionIcon(gtx, uikit.IconStar, RowGlyphSize, c.view.Chrome.Colors.Primary)
-							})
-						}),
-						layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-							return c.view.Chrome.Label(gtx, "Pinned", uikit.TextLabelSmall, font.SemiBold, foreground, 1)
-						}),
-						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-							if row.SessionCount > 0 {
-								return c.layoutCountPill(gtx, row.SessionCount)
-							}
-							return layout.Dimensions{}
-						}),
-					)
+		return uikit.Inset{Top: sidebarGroupTopInset, Bottom: sidebarGroupBottomInset, Left: 8, Right: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+			return button.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+				gtx.Constraints.Min.Y = gtx.Dp(28)
+				background := color.NRGBA{}
+				foreground := c.view.Chrome.Colors.OnSurfaceVariant
+				if button.Hovered() {
+					background = c.view.Chrome.Colors.SurfaceContainerHigh
+					foreground = c.view.Chrome.Colors.OnSurface
+				}
+				return c.view.Chrome.RoundedSurface(gtx, uikit.ShapeSmall, background, func(gtx layout.Context) layout.Dimensions {
+					return uikit.Inset{Top: 4, Bottom: 4, Left: 8, Right: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+						return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
+							layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+								return uikit.Inset{Right: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+									return c.view.Chrome.ActionIcon(gtx, chevronKind, RowGlyphSize, c.view.Chrome.Colors.OnSurfaceVariant)
+								})
+							}),
+							layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+								return uikit.Inset{Right: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+									return c.view.Chrome.ActionIcon(gtx, uikit.IconStar, RowGlyphSize, c.view.Chrome.Colors.Primary)
+								})
+							}),
+							layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+								return c.view.Chrome.Label(gtx, "Pinned", uikit.TextLabelSmall, font.SemiBold, foreground, 1)
+							}),
+							layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+								if row.SessionCount > 0 {
+									return c.layoutCountPill(gtx, row.SessionCount)
+								}
+								return layout.Dimensions{}
+							}),
+						)
+					})
 				})
 			})
-		})
-		return uikit.Inset{Top: sidebarGroupTopInset, Bottom: sidebarGroupBottomInset, Left: 8, Right: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-			return layout.Dimensions{Size: dims.Size}
 		})
 	}
 
@@ -543,7 +541,6 @@ func (c *Component) layoutSidebarRow(gtx layout.Context, row Row, state desktops
 		} else if button.Clicked(gtx) {
 			c.ToggleProject(row.ProjectID)
 		}
-		gtx.Constraints.Min.Y = gtx.Dp(32)
 		chevronKind := uikit.IconChevronDown
 		if isCollapsed {
 			chevronKind = uikit.IconChevronRight
@@ -553,66 +550,66 @@ func (c *Component) layoutSidebarRow(gtx layout.Context, row Row, state desktops
 		isNewHovered := newBtn != nil && newBtn.Hovered()
 		showProjectActions := isHovered || isFocused || isNewHovered
 
-		dims := button.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-			gtx.Constraints.Min.Y = gtx.Dp(28)
-			semantic.Button.Add(gtx.Ops)
-			semantic.SelectedOp(selected).Add(gtx.Ops)
-			semantic.DescriptionOp(fmt.Sprintf("Select workspace %s, %d conversations", row.Title, row.SessionCount)).Add(gtx.Ops)
-			background := color.NRGBA{}
-			foreground := c.view.Chrome.Colors.OnSurfaceVariant
-			if selected {
-				// A project selection stays subtler than the active thread:
-				// one surface step above hover, never a filled pill.
-				background = c.view.Chrome.Colors.SurfaceContainerHighest
-				foreground = c.view.Chrome.Colors.OnSurface
-			} else if button.Hovered() {
-				background = c.view.Chrome.Colors.SurfaceContainerHigh
-				foreground = c.view.Chrome.Colors.OnSurface
-			}
-			return c.view.Chrome.RoundedSurface(gtx, uikit.ShapeSmall, background, func(gtx layout.Context) layout.Dimensions {
-				return uikit.Inset{Top: 4, Bottom: 4, Left: 8, Right: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-					return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
-						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-							return uikit.Inset{Right: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-								return c.view.Chrome.ActionIcon(gtx, chevronKind, RowGlyphSize, c.view.Chrome.Colors.OnSurfaceVariant)
-							})
-						}),
-						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-							return uikit.Inset{Right: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-								return c.view.Chrome.ActionIcon(gtx, uikit.IconFolder, RowGlyphSize, c.view.Chrome.Colors.OnSurfaceVariant)
-							})
-						}),
-						layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-							return c.view.Chrome.Label(gtx, row.Title, uikit.TextLabelSmall, font.SemiBold, foreground, 1)
-						}),
-						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-							return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
-								layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-									if !showProjectActions {
+		return uikit.Inset{Top: sidebarGroupTopInset, Bottom: sidebarGroupBottomInset, Left: 8, Right: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+			dims := button.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+				gtx.Constraints.Min.Y = gtx.Dp(28)
+				semantic.Button.Add(gtx.Ops)
+				semantic.SelectedOp(selected).Add(gtx.Ops)
+				semantic.DescriptionOp(fmt.Sprintf("Select workspace %s, %d conversations", row.Title, row.SessionCount)).Add(gtx.Ops)
+				background := color.NRGBA{}
+				foreground := c.view.Chrome.Colors.OnSurfaceVariant
+				if selected {
+					// A project selection stays subtler than the active thread:
+					// one surface step above hover, never a filled pill.
+					background = c.view.Chrome.Colors.SurfaceContainerHighest
+					foreground = c.view.Chrome.Colors.OnSurface
+				} else if button.Hovered() {
+					background = c.view.Chrome.Colors.SurfaceContainerHigh
+					foreground = c.view.Chrome.Colors.OnSurface
+				}
+				return c.view.Chrome.RoundedSurface(gtx, uikit.ShapeSmall, background, func(gtx layout.Context) layout.Dimensions {
+					return uikit.Inset{Top: 4, Bottom: 4, Left: 8, Right: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+						return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
+							layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+								return uikit.Inset{Right: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+									return c.view.Chrome.ActionIcon(gtx, chevronKind, RowGlyphSize, c.view.Chrome.Colors.OnSurfaceVariant)
+								})
+							}),
+							layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+								return uikit.Inset{Right: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+									return c.view.Chrome.ActionIcon(gtx, uikit.IconFolder, RowGlyphSize, c.view.Chrome.Colors.OnSurfaceVariant)
+								})
+							}),
+							layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+								return c.view.Chrome.Label(gtx, row.Title, uikit.TextLabelSmall, font.SemiBold, foreground, 1)
+							}),
+							layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+								return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
+									layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+										if !showProjectActions {
+											return layout.Dimensions{}
+										}
+										return uikit.Inset{Right: 4}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+											return c.layoutRowAction(gtx, newBtn, uikit.IconPlus, c.view.Chrome.Colors.OnSurfaceVariant, fmt.Sprintf("New session in %s", row.Title))
+										})
+									}),
+									layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+										if row.SessionCount > 0 {
+											return c.layoutCountPill(gtx, row.SessionCount)
+										}
 										return layout.Dimensions{}
-									}
-									return uikit.Inset{Right: 4}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-										return c.layoutRowAction(gtx, newBtn, uikit.IconPlus, c.view.Chrome.Colors.OnSurfaceVariant, fmt.Sprintf("New session in %s", row.Title))
-									})
-								}),
-								layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-									if row.SessionCount > 0 {
-										return c.layoutCountPill(gtx, row.SessionCount)
-									}
-									return layout.Dimensions{}
-								}),
-							)
-						}),
-					)
+									}),
+								)
+							}),
+						)
+					})
 				})
 			})
-		})
-		if gtx.Focused(button) {
-			widget.Border{Color: c.view.Chrome.Colors.Primary, CornerRadius: uikit.ShapeSmall, Width: 1}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-				return layout.Dimensions{Size: dims.Size}
-			})
-		}
-		return uikit.Inset{Top: sidebarGroupTopInset, Bottom: sidebarGroupBottomInset, Left: 8, Right: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+			if isFocused {
+				widget.Border{Color: c.view.Chrome.Colors.Primary, CornerRadius: uikit.ShapeSmall, Width: 1}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+					return layout.Dimensions{Size: dims.Size}
+				})
+			}
 			if !isCollapsed && row.SessionCount == 0 {
 				return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
 					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
@@ -636,7 +633,7 @@ func (c *Component) layoutSidebarRow(gtx layout.Context, row Row, state desktops
 					}),
 				)
 			}
-			return layout.Dimensions{Size: dims.Size}
+			return dims
 		})
 	}
 
@@ -769,185 +766,174 @@ func (c *Component) layoutSidebarRow(gtx layout.Context, row Row, state desktops
 	subtitle := SessionSubtitle(row, gtx.Now)
 	statusLabel := StatusLabel(row.Status)
 
-	dims := button.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-		gtx.Constraints.Min.Y = gtx.Dp(sidebarSessionRowMinHeight)
-		semantic.Button.Add(gtx.Ops)
-		semantic.SelectedOp(selected).Add(gtx.Ops)
-		description := row.Title
-		if subtitle != "" {
-			description += ", " + subtitle
-		}
-		if statusLabel != "" {
-			description += ", " + statusLabel
-		}
-		semantic.DescriptionOp(description).Add(gtx.Ops)
-		background := color.NRGBA{}
-		// The active thread is a filled pill with on-primary text so selection
-		// reads instantly; hover is one surface step above the resting row, so
-		// the two never read the same.
-		foreground := c.view.Chrome.Colors.OnSurface
-		metaColor := c.view.Chrome.Colors.OnSurfaceVariant
-		if selected {
-			background = c.view.Chrome.Colors.PrimaryContainer
-			foreground = c.view.Chrome.Colors.OnPrimaryContainer
-			metaColor = c.view.Chrome.Colors.OnPrimaryContainer
-		} else if isHovered {
-			background = c.view.Chrome.Colors.SurfaceContainerHigh
-		}
-		return c.view.Chrome.RoundedSurface(gtx, uikit.ShapeMedium, background, func(gtx layout.Context) layout.Dimensions {
-			return layout.Stack{Alignment: layout.W}.Layout(gtx,
-				layout.Stacked(func(gtx layout.Context) layout.Dimensions {
-					return uikit.Inset{Top: 6, Bottom: 6, Left: 12, Right: 6}.Layout(gtx,
-						func(gtx layout.Context) layout.Dimensions {
-							cardChildren := []layout.FlexChild{
+	return uikit.Inset{Top: 2, Bottom: 2, Left: unit.Dp(RowIndent), Right: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+		dims := button.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+			gtx.Constraints.Min.Y = gtx.Dp(sidebarSessionRowMinHeight)
+			semantic.Button.Add(gtx.Ops)
+			semantic.SelectedOp(selected).Add(gtx.Ops)
+			description := row.Title
+			if subtitle != "" {
+				description += ", " + subtitle
+			}
+			if statusLabel != "" {
+				description += ", " + statusLabel
+			}
+			semantic.DescriptionOp(description).Add(gtx.Ops)
+			background := color.NRGBA{}
+			// The active thread is a filled pill with on-primary text so selection
+			// reads instantly; hover is one surface step above the resting row, so
+			// the two never read the same.
+			foreground := c.view.Chrome.Colors.OnSurface
+			metaColor := c.view.Chrome.Colors.OnSurfaceVariant
+			if selected {
+				background = c.view.Chrome.Colors.PrimaryContainer
+				foreground = c.view.Chrome.Colors.OnPrimaryContainer
+				metaColor = c.view.Chrome.Colors.OnPrimaryContainer
+			} else if isHovered {
+				background = c.view.Chrome.Colors.SurfaceContainerHigh
+			}
+			return c.view.Chrome.RoundedSurface(gtx, uikit.ShapeMedium, background, func(gtx layout.Context) layout.Dimensions {
+				cardChildren := []layout.FlexChild{
+					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+						if isRenaming {
+							return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
+								layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+									ed := material.Editor(c.view.Chrome.Material, c.RenameEditor(), "Session title…")
+									ed.TextSize = uikit.TextBodySmall
+									ed.Color = foreground
+									return ed.Layout(gtx)
+								}),
 								layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-									if isRenaming {
-										return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
-											layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-												ed := material.Editor(c.view.Chrome.Material, c.RenameEditor(), "Session title…")
-												ed.TextSize = uikit.TextBodySmall
-												ed.Color = foreground
-												return ed.Layout(gtx)
-											}),
-											layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-												return uikit.Inset{Left: 4}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-													return c.layoutMiniButton(gtx, c.RenameConfirmButton(), "✓", c.view.Chrome.Colors.Primary)
-												})
-											}),
-											layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-												return uikit.Inset{Left: 2}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-													return c.layoutMiniButton(gtx, c.RenameCancelButton(), "✕", c.view.Chrome.Colors.OnSurfaceVariant)
-												})
-											}),
-										)
+									return uikit.Inset{Left: 4}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+										return c.layoutMiniButton(gtx, c.RenameConfirmButton(), "✓", c.view.Chrome.Colors.Primary)
+									})
+								}),
+								layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+									return uikit.Inset{Left: 2}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+										return c.layoutMiniButton(gtx, c.RenameCancelButton(), "✕", c.view.Chrome.Colors.OnSurfaceVariant)
+									})
+								}),
+							)
+						}
+						weight := font.Normal
+						if selected {
+							weight = font.Medium
+						}
+						return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
+							layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+								return c.view.Chrome.Label(gtx, row.Title, uikit.TextBodySmall, weight, foreground, 1)
+							}),
+							layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+								if !showActions {
+									if row.Pinned {
+										return uikit.Inset{Left: 4}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+											return c.view.Chrome.ActionIcon(gtx, uikit.IconStar, RowGlyphSize, c.view.Chrome.Colors.Primary)
+										})
 									}
-									weight := font.Normal
-									if selected {
-										weight = font.Medium
-									}
+									return layout.Dimensions{}
+								}
+								// Hover/focus quick actions replace the old
+								// kebab menu: pin, rename, and delete are one
+								// click away without opening a popover.
+								return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
+									layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+										return uikit.Inset{Right: 2}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+											pinTint := c.view.Chrome.Colors.OnSurfaceVariant
+											pinDesc := "Pin conversation"
+											if row.Pinned {
+												pinTint = c.view.Chrome.Colors.Primary
+												pinDesc = "Unpin conversation"
+											}
+											return c.layoutRowAction(gtx, pinBtn, uikit.IconStar, pinTint, pinDesc)
+										})
+									}),
+									layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+										return uikit.Inset{Right: 2}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+											return c.layoutRowAction(gtx, renameBtn, uikit.IconCompose, c.view.Chrome.Colors.OnSurfaceVariant, "Rename conversation")
+										})
+									}),
+									layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+										return c.layoutRowAction(gtx, deleteBtn, uikit.IconTrash, c.view.Chrome.Colors.OnErrorContainer, "Delete conversation")
+									}),
+								)
+							}),
+						)
+					}),
+				}
+				{
+					// The metadata line always renders, even when both the
+					// subtitle and status are empty, so a row never changes
+					// height as a session moves between idle and running.
+					cardChildren = append(cardChildren, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+						return uikit.Inset{Top: 3}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+							gtx.Constraints.Min.Y = gtx.Dp(sidebarMetadataLineHeight)
+							return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle, Spacing: layout.SpaceBetween}.Layout(gtx,
+								layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
 									return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
-										layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-											return c.view.Chrome.Label(gtx, row.Title, uikit.TextBodySmall, weight, foreground, 1)
-										}),
 										layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-											if !showActions {
-												if row.Pinned {
-													return uikit.Inset{Left: 4}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-														return c.view.Chrome.ActionIcon(gtx, uikit.IconStar, RowGlyphSize, c.view.Chrome.Colors.Primary)
-													})
-												}
+											badge := agentBadgeLabel(row)
+											if badge == "" {
 												return layout.Dimensions{}
 											}
-											// Hover/focus quick actions replace the old
-											// kebab menu: pin, rename, and delete are one
-											// click away without opening a popover.
-											return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
-												layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-													return uikit.Inset{Right: 2}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-														pinTint := c.view.Chrome.Colors.OnSurfaceVariant
-														pinDesc := "Pin conversation"
-														if row.Pinned {
-															pinTint = c.view.Chrome.Colors.Primary
-															pinDesc = "Unpin conversation"
-														}
-														return c.layoutRowAction(gtx, pinBtn, uikit.IconStar, pinTint, pinDesc)
-													})
-												}),
-												layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-													return uikit.Inset{Right: 2}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-														return c.layoutRowAction(gtx, renameBtn, uikit.IconCompose, c.view.Chrome.Colors.OnSurfaceVariant, "Rename conversation")
-													})
-												}),
-												layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-													return c.layoutRowAction(gtx, deleteBtn, uikit.IconTrash, c.view.Chrome.Colors.OnErrorContainer, "Delete conversation")
-												}),
-											)
+											return uikit.Inset{Right: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+												return c.layoutAgentBadge(gtx, badge)
+											})
+										}),
+										layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+											if subtitle == "" {
+												return layout.Dimensions{}
+											}
+											return c.view.Chrome.Label(gtx, subtitle, uikit.TextLabelSmall, font.Normal, metaColor, 1)
 										}),
 									)
 								}),
-							}
-							{
-								// The metadata line always renders, even when both the
-								// subtitle and status are empty, so a row never changes
-								// height as a session moves between idle and running.
-								cardChildren = append(cardChildren, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-									return uikit.Inset{Top: 3}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-										gtx.Constraints.Min.Y = gtx.Dp(sidebarMetadataLineHeight)
-										return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle, Spacing: layout.SpaceBetween}.Layout(gtx,
-											layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-												return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
-													layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-														badge := agentBadgeLabel(row)
-														if badge == "" {
-															return layout.Dimensions{}
-														}
-														return uikit.Inset{Right: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-															return c.layoutAgentBadge(gtx, badge)
-														})
-													}),
-													layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-														if subtitle == "" {
-															return layout.Dimensions{}
-														}
-														return c.view.Chrome.Label(gtx, subtitle, uikit.TextLabelSmall, font.Normal, metaColor, 1)
-													}),
-												)
-											}),
-											layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-												if statusLabel == "" {
-													return layout.Dimensions{}
-												}
-												return uikit.Inset{Left: 4}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-													return c.view.Chrome.TaskStatus(gtx, statusLabel, taskStatusFromLabel(row.Status))
-												})
-											}),
-										)
+								layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+									if statusLabel == "" {
+										return layout.Dimensions{}
+									}
+									return uikit.Inset{Left: 4}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+										return c.view.Chrome.TaskStatus(gtx, statusLabel, taskStatusFromLabel(row.Status))
 									})
-								}))
-							}
-							return layout.Flex{Axis: layout.Vertical}.Layout(gtx, cardChildren...)
-						},
-					)
-				}),
-				layout.Expanded(func(gtx layout.Context) layout.Dimensions {
-					if !selected {
-						return layout.Dimensions{}
-					}
+								}),
+							)
+						})
+					}))
+				}
+
+				dims := uikit.Inset{Top: 6, Bottom: 6, Left: 12, Right: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+					return layout.Flex{Axis: layout.Vertical}.Layout(gtx, cardChildren...)
+				})
+
+				if selected {
 					barWidth := gtx.Dp(3)
 					barInsetY := gtx.Dp(6)
-					height := gtx.Constraints.Max.Y - (barInsetY * 2)
-					if height < gtx.Dp(12) {
-						height = gtx.Constraints.Max.Y
-						barInsetY = 0
+					height := dims.Size.Y - (barInsetY * 2)
+					if height > 0 {
+						radius := barWidth / 2
+						if radius < 1 {
+							radius = 1
+						}
+						barRect := image.Rect(gtx.Dp(2), barInsetY, gtx.Dp(2)+barWidth, barInsetY+height)
+						stack := clip.RRect{
+							Rect: barRect,
+							SE:   radius,
+							SW:   radius,
+							NW:   radius,
+							NE:   radius,
+						}.Push(gtx.Ops)
+						paint.Fill(gtx.Ops, c.view.Chrome.Colors.Primary)
+						stack.Pop()
 					}
-					radius := barWidth / 2
-					if radius < 1 {
-						radius = 1
-					}
-					barRect := image.Rect(gtx.Dp(2), barInsetY, gtx.Dp(2)+barWidth, barInsetY+height)
-					stack := clip.RRect{
-						Rect: barRect,
-						SE:   radius,
-						SW:   radius,
-						NW:   radius,
-						NE:   radius,
-					}.Push(gtx.Ops)
-					paint.Fill(gtx.Ops, c.view.Chrome.Colors.Primary)
-					stack.Pop()
-					return layout.Dimensions{Size: image.Pt(gtx.Dp(2)+barWidth, gtx.Constraints.Max.Y)}
-				}),
-			)
+				}
+				return dims
+			})
 		})
-	})
-	if isFocused {
-		widget.Border{Color: c.view.Chrome.Colors.Primary, CornerRadius: uikit.ShapeMedium, Width: 1}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-			return layout.Dimensions{Size: dims.Size}
-		})
-	}
-	// Every session row is a child of a group header (Pinned or a project), so
-	// all of them share the same nesting indent.
-	return uikit.Inset{Top: 2, Bottom: 2, Left: unit.Dp(RowIndent), Right: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-		return layout.Dimensions{Size: dims.Size}
+		if isFocused {
+			widget.Border{Color: c.view.Chrome.Colors.Primary, CornerRadius: uikit.ShapeMedium, Width: 1}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+				return layout.Dimensions{Size: dims.Size}
+			})
+		}
+		return dims
 	})
 }
 
