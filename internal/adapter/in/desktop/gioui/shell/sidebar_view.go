@@ -115,22 +115,6 @@ func sidebarSessionWidgetKey(sessionID string, agentIDs ...string) string {
 	return sidebarcomponent.SessionWidgetKey(sessionID, agentIDs...)
 }
 
-func (s *Shell) sessionMenuButton(sessionID string, agentIDs ...string) *widget.Clickable {
-	return s.sidebarData.MenuButton(sessionID, agentIDs...)
-}
-
-func (s *Shell) sessionPinButton(sessionID string, agentIDs ...string) *widget.Clickable {
-	return s.sidebarData.PinButton(sessionID, agentIDs...)
-}
-
-func (s *Shell) sessionQuickRenameButton(sessionID string, agentIDs ...string) *widget.Clickable {
-	return s.sidebarData.RenameButton(sessionID, agentIDs...)
-}
-
-func (s *Shell) sessionQuickDeleteButton(sessionID string, agentIDs ...string) *widget.Clickable {
-	return s.sidebarData.DeleteButton(sessionID, agentIDs...)
-}
-
 func (s *Shell) syncSessionButtons(state desktopstate.State, revision uint64) {
 	s.sidebarData.SyncSessionButtons(state, revision)
 }

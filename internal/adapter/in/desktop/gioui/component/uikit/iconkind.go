@@ -29,6 +29,7 @@ const (
 	KindTerminal
 	KindCheck
 	KindCopy
+	KindTrash
 )
 
 // ResolveIconKind maps a component-requested icon onto its drawing variant. An
@@ -58,4 +59,6 @@ var iconKindByName = map[Icon]IconKind{
 	IconTerminal:     KindTerminal,
 	IconCheck:        KindCheck,
 	IconCopy:         KindCopy,
+	IconTrash:        KindTrash,
+	IconPlus:         KindAdd,
 }

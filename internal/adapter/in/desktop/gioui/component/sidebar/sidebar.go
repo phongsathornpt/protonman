@@ -63,13 +63,16 @@ type sessionCacheEntry struct {
 }
 
 type RowsCache struct {
-	valid      bool
-	revision   uint64
-	rows       []Row
-	projects   []projectCacheEntry
-	sessions   []sessionCacheEntry
-	filterMode string
-	pinned     []string
+	valid           bool
+	revision        uint64
+	rows            []Row
+	projects        []projectCacheEntry
+	sessions        []sessionCacheEntry
+	filterMode      string
+	pinned          []string
+	activeSessionID string
+	activeAgentID   string
+	activeSortAt    *time.Time
 }
 
 type displayCache struct {
@@ -82,11 +85,9 @@ type displayCache struct {
 	pinnedCollapsed  bool
 }
 
-// InteractionState stores transient navigation, rename, menu, and delete
-// targets owned by the sidebar. Application actions remain callback-driven.
+// InteractionState stores transient navigation, rename, and delete targets
+// owned by the sidebar. Application actions remain callback-driven.
 type InteractionState struct {
-	MenuSessionID        string
-	MenuAgentID          string
 	EditingSessionID     string
 	EditingAgentID       string
 	DeletingSessionID    string
@@ -102,6 +103,13 @@ type Model struct {
 	CustomTitles  map[string]string
 	FilterMode    string
 	Revision      uint64
+
+	// ActiveSortAt, when set, replaces the active session's LastActivityAt as
+	// its sort key. Prompting and remote sync keep refreshing that timestamp,
+	// which would otherwise throw the session the user is working on to the top
+	// of its project group and shuffle the rows under the cursor. The row still
+	// carries the live timestamp, so its activity label stays accurate.
+	ActiveSortAt *time.Time
 }
 
 // Snapshot is the immutable desktop state needed to render the sidebar.
@@ -182,60 +190,64 @@ type ViewInput struct {
 // Component owns sidebar projection caches, Gio widgets, interaction state,
 // and rendering-local caches.
 type Component struct {
-	rowsCache          RowsCache
-	displayCache       displayCache
-	projectCollapsed   map[string]bool
-	pinnedCollapsed    bool
-	collapseRevision   uint64
-	list               layout.List
-	searchEditor       widget.Editor
-	sessionButtons     map[string]*widget.Clickable
-	projectButtons     map[string]*widget.Clickable
-	sessionButtonLive  map[string]struct{}
-	projectButtonLive  map[string]struct{}
-	menuButtons        map[string]*widget.Clickable
-	pinButtons         map[string]*widget.Clickable
-	renameButtons      map[string]*widget.Clickable
-	deleteButtons      map[string]*widget.Clickable
-	buttonRevision     uint64
-	buttonRevisionSet  bool
-	pinnedButton       widget.Clickable
-	toggleButton       widget.Clickable
-	visible            bool
-	interaction        InteractionState
-	searchClearButton  widget.Clickable
-	clearFilterButton  widget.Clickable
-	newSessionButton   widget.Clickable
-	inspectorButton    widget.Clickable
-	pinnedFilterButton widget.Clickable
-	communityButton    widget.Clickable
-	renameEditor       widget.Editor
-	renameConfirm      widget.Clickable
-	renameCancel       widget.Clickable
-	menuPin            widget.Clickable
-	menuRename         widget.Clickable
-	menuDelete         widget.Clickable
-	deleteScrim        widget.Clickable
-	deleteCancel       widget.Clickable
-	deleteConfirm      widget.Clickable
-	view               ViewInput
+	rowsCache              RowsCache
+	displayCache           displayCache
+	projectCollapsed       map[string]bool
+	pinnedCollapsed        bool
+	collapseRevision       uint64
+	list                   layout.List
+	searchEditor           widget.Editor
+	sessionButtons         map[string]*widget.Clickable
+	projectButtons         map[string]*widget.Clickable
+	projectNewButtons      map[string]*widget.Clickable
+	projectEmptyNewButtons map[string]*widget.Clickable
+	sessionButtonLive      map[string]struct{}
+	projectButtonLive      map[string]struct{}
+	pinButtons             map[string]*widget.Clickable
+	renameButtons          map[string]*widget.Clickable
+	deleteButtons          map[string]*widget.Clickable
+	buttonRevision         uint64
+	buttonRevisionSet      bool
+	pinnedButton           widget.Clickable
+	toggleButton           widget.Clickable
+	visible                bool
+	interaction            InteractionState
+	searchClearButton      widget.Clickable
+	clearFilterButton      widget.Clickable
+	newSessionButton       widget.Clickable
+	inspectorButton        widget.Clickable
+	pinnedFilterButton     widget.Clickable
+	runningFilterButton    widget.Clickable
+	communityButton        widget.Clickable
+	renameEditor           widget.Editor
+	renameConfirm          widget.Clickable
+	renameCancel           widget.Clickable
+	deleteScrim            widget.Clickable
+	deleteCancel           widget.Clickable
+	deleteConfirm          widget.Clickable
+	view                   ViewInput
+	activeSessionID        string
+	activeAgentID          string
+	activeSortAt           time.Time
+	lastEnsuredSessionID   string
 }
 
 func New() *Component {
 	return &Component{
-		projectCollapsed:  make(map[string]bool),
-		list:              layout.List{Axis: layout.Vertical},
-		searchEditor:      widget.Editor{SingleLine: true, MaxLen: 128},
-		sessionButtons:    make(map[string]*widget.Clickable),
-		projectButtons:    make(map[string]*widget.Clickable),
-		sessionButtonLive: make(map[string]struct{}),
-		projectButtonLive: make(map[string]struct{}),
-		menuButtons:       make(map[string]*widget.Clickable),
-		pinButtons:        make(map[string]*widget.Clickable),
-		renameButtons:     make(map[string]*widget.Clickable),
-		deleteButtons:     make(map[string]*widget.Clickable),
-		visible:           true,
-		renameEditor:      widget.Editor{SingleLine: true, MaxLen: 256},
+		projectCollapsed:       make(map[string]bool),
+		list:                   layout.List{Axis: layout.Vertical},
+		searchEditor:           widget.Editor{SingleLine: true, MaxLen: 128},
+		sessionButtons:         make(map[string]*widget.Clickable),
+		projectButtons:         make(map[string]*widget.Clickable),
+		projectNewButtons:      make(map[string]*widget.Clickable),
+		projectEmptyNewButtons: make(map[string]*widget.Clickable),
+		sessionButtonLive:      make(map[string]struct{}),
+		projectButtonLive:      make(map[string]struct{}),
+		pinButtons:             make(map[string]*widget.Clickable),
+		renameButtons:          make(map[string]*widget.Clickable),
+		deleteButtons:          make(map[string]*widget.Clickable),
+		visible:                true,
+		renameEditor:           widget.Editor{SingleLine: true, MaxLen: 256},
 	}
 }
 
@@ -271,6 +283,8 @@ func (c *Component) InspectorButton() *widget.Clickable { return &c.inspectorBut
 
 func (c *Component) PinnedFilterButton() *widget.Clickable { return &c.pinnedFilterButton }
 
+func (c *Component) RunningFilterButton() *widget.Clickable { return &c.runningFilterButton }
+
 func (c *Component) CommunityButton() *widget.Clickable { return &c.communityButton }
 
 func (c *Component) RenameEditor() *widget.Editor { return &c.renameEditor }
@@ -278,12 +292,6 @@ func (c *Component) RenameEditor() *widget.Editor { return &c.renameEditor }
 func (c *Component) RenameConfirmButton() *widget.Clickable { return &c.renameConfirm }
 
 func (c *Component) RenameCancelButton() *widget.Clickable { return &c.renameCancel }
-
-func (c *Component) MenuPinButton() *widget.Clickable { return &c.menuPin }
-
-func (c *Component) MenuRenameButton() *widget.Clickable { return &c.menuRename }
-
-func (c *Component) MenuDeleteButton() *widget.Clickable { return &c.menuDelete }
 
 func (c *Component) DeleteScrim() *widget.Clickable { return &c.deleteScrim }
 
@@ -300,15 +308,25 @@ func (c *Component) ProjectButton(projectID string) *widget.Clickable {
 	return c.projectButtons[projectID]
 }
 
+func (c *Component) ProjectNewButton(projectID string) *widget.Clickable {
+	if c.projectNewButtons[projectID] == nil {
+		c.projectNewButtons[projectID] = new(widget.Clickable)
+	}
+	return c.projectNewButtons[projectID]
+}
+
+func (c *Component) ProjectEmptyNewButton(projectID string) *widget.Clickable {
+	if c.projectEmptyNewButtons[projectID] == nil {
+		c.projectEmptyNewButtons[projectID] = new(widget.Clickable)
+	}
+	return c.projectEmptyNewButtons[projectID]
+}
+
 func (c *Component) SessionButton(sessionKey string) *widget.Clickable {
 	if c.sessionButtons[sessionKey] == nil {
 		c.sessionButtons[sessionKey] = new(widget.Clickable)
 	}
 	return c.sessionButtons[sessionKey]
-}
-
-func (c *Component) MenuButton(sessionID string, agentID ...string) *widget.Clickable {
-	return c.actionButton(c.menuButtons, sessionID, agentID...)
 }
 
 func (c *Component) PinButton(sessionID string, agentID ...string) *widget.Clickable {
@@ -324,11 +342,10 @@ func (c *Component) DeleteButton(sessionID string, agentID ...string) *widget.Cl
 }
 
 func (c *Component) actionButton(buttons map[string]*widget.Clickable, sessionID string, agentIDs ...string) *widget.Clickable {
-	agentID := ""
+	key := sessionID
 	if len(agentIDs) > 0 {
-		agentID = agentIDs[0]
+		key = SessionWidgetKey(sessionID, agentIDs[0])
 	}
-	key := SessionWidgetKey(sessionID, agentID)
 	if buttons[key] == nil {
 		buttons[key] = new(widget.Clickable)
 	}
@@ -343,6 +360,14 @@ func (c *Component) HasDeleteButton(key string) bool { return c.deleteButtons[ke
 
 func (c *Component) HasSessionButton(key string) bool { return c.sessionButtons[key] != nil }
 
+func (c *Component) HasProjectButton(projectID string) bool {
+	return c.projectButtons[projectID] != nil
+}
+
+func (c *Component) HasProjectNewButton(projectID string) bool {
+	return c.projectNewButtons[projectID] != nil
+}
+
 func (c *Component) SyncSessionButtons(state desktopstate.State, revision uint64) {
 	if revision != 0 && c.buttonRevisionSet && c.buttonRevision == revision {
 		return
@@ -351,10 +376,22 @@ func (c *Component) SyncSessionButtons(state desktopstate.State, revision uint64
 	for _, project := range state.Projects {
 		c.projectButtonLive[project.ID] = struct{}{}
 		c.ProjectButton(project.ID)
+		c.ProjectNewButton(project.ID)
+		c.ProjectEmptyNewButton(project.ID)
 	}
 	for projectID := range c.projectButtons {
 		if _, ok := c.projectButtonLive[projectID]; !ok {
 			delete(c.projectButtons, projectID)
+		}
+	}
+	for projectID := range c.projectNewButtons {
+		if _, ok := c.projectButtonLive[projectID]; !ok {
+			delete(c.projectNewButtons, projectID)
+		}
+	}
+	for projectID := range c.projectEmptyNewButtons {
+		if _, ok := c.projectButtonLive[projectID]; !ok {
+			delete(c.projectEmptyNewButtons, projectID)
 		}
 	}
 	clear(c.sessionButtonLive)
@@ -362,10 +399,16 @@ func (c *Component) SyncSessionButtons(state desktopstate.State, revision uint64
 		key := SessionWidgetKey(session.ID, session.AgentID)
 		c.sessionButtonLive[key] = struct{}{}
 		c.SessionButton(key)
-		c.MenuButton(session.ID, session.AgentID)
-		c.PinButton(session.ID, session.AgentID)
-		c.RenameButton(session.ID, session.AgentID)
-		c.DeleteButton(session.ID, session.AgentID)
+		c.PinButton(key)
+		c.RenameButton(key)
+		c.DeleteButton(key)
+
+		pinnedKey := "pinned:" + key
+		c.sessionButtonLive[pinnedKey] = struct{}{}
+		c.SessionButton(pinnedKey)
+		c.PinButton(pinnedKey)
+		c.RenameButton(pinnedKey)
+		c.DeleteButton(pinnedKey)
 	}
 	pruneButtons := func(buttons map[string]*widget.Clickable) {
 		for key := range buttons {
@@ -375,7 +418,6 @@ func (c *Component) SyncSessionButtons(state desktopstate.State, revision uint64
 		}
 	}
 	pruneButtons(c.sessionButtons)
-	pruneButtons(c.menuButtons)
 	pruneButtons(c.pinButtons)
 	pruneButtons(c.renameButtons)
 	pruneButtons(c.deleteButtons)
@@ -393,8 +435,58 @@ func SessionWidgetKey(sessionID string, agentID ...string) string {
 	return sessionRefStorageKey(desktopstate.SessionRef{AgentID: owner, SessionID: sessionID})
 }
 
+// EnsureVisible adjusts the scroll position so that the specified session is within view.
+func (c *Component) EnsureVisible(sessionID string, rows []Row) {
+	if sessionID == "" {
+		return
+	}
+	targetIdx := -1
+	for i, r := range rows {
+		if r.Kind == SessionRow && r.SessionID == sessionID {
+			targetIdx = i
+			break
+		}
+	}
+	if targetIdx < 0 {
+		return
+	}
+	if targetIdx < c.list.Position.First {
+		c.list.Position.First = targetIdx
+		c.list.Position.Offset = 0
+		return
+	}
+	const estimatedVisible = 8
+	if targetIdx >= c.list.Position.First+estimatedVisible {
+		c.list.Position.First = max(0, targetIdx-estimatedVisible+1)
+		c.list.Position.Offset = 0
+	}
+}
+
 // Rows returns the cached sidebar row projection for model.
 func (c *Component) Rows(model Model) []Row {
+	if model.State.ActiveSessionID == "" {
+		c.activeSessionID = ""
+		c.activeAgentID = ""
+		c.activeSortAt = time.Time{}
+	} else if model.ActiveSortAt == nil {
+		if c.activeSessionID == model.State.ActiveSessionID && c.activeAgentID == model.State.ActiveAgentID && !c.activeSortAt.IsZero() {
+			model.ActiveSortAt = &c.activeSortAt
+		} else {
+			for _, s := range model.State.Sessions {
+				if s.ID == model.State.ActiveSessionID && (model.State.ActiveAgentID == "" || s.AgentID == model.State.ActiveAgentID) {
+					c.activeSessionID = model.State.ActiveSessionID
+					c.activeAgentID = model.State.ActiveAgentID
+					c.activeSortAt = s.LastActivityAt
+					model.ActiveSortAt = &c.activeSortAt
+					break
+				}
+			}
+		}
+	} else {
+		c.activeSessionID = model.State.ActiveSessionID
+		c.activeAgentID = model.State.ActiveAgentID
+		c.activeSortAt = *model.ActiveSortAt
+	}
 	if model.Revision != 0 && c.rowsCache.valid && c.rowsCache.revision == model.Revision {
 		return c.rowsCache.rows
 	}
@@ -430,10 +522,16 @@ func (c *Component) DisplayRows(rows []Row, query, filterMode string, sourceRevi
 			}
 		case ProjectRow:
 			inPinnedSection = false
+			if filterMode == "pinned" {
+				continue
+			}
 			currentProjectCollapsed = c.projectCollapsed[row.ProjectID]
 			display = append(display, row)
 		case SessionRow:
-			if inPinnedSection && c.pinnedCollapsed || !inPinnedSection && currentProjectCollapsed {
+			if filterMode == "pinned" && !inPinnedSection {
+				continue
+			}
+			if query == "" && (inPinnedSection && c.pinnedCollapsed || !inPinnedSection && currentProjectCollapsed) {
 				continue
 			}
 			if matchesFilter(row, filterMode) && matchesQuery(row, query) {
@@ -476,6 +574,16 @@ func (c *Component) DisplayRows(rows []Row, query, filterMode string, sourceRevi
 
 func (c *Component) ProjectCollapsed(projectID string) bool {
 	return c.projectCollapsed[projectID]
+}
+
+func (c *Component) SetProjectCollapsed(projectID string, collapsed bool) {
+	if c.projectCollapsed == nil {
+		c.projectCollapsed = make(map[string]bool)
+	}
+	if c.projectCollapsed[projectID] != collapsed {
+		c.projectCollapsed[projectID] = collapsed
+		c.collapseRevision++
+	}
 }
 
 func (c *Component) ToggleProject(projectID string) {
@@ -540,13 +648,17 @@ func buildRows(model Model) RowsCache {
 
 	for _, session := range state.Sessions {
 		storageKey := sessionRefStorageKey(session.Ref())
-		title := session.Title
+		title := strings.TrimSpace(session.Title)
 		custom, ok := model.CustomTitles[storageKey]
 		if !ok && storageKey != session.ID {
 			custom = model.CustomTitles[session.ID]
 		}
+		custom = strings.TrimSpace(custom)
 		if custom != "" {
 			title = custom
+		}
+		if title == "" {
+			title = "Untitled conversation"
 		}
 		pinned := pinnedMap[storageKey] || pinnedMap[session.ID]
 		subtitle := subtitleFor(session.AgentID)
@@ -564,21 +676,41 @@ func buildRows(model Model) RowsCache {
 		}
 		sessionsByProject[session.ProjectID] = append(sessionsByProject[session.ProjectID], row)
 		if pinned {
-			pinnedRows = append(pinnedRows, row)
+			pinnedRow := row
+			pinnedRow.SessionKey = "pinned:" + storageKey
+			pinnedRows = append(pinnedRows, pinnedRow)
 		}
 	}
 
-	if len(pinnedRows) > 0 {
-		sort.SliceStable(pinnedRows, func(i, j int) bool {
-			left, right := pinnedRows[i].LastActivityAt, pinnedRows[j].LastActivityAt
-			if left.IsZero() {
+	sortSessions := func(sessions []Row) {
+		sort.SliceStable(sessions, func(i, j int) bool {
+			left, right := sessions[i].LastActivityAt, sessions[j].LastActivityAt
+			if model.ActiveSortAt != nil {
+				if sessions[i].SessionID == model.State.ActiveSessionID && (model.State.ActiveAgentID == "" || sessions[i].AgentID == model.State.ActiveAgentID) {
+					left = *model.ActiveSortAt
+				}
+				if sessions[j].SessionID == model.State.ActiveSessionID && (model.State.ActiveAgentID == "" || sessions[j].AgentID == model.State.ActiveAgentID) {
+					right = *model.ActiveSortAt
+				}
+			}
+			if left.IsZero() && !right.IsZero() {
 				return false
 			}
-			if right.IsZero() {
+			if !left.IsZero() && right.IsZero() {
 				return true
 			}
-			return left.After(right)
+			if !left.Equal(right) {
+				return left.After(right)
+			}
+			if sessions[i].SessionID != sessions[j].SessionID {
+				return sessions[i].SessionID < sessions[j].SessionID
+			}
+			return sessions[i].AgentID < sessions[j].AgentID
 		})
+	}
+
+	if len(pinnedRows) > 0 {
+		sortSessions(pinnedRows)
 		rows = append(rows, Row{Kind: PinnedHeaderRow, Title: "Pinned", SessionCount: len(pinnedRows)})
 		rows = append(rows, pinnedRows...)
 	}
@@ -586,25 +718,38 @@ func buildRows(model Model) RowsCache {
 	for _, project := range state.Projects {
 		projects = append(projects, projectCacheEntry{id: project.ID, name: project.Name})
 		projectSessions := sessionsByProject[project.ID]
-		sort.SliceStable(projectSessions, func(i, j int) bool {
-			left, right := projectSessions[i].LastActivityAt, projectSessions[j].LastActivityAt
-			if left.IsZero() {
-				return false
-			}
-			if right.IsZero() {
-				return true
-			}
-			return left.After(right)
-		})
+		sortSessions(projectSessions)
 		rows = append(rows, Row{Kind: ProjectRow, ProjectID: project.ID, Title: project.Name, SessionCount: len(projectSessions)})
 		rows = append(rows, projectSessions...)
 	}
-	return RowsCache{valid: true, rows: rows, projects: projects, sessions: sessions, pinned: slices.Clone(model.Pinned)}
+	var activeSortAt *time.Time
+	if model.ActiveSortAt != nil {
+		t := *model.ActiveSortAt
+		activeSortAt = &t
+	}
+	return RowsCache{
+		valid:           true,
+		rows:            rows,
+		projects:        projects,
+		sessions:        sessions,
+		pinned:          slices.Clone(model.Pinned),
+		filterMode:      model.FilterMode,
+		activeSessionID: model.State.ActiveSessionID,
+		activeAgentID:   model.State.ActiveAgentID,
+		activeSortAt:    activeSortAt,
+	}
 }
 
 func (cache RowsCache) matches(model Model) bool {
 	if cache.filterMode != model.FilterMode || !slices.Equal(cache.pinned, model.Pinned) ||
+		cache.activeSessionID != model.State.ActiveSessionID || cache.activeAgentID != model.State.ActiveAgentID ||
 		len(cache.projects) != len(model.State.Projects) || len(cache.sessions) != len(model.State.Sessions) {
+		return false
+	}
+	if (cache.activeSortAt == nil) != (model.ActiveSortAt == nil) {
+		return false
+	}
+	if cache.activeSortAt != nil && model.ActiveSortAt != nil && !cache.activeSortAt.Equal(*model.ActiveSortAt) {
 		return false
 	}
 	for index, project := range model.State.Projects {
@@ -617,13 +762,17 @@ func (cache RowsCache) matches(model Model) bool {
 	for index, session := range model.State.Sessions {
 		cached := cache.sessions[index]
 		storageKey := cached.key
-		expectedTitle := session.Title
+		expectedTitle := strings.TrimSpace(session.Title)
 		custom, ok := model.CustomTitles[storageKey]
 		if !ok && storageKey != session.ID {
 			custom = model.CustomTitles[session.ID]
 		}
+		custom = strings.TrimSpace(custom)
 		if custom != "" {
 			expectedTitle = custom
+		}
+		if expectedTitle == "" {
+			expectedTitle = "Untitled conversation"
 		}
 		subtitle, ok := displayNames[session.AgentID]
 		if !ok {
@@ -652,8 +801,13 @@ func matchesFilter(row Row, filterMode string) bool {
 }
 
 func matchesQuery(row Row, query string) bool {
-	return query == "" || strings.Contains(strings.ToLower(row.Title), query) ||
-		strings.Contains(strings.ToLower(row.Subtitle), query) || strings.Contains(strings.ToLower(row.ProjectID), query)
+	if query == "" {
+		return true
+	}
+	return strings.Contains(strings.ToLower(row.Title), query) ||
+		strings.Contains(strings.ToLower(row.Subtitle), query) ||
+		strings.Contains(strings.ToLower(row.SessionID), query) ||
+		strings.Contains(strings.ToLower(row.ProjectID), query)
 }
 
 func DisplayStatus(status desktopstate.TaskStatus) string {
@@ -706,13 +860,10 @@ func StatusLabel(status string) string {
 	}
 }
 
-// SessionSubtitle returns the activity or non-default-agent label for a row.
+// SessionSubtitle returns the relative activity label for a row if recorded.
 func SessionSubtitle(row Row, now time.Time) string {
 	if !row.LastActivityAt.IsZero() {
 		return ActivityLabel(row.LastActivityAt, now)
-	}
-	if row.AgentID != "" && row.AgentID != "protonman" {
-		return row.Subtitle
 	}
 	return ""
 }

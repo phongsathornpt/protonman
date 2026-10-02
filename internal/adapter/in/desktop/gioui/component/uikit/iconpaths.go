@@ -161,6 +161,17 @@ func desktopIconPath(ops *op.Ops, kind IconKind, size float32) clip.PathSpec {
 		path.Close()
 		line(.22, .35, .22, .80)
 		line(.22, .80, .65, .80)
+	case KindTrash:
+		line(.22, .28, .78, .28)
+		line(.40, .28, .40, .20)
+		line(.60, .28, .60, .20)
+		path.MoveTo(p(.28, .28))
+		path.LineTo(p(.72, .28))
+		path.LineTo(p(.67, .82))
+		path.LineTo(p(.33, .82))
+		path.Close()
+		line(.43, .40, .45, .70)
+		line(.57, .40, .55, .70)
 	}
 	return path.End()
 }

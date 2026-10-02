@@ -120,9 +120,9 @@ The desktop application is structured as a native macOS 3-column split-view work
 1. **Unified Top Toolbar (60dp)**: Aligned across panes with the native window titlebar. Contains icon-driven sidebar toggle (`◧`), project/session context, active session title, active agent selector (`▾`), connection status pill, and inspector toggle (`◨`).
 2. **Left Sidebar (260dp, 220dp below a 900dp window width, full-height and collapsible)**:
    - Extends the full window height in a quiet `surfaceDim` background.
-   - Stacked header with the Protonman brand, New chat action, thread search, and Projects label.
-   - Collapsible project directory groups with toggle chevrons (`▾`/`▸`).
-   - Inset capsule session selection: 8dp rounded selection pills (`primaryContainer` / `surfaceContainerHigh`) with 8dp horizontal gutter, 44dp minimum row height, colored status dots, and relative timestamps.
+   - Top bar with the Protonman brand and a compact new-session icon action, thread search on its own row below, and a Projects section label.
+   - Collapsible project directory groups with toggle chevrons (`▾`/`▸`) and hover `+` quick action to start new threads directly in that workspace. Expanded empty projects display an inline `"No conversations yet"` + `"+ New"` CTA. Pinned sessions sit under their own collapsible group header above projects.
+   - Active thread visual anchoring: prominent 3dp rounded accent indicator bar (`Primary`) on the leading edge of the active session card, filled pill (`primaryContainer` on `onPrimaryContainer`) with an 8dp horizontal gutter, 44dp minimum row height, colored status dots, and relative timestamps. Hover actions (pin, rename, delete) reveal on the active or hovered row, and non-default agents get a compact identity badge. Full arrow key navigation (`UpArrow`/`DownArrow`) traverses between threads and smoothly transitions into search.
 3. **Center Conversation Pane (Flexible width, max 840dp text constraint)**:
    - Clean canvas stream: AI assistant messages flow directly onto the canvas (`surface`) without enclosing card borders.
    - User prompts rendered as refined rounded speech bubbles (`shapeLarge` / 12-14dp radius) in elevated `secondaryContainer`.

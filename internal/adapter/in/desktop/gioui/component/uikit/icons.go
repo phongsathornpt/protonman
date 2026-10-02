@@ -28,4 +28,6 @@ const (
 	IconTerminal     Icon = "terminal"
 	IconCheck        Icon = "check"
 	IconCopy         Icon = "copy"
+	IconTrash        Icon = "trash"
+	IconPlus         Icon = "plus"
 )
