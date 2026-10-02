@@ -96,12 +96,6 @@ type diagnosticCounts struct {
 	Warnings int
 }
 
-type changeCounts struct {
-	Added     int
-	Changed   int
-	Destroyed int
-}
-
 func formatTestCounts(c testCounts) string {
 	parts := make([]string, 0, 5)
 	if c.Passed > 0 {

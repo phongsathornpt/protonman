@@ -5,8 +5,6 @@
 package runtime
 
 import (
-	"strings"
-
 	"gioui.org/layout"
 	"gioui.org/widget"
 
@@ -16,13 +14,6 @@ import (
 // Chrome is the shared uikit surface. The runtime package adds no visual
 // primitives of its own, so it uses the common palette directly.
 type Chrome = uikit.Chrome
-
-// ModelPresetRecord is one entry in the runtime's recents list.
-type ModelPresetRecord struct {
-	Provider string
-	Model    string
-	Name     string
-}
 
 type Widgets struct {
 	RuntimeProviderEditor, RuntimeModelEditor    widget.Editor
@@ -50,14 +41,13 @@ type Widgets struct {
 	PopoverProviderTabList                       layout.List
 	PopoverManageProvidersButton                 widget.Clickable
 	ModelList                                    layout.List
-	AgentModelButtons, ModelPresetButtons        map[string]*widget.Clickable
+	AgentModelButtons                            map[string]*widget.Clickable
 	PopoverReasoningButtons                      map[string]*widget.Clickable
 	PopoverPermissionModeButtons                 map[string]*widget.Clickable
 }
 
 type Component struct {
-	widgets      Widgets
-	recentModels []ModelPresetRecord
+	widgets Widgets
 }
 
 func New() *Component {
@@ -69,7 +59,6 @@ func New() *Component {
 		PopoverModelEditor:           widget.Editor{SingleLine: true, MaxLen: 256},
 		PopoverProviderTabButtons:    make(map[string]*widget.Clickable),
 		AgentModelButtons:            make(map[string]*widget.Clickable),
-		ModelPresetButtons:           make(map[string]*widget.Clickable),
 		PopoverReasoningButtons:      make(map[string]*widget.Clickable),
 		PopoverPermissionModeButtons: make(map[string]*widget.Clickable),
 		ReasoningButtons:             make(map[string]*widget.Clickable),
@@ -86,29 +75,6 @@ func (c *Component) ClosePopovers() {
 	c.widgets.ModelPopoverVisible = false
 	c.widgets.ReasoningPopoverVisible = false
 	c.widgets.PermissionModePopoverVisible = false
-}
-
-func (c *Component) RecentModels() []ModelPresetRecord {
-	return c.recentModels
-}
-
-func (c *Component) AddRecentModel(provider, model, name string) {
-	provider = strings.TrimSpace(provider)
-	model = strings.TrimSpace(model)
-	if provider == "" || model == "" {
-		return
-	}
-	if name == "" {
-		name = model
-	}
-	recents := make([]ModelPresetRecord, 0, len(c.recentModels)+1)
-	recents = append(recents, ModelPresetRecord{Provider: provider, Model: model, Name: name})
-	for _, r := range c.recentModels {
-		if !(r.Provider == provider && r.Model == model) && len(recents) < 5 {
-			recents = append(recents, r)
-		}
-	}
-	c.recentModels = recents
 }
 
 func (c *Component) PopoverPermissionModeButton(mode string) *widget.Clickable {
@@ -131,18 +97,6 @@ func (c *Component) AgentModelButton(name string) *widget.Clickable {
 			c.widgets.AgentModelButtons = make(map[string]*widget.Clickable)
 		}
 		c.widgets.AgentModelButtons[name] = btn
-	}
-	return btn
-}
-
-func (c *Component) ModelPresetButton(name string) *widget.Clickable {
-	btn, ok := c.widgets.ModelPresetButtons[name]
-	if !ok {
-		btn = new(widget.Clickable)
-		if c.widgets.ModelPresetButtons == nil {
-			c.widgets.ModelPresetButtons = make(map[string]*widget.Clickable)
-		}
-		c.widgets.ModelPresetButtons[name] = btn
 	}
 	return btn
 }

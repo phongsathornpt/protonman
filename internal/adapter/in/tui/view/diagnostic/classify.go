@@ -439,10 +439,7 @@ func Classify(err error, activeProvider string, activeModel string) Error {
 	}
 
 	// 23. Generic Fallback
-	cleanMsg := effMessage
-	if strings.HasPrefix(cleanMsg, "turn failed: ") {
-		cleanMsg = strings.TrimPrefix(cleanMsg, "turn failed: ")
-	}
+	cleanMsg := strings.TrimPrefix(effMessage, "turn failed: ")
 
 	return Error{
 		Kind:        KindGeneric,

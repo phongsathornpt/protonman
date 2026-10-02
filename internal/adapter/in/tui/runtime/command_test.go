@@ -555,7 +555,6 @@ func TestSkillsPickerWindowingLargeList(t *testing.T) {
 	if !model.panes.bottom.has(skillsViewID) {
 		t.Fatal("expected skills picker to be open")
 	}
-	render := model.panes.bottom.renderTop(model)
 	view := model.panes.bottom.find(skillsViewID).(*skillsPaneView)
 	if got := view.picker.GlobalIndex(); got != 0 {
 		t.Fatalf("expected initial selected index 0, got %d", got)
@@ -564,7 +563,7 @@ func TestSkillsPickerWindowingLargeList(t *testing.T) {
 		updated, _ = model.Update(testKey(tea.KeyDown))
 		model = updated.(*bubbleModel)
 	}
-	render = model.panes.bottom.renderTop(model)
+	render := model.panes.bottom.renderTop(model)
 	if got := view.picker.GlobalIndex(); got != 8 {
 		t.Fatalf("expected selected index 8 after navigation, got %d", got)
 	}
@@ -583,8 +582,7 @@ func TestSkillsPickerWrapAround(t *testing.T) {
 	if got := view.picker.GlobalIndex(); got != 4 {
 		t.Fatalf("expected wrap-around index 4, got %d", got)
 	}
-	updated, _ = model.Update(testKey(tea.KeyDown))
-	model = updated.(*bubbleModel)
+	_, _ = model.Update(testKey(tea.KeyDown))
 	if got := view.picker.GlobalIndex(); got != 0 {
 		t.Fatalf("expected wrap-around index 0, got %d", got)
 	}
@@ -611,8 +609,7 @@ func TestSkillsPickerFastNavigation(t *testing.T) {
 	if got := view.picker.GlobalIndex(); got != 0 {
 		t.Fatalf("expected index 0 after g, got %d", got)
 	}
-	updated, _ = model.Update(testText("3"))
-	model = updated.(*bubbleModel)
+	_, _ = model.Update(testText("3"))
 	if got := view.picker.GlobalIndex(); got != 2 {
 		t.Fatalf("expected item 3 after number 3, got: %s", render)
 	}
@@ -906,8 +903,7 @@ func TestSkillsPickerMouseWheelNavigation(t *testing.T) {
 	if got := view.picker.GlobalIndex(); got != 1 {
 		t.Fatalf("expected index 1 after wheel down, got %d", got)
 	}
-	updated, _ = model.Update(tea.MouseWheelMsg{Button: tea.MouseWheelUp})
-	model = updated.(*bubbleModel)
+	_, _ = model.Update(tea.MouseWheelMsg{Button: tea.MouseWheelUp})
 	if got := view.picker.GlobalIndex(); got != 0 {
 		t.Fatalf("expected index 0 after wheel up, got %d", got)
 	}
@@ -922,8 +918,7 @@ func TestLowConcurrencyPickerMouseWheelNavigation(t *testing.T) {
 	if got := view.index; got != 1 {
 		t.Fatalf("expected index 1 after wheel down, got %d", got)
 	}
-	updated, _ = m.Update(tea.MouseWheelMsg{Button: tea.MouseWheelUp})
-	m = updated.(*bubbleModel)
+	_, _ = m.Update(tea.MouseWheelMsg{Button: tea.MouseWheelUp})
 	if got := view.index; got != 0 {
 		t.Fatalf("expected index 0 after wheel up, got %d", got)
 	}

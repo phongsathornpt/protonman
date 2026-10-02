@@ -21,6 +21,21 @@ type ACPAgentProfile struct {
 	Env         []string
 }
 
+// AgentDisplayName resolves the display name for one ACP agent, falling back to
+// a stable placeholder for an empty ID or the raw ID for an unknown profile.
+func AgentDisplayName(profiles []ACPAgentProfile, agentID string) string {
+	agentID = strings.TrimSpace(agentID)
+	for _, profile := range profiles {
+		if profile.ID == agentID {
+			return profile.DisplayName
+		}
+	}
+	if agentID == "" {
+		return "Not configured"
+	}
+	return agentID
+}
+
 // ACPAgentsRepository is the outbound persistence port for desktop-owned ACP
 // agent profiles.
 type ACPAgentsRepository interface {

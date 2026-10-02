@@ -93,14 +93,6 @@ func (s *Shell) sidebarRows(snapshot controller.Snapshot) []sidebarRow {
 	})
 }
 
-func (s *Shell) sidebarDisplayRows(rows []sidebarRow, filterMode string, sourceRevisions ...uint64) []sidebarRow {
-	sourceRevision := uint64(0)
-	if len(sourceRevisions) > 0 {
-		sourceRevision = sourceRevisions[0]
-	}
-	return s.sidebarData.DisplayRows(rows, s.sidebarData.SearchQuery(), filterMode, sourceRevision)
-}
-
 func buildSidebarRows(state desktopstate.State, profiles []app.ACPAgentProfile) ([]sidebarRow, sidebarRowsCache) {
 	return buildSidebarRowsWithOptions(state, profiles, nil, nil)
 }
@@ -109,10 +101,6 @@ func buildSidebarRowsWithOptions(state desktopstate.State, profiles []app.ACPAge
 	model := sidebarcomponent.Model{State: state, AgentProfiles: profiles, Pinned: pinnedSessions, CustomTitles: customTitles}
 	cache := sidebarcomponent.BuildRows(model)
 	return cache.Rows(), sidebarRowsCache{cache: cache, model: model, filterMode: model.FilterMode}
-}
-
-func sidebarSessionWidgetKey(sessionID string, agentIDs ...string) string {
-	return sidebarcomponent.SessionWidgetKey(sessionID, agentIDs...)
 }
 
 func (s *Shell) syncSessionButtons(state desktopstate.State, revision uint64) {

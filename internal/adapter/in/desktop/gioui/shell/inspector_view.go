@@ -12,6 +12,7 @@ import (
 
 	inspectorcomponent "github.com/phongsathornpt/protonman/internal/adapter/in/desktop/gioui/component/inspector"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/desktop/gioui/component/uikit"
+	"github.com/phongsathornpt/protonman/internal/app"
 	desktopstate "github.com/phongsathornpt/protonman/internal/feature/desktop"
 
 	"github.com/phongsathornpt/protonman/internal/adapter/in/desktop/gioui/controller"
@@ -62,7 +63,7 @@ func (s *Shell) layoutInspector(gtx layout.Context, session desktopstate.Session
 		Snapshot: inspectorcomponent.Snapshot{
 			ExternalAgent: !protonmanSession(session),
 			Connected:     sessionConnection(snapshot, session.AgentID) == controller.ConnectionConnected,
-			AgentName:     agentDisplayName(snapshot.AgentProfiles, session.AgentID),
+			AgentName:     app.AgentDisplayName(snapshot.AgentProfiles, session.AgentID),
 		},
 		Chrome: s.inspectorChrome(),
 		Panel: func(gtx layout.Context, tab, index int) layout.Dimensions {

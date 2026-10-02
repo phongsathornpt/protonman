@@ -333,10 +333,8 @@ func (s *Service) call(ctx context.Context, call tool.Call, recoveryDepth int) (
 		s.rememberGrant(request.Key())
 	}
 
-	releaseMutation := func() {}
 	if s.mutationWorkspace != nil && tool.EffectiveCallMutability(definition, call.Arguments) == tool.MutabilityMutating {
-		var gateErr error
-		releaseMutation, gateErr = s.mutationWorkspace.AcquireMutation(ctx)
+		releaseMutation, gateErr := s.mutationWorkspace.AcquireMutation(ctx)
 		if gateErr != nil {
 			result := tool.Result{CallID: call.ID, ToolName: call.Name, Failure: tool.FailureFromError(gateErr)}
 			s.observeCallResult(ctx, telemetry, result, gateErr)

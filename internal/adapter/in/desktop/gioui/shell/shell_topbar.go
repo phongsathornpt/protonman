@@ -171,18 +171,3 @@ func connectionStatusLabel(status string) string {
 	}
 	return compactInspectorText(status, 26)
 }
-
-func desktopIconKind(glyph string) (uikit.IconKind, bool) {
-	switch glyph {
-	case "◧":
-		return uikit.KindSidebar, true
-	case "◨":
-		return uikit.KindInspector, true
-	case "+":
-		return uikit.KindAdd, true
-	case "✕":
-		return uikit.KindClose, true
-	default:
-		return 0, false
-	}
-}

@@ -234,20 +234,6 @@ func (m *bubbleModel) isCommandLine(line string) bool {
 	return true
 }
 
-func isCommandLine(line string) bool {
-	if !slashview.IsCommandLine(line) {
-		return false
-	}
-	trimmed := strings.TrimSpace(line)
-	if _, err := os.Stat(trimmed); err == nil {
-		parsed := slashview.ParseCommand(trimmed)
-		if _, ok := slashview.LookupCommand(parsed.Name); !ok {
-			return false
-		}
-	}
-	return true
-}
-
 func parseCommand(line string) slashview.ParsedCommand {
 	return slashview.ParseCommand(line)
 }

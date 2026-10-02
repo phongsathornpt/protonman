@@ -116,16 +116,12 @@ func (c AgentRunCell) RenderWidth(width int) []string {
 				}
 			}
 			stepLine := "  ↳ " + stepText
-			for _, line := range wrapStyledLines(tuistyle.ToolExcerptStyle.Render(stepLine), max(1, width)) {
-				out = append(out, line)
-			}
+			out = append(out, wrapStyledLines(tuistyle.ToolExcerptStyle.Render(stepLine), max(1, width))...)
 		}
 	}
 
 	if detail := c.detail(); detail != "" {
-		for _, line := range wrapStyledLines(tuistyle.BodyStyle.Render("  "+detail), max(1, width)) {
-			out = append(out, line)
-		}
+		out = append(out, wrapStyledLines(tuistyle.BodyStyle.Render("  "+detail), max(1, width))...)
 	}
 	return out
 }

@@ -3,7 +3,6 @@
 package shell
 
 import (
-	"context"
 	"image"
 	"testing"
 	"time"
@@ -27,19 +26,6 @@ func testLayoutContext() layout.Context {
 		Now:         time.Now(),
 		Source:      router.Source(),
 	}
-}
-
-type memoryPreferencesRepo struct {
-	state app.DesktopPreferencesState
-}
-
-func (m *memoryPreferencesRepo) Load(context.Context) (app.DesktopPreferencesState, error) {
-	return m.state, nil
-}
-
-func (m *memoryPreferencesRepo) Save(_ context.Context, state app.DesktopPreferencesState) error {
-	m.state = state
-	return nil
 }
 
 func TestBuildSidebarRowsWithOptions_PinnedAndCustomTitles(t *testing.T) {

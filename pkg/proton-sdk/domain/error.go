@@ -148,22 +148,6 @@ func classifyHTTPError(status int, code, message string) ErrorKind {
 	return ErrorUnknown
 }
 
-func classifyMessage(message string, fallback ErrorKind) ErrorKind {
-	lowered := strings.ToLower(message)
-	switch {
-	case strings.Contains(lowered, "context length"), strings.Contains(lowered, "maximum context"), strings.Contains(lowered, "too many tokens"):
-		return ErrorContextLength
-	case strings.Contains(lowered, "rate limit"), strings.Contains(lowered, "quota"):
-		return ErrorRateLimit
-	case strings.Contains(lowered, "model") && strings.Contains(lowered, "not found"):
-		return ErrorModelNotFound
-	case isOverloadedMessage(lowered):
-		return ErrorOverloaded
-	default:
-		return fallback
-	}
-}
-
 func isOverloadedMessage(value string) bool {
 	for _, candidate := range []string{
 		"busy",

@@ -12,7 +12,6 @@ import (
 	tuipresentation "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/presentation"
 	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/style"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/textview"
-	"github.com/phongsathornpt/protonman/internal/base/buildinfo"
 )
 
 func brandLockup(width int) string {
@@ -52,42 +51,19 @@ const (
 )
 
 var (
-	appVersion       = buildinfo.Version()
-	accentAssistant  = tuistyle.AccentAssistant
-	accentUser       = tuistyle.AccentUser
-	accentTool       = tuistyle.AccentTool
-	accentSystem     = tuistyle.AccentSystem
-	accentPlan       = tuistyle.AccentPlan
-	accentError      = tuistyle.AccentError
-	accentSuccess    = tuistyle.AccentSuccess
-	commandColor     = tuistyle.CommandColor
-	warningColor     = tuistyle.WarningColor
-	promptBorder     = tuistyle.PromptBorder
-	brandStyle       = tuistyle.BrandStyle
-	brandMarkStyle   = tuistyle.BrandMarkStyle
-	userStyle        = tuistyle.UserStyle
-	assistantStyle   = tuistyle.AssistantStyle
-	toolStyle        = tuistyle.ToolStyle
-	systemStyle      = tuistyle.SystemStyle
-	mutedStyle       = tuistyle.MutedStyle
-	statusStyle      = tuistyle.StatusStyle
-	warningStyle     = tuistyle.WarningStyle
-	successStyle     = tuistyle.SuccessStyle
-	errorStyle       = tuistyle.ErrorStyle
-	planStyle        = tuistyle.PlanStyle
-	commandStyle     = tuistyle.CommandStyle
-	toolTargetStyle  = tuistyle.ToolTargetStyle
-	toolDirStyle     = tuistyle.ToolDirStyle
-	toolSummaryStyle = tuistyle.ToolSummaryStyle
-	fileBadgeStyle   = tuistyle.FileBadgeStyle
-	toolExcerptStyle = tuistyle.ToolExcerptStyle
-	toolFoldStyle    = tuistyle.ToolFoldStyle
-	heroLabelStyle   = tuistyle.HeroLabelStyle
-	heroKeyStyle     = tuistyle.HeroKeyStyle
-	diffAddStyle     = tuistyle.DiffAddStyle
-	diffDeleteStyle  = tuistyle.DiffDeleteStyle
-	diffHunkStyle    = tuistyle.DiffHunkStyle
-	bodyStyle        = tuistyle.BodyStyle
+	accentAssistant = tuistyle.AccentAssistant
+	commandColor    = tuistyle.CommandColor
+	brandStyle      = tuistyle.BrandStyle
+	brandMarkStyle  = tuistyle.BrandMarkStyle
+	userStyle       = tuistyle.UserStyle
+	systemStyle     = tuistyle.SystemStyle
+	mutedStyle      = tuistyle.MutedStyle
+	warningStyle    = tuistyle.WarningStyle
+	successStyle    = tuistyle.SuccessStyle
+	errorStyle      = tuistyle.ErrorStyle
+	planStyle       = tuistyle.PlanStyle
+	commandStyle    = tuistyle.CommandStyle
+	bodyStyle       = tuistyle.BodyStyle
 )
 
 var (
@@ -101,26 +77,12 @@ func (s *simpleANSIStyle) writeTo(out *strings.Builder, style lipgloss.Style, te
 	s.inner.WriteTo(out, style, text)
 }
 
-func renderMarkdownLines(markdown string, width int) []string {
-	return textview.RenderMarkdownLines(markdown, width)
-}
-
 func renderMarkdownBodyWrapped(text string, width int) []string {
 	return textview.RenderMarkdownBodyWrapped(text, width)
 }
 
 func renderMarkdownWrapped(text string, width int, style lipgloss.Style) []string {
 	return textview.RenderMarkdownWrapped(text, width, style)
-}
-
-type markdownRenderState = textview.MarkdownState
-
-func renderMarkdownLine(raw string, width int, state *markdownRenderState) []string {
-	return textview.RenderMarkdownLine(raw, width, state)
-}
-
-func trimTrailingBlankLines(lines []string) []string {
-	return textview.TrimTrailingBlankLines(lines)
 }
 
 func wrapWords(text string, width int) string {
@@ -133,10 +95,6 @@ func wrapLines(text string, width int) []string {
 
 func sanitizeBubbleText(text string) string {
 	return textview.Sanitize(text)
-}
-
-func safeWrappedLines(text string, width int) []string {
-	return textview.SafeWrappedLines(text, width)
 }
 
 func overlayCenter(background, overlay string, width, height int) string {

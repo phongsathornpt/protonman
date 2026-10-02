@@ -105,7 +105,7 @@ func TestMainEmptyStateWorkspaceReadyCentering(t *testing.T) {
 	centerColor := img.RGBAAt(width/2, height/2)
 
 	surfaceNRGBA := view.theme.Colors.Surface
-	surfaceColor := color.RGBA{R: surfaceNRGBA.R, G: surfaceNRGBA.G, B: surfaceNRGBA.B, A: surfaceNRGBA.A}
+	surfaceColor := color.RGBA(surfaceNRGBA)
 	if leftColor != surfaceColor {
 		t.Fatalf("left margin pixel at (50, %d) = %+v, want surface %+v (card is not centered)", height/2, leftColor, surfaceColor)
 	}
@@ -169,7 +169,7 @@ func TestMainEmptyStateWorkspaceReadyFullShellCentering(t *testing.T) {
 	rightColor := img.RGBAAt(1150, 400)
 
 	surfaceNRGBA := view.theme.Colors.Surface
-	surfaceColor := color.RGBA{R: surfaceNRGBA.R, G: surfaceNRGBA.G, B: surfaceNRGBA.B, A: surfaceNRGBA.A}
+	surfaceColor := color.RGBA(surfaceNRGBA)
 	if leftColor != surfaceColor {
 		t.Fatalf("main pane left margin pixel at (320, 400) = %+v, want surface %+v", leftColor, surfaceColor)
 	}

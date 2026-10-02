@@ -59,7 +59,6 @@ type Server struct {
 	writeMu                sync.Mutex
 	sessions               map[string]*Session
 	sessionDirectories     map[string][]string
-	nextID                 uint64
 	permissionSeq          uint64
 	// output is the transport used for server-initiated requests such as
 	// session/request_permission. It is set for the duration of Serve.

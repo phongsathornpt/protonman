@@ -19,20 +19,7 @@ import (
 )
 
 func activeAgentDisplayName(snapshot controller.Snapshot) string {
-	return agentDisplayName(snapshot.AgentProfiles, snapshot.ActiveAgentID)
-}
-
-func agentDisplayName(profiles []app.ACPAgentProfile, agentID string) string {
-	agentID = strings.TrimSpace(agentID)
-	for _, profile := range profiles {
-		if profile.ID == agentID {
-			return profile.DisplayName
-		}
-	}
-	if agentID == "" {
-		return "Not configured"
-	}
-	return agentID
+	return app.AgentDisplayName(snapshot.AgentProfiles, snapshot.ActiveAgentID)
 }
 
 func (s *Shell) syncAgentProfileEditors(snapshot controller.Snapshot) {
@@ -132,19 +119,6 @@ func anyAgentConnected(snapshot controller.Snapshot) bool {
 	return snapshot.Connection == controller.ConnectionConnected
 }
 
-func connectionStatusInfo(phase controller.ConnectionPhase) (color.NRGBA, string) {
-	switch phase {
-	case controller.ConnectionConnected:
-		return color.NRGBA{R: 52, G: 199, B: 89, A: 255}, "Ready"
-	case controller.ConnectionConnecting:
-		return color.NRGBA{R: 255, G: 159, B: 10, A: 255}, "Starting"
-	case controller.ConnectionReconnecting:
-		return color.NRGBA{R: 255, G: 159, B: 10, A: 255}, "Retrying"
-	default:
-		return color.NRGBA{R: 142, G: 142, B: 147, A: 255}, "Offline"
-	}
-}
-
 func (s *Shell) layoutStatusDot(gtx layout.Context, c color.NRGBA) layout.Dimensions {
 	size := gtx.Dp(8)
 	gtx.Constraints.Min = image.Pt(size, size)
@@ -185,12 +159,4 @@ func (s *Shell) clearAgentProfileEditors() {
 
 func (s *Shell) layoutAgentProfilesPanel(gtx layout.Context, snapshot controller.Snapshot) layout.Dimensions {
 	return s.settingsComponent.LayoutAgents(gtx, s.agentsInput(snapshot, !snapshot.AgentUpdating))
-}
-
-func (s *Shell) layoutAgentProfileRow(gtx layout.Context, profile app.ACPAgentProfile, selected, enabled bool, snapshot controller.Snapshot) layout.Dimensions {
-	return s.settingsComponent.LayoutAgentProfileRow(gtx, profile, selected, enabled, s.agentsInput(snapshot, enabled))
-}
-
-func (s *Shell) layoutAgentConfigurationCard(gtx layout.Context, snapshot controller.Snapshot, profiles []app.ACPAgentProfile, enabled bool) layout.Dimensions {
-	return s.settingsComponent.LayoutAgentConfigurationCard(gtx, s.agentsInput(snapshot, enabled), profiles, enabled)
 }

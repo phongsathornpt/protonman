@@ -246,10 +246,6 @@ func advancesProgressEpoch(semantics tool.CallSemantics) bool {
 	return semantics.Mutability != tool.MutabilityReadOnly && semantics.Safety.MutationDomain != tool.MutationDomainTaskState
 }
 
-func potentiallyMutating(definition tool.Definition, call tool.Call) bool {
-	return tool.EffectiveCallMutability(definition, call.Arguments) != tool.MutabilityReadOnly
-}
-
 func semanticCallHash(call tool.Call) ([sha256.Size]byte, error) {
 	var arguments any
 	if err := json.Unmarshal(call.Arguments, &arguments); err != nil {

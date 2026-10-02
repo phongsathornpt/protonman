@@ -69,21 +69,8 @@ func (s *Shell) agentModelButton(name string) *widget.Clickable {
 	return s.runtimeComponent.AgentModelButton(name)
 }
 
-func (s *Shell) modelPresetButton(name string) *widget.Clickable {
-	return s.runtimeComponent.ModelPresetButton(name)
-}
-
 func (s *Shell) popoverReasoningButton(level string) *widget.Clickable {
 	return s.runtimeComponent.PopoverReasoningButton(level)
-}
-
-func (s *Shell) popoverProviderTabButton(id string) *widget.Clickable {
-	return s.runtimeComponent.PopoverProviderTabButton(id)
-}
-
-func (s *Shell) addRecentModel(provider, model, name string) {
-	s.runtimeComponent.AddRecentModel(provider, model, name)
-	s.recentModels = s.runtimeComponent.RecentModels()
 }
 
 func (s *Shell) runtimeChrome() runtimecomponent.Chrome {

@@ -27,14 +27,6 @@ func streamingText(source string) string {
 	return conversationcomponent.StreamingText(source)
 }
 
-func isDiffText(text string) bool {
-	return conversationcomponent.IsDiffText(text)
-}
-
-func extractDiffFilename(text string) string {
-	return conversationcomponent.ExtractDiffFilename(text)
-}
-
 func toolCategoryIcon(title string) uikit.IconKind {
 	switch conversationcomponent.ToolCategoryIcon(title) {
 	case "terminal":

@@ -583,7 +583,6 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 				terminalReason = "runtime_event_flush_failed"
 				return l.failWithResult(ctx, sink, round, checkpoint(), err)
 			}
-			history = append(history, assistant)
 			turnMessages = append(turnMessages, assistant)
 			terminalReason = "completed"
 			if safetyBudgetFallback {

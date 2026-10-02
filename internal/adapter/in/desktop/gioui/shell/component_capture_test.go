@@ -3,59 +3,10 @@
 package shell
 
 import (
-	"image"
-	"image/png"
-	"os"
-	"testing"
-	"time"
-
-	"gioui.org/gpu/headless"
-	"gioui.org/io/input"
-	"gioui.org/layout"
-	"gioui.org/op"
-	"gioui.org/op/paint"
-	"gioui.org/unit"
-
 	"github.com/phongsathornpt/protonman/internal/adapter/in/desktop/gioui/controller"
 	"github.com/phongsathornpt/protonman/internal/app"
 	desktopstate "github.com/phongsathornpt/protonman/internal/feature/desktop"
 )
-
-func captureDesktopWidget(t *testing.T, path string, size image.Point, view *Shell, render layout.Widget) {
-	t.Helper()
-	window, err := headless.NewWindow(size.X, size.Y)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer window.Release()
-	var ops op.Ops
-	var router input.Router
-	for frame := range 3 {
-		ops.Reset()
-		gtx := layout.Context{Ops: &ops, Constraints: layout.Exact(size), Metric: unit.Metric{PxPerDp: 1, PxPerSp: 1}, Now: time.Unix(1, int64(frame)*16_000_000), Source: router.Source()}
-		paint.Fill(&ops, view.theme.Colors.Surface)
-		render(gtx)
-		router.Frame(&ops)
-		if err := window.Frame(&ops); err != nil {
-			t.Fatal(err)
-		}
-	}
-	img := image.NewRGBA(image.Rectangle{Max: size})
-	if err := window.Screenshot(img); err != nil {
-		t.Fatal(err)
-	}
-	file, err := os.Create(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := png.Encode(file, img); err != nil {
-		file.Close()
-		t.Fatal(err)
-	}
-	if err := file.Close(); err != nil {
-		t.Fatal(err)
-	}
-}
 
 func desktopCaptureSnapshot() controller.Snapshot {
 	return controller.Snapshot{

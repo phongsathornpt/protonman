@@ -11,7 +11,6 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	turnmsg "github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/turn"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
-	domainmodel "github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/base/envconfig"
 	"github.com/phongsathornpt/protonman/internal/core/conversation"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
@@ -33,7 +32,7 @@ type scriptedRunner struct {
 	err    error
 }
 
-func (r *scriptedRunner) Run(ctx context.Context, _ []domainmodel.Message, sink applicationturn.Sink) (applicationturn.Result, error) {
+func (r *scriptedRunner) Run(ctx context.Context, _ []model.Message, sink applicationturn.Sink) (applicationturn.Result, error) {
 	for _, event := range r.events {
 		if err := sink(ctx, event); err != nil {
 			return applicationturn.Result{}, err
@@ -354,11 +353,11 @@ type blockingRunner struct{ started chan struct{} }
 
 type panicRunner struct{}
 
-func (panicRunner) Run(context.Context, []domainmodel.Message, applicationturn.Sink) (applicationturn.Result, error) {
+func (panicRunner) Run(context.Context, []model.Message, applicationturn.Sink) (applicationturn.Result, error) {
 	panic("test runner panic")
 }
 
-func (r *blockingRunner) Run(ctx context.Context, _ []domainmodel.Message, _ applicationturn.Sink) (applicationturn.Result, error) {
+func (r *blockingRunner) Run(ctx context.Context, _ []model.Message, _ applicationturn.Sink) (applicationturn.Result, error) {
 	close(r.started)
 	<-ctx.Done()
 	return applicationturn.Result{}, ctx.Err()

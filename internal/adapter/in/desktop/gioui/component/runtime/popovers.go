@@ -112,19 +112,6 @@ func IsClineProvider(agentID, provider string, models []string, profiles []app.A
 	return false
 }
 
-func agentDisplayName(profiles []app.ACPAgentProfile, agentID string) string {
-	agentID = strings.TrimSpace(agentID)
-	for _, profile := range profiles {
-		if profile.ID == agentID {
-			return profile.DisplayName
-		}
-	}
-	if agentID == "" {
-		return "Not configured"
-	}
-	return agentID
-}
-
 func (c *Component) LayoutModelPopover(gtx layout.Context, input ModelPopoverInput) layout.Dimensions {
 	if c.widgets.ModelPopoverCloseButton.Clicked(gtx) {
 		c.ClosePopovers()
@@ -146,7 +133,7 @@ func (c *Component) LayoutModelPopover(gtx layout.Context, input ModelPopoverInp
 	if agentID == "" {
 		agentID = "protonman"
 	}
-	agentName := agentDisplayName(input.AgentProfiles, agentID)
+	agentName := app.AgentDisplayName(input.AgentProfiles, agentID)
 	isProton := IsProtonmanAgent(agentID)
 
 	if currentModel == "" && input.AgentDefaultModels != nil {

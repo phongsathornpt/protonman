@@ -138,13 +138,5 @@ func (c *ReasoningCell) LineCount() int {
 	return len(c.RawLines())
 }
 
-// sanitizeBubbleText cleans terminal escapes and unprintable characters.
-func (c *ReasoningCell) appendDelta(delta string) {
-	if c.StartedAt.IsZero() {
-		c.StartedAt = time.Now()
-	}
-	c.Content += delta
-}
-
 // Ensure interface satisfaction
 var _ CollapsibleCell = (*ReasoningCell)(nil)

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"image"
 	"image/color"
-	"strings"
 	"time"
 
 	"gioui.org/font"
@@ -22,7 +21,6 @@ import (
 	runtimecomponent "github.com/phongsathornpt/protonman/internal/adapter/in/desktop/gioui/component/runtime"
 	settingscomponent "github.com/phongsathornpt/protonman/internal/adapter/in/desktop/gioui/component/settings"
 	sidebarcomponent "github.com/phongsathornpt/protonman/internal/adapter/in/desktop/gioui/component/sidebar"
-	"github.com/phongsathornpt/protonman/internal/base/modelcatalogpolicy"
 	desktopstate "github.com/phongsathornpt/protonman/internal/feature/desktop"
 
 	"github.com/phongsathornpt/protonman/internal/adapter/in/desktop/gioui/component/uikit"
@@ -105,24 +103,10 @@ type Shell struct {
 	runtimeComponent  *runtimecomponent.Component
 
 	tailFollowBeforeOverlay bool
-	recentModels            []modelPresetRecord
 
 	// Settings Providers tab widgets
 	backgroundAttentionButton widget.Clickable
 }
-
-type modelPresetRecord = runtimecomponent.ModelPresetRecord
-
-// curatedModelPresets derives its quick-pick models from the shared catalog
-// policy instead of restating model identifiers here.
-var curatedModelPresets = func() []modelPresetRecord {
-	presets := modelcatalogpolicy.CuratedPresets()
-	records := make([]modelPresetRecord, 0, len(presets))
-	for _, preset := range presets {
-		records = append(records, modelPresetRecord(preset))
-	}
-	return records
-}()
 
 // New builds the Shell for a resolved theme and a set of application actions.
 // Bindings are defaulted to no-ops, so a caller that wires only some actions
@@ -494,10 +478,6 @@ func (s *Shell) taskStatusColors(status desktopstate.TaskStatus) (color.NRGBA, c
 	}
 }
 
-func taskStatusFromLabel(label string) desktopstate.TaskStatus {
-	return desktopstate.TaskStatus(strings.ReplaceAll(strings.ToLower(strings.TrimSpace(label)), " ", "_"))
-}
-
 func (s *Shell) layoutMainEmptyState(gtx layout.Context, snapshot controller.Snapshot) layout.Dimensions {
 	title, body, ready := mainEmptyStateCopy(snapshot.State)
 	return s.layoutCenteredCard(gtx, func(gtx layout.Context) layout.Dimensions {
@@ -534,58 +514,6 @@ func mainEmptyStateCopy(state desktopstate.State) (title, body string, ready boo
 		return "Select a project", "1. Choose a project in the sidebar.\n2. Start a conversation to begin working. Your conversations stay with the agent that started them.", false
 	}
 	return "Your workspace is ready", "Start a conversation to begin working. Your conversations stay with the agent that started them.", true
-}
-
-func (s *Shell) layoutSessionDetails(gtx layout.Context, session desktopstate.SessionState) layout.Dimensions {
-	return s.layoutCenteredCard(gtx, func(gtx layout.Context) layout.Dimensions {
-		return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
-			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				return s.layoutLabel(gtx, "Session overview", textTitleMedium, font.SemiBold, s.theme.Colors.OnSurface, 1)
-			}),
-			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				return uikit.UniformInset(8).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-					return s.layoutLabel(gtx, "Your conversation, permissions, and session controls appear here.", textBodyMedium, font.Normal, s.theme.Colors.OnSurfaceVariant, 4)
-				})
-			}),
-			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				return s.layoutDetailRow(gtx, "Workspace", session.Workspace)
-			}),
-			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				return s.layoutDetailRow(gtx, "Workspace key", session.WorkspaceKey)
-			}),
-			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				return s.layoutDetailRow(gtx, "Agent", session.AgentID)
-			}),
-			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				return s.layoutDetailRow(gtx, "Session ID", session.ID)
-			}),
-		)
-	})
-}
-
-func (s *Shell) layoutDetailRow(gtx layout.Context, label, value string) layout.Dimensions {
-	if value == "" {
-		value = "Not reported"
-	}
-	if gtx.Constraints.Max.X-gtx.Constraints.Min.X < gtx.Dp(480) {
-		return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
-			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				return s.layoutLabel(gtx, label, textLabelMedium, font.SemiBold, s.theme.Colors.OnSurfaceVariant, 1)
-			}),
-			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				return s.layoutLabel(gtx, value, textBodyMedium, font.Normal, s.theme.Colors.OnSurface, 2)
-			}),
-		)
-	}
-	return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Start}.Layout(gtx,
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			gtx.Constraints.Min.X = gtx.Dp(112)
-			return s.layoutLabel(gtx, label, textLabelMedium, font.SemiBold, s.theme.Colors.OnSurfaceVariant, 2)
-		}),
-		layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-			return s.layoutLabel(gtx, value, textBodyMedium, font.Normal, s.theme.Colors.OnSurface, 2)
-		}),
-	)
 }
 
 func selectedSession(state desktopstate.State) (desktopstate.SessionState, bool) {

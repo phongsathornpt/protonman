@@ -229,11 +229,9 @@ func TestMCPSavePersistsNormalizedState(t *testing.T) {
 	controller := newMCPTestController(repository)
 
 	controller.SaveMCPIntegration("docs", "mcp-docs", `["--stdio"]`, `["TOKEN"]`)
-	select {
-	case saved := <-repository.save:
-		if !reflect.DeepEqual(saved, []app.MCPIntegration{{Name: "docs", Command: "mcp-docs", Args: []string{"--stdio"}, Env: []string{"TOKEN"}}}) {
-			t.Fatalf("saved = %#v", saved)
-		}
+	saved := <-repository.save
+	if !reflect.DeepEqual(saved, []app.MCPIntegration{{Name: "docs", Command: "mcp-docs", Args: []string{"--stdio"}, Env: []string{"TOKEN"}}}) {
+		t.Fatalf("saved = %#v", saved)
 	}
 	for i := 0; i < 100 && controller.Snapshot().MCPUpdating; i++ {
 		time.Sleep(time.Millisecond)

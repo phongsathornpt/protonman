@@ -1004,8 +1004,7 @@ func TestProviderSelectFilteredSelectionUsesVisibleItem(t *testing.T) {
 	if !ok || item.name != "beta" {
 		t.Fatalf("filtered selection = %#v, %t; want beta", item, ok)
 	}
-	updated, cmd := bModel.Update(testKey(tea.KeyEnter))
-	bModel = updated.(*bubbleModel)
+	_, cmd := bModel.Update(testKey(tea.KeyEnter))
 	if cmd == nil {
 		t.Fatal("expected provider selection command")
 	}

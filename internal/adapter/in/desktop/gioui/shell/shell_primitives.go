@@ -117,41 +117,6 @@ func (s *Shell) layoutButtonStyle(gtx layout.Context, button *widget.Clickable, 
 	return dims
 }
 
-func (s *Shell) layoutIconButton(gtx layout.Context, button *widget.Clickable, icon, tooltip string, action func()) layout.Dimensions {
-	kind, ok := desktopIconKind(icon)
-	if ok {
-		return s.layoutIconActionButton(gtx, button, kind, tooltip, action)
-	}
-	if button.Clicked(gtx) && action != nil {
-		action()
-		gtx.Execute(op.InvalidateCmd{})
-	}
-	size := gtx.Dp(30)
-	gtx.Constraints.Min = image.Pt(size, size)
-	gtx.Constraints.Max = image.Pt(size, size)
-	semantic.Button.Add(gtx.Ops)
-	semantic.DescriptionOp(tooltip).Add(gtx.Ops)
-	background := color.NRGBA{}
-	foreground := s.theme.Colors.OnSurfaceVariant
-	if button.Hovered() {
-		background = s.theme.Colors.SurfaceContainerHigh
-		foreground = s.theme.Colors.OnSurface
-	}
-	dims := button.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-		return s.roundedSurface(gtx, shapeSmall, background, func(gtx layout.Context) layout.Dimensions {
-			return layout.Stack{Alignment: layout.Center}.Layout(gtx, layout.Stacked(func(gtx layout.Context) layout.Dimensions {
-				return s.layoutLabel(gtx, icon, textTitleMedium, font.Normal, foreground, 1)
-			}))
-		})
-	})
-	if gtx.Focused(button) {
-		widget.Border{Color: s.theme.Colors.Primary, CornerRadius: shapeSmall, Width: 1}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-			return layout.Dimensions{Size: dims.Size}
-		})
-	}
-	return dims
-}
-
 func (s *Shell) layoutAgentCapsuleButton(gtx layout.Context, button *widget.Clickable, label string, action func()) layout.Dimensions {
 	if button.Clicked(gtx) && action != nil {
 		action()

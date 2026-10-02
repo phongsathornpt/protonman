@@ -138,18 +138,6 @@ func TestCollapsibleToolAndDiffCards(t *testing.T) {
 	}
 }
 
-func mkJumpGtx() layout.Context {
-	ops := new(op.Ops)
-	var router input.Router
-	return layout.Context{
-		Ops:         ops,
-		Constraints: layout.Constraints{Min: image.Pt(800, 0), Max: image.Pt(800, 600)},
-		Metric:      unit.Metric{PxPerDp: 1, PxPerSp: 1},
-		Now:         time.Unix(1, 0),
-		Source:      router.Source(),
-	}
-}
-
 // Submitting must clear exactly the active session's draft and nothing else.
 // Leaving the draft behind would replay a sent prompt the next time the user
 // switches back, and clearing the wrong session would silently lose unsent text.

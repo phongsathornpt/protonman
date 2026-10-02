@@ -13,7 +13,6 @@ import (
 	turnmsg "github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/turn"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
-	domainmodel "github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/app"
 	"github.com/phongsathornpt/protonman/internal/core/modelprofile"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
@@ -572,7 +571,7 @@ func TestModelSetupPagedNavigation(t *testing.T) {
 	m.activeProvider = model.DefaultProtonmanName
 	seedModelSetupCatalog(m)
 	models := m.modelCatalogs.Models(model.DefaultProtonmanName)
-	models = append(models, domainmodel.RemoteModel{ID: "fixture-seven", Name: "Fixture Seven"})
+	models = append(models, model.RemoteModel{ID: "fixture-seven", Name: "Fixture Seven"})
 	m.modelCatalogs.Set(model.DefaultProtonmanName, models)
 	m.resize(40, 14)
 	m.executeCommand("/model")
@@ -685,9 +684,9 @@ func TestComposerClickRestoresFocus(t *testing.T) {
 }
 
 func TestAppendTurnResultCoalescesAssistantText(t *testing.T) {
-	model := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
-	model.appendTurnResult([]applicationturn.Event{{Kind: applicationturn.EventTextDelta, Text: "hello"}, {Kind: applicationturn.EventTextDelta, Text: " world"}}, applicationturn.Result{Message: domainmodel.Message{Content: "hello world"}}, nil)
-	plain := plainTranscript(model)
+	bm := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	bm.appendTurnResult([]applicationturn.Event{{Kind: applicationturn.EventTextDelta, Text: "hello"}, {Kind: applicationturn.EventTextDelta, Text: " world"}}, applicationturn.Result{Message: model.Message{Content: "hello world"}}, nil)
+	plain := plainTranscript(bm)
 	if strings.Count(plain, "hello world") != 1 {
 		t.Fatalf("assistant text count = %d, want 1: %q", strings.Count(plain, "hello world"), plain)
 	}
@@ -706,7 +705,7 @@ func TestAppendTurnResultPreservesToolNewlines(t *testing.T) {
 }
 
 func TestStartTurnStreamsSinkEvents(t *testing.T) {
-	runner := &scriptedRunner{events: []applicationturn.Event{{Kind: applicationturn.EventTextDelta, Text: "hello"}, {Kind: applicationturn.EventTextDelta, Text: " stream"}}, result: applicationturn.Result{Message: domainmodel.Message{Role: domainmodel.RoleAssistant, Content: "hello stream"}}}
+	runner := &scriptedRunner{events: []applicationturn.Event{{Kind: applicationturn.EventTextDelta, Text: "hello"}, {Kind: applicationturn.EventTextDelta, Text: " stream"}}, result: applicationturn.Result{Message: model.Message{Role: model.RoleAssistant, Content: "hello stream"}}}
 	registry, _ := newBubbleTestRegistry()
 	service := newBubbleTestService(t, registry, permission.ModeAsk, permission.Config{})
 	model := newBubbleModel(context.Background(), service, registry, emptyTodoItems(), runner, newPermissionBridge(), "")
@@ -752,7 +751,7 @@ func TestClosedTurnEventsRenderTerminalFailure(t *testing.T) {
 }
 
 func TestTurnDoneAppendsProducedToolHistory(t *testing.T) {
-	runner := &scriptedRunner{result: applicationturn.Result{Message: domainmodel.Message{Role: domainmodel.RoleAssistant, Content: "done"}, Messages: []domainmodel.Message{{Role: domainmodel.RoleAssistant, ToolCalls: []domainmodel.ToolCall{{ID: "call-1", Name: "read", Arguments: []byte(`{"path":"README.md"}`)}}}, {Role: domainmodel.RoleTool, ToolCallID: "call-1", ToolName: "read", Content: `{"output":"ok"}`}, {Role: domainmodel.RoleAssistant, Content: "done"}}}}
+	runner := &scriptedRunner{result: applicationturn.Result{Message: model.Message{Role: model.RoleAssistant, Content: "done"}, Messages: []model.Message{{Role: model.RoleAssistant, ToolCalls: []model.ToolCall{{ID: "call-1", Name: "read", Arguments: []byte(`{"path":"README.md"}`)}}}, {Role: model.RoleTool, ToolCallID: "call-1", ToolName: "read", Content: `{"output":"ok"}`}, {Role: model.RoleAssistant, Content: "done"}}}}
 	registry, _ := newBubbleTestRegistry()
 	service := newBubbleTestService(t, registry, permission.ModeAsk, permission.Config{})
 	m := newBubbleModel(context.Background(), service, registry, emptyTodoItems(), runner, newPermissionBridge(), "")
@@ -762,16 +761,16 @@ func TestTurnDoneAppendsProducedToolHistory(t *testing.T) {
 	if got, want := len(m.conversation.Messages()), 4; got != want {
 		t.Fatalf("provider history length = %d, want %d", got, want)
 	}
-	if m.conversation.Messages()[1].Role != domainmodel.RoleAssistant || m.conversation.Messages()[2].Role != domainmodel.RoleTool {
+	if m.conversation.Messages()[1].Role != model.RoleAssistant || m.conversation.Messages()[2].Role != model.RoleTool {
 		t.Fatalf("provider history = %#v, want assistant/tool exchange", m.conversation.Messages())
 	}
 }
 
 func TestTurnDonePreservesReplaySafeCheckpointOnFailure(t *testing.T) {
 	runner := &scriptedRunner{
-		result: applicationturn.Result{ReplaySafe: true, Rounds: 1, Messages: []domainmodel.Message{
-			{Role: domainmodel.RoleAssistant, ToolCalls: []domainmodel.ToolCall{{ID: "call-safe", Name: "read", Arguments: []byte(`{"path":"README.md"}`)}}},
-			{Role: domainmodel.RoleTool, ToolCallID: "call-safe", ToolName: "read", Content: `{"output":"ok"}`},
+		result: applicationturn.Result{ReplaySafe: true, Rounds: 1, Messages: []model.Message{
+			{Role: model.RoleAssistant, ToolCalls: []model.ToolCall{{ID: "call-safe", Name: "read", Arguments: []byte(`{"path":"README.md"}`)}}},
+			{Role: model.RoleTool, ToolCallID: "call-safe", ToolName: "read", Content: `{"output":"ok"}`},
 		}},
 		err: errors.New("later stream failed"),
 	}
@@ -784,7 +783,7 @@ func TestTurnDonePreservesReplaySafeCheckpointOnFailure(t *testing.T) {
 	if got, want := len(m.conversation.Messages()), 3; got != want {
 		t.Fatalf("provider history length = %d, want %d", got, want)
 	}
-	if m.conversation.Messages()[0].Role != domainmodel.RoleUser || m.conversation.Messages()[1].Role != domainmodel.RoleAssistant || m.conversation.Messages()[2].Role != domainmodel.RoleTool {
+	if m.conversation.Messages()[0].Role != model.RoleUser || m.conversation.Messages()[1].Role != model.RoleAssistant || m.conversation.Messages()[2].Role != model.RoleTool {
 		t.Fatalf("provider history = %#v, want user plus replay-safe assistant/tool checkpoint", m.conversation.Messages())
 	}
 }
@@ -976,7 +975,7 @@ func TestModelSetupReconcilesIncompatibleReasoningEffort(t *testing.T) {
 	}
 	// Populate catalog entry for gpt-4o declaring no reasoning support
 	noReasoning := false
-	bModel.modelCatalogs.Set("openai", []domainmodel.RemoteModel{
+	bModel.modelCatalogs.Set("openai", []model.RemoteModel{
 		{ID: "gpt-4o", Reasoning: &modelprofile.CatalogReasoning{Supported: &noReasoning}},
 	})
 
@@ -1034,7 +1033,7 @@ func TestModelSetupEmptyFilterShowsSearchInput(t *testing.T) {
 	if !ok || view == nil {
 		t.Fatal("expected modelSetupViewID open")
 	}
-	view.setModels([]domainmodel.RemoteModel{{ID: "model-0", Name: "Model Zero"}}, view.activeProviderName(), "")
+	view.setModels([]model.RemoteModel{{ID: "model-0", Name: "Model Zero"}}, view.activeProviderName(), "")
 	view.picker.SetFilterText("nonexistent-model-xyz")
 	view.picker.SetFilterState(list.Filtering)
 	view.syncPickerProjection()
@@ -1071,9 +1070,9 @@ func TestModelSetupShiftTabCyclesPermissionWithoutChangingProvider(t *testing.T)
 
 func TestModelSetupKeepsSelectionAcrossResponsiveResize(t *testing.T) {
 	m := newTestSkillsModel(t, 1)
-	models := make([]domainmodel.RemoteModel, 30)
+	models := make([]model.RemoteModel, 30)
 	for i := range models {
-		models[i] = domainmodel.RemoteModel{ID: fmt.Sprintf("model-%02d", i), Name: fmt.Sprintf("Model %02d", i)}
+		models[i] = model.RemoteModel{ID: fmt.Sprintf("model-%02d", i), Name: fmt.Sprintf("Model %02d", i)}
 	}
 	view := newModelSetupPaneView(m)
 	view.setModels(models, view.activeProviderName(), "model-20")
@@ -1096,9 +1095,9 @@ func TestModelSetupFilteredSelectionSurvivesResize(t *testing.T) {
 	m.resize(100, 28)
 	m.panes.bottom.push(newModelSetupPaneView(m))
 	view := m.panes.bottom.find(modelSetupViewID).(*modelSetupPaneView)
-	models := make([]domainmodel.RemoteModel, 24)
+	models := make([]model.RemoteModel, 24)
 	for i := range models {
-		models[i] = domainmodel.RemoteModel{ID: fmt.Sprintf("model-%02d", i), Name: fmt.Sprintf("Model %02d", i)}
+		models[i] = model.RemoteModel{ID: fmt.Sprintf("model-%02d", i), Name: fmt.Sprintf("Model %02d", i)}
 	}
 	view.setModels(models, view.activeProviderName(), "")
 	view.picker.SetFilterText("model-1")
@@ -1130,7 +1129,7 @@ func TestModelSetupEnterWhileFilteringSelectsModel(t *testing.T) {
 	if !ok || view == nil {
 		t.Fatal("expected modelSetupViewID open")
 	}
-	view.setModels([]domainmodel.RemoteModel{{ID: "deepseek-chat", Name: "DeepSeek Chat"}}, view.activeProviderName(), "")
+	view.setModels([]model.RemoteModel{{ID: "deepseek-chat", Name: "DeepSeek Chat"}}, view.activeProviderName(), "")
 	view.picker.SetFilterText("deepseek")
 	view.picker.Select(0)
 
@@ -1174,7 +1173,7 @@ func TestModelSetupEnterWhileActivelySettingFilterSelectsModel(t *testing.T) {
 	if !ok || view == nil {
 		t.Fatal("expected modelSetupViewID open")
 	}
-	view.setModels([]domainmodel.RemoteModel{{ID: "deepseek-chat", Name: "DeepSeek Chat"}}, view.activeProviderName(), "")
+	view.setModels([]model.RemoteModel{{ID: "deepseek-chat", Name: "DeepSeek Chat"}}, view.activeProviderName(), "")
 	bModel.handlePaneKey(testText("/"))
 	if !view.picker.SettingFilter() {
 		t.Fatal("expected SettingFilter() == true")
@@ -1200,7 +1199,7 @@ func TestModelSetupSearchModeLiveFilteringAndSelection(t *testing.T) {
 	if !ok || view == nil {
 		t.Fatal("expected modelSetupViewID open")
 	}
-	view.setModels([]domainmodel.RemoteModel{
+	view.setModels([]model.RemoteModel{
 		{ID: "deepseek-chat", Name: "DeepSeek Chat"},
 		{ID: "qwen-flash", Name: "Qwen Flash"},
 		{ID: "gpt-4o", Name: "GPT 4o"},
@@ -1230,7 +1229,7 @@ func TestModelSetupArrowKeyNavigationWhileFiltering(t *testing.T) {
 	if !ok || view == nil {
 		t.Fatal("expected modelSetupViewID open")
 	}
-	view.setModels([]domainmodel.RemoteModel{
+	view.setModels([]model.RemoteModel{
 		{ID: "model-0", Name: "Model Zero"},
 		{ID: "model-1", Name: "Model One"},
 	}, view.activeProviderName(), "")
@@ -1266,7 +1265,7 @@ func TestModelSetupHelpShowsFilterAndCancelSearch(t *testing.T) {
 	if !ok || view == nil {
 		t.Fatal("expected modelSetupViewID open")
 	}
-	view.setModels([]domainmodel.RemoteModel{{ID: "model-0"}}, view.activeProviderName(), "")
+	view.setModels([]model.RemoteModel{{ID: "model-0"}}, view.activeProviderName(), "")
 
 	renderedBrowsing := view.Render(newPaneRenderContext(bModel))
 	if !strings.Contains(renderedBrowsing, "filter") {
@@ -1307,7 +1306,7 @@ func TestModelSetupHandlePaneMsgFilterMatches(t *testing.T) {
 	if !ok || view == nil {
 		t.Fatal("expected modelSetupViewID open")
 	}
-	view.setModels([]domainmodel.RemoteModel{
+	view.setModels([]model.RemoteModel{
 		{ID: "alpha", Name: "Alpha"},
 		{ID: "beta", Name: "Beta"},
 	}, view.activeProviderName(), "")
@@ -1423,7 +1422,7 @@ func TestUnifiedModelSetupAppliesModelAndThinkingTogether(t *testing.T) {
 	m.activeProvider = "protonman"
 	m.activeModel = "gemini-3.8-flash"
 	m.providers = map[string]config.ProviderConfig{"protonman": {Name: "protonman", Type: "openai", BaseURL: "https://protonman.dev/api/v1", APIKey: "key"}}
-	m.modelCatalogs.Set("protonman", []domainmodel.RemoteModel{{ID: "gemini-3.8-flash", Name: "Gemini 3.8 Flash"}})
+	m.modelCatalogs.Set("protonman", []model.RemoteModel{{ID: "gemini-3.8-flash", Name: "Gemini 3.8 Flash"}})
 	m.executeCommand("/model")
 	view := m.panes.bottom.find(modelSetupViewID).(*modelSetupPaneView)
 	view.reasoningIndex = 3 // high: auto, low, medium, high
@@ -1454,8 +1453,8 @@ func TestModelSetupCurrentMarkerUsesProviderModelPair(t *testing.T) {
 	}
 	m.activeProvider = "alpha"
 	m.activeModel = "shared-model"
-	m.modelCatalogs.Set("alpha", []domainmodel.RemoteModel{{ID: "shared-model", Name: "Alpha Shared"}})
-	m.modelCatalogs.Set("beta", []domainmodel.RemoteModel{{ID: "shared-model", Name: "Beta Shared"}})
+	m.modelCatalogs.Set("alpha", []model.RemoteModel{{ID: "shared-model", Name: "Alpha Shared"}})
+	m.modelCatalogs.Set("beta", []model.RemoteModel{{ID: "shared-model", Name: "Beta Shared"}})
 	view := newModelSetupPaneView(m)
 	for i, name := range view.providerNames {
 		if name == "beta" {
@@ -1474,7 +1473,7 @@ func TestModelSetupCurrentMarkerUsesProviderModelPair(t *testing.T) {
 }
 
 func TestModelDisplayNameHumanizesIdentifier(t *testing.T) {
-	got := modelpicker.DisplayName(domainmodel.RemoteModel{ID: "nemotron-3.5-lightning-free"})
+	got := modelpicker.DisplayName(model.RemoteModel{ID: "nemotron-3.5-lightning-free"})
 	if got != "Nemotron 3.5 Lightning" {
 		t.Fatalf("display name = %q", got)
 	}
@@ -1485,7 +1484,7 @@ func TestModelSetupMuseSparkUsesFamilyReasoningLevels(t *testing.T) {
 	m.resize(100, 30)
 	m.activeProvider = "opencode"
 	m.activeModel = "muse-spark-1.3-contributor-free"
-	m.modelCatalogs.Set("opencode", []domainmodel.RemoteModel{{ID: m.activeModel, Name: "Muse Spark 1.3 Contributor"}})
+	m.modelCatalogs.Set("opencode", []model.RemoteModel{{ID: m.activeModel, Name: "Muse Spark 1.3 Contributor"}})
 	view := newModelSetupPaneView(m)
 	want := []domain.ReasoningEffort{domain.ReasoningDefault, domain.ReasoningMinimal, domain.ReasoningLow, domain.ReasoningMedium, domain.ReasoningHigh, domain.ReasoningXHigh, domain.ReasoningMax}
 	if len(view.reasoningChoices) != len(want) {
@@ -1496,7 +1495,7 @@ func TestModelSetupMuseSparkUsesFamilyReasoningLevels(t *testing.T) {
 			t.Fatalf("muse reasoning choices = %v, want %v", view.reasoningChoices, want)
 		}
 	}
-	profile := domainmodel.ResolveModelProfile("opencode", m.activeModel, nil)
+	profile := model.ResolveModelProfile("opencode", m.activeModel, nil)
 	if profile.Reasoning.Default != domain.ReasoningHigh {
 		t.Fatalf("muse default reasoning = %q, want high", profile.Reasoning.Default)
 	}
@@ -1513,7 +1512,7 @@ func TestModelSetupSingleItemKeepsThinkingNearModel(t *testing.T) {
 	m.resize(100, 30)
 	m.activeProvider = "opencode"
 	m.activeModel = "nemotron-3.5-lightning-free"
-	m.modelCatalogs.Set("opencode", []domainmodel.RemoteModel{{ID: m.activeModel}})
+	m.modelCatalogs.Set("opencode", []model.RemoteModel{{ID: m.activeModel}})
 	view := newModelSetupPaneView(m)
 	rendered := strings.Split(view.Render(newPaneRenderContext(m)), "\n")
 	modelLine, effortLine := -1, -1
@@ -1535,7 +1534,7 @@ func TestModelSetupMatchesReferenceHierarchy(t *testing.T) {
 	m.resize(100, 30)
 	m.activeProvider = "opencode"
 	m.activeModel = "qwen3.6-plus"
-	m.modelCatalogs.Set("opencode", []domainmodel.RemoteModel{{ID: "qwen3.6-plus"}, {ID: "qwen3.5-plus"}})
+	m.modelCatalogs.Set("opencode", []model.RemoteModel{{ID: "qwen3.6-plus"}, {ID: "qwen3.5-plus"}})
 	m.panes.bottom.prompt().SetValue("draft")
 	m.executeCommand("/model")
 
@@ -1556,8 +1555,8 @@ func TestModelSetupMatchesReferenceHierarchy(t *testing.T) {
 }
 
 func TestModelRowsAlignMetadataColumnAndSelectionMarker(t *testing.T) {
-	freeShort := modelListItem{model: domainmodel.RemoteModel{ID: "big-pickle", Name: "Big Pickle"}}
-	freeSelected := modelListItem{model: domainmodel.RemoteModel{ID: "muse-spark-1.3-contributor-free", Name: "Muse Spark 1.3 Contributor"}, current: true}
+	freeShort := modelListItem{model: model.RemoteModel{ID: "big-pickle", Name: "Big Pickle"}}
+	freeSelected := modelListItem{model: model.RemoteModel{ID: "muse-spark-1.3-contributor-free", Name: "Muse Spark 1.3 Contributor"}, current: true}
 	plainShort := testPlain(renderModelRow(freeShort, false, 56))
 	plainSelected := testPlain(renderModelRow(freeSelected, true, 56))
 	if !strings.HasPrefix(plainShort, "  Big Pickle") {
@@ -1577,7 +1576,7 @@ func TestModelRowsAlignMetadataColumnAndSelectionMarker(t *testing.T) {
 }
 
 func TestModelRowDropsMetadataBeforeTruncatingUsefulNameSpace(t *testing.T) {
-	entry := modelListItem{model: domainmodel.RemoteModel{ID: "muse-spark-1.3-contributor-free", Name: "Muse Spark 1.3 Contributor"}, current: true}
+	entry := modelListItem{model: model.RemoteModel{ID: "muse-spark-1.3-contributor-free", Name: "Muse Spark 1.3 Contributor"}, current: true}
 	plain := testPlain(renderModelRow(entry, true, 22))
 	if strings.Contains(plain, "FREE") || strings.Contains(plain, "current") {
 		t.Fatalf("narrow row kept metadata instead of prioritizing model name: %q", plain)
@@ -1592,7 +1591,7 @@ func TestModelSetupGLM53FamilyExposesNativeEffortLevels(t *testing.T) {
 	m.resize(100, 30)
 	m.activeProvider = "protonman"
 	m.activeModel = "glm-5.3-flash"
-	m.modelCatalogs.Set("protonman", []domainmodel.RemoteModel{{ID: m.activeModel}})
+	m.modelCatalogs.Set("protonman", []model.RemoteModel{{ID: m.activeModel}})
 	view := newModelSetupPaneView(m)
 	want := []domain.ReasoningEffort{domain.ReasoningDefault, domain.ReasoningLow, domain.ReasoningHigh, domain.ReasoningMax}
 	if got := view.reasoningChoices; len(got) != len(want) {
@@ -1620,7 +1619,7 @@ func TestModelSetupQwen38FlashExposesNativeEffortLevels(t *testing.T) {
 	m.resize(100, 30)
 	m.activeProvider = "protonman"
 	m.activeModel = "qwen3.8-flash"
-	m.modelCatalogs.Set("protonman", []domainmodel.RemoteModel{{ID: m.activeModel}})
+	m.modelCatalogs.Set("protonman", []model.RemoteModel{{ID: m.activeModel}})
 	view := newModelSetupPaneView(m)
 	want := []domain.ReasoningEffort{domain.ReasoningDefault, domain.ReasoningNone, domain.ReasoningLow, domain.ReasoningMedium, domain.ReasoningXHigh}
 	if got := view.reasoningChoices; len(got) != len(want) {
@@ -1639,7 +1638,7 @@ func TestModelSetupMiniMaxM3ExposesThinkingToggle(t *testing.T) {
 	m.resize(100, 30)
 	m.activeProvider = "protonman"
 	m.activeModel = "minimax-m3"
-	m.modelCatalogs.Set("protonman", []domainmodel.RemoteModel{{ID: m.activeModel}})
+	m.modelCatalogs.Set("protonman", []model.RemoteModel{{ID: m.activeModel}})
 	view := newModelSetupPaneView(m)
 	if got := view.reasoningChoices; len(got) != 2 || got[0] != domain.ReasoningDefault || got[1] != domain.ReasoningNone {
 		t.Fatalf("MiniMax M3 choices = %#v, want auto/none", got)
@@ -1651,7 +1650,7 @@ func TestModelSetupDeepSeekV4FamilyExposesNativeEffortLevels(t *testing.T) {
 	m.resize(100, 30)
 	m.activeProvider = "protonman"
 	m.activeModel = "deepseek-v4-flash-free"
-	m.modelCatalogs.Set("protonman", []domainmodel.RemoteModel{{ID: m.activeModel}})
+	m.modelCatalogs.Set("protonman", []model.RemoteModel{{ID: m.activeModel}})
 	view := newModelSetupPaneView(m)
 	want := []domain.ReasoningEffort{domain.ReasoningDefault, domain.ReasoningNone, domain.ReasoningLow, domain.ReasoningHigh, domain.ReasoningMax}
 	if got := view.reasoningChoices; len(got) != len(want) {
@@ -1676,7 +1675,7 @@ func TestModelSetupUnknownFamilyExposesAutoOnly(t *testing.T) {
 	m.resize(100, 30)
 	m.activeProvider = "opencode"
 	m.activeModel = "future-unknown-model"
-	m.modelCatalogs.Set("opencode", []domainmodel.RemoteModel{{ID: m.activeModel}})
+	m.modelCatalogs.Set("opencode", []model.RemoteModel{{ID: m.activeModel}})
 	view := newModelSetupPaneView(m)
 	if len(view.reasoningChoices) != 1 || view.reasoningChoices[0] != domain.ReasoningDefault {
 		t.Fatalf("unknown family choices = %#v, want auto only", view.reasoningChoices)
@@ -1693,7 +1692,7 @@ func TestModelSetupCatalogReasoningOverridesUnknownFamily(t *testing.T) {
 	m.activeProvider = "opencode"
 	m.activeModel = "future-reasoner"
 	yes := true
-	m.modelCatalogs.Set("opencode", []domainmodel.RemoteModel{{ID: m.activeModel, Reasoning: &modelprofile.CatalogReasoning{Supported: &yes, Levels: []domain.ReasoningEffort{domain.ReasoningLow, domain.ReasoningHigh}}}})
+	m.modelCatalogs.Set("opencode", []model.RemoteModel{{ID: m.activeModel, Reasoning: &modelprofile.CatalogReasoning{Supported: &yes, Levels: []domain.ReasoningEffort{domain.ReasoningLow, domain.ReasoningHigh}}}})
 	view := newModelSetupPaneView(m)
 	if got := view.reasoningChoices; len(got) != 3 || got[0] != domain.ReasoningDefault || got[1] != domain.ReasoningLow || got[2] != domain.ReasoningHigh {
 		t.Fatalf("catalog reasoning choices = %#v", got)

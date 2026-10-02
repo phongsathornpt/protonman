@@ -46,21 +46,6 @@ func (p *permissionClient) record(params RequestPermissionParams) {
 	}
 }
 
-func (p *permissionClient) snapshot() ([]RequestPermissionParams, []string) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	return append([]RequestPermissionParams(nil), p.requests...), append([]string(nil), p.answered...)
-}
-
-func (p *permissionClient) awaitRequest(t *testing.T) {
-	t.Helper()
-	select {
-	case <-p.requests_seen:
-	case <-time.After(10 * time.Second):
-		t.Fatal("server never sent session/request_permission")
-	}
-}
-
 // runSessionWithPermissionToolCall serves one session, executes a single
 // mutating tool call against that session's service in ask mode, and answers the
 // resulting permission request. It returns the tool result.

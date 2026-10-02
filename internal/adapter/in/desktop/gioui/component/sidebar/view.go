@@ -33,10 +33,6 @@ const (
 	sidebarGroupBottomInset    = 2
 )
 
-func taskStatusFromLabel(label string) desktopstate.TaskStatus {
-	return desktopstate.TaskStatus(strings.ReplaceAll(strings.ToLower(strings.TrimSpace(label)), " ", "_"))
-}
-
 func (c *Component) Layout(gtx layout.Context, input ViewInput) layout.Dimensions {
 	input.Actions = withDefaultActions(input.Actions)
 	c.view = input
@@ -464,14 +460,6 @@ func (c *Component) layoutSidebarSearch(gtx layout.Context, rows []Row) layout.D
 	})
 }
 
-func (c *Component) sidebarDisplayRows(rows []Row, filterMode string, sourceRevisions ...uint64) []Row {
-	sourceRevision := uint64(0)
-	if len(sourceRevisions) > 0 {
-		sourceRevision = sourceRevisions[0]
-	}
-	return c.DisplayRows(rows, (&c.searchEditor).Text(), filterMode, sourceRevision)
-}
-
 type rowNavContext struct {
 	rows  []Row
 	index int
@@ -892,7 +880,7 @@ func (c *Component) layoutSidebarRow(gtx layout.Context, row Row, state desktops
 										return layout.Dimensions{}
 									}
 									return uikit.Inset{Left: 4}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-										return c.view.Chrome.TaskStatus(gtx, statusLabel, taskStatusFromLabel(row.Status))
+										return c.view.Chrome.TaskStatus(gtx, statusLabel, desktopstate.TaskStatus(row.Status))
 									})
 								}),
 							)
@@ -1049,11 +1037,15 @@ func (c *Component) layoutMiniButton(gtx layout.Context, button *widget.Clickabl
 	return dims
 }
 
+func (c *Component) clearDeleteTarget() {
+	c.interaction.DeletingSessionID = ""
+	c.interaction.DeletingAgentID = ""
+	c.interaction.DeletingSessionTitle = ""
+}
+
 func (c *Component) layoutDeleteModal(gtx layout.Context) layout.Dimensions {
 	if c.DeleteCancelButton().Clicked(gtx) || c.DeleteScrim().Clicked(gtx) {
-		(&c.interaction).DeletingSessionID = ""
-		(&c.interaction).DeletingAgentID = ""
-		(&c.interaction).DeletingSessionTitle = ""
+		c.clearDeleteTarget()
 	}
 
 	for {
@@ -1062,9 +1054,7 @@ func (c *Component) layoutDeleteModal(gtx layout.Context) layout.Dimensions {
 			break
 		}
 		if e, ok := evt.(key.Event); ok && e.State == key.Press {
-			(&c.interaction).DeletingSessionID = ""
-			(&c.interaction).DeletingAgentID = ""
-			(&c.interaction).DeletingSessionTitle = ""
+			c.clearDeleteTarget()
 		}
 	}
 	for {
@@ -1073,11 +1063,9 @@ func (c *Component) layoutDeleteModal(gtx layout.Context) layout.Dimensions {
 			break
 		}
 		if e, ok := evt.(key.Event); ok && e.State == key.Press {
-			id := (&c.interaction).DeletingSessionID
-			agentID := (&c.interaction).DeletingAgentID
-			(&c.interaction).DeletingSessionID = ""
-			(&c.interaction).DeletingAgentID = ""
-			(&c.interaction).DeletingSessionTitle = ""
+			id := c.interaction.DeletingSessionID
+			agentID := c.interaction.DeletingAgentID
+			c.clearDeleteTarget()
 			if c.view.Actions.DeleteSession != nil && id != "" {
 				c.view.Actions.DeleteSession(agentID, id)
 			}
@@ -1111,18 +1099,15 @@ func (c *Component) layoutDeleteModal(gtx layout.Context) layout.Dimensions {
 								layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 									return uikit.Inset{Right: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 										return c.view.Chrome.Button(gtx, c.DeleteCancelButton(), "Cancel", true, func() {
-											(&c.interaction).DeletingSessionID = ""
-											(&c.interaction).DeletingSessionTitle = ""
+											c.clearDeleteTarget()
 										})
 									})
 								}),
 								layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 									return c.view.Chrome.DangerButton(gtx, c.DeleteConfirmButton(), "Delete", true, func() {
-										id := (&c.interaction).DeletingSessionID
-										agentID := (&c.interaction).DeletingAgentID
-										(&c.interaction).DeletingSessionID = ""
-										(&c.interaction).DeletingAgentID = ""
-										(&c.interaction).DeletingSessionTitle = ""
+										id := c.interaction.DeletingSessionID
+										agentID := c.interaction.DeletingAgentID
+										c.clearDeleteTarget()
 										if c.view.Actions.DeleteSession != nil && id != "" {
 											c.view.Actions.DeleteSession(agentID, id)
 										}
@@ -1135,8 +1120,4 @@ func (c *Component) layoutDeleteModal(gtx layout.Context) layout.Dimensions {
 			})
 		}),
 	)
-}
-
-func (c *Component) layoutSidebarTaskStatus(gtx layout.Context, label string, status desktopstate.TaskStatus) layout.Dimensions {
-	return c.view.Chrome.TaskStatus(gtx, label, status)
 }

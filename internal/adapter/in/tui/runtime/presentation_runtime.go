@@ -74,10 +74,8 @@ func (m *bubbleModel) renderComposerCard() string {
 	switch {
 	case m.permissionView() != nil:
 		borderStyle = tuistyle.ComposerBorderWarning
-		focused = false
 	case m.service != nil && m.service.Mode() == permission.ModeDeny:
 		borderStyle = tuistyle.ComposerBorderError
-		focused = false
 	case bashMode:
 		borderStyle = tuistyle.ComposerBorderBash
 	case m.planMode:
@@ -177,12 +175,10 @@ func (m *bubbleModel) buildComposerTopRail(totalWidth int, borderStyle lipgloss.
 
 	if fillWidth < 1 && rightBadge != "" {
 		rightBadge = ""
-		rightW = 0
 		fillWidth = avail - leftW
 	}
 	if fillWidth < 1 && leftBadge != "" {
 		leftBadge = ""
-		leftW = 0
 		fillWidth = avail
 	}
 
@@ -258,19 +254,6 @@ func (m *bubbleModel) buildComposerBottomRail(totalWidth int, borderStyle lipglo
 	middleRail := borderStyle.Render(strings.Repeat(icons.CardHorizontal, max(1, fillWidth)))
 
 	return cornerLeft + leftPart + middleRail + rightPart + cornerRight
-}
-
-func renderPromptDivider(style lipgloss.Style, width int, focused bool) string {
-	width = max(1, width)
-	if !focused {
-		return style.Render(strings.Repeat("─", width))
-	}
-
-	accentWidth := min(8, width)
-	accent := strings.Repeat("─", accentWidth)
-	neutral := strings.Repeat("─", width-accentWidth)
-	return tuistyle.PromptDividerFocused.Render(accent) +
-		tuistyle.PromptDividerIdle.Render(neutral)
 }
 
 func renderAnimatedPromptDivider(width, phase int) string {

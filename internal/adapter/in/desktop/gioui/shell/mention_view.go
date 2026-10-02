@@ -10,10 +10,6 @@ import (
 	conversationcomponent "github.com/phongsathornpt/protonman/internal/adapter/in/desktop/gioui/component/conversation"
 )
 
-func (s *Shell) updateMentionState(workDir string) {
-	s.updateMentionStateForText(workDir, s.conversationUI.Editor().Text())
-}
-
 func (s *Shell) updateMentionStateForText(workDir, text string) {
 	runes := []rune(text)
 	_, end := s.conversationUI.Editor().Selection()

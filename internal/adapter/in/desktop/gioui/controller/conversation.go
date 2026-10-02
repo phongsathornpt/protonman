@@ -603,22 +603,6 @@ func timelineSize(items []desktopstate.TimelineItem) int {
 	return bytes
 }
 
-func (c *controller) pruneSessionTimelineLocked(sessionID string, agentIDs ...string) {
-	session := desktopstateSessionPointer(&c.state, sessionID, agentIDs...)
-	if session == nil {
-		return
-	}
-	sessionKey := desktopSessionStorageKey(c.state, session.Ref())
-	if c.timelineBytes[sessionKey] <= maxSessionTimelineBytes && len(session.Timeline) <= maxSessionTimelineItems {
-		return
-	}
-	if retained := retainedTimelineBytes(session.Timeline); retained <= maxSessionTimelineBytes {
-		c.timelineBytes[sessionKey] = retained
-		return
-	}
-	c.pruneSessionTimelineTrustedLocked(session)
-}
-
 // pruneSessionTimelineTrustedLocked trims the session timeline using the
 // incrementally maintained byte counter instead of rescanning every retained
 // item. Callers guarantee c.timelineBytes[sessionID] reflects the current
@@ -1418,33 +1402,6 @@ func (c *controller) pruneInactiveSessionHistoryLocked(activeSessionID, previous
 		delete(c.timelineBytes, sessionKey)
 		c.histories[sessionKey] = HistoryStateUnloaded
 	}
-}
-
-func (c *controller) resetTransientSessionStateLocked() {
-	for sessionID, state := range c.histories {
-		if state == HistoryStateLoading {
-			c.histories[sessionID] = HistoryStateUnloaded
-		}
-	}
-	for sessionID, load := range c.historyLoads {
-		load.cancel()
-		delete(c.historyLoads, sessionID)
-	}
-	clear(c.historyStaging)
-	clear(c.historyStagingBytes)
-	clear(c.historyStagingTruncated)
-	clear(c.messageStreams)
-	for _, buffer := range c.messageStreamBuffers {
-		if buffer.timer != nil {
-			buffer.timer.Stop()
-		}
-	}
-	clear(c.messageStreamBuffers)
-	c.permissionWait = make(map[string]chan string)
-	c.runtimeMutation = ""
-	c.contextRefresh.reset()
-	c.memoryRefresh.reset()
-	c.runtimeRefresh.reset()
 }
 
 func (c *controller) resetAgentTransientSessionStateLocked(agentID string) {

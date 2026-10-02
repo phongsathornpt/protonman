@@ -3,30 +3,12 @@
 package shell
 
 import (
-	"context"
 	"slices"
 	"testing"
 
 	"github.com/phongsathornpt/protonman/internal/adapter/in/desktop/gioui/controller"
 	"github.com/phongsathornpt/protonman/internal/app"
 )
-
-type acpAgentSaveRepository struct {
-	saved chan []app.ACPAgentProfile
-}
-
-func (r *acpAgentSaveRepository) Load(context.Context) ([]app.ACPAgentProfile, error) {
-	return nil, nil
-}
-
-func (r *acpAgentSaveRepository) Save(_ context.Context, profiles []app.ACPAgentProfile) error {
-	cloned := make([]app.ACPAgentProfile, len(profiles))
-	for index, profile := range profiles {
-		cloned[index] = controller.CloneACPAgentProfile(profile)
-	}
-	r.saved <- cloned
-	return nil
-}
 
 func TestCommandSpecForACPAgentResolvesEnvironmentAtRuntime(t *testing.T) {
 	t.Setenv("CUSTOM_ACP_TOKEN", "secret")

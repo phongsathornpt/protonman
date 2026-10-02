@@ -40,7 +40,7 @@ func TestComponentProjectsAndCachesSidebarRows(t *testing.T) {
 	model.State.Sessions[1].Status = desktopstate.TaskFailed
 	model.Revision++
 	updated := component.Rows(model)
-	if &first[0] == &updated[0] || updated[3].Status != "Failed" {
+	if &first[0] == &updated[0] || updated[3].Status != "failed" {
 		t.Fatalf("visible status change did not rebuild rows: %#v", updated)
 	}
 }
@@ -290,7 +290,7 @@ func TestPinnedSessionScopedWidgetKeyPreventsPointerCollision(t *testing.T) {
 	}
 }
 
-func TestRowsCacheMatchesTracksActiveSessionAndSortTimestamp(t *testing.T) {
+func TestRowsCacheMatchesIgnoresSelectionChangesToPreventSwapping(t *testing.T) {
 	activity := time.Date(2026, 10, 1, 10, 0, 0, 0, time.UTC)
 	modelA := Model{
 		State: desktopstate.State{
@@ -308,19 +308,84 @@ func TestRowsCacheMatchesTracksActiveSessionAndSortTimestamp(t *testing.T) {
 		t.Fatal("cache should match identical modelA")
 	}
 
-	// Changing ActiveSessionID must invalidate cache
+	// Changing ActiveSessionID or ActiveAgentID must NOT invalidate cache,
+	// otherwise selecting a session row would re-sort and swap positions under
+	// the cursor. Selection is applied at render time, not in row projection.
 	modelB := modelA
 	modelB.State.ActiveSessionID = "s2"
-	if cache.Matches(modelB) {
-		t.Fatal("cache should NOT match when ActiveSessionID changes")
+	if !cache.Matches(modelB) {
+		t.Fatal("cache should match when only ActiveSessionID changes")
 	}
 
-	// Changing ActiveSortAt must invalidate cache
-	modelC := modelA
-	sortTime := activity.Add(5 * time.Minute)
-	modelC.ActiveSortAt = &sortTime
-	if cache.Matches(modelC) {
-		t.Fatal("cache should NOT match when ActiveSortAt changes")
+	modelB.State.ActiveAgentID = "reviewer"
+	if !cache.Matches(modelB) {
+		t.Fatal("cache should match when only ActiveAgentID changes")
+	}
+}
+
+func TestClickSessionDoesNotSwapPosition(t *testing.T) {
+	activity := time.Date(2026, 9, 30, 10, 0, 0, 0, time.UTC)
+	model := Model{
+		State: desktopstate.State{
+			Projects: []desktopstate.ProjectState{{ID: "workspace", Name: "Workspace"}},
+			Sessions: []desktopstate.SessionState{
+				{ID: "s1", ProjectID: "workspace", AgentID: "protonman", Title: "First", LastActivityAt: activity},
+				{ID: "s2", ProjectID: "workspace", AgentID: "protonman", Title: "Second", LastActivityAt: activity.Add(time.Minute)},
+			},
+			ActiveSessionID: "s1",
+			ActiveAgentID:   "protonman",
+		},
+		AgentProfiles: []app.ACPAgentProfile{{ID: "protonman", DisplayName: "Protonman"}},
+		FilterMode:    "all",
+		Revision:      1,
+	}
+	component := New()
+
+	rows1 := component.Rows(model)
+	s2IdxBefore := indexOfSession(rows1, "s2")
+	s1IdxBefore := indexOfSession(rows1, "s1")
+	if s2IdxBefore != 1 || s1IdxBefore != 2 {
+		t.Fatalf("initial order: s2=%d, s1=%d; want s2=1, s1=2", s2IdxBefore, s1IdxBefore)
+	}
+
+	// Active session s1 has activity (prompt sent).
+	model.State.Sessions[0].LastActivityAt = activity.Add(time.Hour)
+	model.Revision++
+	rows2 := component.Rows(model)
+	if indexOfSession(rows2, "s1") != s1IdxBefore {
+		t.Fatalf("active session s1 moved when activity updated: %d vs %d", indexOfSession(rows2, "s1"), s1IdxBefore)
+	}
+
+	// User clicks s2. ActiveSessionID changes to s2.
+	model.State.ActiveSessionID = "s2"
+	model.Revision++
+	rows3 := component.Rows(model)
+
+	s2IdxAfter := indexOfSession(rows3, "s2")
+	s1IdxAfter := indexOfSession(rows3, "s1")
+	if s2IdxAfter != s2IdxBefore || s1IdxAfter != s1IdxBefore {
+		t.Fatalf("sessions swapped or moved on click! before: s2=%d, s1=%d; after: s2=%d, s1=%d",
+			s2IdxBefore, s1IdxBefore, s2IdxAfter, s1IdxAfter)
+	}
+
+	// Now user sends a prompt in s2.
+	model.State.Sessions[1].LastActivityAt = activity.Add(2 * time.Hour)
+	model.Revision++
+	rows4 := component.Rows(model)
+
+	if indexOfSession(rows4, "s2") != s2IdxBefore || indexOfSession(rows4, "s1") != s1IdxBefore {
+		t.Fatalf("sessions swapped or moved when s2 received prompt! before: s2=%d, s1=%d; after: s2=%d, s1=%d",
+			s2IdxBefore, s1IdxBefore, indexOfSession(rows4, "s2"), indexOfSession(rows4, "s1"))
+	}
+
+	// User clicks back to s1.
+	model.State.ActiveSessionID = "s1"
+	model.Revision++
+	rows5 := component.Rows(model)
+
+	if indexOfSession(rows5, "s2") != s2IdxBefore || indexOfSession(rows5, "s1") != s1IdxBefore {
+		t.Fatalf("sessions swapped or moved when clicking back to s1! before: s2=%d, s1=%d; after: s2=%d, s1=%d",
+			s2IdxBefore, s1IdxBefore, indexOfSession(rows5, "s2"), indexOfSession(rows5, "s1"))
 	}
 }
 

@@ -60,10 +60,10 @@ func NewBubbleTea(
 	options ...BubbleTeaOption,
 ) (*BubbleTeaUI, error) {
 	if service == nil {
-		return nil, errors.New("Bubble Tea UI service is required")
+		return nil, errors.New("bubble tea UI service is required")
 	}
 	if registry == nil {
-		return nil, errors.New("Bubble Tea UI registry is required")
+		return nil, errors.New("bubble tea UI registry is required")
 	}
 	ui := &BubbleTeaUI{
 		service:        service,

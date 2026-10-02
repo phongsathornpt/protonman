@@ -67,9 +67,7 @@ func (c ToolCell) RenderWidth(width int) []string {
 	headerLine := toolview.RenderHeader(header, width)
 
 	out := make([]string, 0, 1)
-	for _, line := range wrapStyledLines(headerLine, max(1, width)) {
-		out = append(out, line)
-	}
+	out = append(out, wrapStyledLines(headerLine, max(1, width))...)
 
 	showDetail := !c.Running && (c.ShowDetail || c.Denied || c.FailureCode != "")
 	if showDetail {

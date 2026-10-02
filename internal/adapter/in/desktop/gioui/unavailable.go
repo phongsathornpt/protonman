@@ -10,7 +10,7 @@ import (
 )
 
 func Run(_ context.Context, _ app.ACPAgents, _ app.MCPIntegrations, _ *app.DesktopPreferences) error {
-	return errors.New("Gio desktop requires the desktop build tag (-tags desktop)")
+	return errors.New("gio desktop requires the desktop build tag (-tags desktop)")
 }
 
 func Main() {}

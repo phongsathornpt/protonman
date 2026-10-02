@@ -29,6 +29,10 @@ const (
 	PinnedHeaderRow
 )
 
+// pinnedSessionKeyPrefix namespaces the widget/row key of the copy shown in the
+// pinned section so it cannot collide with the project-grouped copy.
+const pinnedSessionKeyPrefix = "pinned:"
+
 // Row is the render-ready sidebar representation of a project, session, or
 // pinned-session heading.
 type Row struct {
@@ -59,20 +63,16 @@ type sessionCacheEntry struct {
 	subtitle       string
 	status         string
 	lastActivityAt time.Time
-	pinned         bool
 }
 
 type RowsCache struct {
-	valid           bool
-	revision        uint64
-	rows            []Row
-	projects        []projectCacheEntry
-	sessions        []sessionCacheEntry
-	filterMode      string
-	pinned          []string
-	activeSessionID string
-	activeAgentID   string
-	activeSortAt    *time.Time
+	valid      bool
+	revision   uint64
+	rows       []Row
+	projects   []projectCacheEntry
+	sessions   []sessionCacheEntry
+	filterMode string
+	pinned     []string
 }
 
 type displayCache struct {
@@ -104,12 +104,11 @@ type Model struct {
 	FilterMode    string
 	Revision      uint64
 
-	// ActiveSortAt, when set, replaces the active session's LastActivityAt as
-	// its sort key. Prompting and remote sync keep refreshing that timestamp,
-	// which would otherwise throw the session the user is working on to the top
-	// of its project group and shuffle the rows under the cursor. The row still
-	// carries the live timestamp, so its activity label stays accurate.
-	ActiveSortAt *time.Time
+	// sessionSortAt maps session keys to their sort timestamps. This keeps
+	// the active session in place when its activity updates, prevents
+	// session positions from swapping when clicked, and allows non-active
+	// sessions to re-sort when they receive background activity.
+	sessionSortAt map[string]time.Time
 }
 
 // Snapshot is the immutable desktop state needed to render the sidebar.
@@ -226,9 +225,8 @@ type Component struct {
 	deleteCancel           widget.Clickable
 	deleteConfirm          widget.Clickable
 	view                   ViewInput
-	activeSessionID        string
-	activeAgentID          string
-	activeSortAt           time.Time
+	sessionSortAt          map[string]time.Time
+	lastKnownActivity      map[string]time.Time
 	lastEnsuredSessionID   string
 }
 
@@ -246,16 +244,14 @@ func New() *Component {
 		pinButtons:             make(map[string]*widget.Clickable),
 		renameButtons:          make(map[string]*widget.Clickable),
 		deleteButtons:          make(map[string]*widget.Clickable),
+		sessionSortAt:          make(map[string]time.Time),
+		lastKnownActivity:      make(map[string]time.Time),
 		visible:                true,
 		renameEditor:           widget.Editor{SingleLine: true, MaxLen: 256},
 	}
 }
 
 func (c *Component) SearchQuery() string { return c.searchEditor.Text() }
-
-func (c *Component) SetSearchQuery(query string) { c.searchEditor.SetText(query) }
-
-func (c *Component) ListAxis() layout.Axis { return c.list.Axis }
 
 func (c *Component) ScrollPosition() layout.Position { return c.list.Position }
 
@@ -354,10 +350,6 @@ func (c *Component) actionButton(buttons map[string]*widget.Clickable, sessionID
 
 func (c *Component) HasPinButton(key string) bool { return c.pinButtons[key] != nil }
 
-func (c *Component) HasRenameButton(key string) bool { return c.renameButtons[key] != nil }
-
-func (c *Component) HasDeleteButton(key string) bool { return c.deleteButtons[key] != nil }
-
 func (c *Component) HasSessionButton(key string) bool { return c.sessionButtons[key] != nil }
 
 func (c *Component) HasProjectButton(projectID string) bool {
@@ -403,7 +395,7 @@ func (c *Component) SyncSessionButtons(state desktopstate.State, revision uint64
 		c.RenameButton(key)
 		c.DeleteButton(key)
 
-		pinnedKey := "pinned:" + key
+		pinnedKey := pinnedSessionKeyPrefix + key
 		c.sessionButtonLive[pinnedKey] = struct{}{}
 		c.SessionButton(pinnedKey)
 		c.PinButton(pinnedKey)
@@ -464,37 +456,46 @@ func (c *Component) EnsureVisible(sessionID string, rows []Row) {
 
 // Rows returns the cached sidebar row projection for model.
 func (c *Component) Rows(model Model) []Row {
-	if model.State.ActiveSessionID == "" {
-		c.activeSessionID = ""
-		c.activeAgentID = ""
-		c.activeSortAt = time.Time{}
-	} else if model.ActiveSortAt == nil {
-		if c.activeSessionID == model.State.ActiveSessionID && c.activeAgentID == model.State.ActiveAgentID && !c.activeSortAt.IsZero() {
-			model.ActiveSortAt = &c.activeSortAt
-		} else {
-			for _, s := range model.State.Sessions {
-				if s.ID == model.State.ActiveSessionID && (model.State.ActiveAgentID == "" || s.AgentID == model.State.ActiveAgentID) {
-					c.activeSessionID = model.State.ActiveSessionID
-					c.activeAgentID = model.State.ActiveAgentID
-					c.activeSortAt = s.LastActivityAt
-					model.ActiveSortAt = &c.activeSortAt
-					break
-				}
-			}
-		}
-	} else {
-		c.activeSessionID = model.State.ActiveSessionID
-		c.activeAgentID = model.State.ActiveAgentID
-		c.activeSortAt = *model.ActiveSortAt
+	if c.sessionSortAt == nil {
+		c.sessionSortAt = make(map[string]time.Time)
+		c.lastKnownActivity = make(map[string]time.Time)
 	}
+	liveKeys := make(map[string]struct{}, len(model.State.Sessions))
+	for _, s := range model.State.Sessions {
+		key := SessionWidgetKey(s.ID, s.AgentID)
+		liveKeys[key] = struct{}{}
+		prevActivity, known := c.lastKnownActivity[key]
+		c.lastKnownActivity[key] = s.LastActivityAt
+
+		if !known || c.sessionSortAt[key].IsZero() {
+			c.sessionSortAt[key] = s.LastActivityAt
+		} else if s.ID == model.State.ActiveSessionID && (model.State.ActiveAgentID == "" || s.AgentID == model.State.ActiveAgentID) {
+			// Active session keeps its established sort timestamp so it does not
+			// jump or shuffle under the cursor while prompting or typing.
+		} else if !s.LastActivityAt.Equal(prevActivity) {
+			// Non-active session received new activity: update sort timestamp so
+			// it re-sorts by recency.
+			c.sessionSortAt[key] = s.LastActivityAt
+		}
+	}
+	for key := range c.sessionSortAt {
+		if _, ok := liveKeys[key]; !ok {
+			delete(c.sessionSortAt, key)
+			delete(c.lastKnownActivity, key)
+		}
+	}
+	if model.sessionSortAt == nil {
+		model.sessionSortAt = c.sessionSortAt
+	}
+
 	if model.Revision != 0 && c.rowsCache.valid && c.rowsCache.revision == model.Revision {
 		return c.rowsCache.rows
 	}
 	if c.rowsCache.valid && c.rowsCache.matches(model) {
+		c.rowsCache.revision = model.Revision
 		return c.rowsCache.rows
 	}
 	c.rowsCache = BuildRows(model)
-	c.rowsCache.filterMode = model.FilterMode
 	c.rowsCache.revision = model.Revision
 	return c.rowsCache.rows
 }
@@ -608,15 +609,9 @@ func (c *Component) TogglePinned() {
 	c.collapseRevision++
 }
 
-// Invalidate clears projection caches for benchmarks and explicit refreshes.
-func (c *Component) Invalidate() {
-	c.rowsCache.valid = false
-	c.displayCache.valid = false
-}
-
-// RowsCacheMatches reports whether a projection cache still matches model.
-// It is exposed for focused cache contract tests; callers should normally use
-// Rows, which owns the cache lifecycle.
+// BuildRows derives the sidebar row projection for model. It is exposed for
+// callers and tests that manage their own RowsCache lifecycle; callers holding
+// a Component should normally use Rows instead.
 func BuildRows(model Model) RowsCache {
 	return buildRows(model)
 }
@@ -641,7 +636,7 @@ func buildRows(model Model) RowsCache {
 		if name, ok := displayNames[agentID]; ok {
 			return name
 		}
-		name := agentDisplayName(profiles, agentID)
+		name := app.AgentDisplayName(profiles, agentID)
 		displayNames[agentID] = name
 		return name
 	}
@@ -649,12 +644,7 @@ func buildRows(model Model) RowsCache {
 	for _, session := range state.Sessions {
 		storageKey := sessionRefStorageKey(session.Ref())
 		title := strings.TrimSpace(session.Title)
-		custom, ok := model.CustomTitles[storageKey]
-		if !ok && storageKey != session.ID {
-			custom = model.CustomTitles[session.ID]
-		}
-		custom = strings.TrimSpace(custom)
-		if custom != "" {
+		if custom := customTitle(model.CustomTitles, storageKey, session.ID); custom != "" {
 			title = custom
 		}
 		if title == "" {
@@ -666,33 +656,36 @@ func buildRows(model Model) RowsCache {
 			id: session.ID, key: storageKey, projectID: session.ProjectID,
 			agentID: session.AgentID, title: title, subtitle: subtitle,
 			status: string(session.Status), lastActivityAt: session.LastActivityAt,
-			pinned: pinned,
 		})
 		row := Row{
 			Kind: SessionRow, ProjectID: session.ProjectID, SessionID: session.ID,
 			SessionKey: storageKey, AgentID: session.AgentID, Title: title,
-			Subtitle: subtitle, Status: DisplayStatus(session.Status),
+			Subtitle: subtitle, Status: string(session.Status),
 			LastActivityAt: session.LastActivityAt, Pinned: pinned,
 		}
 		sessionsByProject[session.ProjectID] = append(sessionsByProject[session.ProjectID], row)
 		if pinned {
 			pinnedRow := row
-			pinnedRow.SessionKey = "pinned:" + storageKey
+			pinnedRow.SessionKey = pinnedSessionKeyPrefix + storageKey
 			pinnedRows = append(pinnedRows, pinnedRow)
 		}
 	}
 
+	sortKey := func(row Row) time.Time {
+		if model.sessionSortAt != nil {
+			key := SessionWidgetKey(row.SessionID, row.AgentID)
+			if t, ok := model.sessionSortAt[key]; ok {
+				return t
+			}
+			if t, ok := model.sessionSortAt[row.SessionID]; ok {
+				return t
+			}
+		}
+		return row.LastActivityAt
+	}
 	sortSessions := func(sessions []Row) {
 		sort.SliceStable(sessions, func(i, j int) bool {
-			left, right := sessions[i].LastActivityAt, sessions[j].LastActivityAt
-			if model.ActiveSortAt != nil {
-				if sessions[i].SessionID == model.State.ActiveSessionID && (model.State.ActiveAgentID == "" || sessions[i].AgentID == model.State.ActiveAgentID) {
-					left = *model.ActiveSortAt
-				}
-				if sessions[j].SessionID == model.State.ActiveSessionID && (model.State.ActiveAgentID == "" || sessions[j].AgentID == model.State.ActiveAgentID) {
-					right = *model.ActiveSortAt
-				}
-			}
+			left, right := sortKey(sessions[i]), sortKey(sessions[j])
 			if left.IsZero() && !right.IsZero() {
 				return false
 			}
@@ -722,34 +715,19 @@ func buildRows(model Model) RowsCache {
 		rows = append(rows, Row{Kind: ProjectRow, ProjectID: project.ID, Title: project.Name, SessionCount: len(projectSessions)})
 		rows = append(rows, projectSessions...)
 	}
-	var activeSortAt *time.Time
-	if model.ActiveSortAt != nil {
-		t := *model.ActiveSortAt
-		activeSortAt = &t
-	}
 	return RowsCache{
-		valid:           true,
-		rows:            rows,
-		projects:        projects,
-		sessions:        sessions,
-		pinned:          slices.Clone(model.Pinned),
-		filterMode:      model.FilterMode,
-		activeSessionID: model.State.ActiveSessionID,
-		activeAgentID:   model.State.ActiveAgentID,
-		activeSortAt:    activeSortAt,
+		valid:      true,
+		rows:       rows,
+		projects:   projects,
+		sessions:   sessions,
+		pinned:     slices.Clone(model.Pinned),
+		filterMode: model.FilterMode,
 	}
 }
 
 func (cache RowsCache) matches(model Model) bool {
 	if cache.filterMode != model.FilterMode || !slices.Equal(cache.pinned, model.Pinned) ||
-		cache.activeSessionID != model.State.ActiveSessionID || cache.activeAgentID != model.State.ActiveAgentID ||
 		len(cache.projects) != len(model.State.Projects) || len(cache.sessions) != len(model.State.Sessions) {
-		return false
-	}
-	if (cache.activeSortAt == nil) != (model.ActiveSortAt == nil) {
-		return false
-	}
-	if cache.activeSortAt != nil && model.ActiveSortAt != nil && !cache.activeSortAt.Equal(*model.ActiveSortAt) {
 		return false
 	}
 	for index, project := range model.State.Projects {
@@ -763,12 +741,7 @@ func (cache RowsCache) matches(model Model) bool {
 		cached := cache.sessions[index]
 		storageKey := cached.key
 		expectedTitle := strings.TrimSpace(session.Title)
-		custom, ok := model.CustomTitles[storageKey]
-		if !ok && storageKey != session.ID {
-			custom = model.CustomTitles[session.ID]
-		}
-		custom = strings.TrimSpace(custom)
-		if custom != "" {
+		if custom := customTitle(model.CustomTitles, storageKey, session.ID); custom != "" {
 			expectedTitle = custom
 		}
 		if expectedTitle == "" {
@@ -776,7 +749,7 @@ func (cache RowsCache) matches(model Model) bool {
 		}
 		subtitle, ok := displayNames[session.AgentID]
 		if !ok {
-			subtitle = agentDisplayName(model.AgentProfiles, session.AgentID)
+			subtitle = app.AgentDisplayName(model.AgentProfiles, session.AgentID)
 			displayNames[session.AgentID] = subtitle
 		}
 		if cached.id != session.ID || cached.projectID != session.ProjectID || cached.agentID != session.AgentID ||
@@ -810,25 +783,14 @@ func matchesQuery(row Row, query string) bool {
 		strings.Contains(strings.ToLower(row.ProjectID), query)
 }
 
-func DisplayStatus(status desktopstate.TaskStatus) string {
-	value := strings.ReplaceAll(strings.TrimSpace(string(status)), "_", " ")
-	if value == "" {
-		return "idle"
+// customTitle resolves a user-assigned session title, preferring the
+// agent-scoped storage key and falling back to the bare session ID.
+func customTitle(titles map[string]string, storageKey, sessionID string) string {
+	custom, ok := titles[storageKey]
+	if !ok && storageKey != sessionID {
+		custom = titles[sessionID]
 	}
-	return strings.ToUpper(value[:1]) + value[1:]
-}
-
-func agentDisplayName(profiles []app.ACPAgentProfile, agentID string) string {
-	agentID = strings.TrimSpace(agentID)
-	for _, profile := range profiles {
-		if profile.ID == agentID {
-			return profile.DisplayName
-		}
-	}
-	if agentID == "" {
-		return "Not configured"
-	}
-	return agentID
+	return strings.TrimSpace(custom)
 }
 
 func sessionRefStorageKey(ref desktopstate.SessionRef) string {

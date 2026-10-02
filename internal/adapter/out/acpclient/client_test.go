@@ -236,15 +236,6 @@ func startHelperClient(t *testing.T, mode string) *Client {
 	return client
 }
 
-func waitForDone(t *testing.T, client *Client) {
-	t.Helper()
-	select {
-	case <-client.Done():
-	case <-time.After(10 * time.Second):
-		t.Fatal("client did not shut down")
-	}
-}
-
 func TestStderrTailIsReportedOnAbnormalExit(t *testing.T) {
 	client := startHelperClient(t, "stderr_then_exit")
 

@@ -3,7 +3,6 @@
 package conversation
 
 import (
-	"fmt"
 	"strings"
 	"unicode/utf8"
 
@@ -17,18 +16,6 @@ type CacheKey struct {
 	SessionID string
 	ItemID    string
 	Kind      desktopstate.TimelineKind
-}
-
-func MakeCacheKey(sessionID string, index int, item desktopstate.TimelineItem) CacheKey {
-	itemID := item.ID
-	if itemID == "" {
-		itemID = "#" + fmt.Sprint(index)
-	}
-	return CacheKey{
-		SessionID: sessionID,
-		ItemID:    itemID,
-		Kind:      item.Kind,
-	}
 }
 
 type DisclosureButtons struct {

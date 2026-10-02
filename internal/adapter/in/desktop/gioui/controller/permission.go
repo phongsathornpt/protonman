@@ -35,10 +35,6 @@ func (c *controller) handlePermissionRequest(ctx context.Context, request acpcli
 	return c.handlePermissionRequestFrom(nil, ctx, request)
 }
 
-func (c *controller) handlePermissionRequestFor(client *acpclient.Client, ctx context.Context, request acpclient.Request) (any, error) {
-	return c.handlePermissionRequestFrom(client, ctx, request)
-}
-
 func (c *controller) handlePermissionRequestForAgent(agentID string, client *acpclient.Client, ctx context.Context, request acpclient.Request) (any, error) {
 	return c.handlePermissionRequestFromAgent(agentID, client, ctx, request)
 }

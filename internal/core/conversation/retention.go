@@ -341,7 +341,6 @@ func historicalOutputFromJSONString(name, raw string, limit int) (string, bool) 
 					cut--
 				}
 				out.WriteString(plain[:cut])
-				written += cut
 				truncated = true
 				break
 			}
