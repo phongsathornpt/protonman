@@ -25,11 +25,11 @@ import (
 )
 
 const (
-	sidebarSessionRowMinHeight = 44
+	sidebarSessionRowMinHeight = 36
 	RowGlyphSize               = 14
-	sidebarMetadataLineHeight  = 15
-	RowIndent                  = 22
-	sidebarGroupTopInset       = 8
+	sidebarMetadataLineHeight  = 14
+	RowIndent                  = 18
+	sidebarGroupTopInset       = 6
 	sidebarGroupBottomInset    = 2
 )
 
@@ -147,22 +147,6 @@ func (c *Component) layoutSidebarFooter(gtx layout.Context, snapshot Snapshot) l
 		gtx.Execute(key.FocusCmd{Tag: nil})
 	}
 
-	if c.PinnedFilterButton().Clicked(gtx) && c.view.Actions.SetFilterMode != nil {
-		if snapshot.FilterMode == "pinned" {
-			c.view.Actions.SetFilterMode("all")
-		} else {
-			c.view.Actions.SetFilterMode("pinned")
-		}
-	}
-
-	if c.RunningFilterButton().Clicked(gtx) && c.view.Actions.SetFilterMode != nil {
-		if snapshot.FilterMode == "running" {
-			c.view.Actions.SetFilterMode("all")
-		} else {
-			c.view.Actions.SetFilterMode("running")
-		}
-	}
-
 	if c.CommunityButton().Clicked(gtx) {
 		c.view.Actions.OpenCommunity()
 	}
@@ -216,52 +200,6 @@ func (c *Component) layoutSidebarFooter(gtx layout.Context, snapshot Snapshot) l
 							btnGtx := gtx
 							bg := color.NRGBA{}
 							fg := c.view.Chrome.Colors.OnSurfaceVariant
-							if snapshot.FilterMode == "pinned" {
-								bg = c.view.Chrome.Colors.PrimaryContainer
-								fg = c.view.Chrome.Colors.OnPrimaryContainer
-							} else if c.PinnedFilterButton().Hovered() {
-								bg = c.view.Chrome.Colors.SurfaceContainerHigh
-								fg = c.view.Chrome.Colors.OnSurface
-							}
-							semantic.Button.Add(btnGtx.Ops)
-							semantic.DescriptionOp("Toggle pinned conversations filter").Add(btnGtx.Ops)
-							return c.PinnedFilterButton().Layout(btnGtx, func(gtx layout.Context) layout.Dimensions {
-								return c.view.Chrome.RoundedSurface(gtx, uikit.ShapeSmall, bg, func(gtx layout.Context) layout.Dimensions {
-									return uikit.UniformInset(6).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-										return c.view.Chrome.ActionIcon(gtx, uikit.IconStar, 16, fg)
-									})
-								})
-							})
-						})
-					}),
-					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-						return uikit.Inset{Left: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-							btnGtx := gtx
-							bg := color.NRGBA{}
-							fg := c.view.Chrome.Colors.OnSurfaceVariant
-							if snapshot.FilterMode == "running" {
-								bg = c.view.Chrome.Colors.PrimaryContainer
-								fg = c.view.Chrome.Colors.OnPrimaryContainer
-							} else if c.RunningFilterButton().Hovered() {
-								bg = c.view.Chrome.Colors.SurfaceContainerHigh
-								fg = c.view.Chrome.Colors.OnSurface
-							}
-							semantic.Button.Add(btnGtx.Ops)
-							semantic.DescriptionOp("Toggle running tasks filter").Add(btnGtx.Ops)
-							return c.RunningFilterButton().Layout(btnGtx, func(gtx layout.Context) layout.Dimensions {
-								return c.view.Chrome.RoundedSurface(gtx, uikit.ShapeSmall, bg, func(gtx layout.Context) layout.Dimensions {
-									return uikit.UniformInset(6).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-										return c.view.Chrome.ActionIcon(gtx, uikit.IconTerminal, 16, fg)
-									})
-								})
-							})
-						})
-					}),
-					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-						return uikit.Inset{Left: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-							btnGtx := gtx
-							bg := color.NRGBA{}
-							fg := c.view.Chrome.Colors.OnSurfaceVariant
 							if c.CommunityButton().Hovered() {
 								bg = c.view.Chrome.Colors.SurfaceContainerHigh
 								fg = c.view.Chrome.Colors.OnSurface
@@ -300,61 +238,83 @@ func (c *Component) layoutSidebarFooter(gtx layout.Context, snapshot Snapshot) l
 }
 
 func (c *Component) layoutSidebarHeader(gtx layout.Context, snapshot Snapshot, rows []Row) layout.Dimensions {
-	return uikit.Inset{Top: 14, Bottom: 4, Left: 12, Right: 12}.Layout(gtx,
+	return uikit.Inset{Top: 12, Bottom: 4, Left: 10, Right: 10}.Layout(gtx,
 		func(gtx layout.Context) layout.Dimensions {
 			canCreate := snapshot.Connection == "connected" && !snapshot.CreatingSession
 
 			items := []layout.FlexChild{
-				// Top bar: [P] Protonman ...... new-session icon action.
+				// Brand row: [P] Protonman
 				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 					return uikit.Inset{Bottom: 8, Left: 4, Right: 4}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-						return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle, Spacing: layout.SpaceBetween}.Layout(gtx,
+						return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
 							layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-								return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
-									layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-										return uikit.Inset{Right: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-											return c.view.Chrome.ActionIcon(gtx, uikit.IconBrandLogo, 20, c.view.Chrome.Colors.OnSurface)
-										})
-									}),
-									layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-										return c.view.Chrome.Label(gtx, "Protonman", uikit.TextTitleMedium, font.Bold, c.view.Chrome.Colors.OnSurface, 1)
-									}),
-								)
+								return uikit.Inset{Right: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+									return c.view.Chrome.ActionIcon(gtx, uikit.IconBrandLogo, 18, c.view.Chrome.Colors.OnSurface)
+								})
 							}),
 							layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-								btn := c.NewSessionButton()
-								if btn.Clicked(gtx) && canCreate && c.view.Actions.NewSession != nil {
-									c.view.Actions.NewSession()
-								}
-								bg := color.NRGBA{}
-								fg := c.view.Chrome.Colors.OnSurfaceVariant
-								if btn.Hovered() && canCreate {
-									bg = c.view.Chrome.Colors.SurfaceContainerHigh
-									fg = c.view.Chrome.Colors.OnSurface
-								} else if !canCreate {
-									fg = c.view.Chrome.Colors.OutlineVariant
-								}
-								label := "Start a new chat session"
-								if snapshot.CreatingSession {
-									label = "Starting a new chat session"
-								}
-								semantic.Button.Add(gtx.Ops)
-								semantic.DescriptionOp(label).Add(gtx.Ops)
-								return btn.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-									return c.view.Chrome.RoundedSurface(gtx, uikit.ShapeSmall, bg, func(gtx layout.Context) layout.Dimensions {
-										return uikit.UniformInset(7).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-											return c.view.Chrome.ActionIcon(gtx, uikit.IconCompose, 16, fg)
-										})
-									})
-								})
+								return c.view.Chrome.Label(gtx, "Protonman", uikit.TextTitleMedium, font.SemiBold, c.view.Chrome.Colors.OnSurface, 1)
 							}),
 						)
 					})
 				}),
+				// Prominent New Conversation action button (⌘N)
+				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+					return uikit.Inset{Bottom: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+						btn := c.NewSessionButton()
+						if btn.Clicked(gtx) && canCreate && c.view.Actions.NewSession != nil {
+							c.view.Actions.NewSession()
+						}
+						bg := c.view.Chrome.Colors.SurfaceContainerHigh
+						fg := c.view.Chrome.Colors.OnSurface
+						shortcutFg := c.view.Chrome.Colors.OnSurfaceVariant
+						if btn.Hovered() && canCreate {
+							bg = c.view.Chrome.Colors.SurfaceContainerHighest
+						} else if !canCreate {
+							fg = c.view.Chrome.Colors.OutlineVariant
+							shortcutFg = c.view.Chrome.Colors.OutlineVariant
+						}
+						label := "New conversation"
+						if snapshot.CreatingSession {
+							label = "Starting…"
+						}
+						semantic.Button.Add(gtx.Ops)
+						semantic.DescriptionOp("Start a new chat session (⌘N)").Add(gtx.Ops)
+						return btn.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+							return c.view.Chrome.RoundedSurface(gtx, uikit.ShapeSmall, bg, func(gtx layout.Context) layout.Dimensions {
+								return uikit.Inset{Top: 6, Bottom: 6, Left: 10, Right: 10}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+									return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle, Spacing: layout.SpaceBetween}.Layout(gtx,
+										layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+											return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
+												layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+													return uikit.Inset{Right: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+														return c.view.Chrome.ActionIcon(gtx, uikit.IconCompose, 15, fg)
+													})
+												}),
+												layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+													return c.view.Chrome.Label(gtx, label, uikit.TextLabelSmall, font.SemiBold, fg, 1)
+												}),
+											)
+										}),
+										layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+											return c.view.Chrome.Label(gtx, "⌘N", uikit.TextLabelSmall, font.Normal, shortcutFg, 1)
+										}),
+									)
+								})
+							})
+						})
+					})
+				}),
 				// Full-width search bar: Search threads
 				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-					return uikit.Inset{Top: 2, Bottom: 14}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+					return uikit.Inset{Bottom: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 						return c.layoutSidebarSearch(gtx, rows)
+					})
+				}),
+				// Filter chips row: [★ Pinned] [⚡ Running]
+				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+					return uikit.Inset{Bottom: 10}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+						return c.layoutSidebarFilters(gtx, snapshot)
 					})
 				}),
 				// "Projects" section label
@@ -366,6 +326,70 @@ func (c *Component) layoutSidebarHeader(gtx layout.Context, snapshot Snapshot, r
 			}
 			return layout.Flex{Axis: layout.Vertical}.Layout(gtx, items...)
 		},
+	)
+}
+
+func (c *Component) layoutSidebarFilters(gtx layout.Context, snapshot Snapshot) layout.Dimensions {
+	if c.PinnedFilterButton().Clicked(gtx) && c.view.Actions.SetFilterMode != nil {
+		if snapshot.FilterMode == "pinned" {
+			c.view.Actions.SetFilterMode("all")
+		} else {
+			c.view.Actions.SetFilterMode("pinned")
+		}
+	}
+
+	if c.RunningFilterButton().Clicked(gtx) && c.view.Actions.SetFilterMode != nil {
+		if snapshot.FilterMode == "running" {
+			c.view.Actions.SetFilterMode("all")
+		} else {
+			c.view.Actions.SetFilterMode("running")
+		}
+	}
+
+	renderChip := func(gtx layout.Context, btn *widget.Clickable, icon uikit.Icon, label string, active bool, desc string) layout.Dimensions {
+		bg := color.NRGBA{}
+		fg := c.view.Chrome.Colors.OnSurfaceVariant
+		if active {
+			bg = c.view.Chrome.Colors.PrimaryContainer
+			fg = c.view.Chrome.Colors.OnPrimaryContainer
+		} else if btn.Hovered() {
+			bg = c.view.Chrome.Colors.SurfaceContainerHigh
+			fg = c.view.Chrome.Colors.OnSurface
+		}
+		semantic.Button.Add(gtx.Ops)
+		semantic.SelectedOp(active).Add(gtx.Ops)
+		semantic.DescriptionOp(desc).Add(gtx.Ops)
+		return btn.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+			return c.view.Chrome.RoundedSurface(gtx, uikit.ShapeFull, bg, func(gtx layout.Context) layout.Dimensions {
+				return uikit.Inset{Top: 2, Bottom: 2, Left: 8, Right: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+					return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
+						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+							return uikit.Inset{Right: 4}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+								return c.view.Chrome.ActionIcon(gtx, icon, 12, fg)
+							})
+						}),
+						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+							weight := font.Normal
+							if active {
+								weight = font.Medium
+							}
+							return c.view.Chrome.Label(gtx, label, uikit.TextLabelSmall, weight, fg, 1)
+						}),
+					)
+				})
+			})
+		})
+	}
+
+	return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
+		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			return renderChip(gtx, c.PinnedFilterButton(), uikit.IconStar, "Pinned", snapshot.FilterMode == "pinned", "Filter pinned conversations")
+		}),
+		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			return uikit.Inset{Left: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+				return renderChip(gtx, c.RunningFilterButton(), uikit.IconTerminal, "Running", snapshot.FilterMode == "running", "Filter running conversations")
+			})
+		}),
 	)
 }
 
@@ -435,7 +459,7 @@ func (c *Component) layoutSidebarSearch(gtx layout.Context, rows []Row) layout.D
 			return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
 				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 					return uikit.Inset{Right: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-						return c.view.Chrome.ActionIcon(gtx, uikit.IconSearch, 16, iconColor)
+						return c.view.Chrome.ActionIcon(gtx, uikit.IconSearch, 14, iconColor)
 					})
 				}),
 				layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
@@ -446,14 +470,19 @@ func (c *Component) layoutSidebarSearch(gtx layout.Context, rows []Row) layout.D
 					return ed.Layout(gtx)
 				}),
 				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-					if (&c.searchEditor).Text() == "" {
-						return layout.Dimensions{}
+					if (&c.searchEditor).Text() != "" {
+						return uikit.Inset{Left: 4}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+							semantic.Button.Add(gtx.Ops)
+							semantic.DescriptionOp("Clear conversation search").Add(gtx.Ops)
+							return c.layoutMiniIconButton(gtx, c.SearchClearButton(), "×", c.view.Chrome.Colors.OnSurfaceVariant)
+						})
 					}
-					return uikit.Inset{Left: 4}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-						semantic.Button.Add(gtx.Ops)
-						semantic.DescriptionOp("Clear conversation search").Add(gtx.Ops)
-						return c.layoutMiniIconButton(gtx, c.SearchClearButton(), "×", c.view.Chrome.Colors.OnSurfaceVariant)
-					})
+					if !isFocused {
+						return uikit.Inset{Left: 4}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+							return c.view.Chrome.Label(gtx, "⌘K", uikit.TextLabelSmall, font.Normal, c.view.Chrome.Colors.Outline, 1)
+						})
+					}
+					return layout.Dimensions{}
 				}),
 			)
 		})
@@ -754,7 +783,7 @@ func (c *Component) layoutSidebarRow(gtx layout.Context, row Row, state desktops
 	subtitle := SessionSubtitle(row, gtx.Now)
 	statusLabel := StatusLabel(row.Status)
 
-	return uikit.Inset{Top: 2, Bottom: 2, Left: unit.Dp(RowIndent), Right: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+	return uikit.Inset{Top: 1, Bottom: 1, Left: unit.Dp(RowIndent), Right: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 		dims := button.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 			gtx.Constraints.Min.Y = gtx.Dp(sidebarSessionRowMinHeight)
 			semantic.Button.Add(gtx.Ops)
@@ -768,15 +797,14 @@ func (c *Component) layoutSidebarRow(gtx layout.Context, row Row, state desktops
 			}
 			semantic.DescriptionOp(description).Add(gtx.Ops)
 			background := color.NRGBA{}
-			// The active thread is a filled pill with on-primary text so selection
-			// reads instantly; hover is one surface step above the resting row, so
-			// the two never read the same.
+			// The active thread uses a subtle surface wash with a primary left
+			// accent bar; hover is one surface step above the resting row.
 			foreground := c.view.Chrome.Colors.OnSurface
 			metaColor := c.view.Chrome.Colors.OnSurfaceVariant
 			if selected {
-				background = c.view.Chrome.Colors.PrimaryContainer
-				foreground = c.view.Chrome.Colors.OnPrimaryContainer
-				metaColor = c.view.Chrome.Colors.OnPrimaryContainer
+				background = c.view.Chrome.Colors.SurfaceContainerHigh
+				foreground = c.view.Chrome.Colors.OnSurface
+				metaColor = c.view.Chrome.Colors.OnSurfaceVariant
 			} else if isHovered {
 				background = c.view.Chrome.Colors.SurfaceContainerHigh
 			}
@@ -805,7 +833,7 @@ func (c *Component) layoutSidebarRow(gtx layout.Context, row Row, state desktops
 						}
 						weight := font.Normal
 						if selected {
-							weight = font.Medium
+							weight = font.SemiBold
 						}
 						return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
 							layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
@@ -888,13 +916,13 @@ func (c *Component) layoutSidebarRow(gtx layout.Context, row Row, state desktops
 					}))
 				}
 
-				dims := uikit.Inset{Top: 6, Bottom: 6, Left: 12, Right: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+				dims := uikit.Inset{Top: 4, Bottom: 4, Left: 10, Right: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 					return layout.Flex{Axis: layout.Vertical}.Layout(gtx, cardChildren...)
 				})
 
 				if selected {
 					barWidth := gtx.Dp(3)
-					barInsetY := gtx.Dp(6)
+					barInsetY := gtx.Dp(4)
 					height := dims.Size.Y - (barInsetY * 2)
 					if height > 0 {
 						radius := barWidth / 2
@@ -936,11 +964,11 @@ func (c *Component) layoutRowAction(gtx layout.Context, button *widget.Clickable
 	semantic.Button.Add(gtx.Ops)
 	semantic.DescriptionOp(description).Add(gtx.Ops)
 	return button.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-		gtx.Constraints.Min = image.Pt(gtx.Dp(22), gtx.Dp(22))
-		gtx.Constraints.Max = image.Pt(gtx.Dp(22), gtx.Dp(22))
+		gtx.Constraints.Min = image.Pt(gtx.Dp(20), gtx.Dp(20))
+		gtx.Constraints.Max = image.Pt(gtx.Dp(20), gtx.Dp(20))
 		return c.view.Chrome.RoundedSurface(gtx, uikit.ShapeSmall, background, func(gtx layout.Context) layout.Dimensions {
 			return layout.Center.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-				return c.view.Chrome.ActionIcon(gtx, icon, 13, tint)
+				return c.view.Chrome.ActionIcon(gtx, icon, 12, tint)
 			})
 		})
 	})
@@ -984,9 +1012,22 @@ func agentBadgeLabel(row Row) string {
 }
 
 func (c *Component) layoutAgentBadge(gtx layout.Context, label string) layout.Dimensions {
-	return c.view.Chrome.RoundedSurface(gtx, uikit.ShapeSmall, c.view.Chrome.Colors.SecondaryContainer, func(gtx layout.Context) layout.Dimensions {
-		return uikit.Inset{Top: 1, Bottom: 1, Left: 5, Right: 5}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-			return c.view.Chrome.Label(gtx, label, uikit.TextLabelSmall, font.Medium, c.view.Chrome.Colors.OnSecondaryContainer, 1)
+	bg := c.view.Chrome.Colors.SecondaryContainer
+	fg := c.view.Chrome.Colors.OnSecondaryContainer
+	switch label {
+	case "STR":
+		bg = c.view.Chrome.Colors.StrengthContainer
+		fg = c.view.Chrome.Colors.OnStrengthContainer
+	case "AGI":
+		bg = c.view.Chrome.Colors.AgilityContainer
+		fg = c.view.Chrome.Colors.OnAgilityContainer
+	case "INT":
+		bg = c.view.Chrome.Colors.IntelligenceContainer
+		fg = c.view.Chrome.Colors.OnIntelligenceContainer
+	}
+	return c.view.Chrome.RoundedSurface(gtx, uikit.ShapeSmall, bg, func(gtx layout.Context) layout.Dimensions {
+		return uikit.Inset{Top: 1, Bottom: 1, Left: 4, Right: 4}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+			return c.view.Chrome.Label(gtx, label, uikit.TextLabelSmall, font.Medium, fg, 1)
 		})
 	})
 }

@@ -71,7 +71,6 @@ func (s *Shell) syncConversation(state desktopstate.State) {
 	clear(s.userRetryButtons)
 	s.conversationUI.ResetMentionButtons()
 	clear(s.runtimeComponent.Widgets().AgentModelButtons)
-	clear(s.runtimeComponent.Widgets().ModelPresetButtons)
 	clear(s.runtimeComponent.Widgets().PopoverReasoningButtons)
 	clear(s.runtimeComponent.Widgets().PopoverPermissionModeButtons)
 	clear(s.questionStates)

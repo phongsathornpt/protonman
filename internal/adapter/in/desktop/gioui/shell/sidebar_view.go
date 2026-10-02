@@ -110,8 +110,21 @@ func (s *Shell) syncSessionButtons(state desktopstate.State, revision uint64) {
 func (s *Shell) layoutSidebarTaskStatus(gtx layout.Context, label string, status desktopstate.TaskStatus) layout.Dimensions {
 	background, foreground := s.taskStatusColors(status)
 	return s.roundedSurface(gtx, shapeSmall, background, func(gtx layout.Context) layout.Dimensions {
-		return uikit.Inset{Top: 1, Bottom: 1, Left: 6, Right: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-			return s.layoutLabel(gtx, label, textLabelSmall, font.SemiBold, foreground, 1)
+		return uikit.Inset{Top: 1, Bottom: 1, Left: 5, Right: 5}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+			return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
+				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+					return s.roundedSurface(gtx, shapeFull, foreground, func(gtx layout.Context) layout.Dimensions {
+						gtx.Constraints.Min = image.Pt(gtx.Dp(4), gtx.Dp(4))
+						gtx.Constraints.Max = image.Pt(gtx.Dp(4), gtx.Dp(4))
+						return layout.Dimensions{Size: gtx.Constraints.Min}
+					})
+				}),
+				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+					return uikit.Inset{Left: 4}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+						return s.layoutLabel(gtx, label, textLabelSmall, font.SemiBold, foreground, 1)
+					})
+				}),
+			)
 		})
 	})
 }

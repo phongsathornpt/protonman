@@ -44,6 +44,12 @@ func (r *recordingChrome) chrome() Chrome {
 				SurfaceContainerHighest: color.NRGBA{R: 50, A: 255},
 				SecondaryContainer:      color.NRGBA{R: 60, G: 70, A: 255},
 				OnSecondaryContainer:    color.NRGBA{R: 230, A: 255},
+				StrengthContainer:       color.NRGBA{R: 70, G: 80, A: 255},
+				OnStrengthContainer:     color.NRGBA{R: 220, A: 255},
+				AgilityContainer:        color.NRGBA{R: 80, G: 90, A: 255},
+				OnAgilityContainer:      color.NRGBA{R: 210, A: 255},
+				IntelligenceContainer:   color.NRGBA{R: 90, G: 100, A: 255},
+				OnIntelligenceContainer: color.NRGBA{R: 200, A: 255},
 				OnErrorContainer:        color.NRGBA{R: 255, G: 60, A: 255},
 				OutlineVariant:          color.NRGBA{R: 90, A: 255},
 			},
@@ -108,14 +114,14 @@ func renderSessionRow(t *testing.T, row Row, activeSessionID string) *recordingC
 	return recorder
 }
 
-// The active thread must read as a filled primary pill, while keeping quick
+// The active thread must read with a subtle surface wash, while keeping quick
 // actions hidden until hover/focus so the title gets full row width.
-func TestSelectedSessionRowFillsPrimaryPillAndHidesRestingActions(t *testing.T) {
+func TestSelectedSessionRowHasSurfaceTintAndHidesRestingActions(t *testing.T) {
 	row := Row{Kind: SessionRow, SessionID: "s1", AgentID: "protonman", Title: "Refactor", Status: "Running"}
 	recorder := renderSessionRow(t, row, "s1")
 
-	if !containsColor(recorder.surfaces, color.NRGBA{R: 20, G: 30, B: 40, A: 255}) {
-		t.Fatalf("selected row surfaces = %#v, want a PrimaryContainer fill", recorder.surfaces)
+	if !containsColor(recorder.surfaces, color.NRGBA{R: 40, A: 255}) {
+		t.Fatalf("selected row surfaces = %#v, want a SurfaceContainerHigh fill", recorder.surfaces)
 	}
 	for _, icon := range []uikit.Icon{uikit.IconCompose, uikit.IconTrash} {
 		if containsIcon(recorder.icons, icon) {
@@ -124,19 +130,66 @@ func TestSelectedSessionRowFillsPrimaryPillAndHidesRestingActions(t *testing.T) 
 	}
 }
 
-// A resting, unselected row must not paint the active pill and must keep the
+// A resting, unselected row must not paint the active surface tint and must keep the
 // quick actions hidden, otherwise every row competes with the selection.
 func TestUnselectedSessionRowHidesQuickActionsAndActivePill(t *testing.T) {
 	row := Row{Kind: SessionRow, SessionID: "s1", AgentID: "protonman", Title: "Refactor", Status: "Idle"}
 	recorder := renderSessionRow(t, row, "other-session")
 
-	if containsColor(recorder.surfaces, color.NRGBA{R: 20, G: 30, B: 40, A: 255}) {
-		t.Fatalf("unselected row surfaces = %#v, must not contain the PrimaryContainer fill", recorder.surfaces)
+	if containsColor(recorder.surfaces, color.NRGBA{R: 40, A: 255}) {
+		t.Fatalf("unselected row surfaces = %#v, must not contain the SurfaceContainerHigh fill", recorder.surfaces)
 	}
 	for _, icon := range []uikit.Icon{uikit.IconCompose, uikit.IconTrash} {
 		if containsIcon(recorder.icons, icon) {
 			t.Fatalf("unselected row icons = %#v, want %s hidden until hover", recorder.icons, icon)
 		}
+	}
+}
+
+func TestSessionRowShowsDotaAttributeBadges(t *testing.T) {
+	tests := []struct {
+		agentID string
+		wantBg  color.NRGBA
+		wantLbl string
+	}{
+		{"strength", color.NRGBA{R: 70, G: 80, A: 255}, "STR"},
+		{"agility", color.NRGBA{R: 80, G: 90, A: 255}, "AGI"},
+		{"intelligence", color.NRGBA{R: 90, G: 100, A: 255}, "INT"},
+	}
+	for _, tc := range tests {
+		row := Row{Kind: SessionRow, SessionID: "s1", AgentID: tc.agentID, Title: "Task"}
+		recorder := renderSessionRow(t, row, "other-session")
+		if !containsColor(recorder.surfaces, tc.wantBg) {
+			t.Fatalf("row surfaces for %s = %#v, want container color %#v", tc.agentID, recorder.surfaces, tc.wantBg)
+		}
+		if !containsLabel(recorder.labels, tc.wantLbl) {
+			t.Fatalf("row labels for %s = %#v, want %s", tc.agentID, recorder.labels, tc.wantLbl)
+		}
+	}
+}
+
+func TestSidebarHeaderRendersNewChatAndFilters(t *testing.T) {
+	component := New()
+	recorder := &recordingChrome{}
+	component.view = ViewInput{
+		Actions: withDefaultActions(Actions{}),
+		Chrome:  recorder.chrome(),
+	}
+	snapshot := Snapshot{
+		Connection: "connected",
+		FilterMode: "all",
+	}
+	gtx := rowTestContext()
+	component.layoutSidebarHeader(gtx, snapshot, nil)
+
+	if !containsLabel(recorder.labels, "New conversation") {
+		t.Fatalf("header labels = %#v, want New conversation button", recorder.labels)
+	}
+	if !containsLabel(recorder.labels, "Pinned") {
+		t.Fatalf("header labels = %#v, want Pinned filter chip", recorder.labels)
+	}
+	if !containsLabel(recorder.labels, "Running") {
+		t.Fatalf("header labels = %#v, want Running filter chip", recorder.labels)
 	}
 }
 
