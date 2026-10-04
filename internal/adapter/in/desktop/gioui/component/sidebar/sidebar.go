@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"gioui.org/layout"
+	"gioui.org/op"
 	"gioui.org/widget"
 
 	"github.com/phongsathornpt/protonman/internal/adapter/in/desktop/gioui/component/uikit"
@@ -224,10 +225,19 @@ type Component struct {
 	deleteScrim            widget.Clickable
 	deleteCancel           widget.Clickable
 	deleteConfirm          widget.Clickable
+	collapseAllProjectsBtn widget.Clickable
 	view                   ViewInput
 	sessionSortAt          map[string]time.Time
 	lastKnownActivity      map[string]time.Time
 	lastEnsuredSessionID   string
+	transitions            map[string]*FloatTransition
+}
+
+type FloatTransition struct {
+	Value     float32
+	Target    float32
+	StartTime time.Time
+	FromValue float32
 }
 
 func New() *Component {
@@ -246,6 +256,7 @@ func New() *Component {
 		deleteButtons:          make(map[string]*widget.Clickable),
 		sessionSortAt:          make(map[string]time.Time),
 		lastKnownActivity:      make(map[string]time.Time),
+		transitions:            make(map[string]*FloatTransition),
 		visible:                true,
 		renameEditor:           widget.Editor{SingleLine: true, MaxLen: 256},
 	}
@@ -413,10 +424,70 @@ func (c *Component) SyncSessionButtons(state desktopstate.State, revision uint64
 	pruneButtons(c.pinButtons)
 	pruneButtons(c.renameButtons)
 	pruneButtons(c.deleteButtons)
+	for key := range c.transitions {
+		if strings.HasPrefix(key, "chip_") {
+			continue
+		}
+		if strings.HasPrefix(key, "proj_") {
+			projKey := strings.TrimPrefix(key, "proj_hover:")
+			projKey = strings.TrimPrefix(projKey, "proj_active:")
+			projKey = strings.TrimPrefix(projKey, "proj_selected:")
+			if _, ok := c.projectButtonLive[projKey]; !ok {
+				delete(c.transitions, key)
+			}
+			continue
+		}
+		baseKey := strings.TrimPrefix(key, "hover:")
+		baseKey = strings.TrimPrefix(baseKey, "active:")
+		if _, ok := c.sessionButtonLive[baseKey]; !ok {
+			delete(c.transitions, key)
+		}
+	}
 	if revision != 0 {
 		c.buttonRevision = revision
 		c.buttonRevisionSet = true
 	}
+}
+
+// Transition smoothly interpolates a float value towards target over duration.
+// It requests frame invalidation while animating and stops when target is reached.
+func (c *Component) Transition(gtx layout.Context, key string, target float32, duration time.Duration) float32 {
+	if c.transitions == nil {
+		c.transitions = make(map[string]*FloatTransition)
+	}
+	t, ok := c.transitions[key]
+	if !ok {
+		c.transitions[key] = &FloatTransition{Value: target, Target: target, FromValue: target}
+		return target
+	}
+	if gtx.Now.IsZero() || duration <= 0 {
+		t.Value = target
+		t.Target = target
+		t.FromValue = target
+		return target
+	}
+	if target != t.Target {
+		t.FromValue = t.Value
+		t.Target = target
+		t.StartTime = gtx.Now
+	}
+	if t.Value == t.Target {
+		return t.Value
+	}
+	if gtx.Now.Sub(t.StartTime) >= duration {
+		t.Value = t.Target
+		return t.Value
+	}
+	elapsed := float32(gtx.Now.Sub(t.StartTime)) / float32(duration)
+	if elapsed < 0 {
+		elapsed = 0
+	} else if elapsed > 1 {
+		elapsed = 1
+	}
+	progress := uikit.EaseOutCubic(elapsed)
+	t.Value = t.FromValue + (t.Target-t.FromValue)*progress
+	gtx.Execute(op.InvalidateCmd{})
+	return t.Value
 }
 
 func SessionWidgetKey(sessionID string, agentID ...string) string {
@@ -593,6 +664,43 @@ func (c *Component) ToggleProject(projectID string) {
 	}
 	c.projectCollapsed[projectID] = !c.projectCollapsed[projectID]
 	c.collapseRevision++
+}
+
+func (c *Component) CollapseAllProjectsButton() *widget.Clickable {
+	return &c.collapseAllProjectsBtn
+}
+
+func (c *Component) ToggleCollapseAllProjects(projectIDs []string) {
+	if len(projectIDs) == 0 {
+		return
+	}
+	if c.projectCollapsed == nil {
+		c.projectCollapsed = make(map[string]bool)
+	}
+	anyExpanded := false
+	for _, id := range projectIDs {
+		if !c.projectCollapsed[id] {
+			anyExpanded = true
+			break
+		}
+	}
+	targetCollapsed := anyExpanded
+	for _, id := range projectIDs {
+		c.projectCollapsed[id] = targetCollapsed
+	}
+	c.collapseRevision++
+}
+
+func (c *Component) AllProjectsCollapsed(projectIDs []string) bool {
+	if len(projectIDs) == 0 {
+		return false
+	}
+	for _, id := range projectIDs {
+		if !c.ProjectCollapsed(id) {
+			return false
+		}
+	}
+	return true
 }
 
 func (c *Component) PinnedCollapsed() bool { return c.pinnedCollapsed }

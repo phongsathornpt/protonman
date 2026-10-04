@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -486,6 +487,99 @@ func TestACPSessionLoadOmitsStageTimingsByDefault(t *testing.T) {
 	}
 	if loaded.Meta != nil {
 		t.Fatalf("timing metadata leaked without %s: %#v", envconfig.Timing, loaded.Meta)
+	}
+}
+
+func TestACPSessionLoadWithSymlinkCwd(t *testing.T) {
+	ctx := context.Background()
+	realDir := t.TempDir()
+	parentDir := t.TempDir()
+	symlinkDir := filepath.Join(parentDir, "symlink-workspace")
+	if err := os.Symlink(realDir, symlinkDir); err != nil {
+		t.Skipf("symlinks not supported: %v", err)
+	}
+
+	store, err := sessionfs.NewFileStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	const sessionID = "symlink-load-session"
+	wsKey := session.WorkspaceKey(realDir)
+	if err := store.Save(ctx, sessionID, session.State{
+		SessionID:      sessionID,
+		WorkspaceKey:   wsKey,
+		WorkspaceName:  filepath.Base(realDir),
+		PermissionMode: "ask",
+		Messages: []session.Message{
+			{Role: model.RoleUser, Content: "Hello from symlink session"},
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	server := newTestServer(t, permission.ModeAsk)
+	server.sessionService = app.NewSessions(store)
+
+	// Load using symlinked path - should resolve and match wsKey without error
+	params, err := json.Marshal(SessionLoadParams{
+		SessionID: sessionID,
+		Cwd:       symlinkDir,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var output bytes.Buffer
+	result, _, err := server.dispatch(ctx, RPCRequest{Method: "session/load", Params: params}, &output)
+	if err != nil {
+		t.Fatalf("session/load with symlink cwd failed: %v", err)
+	}
+	if _, ok := result.(SessionLoadResult); !ok {
+		t.Fatalf("expected SessionLoadResult, got %T", result)
+	}
+}
+
+func TestACPSessionLoadWithEmptyCwd(t *testing.T) {
+	ctx := context.Background()
+	store, err := sessionfs.NewFileStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	const sessionID = "empty-cwd-load-session"
+	if err := store.Save(ctx, sessionID, session.State{
+		SessionID:      sessionID,
+		WorkspaceKey:   "0123456789abcdef",
+		WorkspaceName:  "remote-project",
+		PermissionMode: "ask",
+		Messages: []session.Message{
+			{Role: model.RoleUser, Content: "Hello from remote session"},
+			{Role: model.RoleAssistant, Content: "Response from remote session"},
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	server := newTestServer(t, permission.ModeAsk)
+	server.sessionService = app.NewSessions(store)
+
+	// Load with empty cwd - should succeed and replay history without "belongs to another workspace"
+	params, err := json.Marshal(SessionLoadParams{
+		SessionID: sessionID,
+		Cwd:       "",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var output bytes.Buffer
+	result, _, err := server.dispatch(ctx, RPCRequest{Method: "session/load", Params: params}, &output)
+	if err != nil {
+		t.Fatalf("session/load with empty cwd failed: %v", err)
+	}
+	if _, ok := result.(SessionLoadResult); !ok {
+		t.Fatalf("expected SessionLoadResult, got %T", result)
+	}
+	out := output.String()
+	if !strings.Contains(out, "Hello from remote session") {
+		t.Fatalf("expected replayed message in output, got: %s", out)
 	}
 }
 

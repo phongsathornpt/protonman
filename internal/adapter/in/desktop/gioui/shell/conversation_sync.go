@@ -29,15 +29,6 @@ func (s *Shell) syncConversation(state desktopstate.State) {
 	}
 	s.activeSessionID = state.ActiveSessionID
 	s.activeSessionAgentID = state.ActiveAgentID
-	if state.ActiveSessionID != "" {
-		rows, _ := buildSidebarRows(state, nil)
-		for index, row := range rows {
-			if row.Kind == sidebarSessionRow && row.SessionID == state.ActiveSessionID && (state.ActiveAgentID == "" || row.AgentID == state.ActiveAgentID) {
-				s.sidebarData.ScrollTo(max(0, index-1))
-				break
-			}
-		}
-	}
 	activeRef := desktopstate.SessionRef{AgentID: state.ActiveAgentID, SessionID: state.ActiveSessionID}
 	s.setComposerText(s.takeComposerDraft(controller.SessionRefStorageKey(activeRef)))
 	s.closePopovers()

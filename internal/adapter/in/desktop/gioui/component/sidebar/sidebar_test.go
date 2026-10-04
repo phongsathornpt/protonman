@@ -389,6 +389,68 @@ func TestClickSessionDoesNotSwapPosition(t *testing.T) {
 	}
 }
 
+func TestClickSessionWithPresentationStateDoesNotSwapPosition(t *testing.T) {
+	activity := time.Date(2026, 9, 30, 10, 0, 0, 0, time.UTC)
+	baseState := desktopstate.State{
+		Projects: []desktopstate.ProjectState{{ID: "workspace", Name: "Workspace"}},
+		Sessions: []desktopstate.SessionState{
+			{ID: "s1", ProjectID: "workspace", AgentID: "protonman", Title: "First", LastActivityAt: activity},
+			{ID: "s2", ProjectID: "workspace", AgentID: "protonman", Title: "Second", LastActivityAt: activity.Add(time.Minute)},
+		},
+		ActiveSessionID: "s1",
+		ActiveAgentID:   "protonman",
+	}
+
+	component := New()
+	revision := uint64(1)
+
+	// Initial render with presentation clone (as controller.Snapshot produces)
+	model1 := Model{
+		State:         desktopstate.ClonePresentationState(baseState),
+		AgentProfiles: []app.ACPAgentProfile{{ID: "protonman", DisplayName: "Protonman"}},
+		FilterMode:    "all",
+		Revision:      revision,
+	}
+	rows1 := component.Rows(model1)
+	s2IdxBefore := indexOfSession(rows1, "s2")
+	s1IdxBefore := indexOfSession(rows1, "s1")
+	if s2IdxBefore != 1 || s1IdxBefore != 2 {
+		t.Fatalf("initial order: s2=%d, s1=%d; want s2=1, s1=2", s2IdxBefore, s1IdxBefore)
+	}
+
+	// User clicks s2: ActiveSessionID becomes s2, new presentation snapshot generated
+	baseState.ActiveSessionID = "s2"
+	revision++
+	model2 := Model{
+		State:         desktopstate.ClonePresentationState(baseState),
+		AgentProfiles: []app.ACPAgentProfile{{ID: "protonman", DisplayName: "Protonman"}},
+		FilterMode:    "all",
+		Revision:      revision,
+	}
+	rows2 := component.Rows(model2)
+	s2IdxAfter := indexOfSession(rows2, "s2")
+	s1IdxAfter := indexOfSession(rows2, "s1")
+	if s2IdxAfter != s2IdxBefore || s1IdxAfter != s1IdxBefore {
+		t.Fatalf("sessions swapped or moved on click with presentation state! before: s2=%d, s1=%d; after: s2=%d, s1=%d",
+			s2IdxBefore, s1IdxBefore, s2IdxAfter, s1IdxAfter)
+	}
+
+	// User clicks back to s1
+	baseState.ActiveSessionID = "s1"
+	revision++
+	model3 := Model{
+		State:         desktopstate.ClonePresentationState(baseState),
+		AgentProfiles: []app.ACPAgentProfile{{ID: "protonman", DisplayName: "Protonman"}},
+		FilterMode:    "all",
+		Revision:      revision,
+	}
+	rows3 := component.Rows(model3)
+	if indexOfSession(rows3, "s2") != s2IdxBefore || indexOfSession(rows3, "s1") != s1IdxBefore {
+		t.Fatalf("sessions swapped or moved on clicking back to s1! before: s2=%d, s1=%d; after: s2=%d, s1=%d",
+			s2IdxBefore, s1IdxBefore, indexOfSession(rows3, "s2"), indexOfSession(rows3, "s1"))
+	}
+}
+
 func TestSortSessionsDeterministicTieBreaker(t *testing.T) {
 	// Sessions with equal timestamps must sort deterministically by SessionID
 	model := Model{

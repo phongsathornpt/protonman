@@ -1060,3 +1060,134 @@ func TestUpsertTimelineItemLockedMergeAndAppend(t *testing.T) {
 		t.Fatalf("appended timeline = %#v", session.Timeline)
 	}
 }
+
+func TestIsSessionActive(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		state     desktopstate.State
+		sessionID string
+		agentID   string
+		want      bool
+	}{
+		{
+			name:      "exact match",
+			state:     desktopstate.State{ActiveSessionID: "s1", ActiveAgentID: ProtonmanAgentID},
+			sessionID: "s1",
+			agentID:   ProtonmanAgentID,
+			want:      true,
+		},
+		{
+			name:      "empty active agent matches protonman",
+			state:     desktopstate.State{ActiveSessionID: "s1", ActiveAgentID: ""},
+			sessionID: "s1",
+			agentID:   ProtonmanAgentID,
+			want:      true,
+		},
+		{
+			name:      "protonman active agent matches empty agent",
+			state:     desktopstate.State{ActiveSessionID: "s1", ActiveAgentID: ProtonmanAgentID},
+			sessionID: "s1",
+			agentID:   "",
+			want:      true,
+		},
+		{
+			name:      "custom agent matches",
+			state:     desktopstate.State{ActiveSessionID: "s1", ActiveAgentID: "reviewer"},
+			sessionID: "s1",
+			agentID:   "reviewer",
+			want:      true,
+		},
+		{
+			name:      "different session id fails",
+			state:     desktopstate.State{ActiveSessionID: "s2", ActiveAgentID: ProtonmanAgentID},
+			sessionID: "s1",
+			agentID:   ProtonmanAgentID,
+			want:      false,
+		},
+		{
+			name:      "different agent id fails",
+			state:     desktopstate.State{ActiveSessionID: "s1", ActiveAgentID: "reviewer"},
+			sessionID: "s1",
+			agentID:   ProtonmanAgentID,
+			want:      false,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := isSessionActive(tc.state, tc.sessionID, tc.agentID); got != tc.want {
+				t.Fatalf("isSessionActive = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestFinishSessionHistoryLoadCancelledDoesNotSetStatus(t *testing.T) {
+	controller := newTestController()
+	current := controller.clients[ProtonmanAgentID]
+	controller.statuses[ProtonmanAgentID] = "Connected"
+	controller.histories["session-1"] = HistoryStateLoading
+
+	controller.finishSessionHistoryLoad(current, "session-1", context.Canceled)
+
+	if got := controller.histories["session-1"]; got != HistoryStateUnloaded {
+		t.Fatalf("history state = %v, want unloaded", got)
+	}
+	if status := controller.statuses[ProtonmanAgentID]; status != "Connected" {
+		t.Fatalf("status = %q, want Connected (should not report failure on cancellation)", status)
+	}
+}
+
+func TestFinishSessionHistoryInactiveSessionFailureDoesNotCorruptActiveStatus(t *testing.T) {
+	controller := newTestController()
+	current := controller.clients[ProtonmanAgentID]
+	controller.state.ActiveSessionID = "session-2"
+	controller.state.Sessions = append(controller.state.Sessions, desktopstate.SessionState{
+		ID:      "session-2",
+		AgentID: ProtonmanAgentID,
+		Status:  desktopstate.TaskIdle,
+	})
+	controller.statuses[ProtonmanAgentID] = "Connected"
+	controller.histories["session-1"] = HistoryStateLoading
+
+	controller.finishSessionHistoryLoad(current, "session-1", errors.New("network failure"))
+
+	if got := controller.histories["session-1"]; got != HistoryStateUnloaded {
+		t.Fatalf("session-1 history state = %v, want unloaded", got)
+	}
+	if status := controller.statuses[ProtonmanAgentID]; status != "Connected" {
+		t.Fatalf("active session status = %q, want Connected (inactive session error should not corrupt active session status)", status)
+	}
+}
+
+func TestFindWorkspaceForSession(t *testing.T) {
+	dir := t.TempDir()
+	wsKey := sessionWorkspaceKey(dir)
+
+	state := desktopstate.State{
+		Projects: []desktopstate.ProjectState{
+			{
+				ID: "project-1",
+				Folders: []desktopstate.ProjectFolder{
+					{Path: dir, Primary: true},
+				},
+			},
+		},
+	}
+
+	// Preserves existing workspace
+	sessWithWs := desktopstate.SessionState{ID: "s1", Workspace: "/custom/path"}
+	if got := findWorkspaceForSession(state, sessWithWs); got != "/custom/path" {
+		t.Fatalf("got %q, want /custom/path", got)
+	}
+
+	// Finds matching folder by session WorkspaceKey
+	sessWithKey := desktopstate.SessionState{ID: "s2", WorkspaceKey: wsKey}
+	if got := findWorkspaceForSession(state, sessWithKey); got != dir {
+		t.Fatalf("got %q, want %q", got, dir)
+	}
+
+	// Does not force mismatching default workspace
+	sessWithOtherKey := desktopstate.SessionState{ID: "s3", WorkspaceKey: "0123456789abcdef"}
+	if got := findWorkspaceForSession(state, sessWithOtherKey); got != "" {
+		t.Fatalf("got %q, want empty string for mismatching workspace key", got)
+	}
+}

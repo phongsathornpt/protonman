@@ -70,7 +70,6 @@ func (c *Component) layoutSidebar(gtx layout.Context, snapshot Snapshot) layout.
 	rows := c.DisplayRows(allRows, c.searchEditor.Text(), snapshot.FilterMode, snapshot.Revision)
 	if snapshot.State.ActiveSessionID != "" && snapshot.State.ActiveSessionID != c.lastEnsuredSessionID {
 		c.lastEnsuredSessionID = snapshot.State.ActiveSessionID
-		c.EnsureVisible(snapshot.State.ActiveSessionID, rows)
 	}
 	return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
@@ -317,10 +316,66 @@ func (c *Component) layoutSidebarHeader(gtx layout.Context, snapshot Snapshot, r
 						return c.layoutSidebarFilters(gtx, snapshot)
 					})
 				}),
-				// "Projects" section label
+				// "Projects" section header with count and collapse-all toggle
 				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-					return uikit.Inset{Bottom: 6, Left: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-						return c.view.Chrome.Label(gtx, "Projects", uikit.TextLabelSmall, font.Medium, c.view.Chrome.Colors.OnSurfaceVariant, 1)
+					projectCount := len(snapshot.State.Projects)
+					var projectIDs []string
+					if projectCount > 0 {
+						projectIDs = make([]string, 0, projectCount)
+						for _, p := range snapshot.State.Projects {
+							projectIDs = append(projectIDs, p.ID)
+						}
+					}
+					if c.CollapseAllProjectsButton().Clicked(gtx) {
+						c.ToggleCollapseAllProjects(projectIDs)
+					}
+					allCollapsed := c.AllProjectsCollapsed(projectIDs)
+					collapseIcon := uikit.IconChevronDown
+					collapseTip := "Collapse all projects"
+					if allCollapsed {
+						collapseIcon = uikit.IconChevronRight
+						collapseTip = "Expand all projects"
+					}
+
+					return uikit.Inset{Bottom: 6, Left: 6, Right: 4}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+						return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle, Spacing: layout.SpaceBetween}.Layout(gtx,
+							layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+								return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
+									layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+										return c.view.Chrome.Label(gtx, "Projects", uikit.TextLabelSmall, font.SemiBold, c.view.Chrome.Colors.OnSurfaceVariant, 1)
+									}),
+									layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+										if projectCount > 0 {
+											return uikit.Inset{Left: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+												return c.view.Chrome.Label(gtx, fmt.Sprintf("%d", projectCount), uikit.TextLabelSmall, font.Normal, c.view.Chrome.Colors.Outline, 1)
+											})
+										}
+										return layout.Dimensions{}
+									}),
+								)
+							}),
+							layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+								if projectCount == 0 {
+									return layout.Dimensions{}
+								}
+								btn := c.CollapseAllProjectsButton()
+								bg := color.NRGBA{}
+								fg := c.view.Chrome.Colors.OnSurfaceVariant
+								if btn.Hovered() {
+									bg = c.view.Chrome.Colors.SurfaceContainerHigh
+									fg = c.view.Chrome.Colors.OnSurface
+								}
+								semantic.Button.Add(gtx.Ops)
+								semantic.DescriptionOp(collapseTip).Add(gtx.Ops)
+								return btn.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+									return c.view.Chrome.RoundedSurface(gtx, uikit.ShapeSmall, bg, func(gtx layout.Context) layout.Dimensions {
+										return uikit.UniformInset(4).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+											return c.view.Chrome.ActionIcon(gtx, collapseIcon, 12, fg)
+										})
+									})
+								})
+							}),
+						)
 					})
 				}),
 			}
@@ -347,15 +402,31 @@ func (c *Component) layoutSidebarFilters(gtx layout.Context, snapshot Snapshot) 
 	}
 
 	renderChip := func(gtx layout.Context, btn *widget.Clickable, icon uikit.Icon, label string, active bool, desc string) layout.Dimensions {
-		bg := color.NRGBA{}
-		fg := c.view.Chrome.Colors.OnSurfaceVariant
+		targetActive := float32(0)
 		if active {
-			bg = c.view.Chrome.Colors.PrimaryContainer
-			fg = c.view.Chrome.Colors.OnPrimaryContainer
-		} else if btn.Hovered() {
-			bg = c.view.Chrome.Colors.SurfaceContainerHigh
-			fg = c.view.Chrome.Colors.OnSurface
+			targetActive = 1
 		}
+		activeT := c.Transition(gtx, "chip_active:"+label, targetActive, 160*time.Millisecond)
+
+		targetHover := float32(0)
+		if btn.Hovered() {
+			targetHover = 1
+		}
+		hoverT := c.Transition(gtx, "chip_hover:"+label, targetHover, 160*time.Millisecond)
+
+		targetBg := color.NRGBA{}
+		targetFg := c.view.Chrome.Colors.OnSurfaceVariant
+		if hoverT > 0 {
+			targetBg = uikit.WithAlpha(c.view.Chrome.Colors.SurfaceContainerHigh, hoverT)
+			targetFg = uikit.InterpolateColor(targetFg, c.view.Chrome.Colors.OnSurface, hoverT)
+		}
+		bg := targetBg
+		fg := targetFg
+		if activeT > 0 {
+			bg = uikit.InterpolateColor(targetBg, c.view.Chrome.Colors.PrimaryContainer, activeT)
+			fg = uikit.InterpolateColor(targetFg, c.view.Chrome.Colors.OnPrimaryContainer, activeT)
+		}
+
 		semantic.Button.Add(gtx.Ops)
 		semantic.SelectedOp(active).Add(gtx.Ops)
 		semantic.DescriptionOp(desc).Add(gtx.Ops)
@@ -370,7 +441,7 @@ func (c *Component) layoutSidebarFilters(gtx layout.Context, snapshot Snapshot) 
 						}),
 						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 							weight := font.Normal
-							if active {
+							if active || activeT >= 0.5 {
 								weight = font.Medium
 							}
 							return c.view.Chrome.Label(gtx, label, uikit.TextLabelSmall, weight, fg, 1)
@@ -548,6 +619,15 @@ func (c *Component) layoutSidebarRow(gtx layout.Context, row Row, state desktops
 		emptyNewBtn := c.ProjectEmptyNewButton(row.ProjectID)
 		selected := state.ActiveProjectID == row.ProjectID && state.ActiveSessionID == ""
 		isCollapsed := c.ProjectCollapsed(row.ProjectID)
+		isActiveProject := state.ActiveProjectID == row.ProjectID
+		if !isActiveProject && state.ActiveSessionID != "" {
+			for _, s := range state.Sessions {
+				if s.ID == state.ActiveSessionID && s.ProjectID == row.ProjectID {
+					isActiveProject = true
+					break
+				}
+			}
+		}
 		if newBtn.Clicked(gtx) || emptyNewBtn.Clicked(gtx) {
 			if c.view.Actions.SelectProject != nil {
 				c.view.Actions.SelectProject(row.ProjectID)
@@ -565,7 +645,24 @@ func (c *Component) layoutSidebarRow(gtx layout.Context, row Row, state desktops
 		isHovered := button != nil && button.Hovered()
 		isFocused := button != nil && gtx.Focused(button)
 		isNewHovered := newBtn != nil && newBtn.Hovered()
-		showProjectActions := isHovered || isFocused || isNewHovered
+
+		targetProjHover := float32(0)
+		if isHovered || isFocused || isNewHovered {
+			targetProjHover = 1
+		}
+		projHoverT := c.Transition(gtx, "proj_hover:"+row.ProjectID, targetProjHover, 160*time.Millisecond)
+
+		targetProjActive := float32(0)
+		if isActiveProject {
+			targetProjActive = 1
+		}
+		projActiveT := c.Transition(gtx, "proj_active:"+row.ProjectID, targetProjActive, 160*time.Millisecond)
+
+		targetProjSelected := float32(0)
+		if selected {
+			targetProjSelected = 1
+		}
+		projSelectedT := c.Transition(gtx, "proj_selected:"+row.ProjectID, targetProjSelected, 160*time.Millisecond)
 
 		return uikit.Inset{Top: sidebarGroupTopInset, Bottom: sidebarGroupBottomInset, Left: 8, Right: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 			dims := button.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
@@ -573,17 +670,27 @@ func (c *Component) layoutSidebarRow(gtx layout.Context, row Row, state desktops
 				semantic.Button.Add(gtx.Ops)
 				semantic.SelectedOp(selected).Add(gtx.Ops)
 				semantic.DescriptionOp(fmt.Sprintf("Select workspace %s, %d conversations", row.Title, row.SessionCount)).Add(gtx.Ops)
-				background := color.NRGBA{}
-				foreground := c.view.Chrome.Colors.OnSurfaceVariant
-				if selected {
-					// A project selection stays subtler than the active thread:
-					// one surface step above hover, never a filled pill.
-					background = c.view.Chrome.Colors.SurfaceContainerHighest
-					foreground = c.view.Chrome.Colors.OnSurface
-				} else if button.Hovered() {
-					background = c.view.Chrome.Colors.SurfaceContainerHigh
-					foreground = c.view.Chrome.Colors.OnSurface
+
+				var background color.NRGBA
+				if projSelectedT > 0 {
+					background = uikit.WithAlpha(c.view.Chrome.Colors.SurfaceContainerHighest, projSelectedT)
+				} else if projHoverT > 0 {
+					background = uikit.WithAlpha(c.view.Chrome.Colors.SurfaceContainerHigh, projHoverT)
 				}
+
+				fgT := projHoverT
+				if projActiveT > fgT {
+					fgT = projActiveT
+				}
+				if projSelectedT > fgT {
+					fgT = projSelectedT
+				}
+				foreground := uikit.InterpolateColor(c.view.Chrome.Colors.OnSurfaceVariant, c.view.Chrome.Colors.OnSurface, fgT)
+				weight := font.Medium
+				if isActiveProject || selected || projActiveT >= 0.5 || projSelectedT >= 0.5 {
+					weight = font.SemiBold
+				}
+
 				return c.view.Chrome.RoundedSurface(gtx, uikit.ShapeSmall, background, func(gtx layout.Context) layout.Dimensions {
 					return uikit.Inset{Top: 4, Bottom: 4, Left: 8, Right: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 						return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
@@ -594,20 +701,23 @@ func (c *Component) layoutSidebarRow(gtx layout.Context, row Row, state desktops
 							}),
 							layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 								return uikit.Inset{Right: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-									return c.view.Chrome.ActionIcon(gtx, uikit.IconFolder, RowGlyphSize, c.view.Chrome.Colors.OnSurfaceVariant)
+									return c.layoutProjectMonogram(gtx, projectMonogram(row.Title), projActiveT)
 								})
 							}),
 							layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-								return c.view.Chrome.Label(gtx, row.Title, uikit.TextLabelSmall, font.SemiBold, foreground, 1)
+								return c.view.Chrome.Label(gtx, row.Title, uikit.TextLabelSmall, weight, foreground, 1)
 							}),
 							layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 								return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
 									layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-										if !showProjectActions {
+										if projHoverT <= 0 {
 											return layout.Dimensions{}
 										}
-										return uikit.Inset{Right: 4}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-											return c.layoutRowAction(gtx, newBtn, uikit.IconPlus, c.view.Chrome.Colors.OnSurfaceVariant, fmt.Sprintf("New session in %s", row.Title))
+										return uikit.Inset{Right: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+											stack := paint.PushOpacity(gtx.Ops, projHoverT)
+											dims := c.layoutRowAction(gtx, newBtn, uikit.IconPlus, c.view.Chrome.Colors.OnSurfaceVariant, fmt.Sprintf("New session in %s", row.Title))
+											stack.Pop()
+											return dims
 										})
 									}),
 									layout.Rigid(func(gtx layout.Context) layout.Dimensions {
@@ -664,9 +774,6 @@ func (c *Component) layoutSidebarRow(gtx layout.Context, row Row, state desktops
 	deleteBtn := c.DeleteButton(widgetKey)
 	selected := state.ActiveSessionID == row.SessionID && (state.ActiveAgentID == "" || state.ActiveAgentID == row.AgentID)
 	isRenaming := (&c.interaction).EditingSessionID == row.SessionID && (&c.interaction).EditingAgentID == row.AgentID
-	isHovered := button != nil && button.Hovered()
-	isFocused := button != nil && gtx.Focused(button)
-	showActions := isHovered || isFocused
 
 	if pinBtn.Clicked(gtx) {
 		c.view.Actions.TogglePin(row.AgentID, row.SessionID)
@@ -681,6 +788,7 @@ func (c *Component) layoutSidebarRow(gtx layout.Context, row Row, state desktops
 		(&c.interaction).DeletingAgentID = row.AgentID
 		(&c.interaction).DeletingSessionTitle = row.Title
 	} else if button != nil && button.Clicked(gtx) {
+		c.lastEnsuredSessionID = row.SessionID
 		c.view.Actions.SelectSession(row.AgentID, row.SessionID)
 	}
 
@@ -782,6 +890,7 @@ func (c *Component) layoutSidebarRow(gtx layout.Context, row Row, state desktops
 	gtx.Constraints.Min.Y = gtx.Dp(sidebarSessionRowMinHeight)
 	subtitle := SessionSubtitle(row, gtx.Now)
 	statusLabel := StatusLabel(row.Status)
+	isFocused := button != nil && gtx.Focused(button)
 
 	return uikit.Inset{Top: 1, Bottom: 1, Left: unit.Dp(RowIndent), Right: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 		dims := button.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
@@ -796,18 +905,35 @@ func (c *Component) layoutSidebarRow(gtx layout.Context, row Row, state desktops
 				description += ", " + statusLabel
 			}
 			semantic.DescriptionOp(description).Add(gtx.Ops)
-			background := color.NRGBA{}
-			// The active thread uses a subtle surface wash with a primary left
-			// accent bar; hover is one surface step above the resting row.
+			isHovered := button != nil && button.Hovered()
+			isActionHovered := (pinBtn != nil && pinBtn.Hovered()) ||
+				(renameBtn != nil && renameBtn.Hovered()) ||
+				(deleteBtn != nil && deleteBtn.Hovered())
+
+			targetHover := float32(0)
+			if isHovered || isFocused || isActionHovered {
+				targetHover = 1
+			}
+			hoverT := c.Transition(gtx, "hover:"+widgetKey, targetHover, 160*time.Millisecond)
+
+			targetActive := float32(0)
+			if selected {
+				targetActive = 1
+			}
+			activeT := c.Transition(gtx, "active:"+widgetKey, targetActive, 160*time.Millisecond)
+
+			var background color.NRGBA
+			if activeT > 0 && hoverT > 0 {
+				baseActive := uikit.WithAlpha(c.view.Chrome.Colors.SurfaceContainerHigh, activeT)
+				background = uikit.InterpolateColor(baseActive, c.view.Chrome.Colors.SurfaceContainerHighest, hoverT*activeT)
+			} else if activeT > 0 {
+				background = uikit.WithAlpha(c.view.Chrome.Colors.SurfaceContainerHigh, activeT)
+			} else if hoverT > 0 {
+				background = uikit.WithAlpha(c.view.Chrome.Colors.SurfaceContainerHigh, hoverT)
+			}
+
 			foreground := c.view.Chrome.Colors.OnSurface
 			metaColor := c.view.Chrome.Colors.OnSurfaceVariant
-			if selected {
-				background = c.view.Chrome.Colors.SurfaceContainerHigh
-				foreground = c.view.Chrome.Colors.OnSurface
-				metaColor = c.view.Chrome.Colors.OnSurfaceVariant
-			} else if isHovered {
-				background = c.view.Chrome.Colors.SurfaceContainerHigh
-			}
 			return c.view.Chrome.RoundedSurface(gtx, uikit.ShapeMedium, background, func(gtx layout.Context) layout.Dimensions {
 				cardChildren := []layout.FlexChild{
 					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
@@ -832,7 +958,7 @@ func (c *Component) layoutSidebarRow(gtx layout.Context, row Row, state desktops
 							)
 						}
 						weight := font.Normal
-						if selected {
+						if selected || activeT >= 0.5 {
 							weight = font.SemiBold
 						}
 						return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
@@ -840,38 +966,61 @@ func (c *Component) layoutSidebarRow(gtx layout.Context, row Row, state desktops
 								return c.view.Chrome.Label(gtx, row.Title, uikit.TextBodySmall, weight, foreground, 1)
 							}),
 							layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-								if !showActions {
-									if row.Pinned {
-										return uikit.Inset{Left: 4}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-											return c.view.Chrome.ActionIcon(gtx, uikit.IconStar, RowGlyphSize, c.view.Chrome.Colors.Primary)
-										})
-									}
-									return layout.Dimensions{}
+								slotWidth := gtx.Dp(66)
+								slotHeight := gtx.Dp(20)
+								gtx.Constraints.Min.X = slotWidth
+								gtx.Constraints.Max.X = slotWidth
+
+								// If unhovered and unpinned, return the reserved slot width to keep title width constant
+								if hoverT <= 0 && !row.Pinned {
+									return layout.Dimensions{Size: image.Pt(slotWidth, slotHeight)}
 								}
-								// Hover/focus quick actions replace the old
-								// kebab menu: pin, rename, and delete are one
-								// click away without opening a popover.
-								return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
-									layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-										return uikit.Inset{Right: 2}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-											pinTint := c.view.Chrome.Colors.OnSurfaceVariant
-											pinDesc := "Pin conversation"
-											if row.Pinned {
-												pinTint = c.view.Chrome.Colors.Primary
-												pinDesc = "Unpin conversation"
+
+								pinTint := c.view.Chrome.Colors.OnSurfaceVariant
+								pinDesc := "Pin conversation"
+								if row.Pinned {
+									pinTint = c.view.Chrome.Colors.Primary
+									pinDesc = "Unpin conversation"
+								}
+
+								return layout.E.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+									return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
+										layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+											return uikit.Inset{Right: 2}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+												if row.Pinned {
+													return c.layoutRowAction(gtx, pinBtn, uikit.IconStar, pinTint, pinDesc)
+												}
+												if hoverT <= 0 {
+													return layout.Dimensions{Size: image.Pt(gtx.Dp(20), slotHeight)}
+												}
+												stack := paint.PushOpacity(gtx.Ops, hoverT)
+												dims := c.layoutRowAction(gtx, pinBtn, uikit.IconStar, pinTint, pinDesc)
+												stack.Pop()
+												return dims
+											})
+										}),
+										layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+											return uikit.Inset{Right: 2}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+												if hoverT <= 0 {
+													return layout.Dimensions{Size: image.Pt(gtx.Dp(20), slotHeight)}
+												}
+												stack := paint.PushOpacity(gtx.Ops, hoverT)
+												dims := c.layoutRowAction(gtx, renameBtn, uikit.IconCompose, c.view.Chrome.Colors.OnSurfaceVariant, "Rename conversation")
+												stack.Pop()
+												return dims
+											})
+										}),
+										layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+											if hoverT <= 0 {
+												return layout.Dimensions{Size: image.Pt(gtx.Dp(20), slotHeight)}
 											}
-											return c.layoutRowAction(gtx, pinBtn, uikit.IconStar, pinTint, pinDesc)
-										})
-									}),
-									layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-										return uikit.Inset{Right: 2}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-											return c.layoutRowAction(gtx, renameBtn, uikit.IconCompose, c.view.Chrome.Colors.OnSurfaceVariant, "Rename conversation")
-										})
-									}),
-									layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-										return c.layoutRowAction(gtx, deleteBtn, uikit.IconTrash, c.view.Chrome.Colors.OnErrorContainer, "Delete conversation")
-									}),
-								)
+											stack := paint.PushOpacity(gtx.Ops, hoverT)
+											dims := c.layoutRowAction(gtx, deleteBtn, uikit.IconTrash, c.view.Chrome.Colors.OnErrorContainer, "Delete conversation")
+											stack.Pop()
+											return dims
+										}),
+									)
+								})
 							}),
 						)
 					}),
@@ -920,16 +1069,20 @@ func (c *Component) layoutSidebarRow(gtx layout.Context, row Row, state desktops
 					return layout.Flex{Axis: layout.Vertical}.Layout(gtx, cardChildren...)
 				})
 
-				if selected {
+				if activeT > 0 {
 					barWidth := gtx.Dp(3)
 					barInsetY := gtx.Dp(4)
-					height := dims.Size.Y - (barInsetY * 2)
-					if height > 0 {
+					fullHeight := dims.Size.Y - (barInsetY * 2)
+					curHeight := int(float32(fullHeight)*activeT + 0.5)
+					if curHeight > 0 {
 						radius := barWidth / 2
 						if radius < 1 {
 							radius = 1
 						}
-						barRect := image.Rect(gtx.Dp(2), barInsetY, gtx.Dp(2)+barWidth, barInsetY+height)
+						centerY := barInsetY + fullHeight/2
+						topY := centerY - curHeight/2
+						bottomY := topY + curHeight
+						barRect := image.Rect(gtx.Dp(2), topY, gtx.Dp(2)+barWidth, bottomY)
 						stack := clip.RRect{
 							Rect: barRect,
 							SE:   radius,
@@ -937,7 +1090,7 @@ func (c *Component) layoutSidebarRow(gtx layout.Context, row Row, state desktops
 							NW:   radius,
 							NE:   radius,
 						}.Push(gtx.Ops)
-						paint.Fill(gtx.Ops, c.view.Chrome.Colors.Primary)
+						paint.Fill(gtx.Ops, uikit.WithAlpha(c.view.Chrome.Colors.Primary, activeT))
 						stack.Pop()
 					}
 				}
@@ -1054,11 +1207,46 @@ func (c *Component) layoutMiniIconButton(gtx layout.Context, button *widget.Clic
 	return dims
 }
 
-func (c *Component) layoutCountPill(gtx layout.Context, count int) layout.Dimensions {
-	return c.view.Chrome.RoundedSurface(gtx, uikit.ShapeFull, c.view.Chrome.Colors.SurfaceContainerHigh, func(gtx layout.Context) layout.Dimensions {
-		return uikit.Inset{Top: 1, Bottom: 1, Left: 6, Right: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-			return c.view.Chrome.Label(gtx, fmt.Sprintf("%d", count), uikit.TextLabelSmall, font.Medium, c.view.Chrome.Colors.OnSurfaceVariant, 1)
+func projectMonogram(title string) string {
+	title = strings.TrimSpace(title)
+	if title == "" {
+		return "PR"
+	}
+	tokens := strings.FieldsFunc(title, func(r rune) bool {
+		return r == '-' || r == '_' || r == '.' || r == ' ' || r == '/'
+	})
+	if len(tokens) >= 2 {
+		first := []rune(tokens[0])
+		last := []rune(tokens[len(tokens)-1])
+		if len(first) > 0 && len(last) > 0 {
+			return strings.ToUpper(string(first[0]) + string(last[0]))
+		}
+	}
+	runes := []rune(title)
+	if len(runes) == 1 {
+		return strings.ToUpper(string(runes[0]) + string(runes[0]))
+	}
+	if len(runes) >= 2 {
+		return strings.ToUpper(string(runes[:2]))
+	}
+	return strings.ToUpper(title)
+}
+
+func (c *Component) layoutProjectMonogram(gtx layout.Context, monogram string, activeT float32) layout.Dimensions {
+	bg := uikit.InterpolateColor(c.view.Chrome.Colors.SurfaceContainerHigh, c.view.Chrome.Colors.PrimaryContainer, activeT)
+	fg := uikit.InterpolateColor(c.view.Chrome.Colors.OnSurfaceVariant, c.view.Chrome.Colors.OnPrimaryContainer, activeT)
+	return c.view.Chrome.RoundedSurface(gtx, uikit.ShapeSmall, bg, func(gtx layout.Context) layout.Dimensions {
+		gtx.Constraints.Min = image.Pt(gtx.Dp(18), gtx.Dp(18))
+		gtx.Constraints.Max = image.Pt(gtx.Dp(18), gtx.Dp(18))
+		return layout.Center.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+			return c.view.Chrome.Label(gtx, monogram, uikit.TextLabelSmall, font.Bold, fg, 1)
 		})
+	})
+}
+
+func (c *Component) layoutCountPill(gtx layout.Context, count int) layout.Dimensions {
+	return uikit.Inset{Right: 2}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+		return c.view.Chrome.Label(gtx, fmt.Sprintf("%d", count), uikit.TextLabelSmall, font.Normal, c.view.Chrome.Colors.OnSurfaceVariant, 1)
 	})
 }
 

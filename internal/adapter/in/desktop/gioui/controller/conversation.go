@@ -828,18 +828,11 @@ func (c *controller) loadSessionHistory(sessionID string) {
 		c.mu.Unlock()
 		return
 	}
-	workspace := strings.TrimSpace(session.Workspace)
-	if workspace == "" {
-		if defaultWS, err := newSessionWorkspace(c.state); err == nil && defaultWS != "" {
-			workspace = defaultWS
-			if sess := desktopstateSessionPointer(&c.state, sessionID, agentID); sess != nil {
-				sess.Workspace = defaultWS
-			}
+	workspace := findWorkspaceForSession(c.state, session)
+	if workspace != "" {
+		if sess := desktopstateSessionPointer(&c.state, sessionID, agentID); sess != nil && sess.Workspace == "" {
+			sess.Workspace = workspace
 		}
-	}
-	if workspace == "" {
-		c.mu.Unlock()
-		return
 	}
 	client, agentID := c.clientForSessionLocked(sessionID, agentID)
 	if client == nil || c.connections[agentID] != ConnectionConnected {
@@ -873,6 +866,9 @@ func (c *controller) loadSessionHistory(sessionID string) {
 	c.mu.Unlock()
 	c.notify()
 	additionalDirectories := c.additionalDirectoriesForAgent(agentID, session.AdditionalDirectories)
+	if workspace == "" {
+		additionalDirectories = nil
+	}
 	params := c.sessionHistoryLoadParams(sessionID, workspace, additionalDirectories)
 
 	go func() {
@@ -884,7 +880,7 @@ func (c *controller) loadSessionHistory(sessionID string) {
 		defer unlock()
 		c.mu.Lock()
 		currentRequest := c.historyLoads[request.storageKey] == request
-		activeSession := c.state.ActiveSessionID == sessionID && c.state.ActiveAgentID == agentID
+		activeSession := isSessionActive(c.state, sessionID, agentID)
 		c.mu.Unlock()
 		if !currentRequest {
 			return
@@ -949,7 +945,7 @@ func (c *controller) finishSessionHistoryLoadRequest(client *acpclient.Client, s
 	delete(c.historyStagingBytes, storageKey)
 	delete(c.historyStagingTruncated, storageKey)
 	c.clearMessageStreamsLocked(sessionID, agentID)
-	active := c.state.ActiveSessionID == sessionID && (c.state.ActiveAgentID == "" || c.state.ActiveAgentID == agentID)
+	active := isSessionActive(c.state, sessionID, agentID)
 	applyStaged := loadErr == nil && active
 	if applyStaged {
 		if session := desktopstateSessionPointer(&c.state, sessionID, agentID); session != nil {
@@ -967,14 +963,15 @@ func (c *controller) finishSessionHistoryLoadRequest(client *acpclient.Client, s
 	if applyStaged {
 		coalesced := coalesceStagedMessageChunks(staged)
 		c.mu.Lock()
-		if currentClient && loadErr == nil && c.state.ActiveSessionID == sessionID && (c.state.ActiveAgentID == "" || c.state.ActiveAgentID == agentID) {
+		if currentClient && loadErr == nil && isSessionActive(c.state, sessionID, agentID) {
 			c.applyStagedHistoryEventsLocked(sessionID, coalesced, agentID)
 			c.clearMessageStreamsLocked(sessionID, agentID)
 		}
 		c.mu.Unlock()
 	}
 	c.mu.Lock()
-	if loadErr == nil && c.state.ActiveSessionID == sessionID && (c.state.ActiveAgentID == "" || c.state.ActiveAgentID == agentID) {
+	active = isSessionActive(c.state, sessionID, agentID)
+	if loadErr == nil && active {
 		if session := desktopstateSessionPointer(&c.state, sessionID, agentID); session != nil {
 			session.HistoryTruncated = session.HistoryTruncated || truncated
 			if models, currentModel := extractModelsFromACP(configOptions, modelsResult); len(models) > 0 {
@@ -993,19 +990,22 @@ func (c *controller) finishSessionHistoryLoadRequest(client *acpclient.Client, s
 		} else {
 			c.statuses[agentID] = "Connected · session history loaded"
 		}
-	} else if loadErr == nil {
+	} else if loadErr == nil || errors.Is(loadErr, context.Canceled) {
 		c.histories[storageKey] = HistoryStateUnloaded
 	} else {
 		c.histories[storageKey] = HistoryStateUnloaded
-		c.statuses[agentID] = "Session history failed · " + compactError(loadErr)
+		if active {
+			c.statuses[agentID] = "Session history failed · " + compactError(loadErr)
+		}
 	}
-	activeSessionID := c.state.ActiveSessionID
-	activeAgentID := c.state.ActiveAgentID
 	c.revision++
 	c.mu.Unlock()
 	c.notify()
 	logSessionLoadTiming(sessionID, request, loadErr)
-	if currentClient && loadErr == nil && activeSessionID == sessionID && activeAgentID == agentID {
+	c.mu.RLock()
+	stillActive := isSessionActive(c.state, sessionID, agentID)
+	c.mu.RUnlock()
+	if currentClient && loadErr == nil && stillActive {
 		c.refreshSessionContextFrom(client, sessionID, false, agentID)
 		c.refreshSessionMemoryFrom(client, sessionID, false, agentID)
 		c.refreshSessionRuntime(sessionID, false, agentID)
@@ -1497,6 +1497,45 @@ func SessionByID(state desktopstate.State, sessionID string, agentIDs ...string)
 		}
 	}
 	return desktopstate.SessionState{}, false
+}
+
+func isSessionActive(state desktopstate.State, sessionID, agentID string) bool {
+	if state.ActiveSessionID != sessionID || sessionID == "" {
+		return false
+	}
+	if state.ActiveAgentID == "" || state.ActiveAgentID == agentID {
+		return true
+	}
+	if (state.ActiveAgentID == ProtonmanAgentID && (agentID == "" || agentID == ProtonmanAgentID)) ||
+		(state.ActiveAgentID == "" && (agentID == "" || agentID == ProtonmanAgentID)) {
+		return true
+	}
+	return false
+}
+
+func findWorkspaceForSession(state desktopstate.State, session desktopstate.SessionState) string {
+	if ws := strings.TrimSpace(session.Workspace); ws != "" {
+		return ws
+	}
+	sessKey := sessionWorkspaceKeyFromSession(session)
+	for _, project := range state.Projects {
+		for _, folder := range project.Folders {
+			folderPath := strings.TrimSpace(folder.Path)
+			if folderPath == "" {
+				continue
+			}
+			if sessKey != "" && (sessionWorkspaceKey(folderPath) == sessKey || sessionWorkspaceKey(canonicalWorkspacePath(folderPath)) == sessKey) {
+				return folderPath
+			}
+		}
+	}
+	if defaultWS, err := newSessionWorkspace(state); err == nil && defaultWS != "" {
+		wsKey := sessionWorkspaceKey(defaultWS)
+		if sessKey == "" || sessKey == wsKey || sessKey == "workspace:"+canonicalWorkspacePath(defaultWS) || (sessKey != "" && sessionWorkspaceKey(canonicalWorkspacePath(defaultWS)) == sessKey) {
+			return defaultWS
+		}
+	}
+	return ""
 }
 
 // SessionBusy reports whether a session still has work in flight, so runtime

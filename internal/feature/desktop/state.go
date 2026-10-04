@@ -470,6 +470,7 @@ func cloneSessionMetadata(sessions []SessionState, activeSessionID, activeAgentI
 			Workspace:        session.Workspace,
 			WorkspaceKey:     session.WorkspaceKey,
 			WorkspaceName:    session.WorkspaceName,
+			LastActivityAt:   session.LastActivityAt,
 			Status:           session.Status,
 			HistoryTruncated: session.HistoryTruncated,
 		}

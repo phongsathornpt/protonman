@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -41,7 +43,7 @@ func (s *Server) loadSession(ctx context.Context, sessionID string, cwd string, 
 	currentDirectories := cloneDirectories(s.sessionDirectories[sessionID])
 	s.mu.Unlock()
 	if ok {
-		if cwd != "" && existing.cwd != "" && cwd != existing.cwd {
+		if cwd != "" && existing.cwd != "" && !cwdMatches(existing.cwd, cwd) {
 			return nil, timings, fmt.Errorf("session %q belongs to cwd %q, not %q", sessionID, existing.cwd, cwd)
 		}
 		if err := existing.matchMCPServers(mcpServers); err != nil {
@@ -80,7 +82,7 @@ func (s *Server) loadSession(ctx context.Context, sessionID string, cwd string, 
 		}
 		if found {
 			restoreStart := time.Now()
-			if cwd != "" && state.WorkspaceKey != "" && state.WorkspaceKey != session.WorkspaceKey(cwd) {
+			if cwd != "" && state.WorkspaceKey != "" && !workspaceKeyMatches(cwd, state.WorkspaceKey) {
 				return nil, timings, fmt.Errorf("session %q belongs to another workspace", sessionID)
 			}
 			if state.WorkspaceKey != "" {
@@ -307,4 +309,49 @@ func (s *Server) closeSessions() {
 	for _, sess := range sessions {
 		_ = sess.Close()
 	}
+}
+
+func cwdMatches(a, b string) bool {
+	if a == b {
+		return true
+	}
+	if filepath.Clean(a) == filepath.Clean(b) {
+		return true
+	}
+	resolvedA, errA := filepath.EvalSymlinks(a)
+	resolvedB, errB := filepath.EvalSymlinks(b)
+	if errA == nil && errB == nil && (resolvedA == resolvedB || filepath.Clean(resolvedA) == filepath.Clean(resolvedB)) {
+		return true
+	}
+	return false
+}
+
+func workspaceKeyMatches(cwd, expectedKey string) bool {
+	if expectedKey == "" || cwd == "" {
+		return true
+	}
+	clean := filepath.Clean(cwd)
+	if session.WorkspaceKey(clean) == expectedKey {
+		return true
+	}
+	if resolved, err := filepath.EvalSymlinks(clean); err == nil && resolved != clean {
+		if session.WorkspaceKey(resolved) == expectedKey {
+			return true
+		}
+	}
+	if target, err := os.Readlink(clean); err == nil {
+		if !filepath.IsAbs(target) {
+			target = filepath.Join(filepath.Dir(clean), target)
+		}
+		target = filepath.Clean(target)
+		if session.WorkspaceKey(target) == expectedKey {
+			return true
+		}
+		if resolvedTarget, err := filepath.EvalSymlinks(target); err == nil && resolvedTarget != target {
+			if session.WorkspaceKey(resolvedTarget) == expectedKey {
+				return true
+			}
+		}
+	}
+	return false
 }

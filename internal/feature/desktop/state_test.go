@@ -1,6 +1,9 @@
 package desktop
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 func TestReduceSessionLifecycle(t *testing.T) {
 	state := State{Sessions: []SessionState{{ID: "s1", Status: TaskIdle}}}
@@ -201,6 +204,7 @@ func TestClonePresentationStateDetachesRenderedAndNavigationData(t *testing.T) {
 				ProjectID:             "project",
 				Title:                 "Inactive session",
 				Workspace:             "/inactive",
+				LastActivityAt:        time.Date(2026, 10, 2, 10, 0, 0, 0, time.UTC),
 				Status:                TaskCompleted,
 				HistoryTruncated:      true,
 				AdditionalDirectories: []string{"/inactive-shared"},
@@ -241,7 +245,7 @@ func TestClonePresentationStateDetachesRenderedAndNavigationData(t *testing.T) {
 		original.Integrations[0].Env[0] != "KEY=value" {
 		t.Fatal("ClonePresentationState aliased detached state")
 	}
-	if inactive.ID != "inactive" || inactive.AgentID != "agent" || inactive.ProjectID != "project" || inactive.Title != "Inactive session" || inactive.Status != TaskCompleted {
+	if inactive.ID != "inactive" || inactive.AgentID != "agent" || inactive.ProjectID != "project" || inactive.Title != "Inactive session" || inactive.Status != TaskCompleted || !inactive.LastActivityAt.Equal(time.Date(2026, 10, 2, 10, 0, 0, 0, time.UTC)) {
 		t.Fatalf("inactive navigation metadata = %+v", inactive)
 	}
 	if inactive.AdditionalDirectories != nil || inactive.Timeline != nil || inactive.Subagents != nil ||

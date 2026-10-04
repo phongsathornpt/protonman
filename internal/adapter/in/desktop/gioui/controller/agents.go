@@ -183,6 +183,7 @@ func (c *controller) SelectAgent(agentID string) {
 		previousSessionID := c.state.ActiveSessionID
 		previousAgentID := c.state.ActiveAgentID
 		c.state.ActiveSessionID = targetSession.ID
+		c.state.ActiveAgentID = targetSession.AgentID
 		c.pruneInactiveSessionHistoryLocked(targetSession.ID, previousSessionID,
 			desktopstate.SessionRef{AgentID: targetSession.AgentID, SessionID: targetSession.ID},
 			desktopstate.SessionRef{AgentID: previousAgentID, SessionID: previousSessionID},

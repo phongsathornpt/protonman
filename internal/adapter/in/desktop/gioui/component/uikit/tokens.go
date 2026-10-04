@@ -10,6 +10,8 @@
 package uikit
 
 import (
+	"image/color"
+
 	"gioui.org/layout"
 	"gioui.org/unit"
 )
@@ -59,4 +61,45 @@ func (in Inset) Layout(gtx layout.Context, content layout.Widget) layout.Dimensi
 // UniformInset builds an Inset with the same padding on all four edges.
 func UniformInset(padding unit.Dp) Inset {
 	return Inset{Top: padding, Right: padding, Bottom: padding, Left: padding}
+}
+
+// InterpolateColor blends two NRGBA colors by factor t in [0.0, 1.0].
+func InterpolateColor(c1, c2 color.NRGBA, t float32) color.NRGBA {
+	if t <= 0 {
+		return c1
+	}
+	if t >= 1 {
+		return c2
+	}
+	inv := 1 - t
+	return color.NRGBA{
+		R: uint8(float32(c1.R)*inv + float32(c2.R)*t + 0.5),
+		G: uint8(float32(c1.G)*inv + float32(c2.G)*t + 0.5),
+		B: uint8(float32(c1.B)*inv + float32(c2.B)*t + 0.5),
+		A: uint8(float32(c1.A)*inv + float32(c2.A)*t + 0.5),
+	}
+}
+
+// WithAlpha returns c with its alpha channel multiplied by factor in [0.0, 1.0].
+func WithAlpha(c color.NRGBA, factor float32) color.NRGBA {
+	if factor <= 0 {
+		return color.NRGBA{R: c.R, G: c.G, B: c.B, A: 0}
+	}
+	if factor >= 1 {
+		return c
+	}
+	c.A = uint8(float32(c.A)*factor + 0.5)
+	return c
+}
+
+// EaseOutCubic implements f(t) = 1 - (1-t)^3 for smooth, snappy deceleration.
+func EaseOutCubic(t float32) float32 {
+	if t <= 0 {
+		return 0
+	}
+	if t >= 1 {
+		return 1
+	}
+	d := 1 - t
+	return 1 - d*d*d
 }

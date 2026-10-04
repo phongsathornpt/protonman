@@ -3,6 +3,7 @@
 package sidebar
 
 import (
+	"fmt"
 	"image"
 	"image/color"
 	"strings"
@@ -25,9 +26,10 @@ import (
 // recordingChrome captures the surfaces and icons a row lays out instead of
 // painting them, so layout intent can be asserted without a screenshot.
 type recordingChrome struct {
-	surfaces []color.NRGBA
-	icons    []uikit.Icon
-	labels   []string
+	surfaces    []color.NRGBA
+	icons       []uikit.Icon
+	labels      []string
+	labelWidths map[string]int
 }
 
 func (r *recordingChrome) chrome() Chrome {
@@ -55,6 +57,10 @@ func (r *recordingChrome) chrome() Chrome {
 			},
 			Label: func(gtx layout.Context, text string, size unit.Sp, weight font.Weight, clr color.NRGBA, maxLines int) layout.Dimensions {
 				r.labels = append(r.labels, text)
+				if r.labelWidths == nil {
+					r.labelWidths = make(map[string]int)
+				}
+				r.labelWidths[text] = gtx.Constraints.Max.X
 				gtx.Constraints.Min.Y = gtx.Dp(16)
 				return layout.Dimensions{Size: image.Pt(gtx.Constraints.Min.X, gtx.Dp(16))}
 			},
@@ -742,4 +748,339 @@ func TestPinnedSessionDynamicActionDescription(t *testing.T) {
 
 	ops.Reset()
 	component.layoutSidebarRow(gtx, rowPinned, desktopstate.State{})
+}
+
+func TestProjectMonogramDerivation(t *testing.T) {
+	tests := []struct {
+		title string
+		want  string
+	}{
+		{"gg", "GG"},
+		{"kokekokkor", "KO"},
+		{"ktj-app-backend", "KB"},
+		{"ktj-app-go", "KG"},
+		{"ktj-flutter-shared", "KS"},
+		{"ktj-vector", "KV"},
+		{"proton", "PR"},
+		{"vpnapp", "VP"},
+		{"", "PR"},
+		{"a", "AA"},
+		{"single", "SI"},
+		{"multi_word_project", "MP"},
+		{"spaced project title", "ST"},
+	}
+	for _, tc := range tests {
+		got := projectMonogram(tc.title)
+		if got != tc.want {
+			t.Errorf("projectMonogram(%q) = %q, want %q", tc.title, got, tc.want)
+		}
+	}
+}
+
+func TestProjectRowShowsMonogramBadgeAndUnboxedCount(t *testing.T) {
+	recorder := &recordingChrome{}
+	component := New()
+	component.view = ViewInput{
+		Actions: withDefaultActions(Actions{}),
+		Chrome:  recorder.chrome(),
+	}
+	row := Row{Kind: ProjectRow, ProjectID: "p1", Title: "proton", SessionCount: 123}
+	gtx := rowTestContext()
+	component.layoutSidebarRow(gtx, row, desktopstate.State{})
+
+	if !containsLabel(recorder.labels, "PR") {
+		t.Fatalf("project row labels = %#v, want monogram 'PR'", recorder.labels)
+	}
+	if !containsLabel(recorder.labels, "123") {
+		t.Fatalf("project row labels = %#v, want unboxed count '123'", recorder.labels)
+	}
+}
+
+func TestActiveProjectRowHighlightsMonogram(t *testing.T) {
+	recorder := &recordingChrome{}
+	component := New()
+	component.view = ViewInput{
+		Actions: withDefaultActions(Actions{}),
+		Chrome:  recorder.chrome(),
+	}
+	row := Row{Kind: ProjectRow, ProjectID: "p1", Title: "proton", SessionCount: 1}
+	state := desktopstate.State{
+		ActiveSessionID: "s1",
+		Sessions: []desktopstate.SessionState{
+			{ID: "s1", ProjectID: "p1"},
+		},
+	}
+	gtx := rowTestContext()
+	component.layoutSidebarRow(gtx, row, state)
+
+	wantColor := color.NRGBA{R: 20, G: 30, B: 40, A: 255}
+	if !containsColor(recorder.surfaces, wantColor) {
+		t.Fatalf("active project surfaces = %#v, want PrimaryContainer fill %#v for monogram", recorder.surfaces, wantColor)
+	}
+}
+
+func TestSidebarHeaderCollapseAllProjectsToggle(t *testing.T) {
+	recorder := &recordingChrome{}
+	component := New()
+	component.view = ViewInput{
+		Actions: withDefaultActions(Actions{}),
+		Chrome:  recorder.chrome(),
+	}
+	snapshot := Snapshot{
+		Connection: "connected",
+		State: desktopstate.State{
+			Projects: []desktopstate.ProjectState{
+				{ID: "p1"},
+				{ID: "p2"},
+			},
+		},
+	}
+	gtx := rowTestContext()
+	component.layoutSidebarHeader(gtx, snapshot, nil)
+
+	if !containsLabel(recorder.labels, "2") {
+		t.Fatalf("header labels = %#v, want total project count '2'", recorder.labels)
+	}
+
+	// Toggle collapse all
+	component.CollapseAllProjectsButton().Click()
+	component.layoutSidebarHeader(gtx, snapshot, nil)
+
+	if !component.AllProjectsCollapsed([]string{"p1", "p2"}) {
+		t.Fatal("expected all projects to be collapsed after clicking collapse-all button")
+	}
+
+	// Toggle expand all
+	component.CollapseAllProjectsButton().Click()
+	component.layoutSidebarHeader(gtx, snapshot, nil)
+
+	if component.AllProjectsCollapsed([]string{"p1", "p2"}) {
+		t.Fatal("expected projects to be expanded after second click on collapse-all button")
+	}
+}
+
+func TestClickingSessionDoesNotScrollOrMoveSidebar(t *testing.T) {
+	sessions := make([]desktopstate.SessionState, 20)
+	for i := range sessions {
+		sessions[i] = desktopstate.SessionState{
+			ID:             fmt.Sprintf("s%d", i),
+			ProjectID:      "p1",
+			AgentID:        "protonman",
+			Title:          fmt.Sprintf("Session %d", i),
+			LastActivityAt: time.Date(2026, 10, 1, 10, i, 0, 0, time.UTC),
+		}
+	}
+	state := desktopstate.State{
+		Projects:        []desktopstate.ProjectState{{ID: "p1", Name: "Project 1"}},
+		Sessions:        sessions,
+		ActiveSessionID: "s0",
+		ActiveAgentID:   "protonman",
+	}
+
+	component := New()
+	selectedID := ""
+	input := ViewInput{
+		Snapshot: Snapshot{
+			State:      desktopstate.ClonePresentationState(state),
+			Connection: "connected",
+			Revision:   1,
+		},
+		Actions: withDefaultActions(Actions{
+			SelectSession: func(agentID, sessionID string) {
+				selectedID = sessionID
+			},
+		}),
+		Chrome: (&recordingChrome{}).chrome(),
+	}
+
+	gtx := rowTestContext()
+	component.Layout(gtx, input)
+
+	if component.ScrollPosition().First != 0 {
+		t.Fatalf("expected initial scroll position 0, got %d", component.ScrollPosition().First)
+	}
+
+	// User clicks on session s12 (which is beyond initial visible rows)
+	s12Key := SessionWidgetKey("s12", "protonman")
+	s12Btn := component.SessionButton(s12Key)
+	s12Btn.Click()
+
+	// Layout pass to process click event
+	gtx2 := rowTestContext()
+	component.Layout(gtx2, input)
+
+	if selectedID != "s12" {
+		t.Fatalf("expected SelectSession to be called for s12, got %q", selectedID)
+	}
+
+	// Next frame with s12 active (as controller provides after click)
+	state.ActiveSessionID = "s12"
+	input.Snapshot.State = desktopstate.ClonePresentationState(state)
+	input.Snapshot.Revision = 2
+
+	gtx3 := rowTestContext()
+	component.Layout(gtx3, input)
+
+	// Scroll position must NOT have jumped/scrolled to s12!
+	if component.ScrollPosition().First != 0 {
+		t.Fatalf("clicking a session must NOT scroll or jump sidebar position: got scroll position %d, want 0", component.ScrollPosition().First)
+	}
+}
+
+func TestSessionTitleWidthRemainsConstantAcrossRestingHoveringAndPinned(t *testing.T) {
+	row := Row{Kind: SessionRow, SessionID: "s1", AgentID: "protonman", Title: "Very Long Session Title That Truncates", Status: "Idle"}
+	component := New()
+
+	// 1. Resting unpinned
+	recorder1 := &recordingChrome{}
+	component.view = ViewInput{Actions: withDefaultActions(Actions{}), Chrome: recorder1.chrome()}
+	gtx1 := rowTestContext()
+	component.layoutSidebarRow(gtx1, row, desktopstate.State{})
+	restingUnpinnedWidth := recorder1.labelWidths[row.Title]
+	if restingUnpinnedWidth <= 0 {
+		t.Fatalf("expected title to be laid out, got width %d", restingUnpinnedWidth)
+	}
+
+	// 2. Resting pinned
+	rowPinned := row
+	rowPinned.Pinned = true
+	recorder2 := &recordingChrome{}
+	component.view = ViewInput{Actions: withDefaultActions(Actions{}), Chrome: recorder2.chrome()}
+	gtx2 := rowTestContext()
+	component.layoutSidebarRow(gtx2, rowPinned, desktopstate.State{})
+	restingPinnedWidth := recorder2.labelWidths[row.Title]
+
+	if restingPinnedWidth != restingUnpinnedWidth {
+		t.Fatalf("title width changed when pinned: resting unpinned = %d, resting pinned = %d", restingUnpinnedWidth, restingPinnedWidth)
+	}
+
+	// 3. Hovering transition (mid-animation)
+	widgetKey := SessionWidgetKey("s1", "protonman")
+	if component.transitions == nil {
+		component.transitions = make(map[string]*FloatTransition)
+	}
+	component.transitions["hover:"+widgetKey] = &FloatTransition{Value: 0.5, Target: 1.0}
+	recorder3 := &recordingChrome{}
+	component.view = ViewInput{Actions: withDefaultActions(Actions{}), Chrome: recorder3.chrome()}
+	gtx3 := rowTestContext()
+	component.layoutSidebarRow(gtx3, row, desktopstate.State{})
+	midHoverWidth := recorder3.labelWidths[row.Title]
+
+	if midHoverWidth != restingUnpinnedWidth {
+		t.Fatalf("title width changed during hover transition: resting = %d, mid-hover = %d", restingUnpinnedWidth, midHoverWidth)
+	}
+
+	// 4. Fully hovered
+	component.transitions["hover:"+widgetKey] = &FloatTransition{Value: 1.0, Target: 1.0}
+	recorder4 := &recordingChrome{}
+	component.view = ViewInput{Actions: withDefaultActions(Actions{}), Chrome: recorder4.chrome()}
+	gtx4 := rowTestContext()
+	component.layoutSidebarRow(gtx4, row, desktopstate.State{})
+	fullHoverWidth := recorder4.labelWidths[row.Title]
+
+	if fullHoverWidth != restingUnpinnedWidth {
+		t.Fatalf("title width changed on full hover: resting = %d, full hover = %d", restingUnpinnedWidth, fullHoverWidth)
+	}
+}
+
+func TestTransitionLifecycleAndZeroCPUWhenIdle(t *testing.T) {
+	component := New()
+	baseTime := time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
+
+	// Step 1: Initial call creates transition record snapped to initial value
+	gtx1 := rowTestContext()
+	gtx1.Now = baseTime
+	val1 := component.Transition(gtx1, "test_key", 1.0, 160*time.Millisecond)
+	if val1 != 1.0 {
+		t.Fatalf("expected initial transition to return target 1.0, got %f", val1)
+	}
+
+	// Step 2: Target changes to 0.0, time advances slightly (+10ms)
+	gtx2 := rowTestContext()
+	gtx2.Now = baseTime.Add(10 * time.Millisecond)
+	val2 := component.Transition(gtx2, "test_key", 0.0, 160*time.Millisecond)
+	if val2 < 0.0 || val2 > 1.0 {
+		t.Fatalf("transition value %f out of bounds [0, 1]", val2)
+	}
+
+	// Step 3: Mid-transition at +90ms (80ms after transition start)
+	gtx3 := rowTestContext()
+	gtx3.Now = baseTime.Add(90 * time.Millisecond)
+	val3 := component.Transition(gtx3, "test_key", 0.0, 160*time.Millisecond)
+	if val3 <= 0.0 || val3 >= 1.0 {
+		t.Fatalf("expected mid-transition value between 0 and 1, got %f", val3)
+	}
+
+	// Step 4: Completion at +170ms (160ms elapsed)
+	gtx4 := rowTestContext()
+	gtx4.Now = baseTime.Add(170 * time.Millisecond)
+	val4 := component.Transition(gtx4, "test_key", 0.0, 160*time.Millisecond)
+	if val4 != 0.0 {
+		t.Fatalf("expected target 0.0 reached, got %f", val4)
+	}
+
+	// Step 5: Idle frame (+300ms) remains at target 0.0
+	gtx5 := rowTestContext()
+	gtx5.Now = baseTime.Add(300 * time.Millisecond)
+	val5 := component.Transition(gtx5, "test_key", 0.0, 160*time.Millisecond)
+	if val5 != 0.0 {
+		t.Fatalf("expected 0.0 when idle, got %f", val5)
+	}
+}
+
+func TestProjectRowMonogramSmoothColorInterpolation(t *testing.T) {
+	component := New()
+	recorder := &recordingChrome{}
+	component.view = ViewInput{
+		Actions: withDefaultActions(Actions{}),
+		Chrome:  recorder.chrome(),
+	}
+
+	restingBg := recorder.chrome().Colors.SurfaceContainerHigh
+	activeBg := recorder.chrome().Colors.PrimaryContainer
+
+	gtx := rowTestContext()
+
+	// activeT = 0.0
+	dims0 := component.layoutProjectMonogram(gtx, "PR", 0.0)
+	if dims0.Size.X <= 0 {
+		t.Fatal("expected positive dimensions")
+	}
+	if !containsColor(recorder.surfaces, restingBg) {
+		t.Fatalf("surfaces = %#v, want resting color %#v", recorder.surfaces, restingBg)
+	}
+
+	// activeT = 1.0
+	recorder.surfaces = nil
+	component.layoutProjectMonogram(gtx, "PR", 1.0)
+	if !containsColor(recorder.surfaces, activeBg) {
+		t.Fatalf("surfaces = %#v, want active color %#v", recorder.surfaces, activeBg)
+	}
+
+	// activeT = 0.5 (mid transition)
+	recorder.surfaces = nil
+	component.layoutProjectMonogram(gtx, "PR", 0.5)
+	midColor := uikit.InterpolateColor(restingBg, activeBg, 0.5)
+	if !containsColor(recorder.surfaces, midColor) {
+		t.Fatalf("surfaces = %#v, want interpolated color %#v", recorder.surfaces, midColor)
+	}
+}
+
+func TestFilterChipSmoothColorInterpolation(t *testing.T) {
+	component := New()
+	recorder := &recordingChrome{}
+	component.view = ViewInput{
+		Actions: withDefaultActions(Actions{}),
+		Chrome:  recorder.chrome(),
+	}
+
+	gtx := rowTestContext()
+
+	// Active filter chip renders with PrimaryContainer
+	recorder.surfaces = nil
+	component.layoutSidebarHeader(gtx, Snapshot{FilterMode: "pinned"}, nil)
+	activeBg := recorder.chrome().Colors.PrimaryContainer
+	if !containsColor(recorder.surfaces, activeBg) {
+		t.Fatalf("surfaces = %#v, want PrimaryContainer fill %#v for active filter chip", recorder.surfaces, activeBg)
+	}
 }
