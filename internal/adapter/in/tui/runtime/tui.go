@@ -87,11 +87,6 @@ func NewBubbleTea(
 	return ui, nil
 }
 
-// QuestionBridge returns the question bridge that satisfies questiontool.Prompter.
-func (ui *BubbleTeaUI) QuestionBridge() *questionbridge.Bridge {
-	return ui.questionBridge
-}
-
 // PermissionPrompt adapts a synchronous service permission request into a
 // Bubble Tea modal request/response exchange.
 func (ui *BubbleTeaUI) PermissionPrompt(

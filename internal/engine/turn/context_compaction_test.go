@@ -30,7 +30,7 @@ func TestCompactRequestPreservesLatestTurn(t *testing.T) {
 		AggressiveThresholdRatio: 0.70, EmergencyThresholdRatio: 0.90,
 		TargetRatio: 0.25, MinRecentMessages: 4,
 	}
-	got, decision, err := compactRequestToModelBudget(request, domain.TokenLimits{MaxInputTokens: 20_000}, policy)
+	got, decision, err := compactRequestToModelBudgetWithVisionPolicy(request, domain.TokenLimits{MaxInputTokens: 20_000}, policy, modelprofile.DefaultVisionPolicy())
 	if err != nil {
 		t.Fatal(err)
 	}

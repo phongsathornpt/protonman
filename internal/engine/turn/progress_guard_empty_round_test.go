@@ -21,7 +21,7 @@ func TestProgressGuardEmptyRoundResetsSynthesisEscalation(t *testing.T) {
 	if escalated, err := guard.observeRound([]executedCall{second}); err != nil || escalated {
 		t.Fatalf("second read escalated=%v err=%v", escalated, err)
 	}
-	if got, want := guard.stalledRoundCount(), 1; got != want {
+	if got, want := guard.consecutiveStalledRounds, 1; got != want {
 		t.Fatalf("stalled rounds = %d, want %d before reset", got, want)
 	}
 
@@ -31,7 +31,7 @@ func TestProgressGuardEmptyRoundResetsSynthesisEscalation(t *testing.T) {
 	if escalated, err := guard.observeRound(nil); err != nil || escalated {
 		t.Fatalf("empty round escalated=%v err=%v", escalated, err)
 	}
-	if got := guard.stalledRoundCount(); got != 0 {
+	if got := guard.consecutiveStalledRounds; got != 0 {
 		t.Fatalf("stalled rounds = %d after empty round, want 0", got)
 	}
 
@@ -43,7 +43,7 @@ func TestProgressGuardEmptyRoundResetsSynthesisEscalation(t *testing.T) {
 	if escalated, err := guard.observeRound([]executedCall{*suppressed}); err != nil || escalated {
 		t.Fatalf("stall after empty-round reset escalated=%v err=%v", escalated, err)
 	}
-	if got, want := guard.stalledRoundCount(), 1; got != want {
+	if got, want := guard.consecutiveStalledRounds, 1; got != want {
 		t.Fatalf("stalled rounds = %d, want %d after reset", got, want)
 	}
 }

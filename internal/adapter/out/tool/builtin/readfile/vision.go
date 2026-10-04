@@ -19,10 +19,6 @@ type VisionTokenEstimate struct {
 	Anthropic int `json:"anthropic"`
 }
 
-func visionTargetDimensions(width, height int) (int, int) {
-	return imageprep.OutputDimensions(width, height, imageprep.DefaultPolicy())
-}
-
 func estimateVisionTokens(width, height int) VisionTokenEstimate {
 	if width <= 0 || height <= 0 {
 		return VisionTokenEstimate{}

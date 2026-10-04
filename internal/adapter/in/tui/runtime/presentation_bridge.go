@@ -14,14 +14,6 @@ import (
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/textview"
 )
 
-func brandLockup(width int) string {
-	return tuistyle.BrandLockup(width)
-}
-
-func brandLockupWidth(width int) int {
-	return tuistyle.BrandLockupWidth(width)
-}
-
 type sessionHeaderModel = tuipresentation.SessionHeaderModel
 
 func renderSessionHeader(model sessionHeaderModel) string {
@@ -199,10 +191,6 @@ const (
 
 func ClassifyOpenCodeError(err error, activeProvider, activeModel string) ClassifiedError {
 	return diagnostic.Classify(err, activeProvider, activeModel)
-}
-
-func FormatErrorSummary(classified ClassifiedError) string {
-	return diagnostic.FormatSummary(classified)
 }
 
 type terminalLayoutMode = panecommon.LayoutMode

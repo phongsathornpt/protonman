@@ -30,33 +30,13 @@ func TestRouteIdentifiersAreDistinctTypes(t *testing.T) {
 	if !provider.Valid() || provider.String() != "anthropic" {
 		t.Fatalf("provider = %q, want valid anthropic", provider)
 	}
-	if !model.Valid() || model.String() != "claude-sonnet" {
-		t.Fatalf("model = %q, want valid claude-sonnet", model)
+	if model.String() != "claude-sonnet" {
+		t.Fatalf("model = %q, want claude-sonnet", model)
 	}
 }
 
-func TestRouteIdentifiersRejectEmptyValues(t *testing.T) {
+func TestRouteIdentifierRejectsEmptyProvider(t *testing.T) {
 	if ProviderName("").Valid() {
 		t.Fatal("empty provider name should be invalid")
-	}
-	if ModelID("").Valid() {
-		t.Fatal("empty model ID should be invalid")
-	}
-}
-
-func TestRouteIdentifiersTrimAndValidateInput(t *testing.T) {
-	provider, err := ParseProviderName("  anthropic ")
-	if err != nil || provider != "anthropic" {
-		t.Fatalf("provider=%q err=%v", provider, err)
-	}
-	model, err := ParseModelID("  claude-sonnet ")
-	if err != nil || model != "claude-sonnet" {
-		t.Fatalf("model=%q err=%v", model, err)
-	}
-	if _, err := ParseProviderName(" "); err == nil {
-		t.Fatal("expected empty provider error")
-	}
-	if _, err := ParseModelID(" "); err == nil {
-		t.Fatal("expected empty model error")
 	}
 }

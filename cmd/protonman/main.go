@@ -202,8 +202,6 @@ func run(ctx context.Context, args []string) error {
 	return nil
 }
 
-func truthy(value string) bool { return envconfig.Truthy(value) }
-
 func configuredTelemetryObserver() (coretelemetry.Observer, error) {
 	switch strings.ToLower(envconfig.Value(envconfig.Telemetry)) {
 	case "", "off", "false", "0":

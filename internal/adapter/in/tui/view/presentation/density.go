@@ -26,14 +26,6 @@ func MinimalPolicy() Policy {
 	return Policy{Density: DensityMinimal}
 }
 
-func (p Policy) ShowRoutineDetail() bool {
-	return p.Density != DensityMinimal
-}
-
-func (p Policy) ShowDebugDetail() bool {
-	return p.Density == DensityDebug
-}
-
 func (p Policy) ToolDetail(kind tool.Kind, denied bool, failed bool) DetailLevel {
 	if denied || failed {
 		return DetailDiagnostic

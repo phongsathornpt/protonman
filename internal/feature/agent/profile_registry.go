@@ -4,7 +4,6 @@ import (
 	"strings"
 
 	"github.com/phongsathornpt/protonman/internal/core/tool"
-	"github.com/phongsathornpt/protonman/internal/engine/prompt"
 )
 
 // FilterRegistryForProfile returns a scoped tool.Registry exposing only the tools
@@ -142,9 +141,4 @@ func subagentResultContract() string {
 - Evidence refs must name successful tool observations from this run. Invented or unmatched refs are discarded by the runtime.
 - Do not report changedTargets or verification in the envelope; the runtime derives those from observed execution.
 - Keep the envelope concise. If structured output is unavailable, return a concise plain-text conclusion; the runtime will fall back safely.`
-}
-
-// DefaultSystemPrompt returns the provider-neutral base prompt without runtime-specific sections.
-func DefaultSystemPrompt() string {
-	return prompt.Render(prompt.Spec{})
 }

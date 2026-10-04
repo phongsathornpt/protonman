@@ -89,18 +89,6 @@ func WithMaxToolCalls(calls int) Option {
 	}
 }
 
-// WithMaxIdenticalNoProgressResults bounds the number of consecutive identical
-// read-only results before the turn stops.
-func WithMaxIdenticalNoProgressResults(limit int) Option {
-	return func(loop *Loop) error {
-		if limit < 0 {
-			return fmt.Errorf("%w: max identical no-progress results cannot be negative", ErrInvalidLoop)
-		}
-		loop.maxIdenticalNoProgressResults = limit
-		return nil
-	}
-}
-
 // WithTurnTimeout bounds the cumulative execution duration of one turn.
 // Zero disables this turn-level bound.
 func WithTurnTimeout(timeout time.Duration) Option {

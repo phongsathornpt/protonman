@@ -233,11 +233,6 @@ func WithModelResolver(resolver *ModelResolver) Option {
 	return func(c *Coordinator) { c.modelResolver = resolver }
 }
 
-// WithReasoningResolver configures optional per-profile reasoning overrides for new subagents.
-func WithReasoningResolver(resolver *ReasoningResolver) Option {
-	return func(c *Coordinator) { c.reasoningResolver = resolver }
-}
-
 // WithReasoningEffort overrides portable profile reasoning for subagents.
 func WithReasoningEffort(effort domain.ReasoningEffort) Option {
 	return func(c *Coordinator) {
@@ -337,15 +332,6 @@ func WithToolRuntimePolicy(permissionTimeout, executionTimeout time.Duration, ob
 // WithLifecycleEventStore configures durable session-scoped lifecycle journaling.
 func WithLifecycleEventStore(store LifecycleEventStore) Option {
 	return func(c *Coordinator) { c.lifecycleStore = store }
-}
-
-// WithResultStore configures the canonical immutable subagent result store.
-func WithResultStore(store ResultStore) Option {
-	return func(c *Coordinator) {
-		if store != nil {
-			c.resultStore = store
-		}
-	}
 }
 
 // WithEventSink attaches an observer for subagent lifecycle events.

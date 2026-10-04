@@ -33,9 +33,9 @@ func TestEstimateRequestTokensDoesNotChargeImageBase64AsText(t *testing.T) {
 		}},
 	}}}
 
-	estimated, err := estimateRequestTokens(request)
+	estimated, err := estimateRequestTokensWithVisionPolicy(request, modelprofile.DefaultVisionPolicy())
 	if err != nil {
-		t.Fatalf("estimateRequestTokens() error = %v", err)
+		t.Fatalf("estimateRequestTokensWithVisionPolicy() error = %v", err)
 	}
 	if estimated >= 20_000 {
 		t.Fatalf("image estimate = %d tokens; base64 transport bytes appear to be charged as text", estimated)
@@ -50,7 +50,7 @@ func TestEstimateImageTokensCapsPathologicalDimensions(t *testing.T) {
 	// fallback rather than charging their entire encoded transport representation.
 	data := base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{0xff}, 1024*1024))
 	want := modelprofile.DefaultVisionPolicy().FallbackTokens
-	if got := estimateImageTokens(data); got != want {
+	if got := estimateImageTokensWithPolicy(data, modelprofile.DefaultVisionPolicy()); got != want {
 		t.Fatalf("fallback image tokens = %d, want %d", got, want)
 	}
 }

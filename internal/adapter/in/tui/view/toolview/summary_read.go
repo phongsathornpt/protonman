@@ -18,10 +18,6 @@ const (
 	maxExcerptWidth       = 65
 )
 
-func summarizeReadFile(body string, truncated bool) string {
-	return summarizeReadFileTarget("", body, truncated)
-}
-
 func summarizeReadFileTarget(target string, body string, truncated bool) string {
 	if body == "" {
 		return "0 B (empty file)"

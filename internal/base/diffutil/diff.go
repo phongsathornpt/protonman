@@ -40,11 +40,6 @@ func UnifiedDiff(original, modified, filename string, contextLines int) string {
 	return GitDiffFile(filename, filename, original, modified, contextLines)
 }
 
-// GitDiff is an alias for UnifiedDiff, computing a git-compatible unified diff.
-func GitDiff(original, modified, filename string, contextLines int) string {
-	return UnifiedDiff(original, modified, filename, contextLines)
-}
-
 // NewFileDiff computes a git-compatible unified diff for a newly created file.
 // When content is empty, it emits a new file mode header with the standard empty blob hash.
 func NewFileDiff(filename, content string, contextLines int) string {

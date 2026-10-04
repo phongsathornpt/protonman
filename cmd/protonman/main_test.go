@@ -170,14 +170,6 @@ func TestMainRunHeadlessRefusalAndExecution(t *testing.T) {
 }
 
 func TestMainHelpers(t *testing.T) {
-	// truthy
-	if !truthy("1") || !truthy("true") || !truthy("yes") || !truthy("on") || !truthy("TRUE") {
-		t.Error("truthy returned false for true values")
-	}
-	if truthy("0") || truthy("false") || truthy("no") || truthy("off") || truthy("") {
-		t.Error("truthy returned true for false values")
-	}
-
 	// workspaceKey
 	k1 := workspaceKey("/path/to/project")
 	k2 := workspaceKey("/path/to/project")

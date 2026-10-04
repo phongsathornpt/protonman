@@ -20,8 +20,8 @@ func TestResolveProviderBaseURL(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			if got := ResolveProviderBaseURL(test.provider, test.configured); got != test.want {
-				t.Fatalf("ResolveProviderBaseURL(%q, %q) = %q, want %q", test.provider, test.configured, got, test.want)
+			if got := ResolveProviderBaseURLForProtocol(test.provider, "", test.configured); got != test.want {
+				t.Fatalf("ResolveProviderBaseURLForProtocol(%q, \"\", %q) = %q, want %q", test.provider, test.configured, got, test.want)
 			}
 		})
 	}

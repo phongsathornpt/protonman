@@ -15,17 +15,6 @@ import (
 
 const MaxProjectInstructionsBytes = 64 * 1024
 
-// LoadProjectInstructions returns the workspace-level agent instructions.
-// AGENTS.override.md takes precedence over AGENTS.md when both exist.
-//
-// When policy is non-nil, candidate files are opened through the workspace
-// safety boundary (confined root, protected paths, symlink checks) instead of
-// the process filesystem directly. A nil policy preserves the legacy direct
-// open for contexts without an assembled workspace.
-func LoadProjectInstructions(root string) (string, error) {
-	return LoadProjectInstructionsWithPolicy(context.Background(), nil, root)
-}
-
 // LoadProjectInstructionsWithPolicy is LoadProjectInstructions with an explicit
 // workspace policy and cancellation context.
 func LoadProjectInstructionsWithPolicy(ctx context.Context, policy *workspace.Workspace, root string) (string, error) {

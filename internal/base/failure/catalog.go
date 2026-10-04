@@ -95,12 +95,6 @@ func TraitsFor(code Code) (Traits, bool) {
 	return traits, ok
 }
 
-// Known reports whether code belongs to the stable application failure catalog.
-func Known(code Code) bool {
-	_, ok := catalog[code]
-	return ok
-}
-
 // Codes returns all stable codes in deterministic declaration order.
 func Codes() []Code {
 	return []Code{

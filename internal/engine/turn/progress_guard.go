@@ -102,13 +102,6 @@ func (g *progressGuard) shouldSynthesize(stalledRound bool) bool {
 	return g.consecutiveStalledRounds >= g.maxConsecutiveStalled
 }
 
-func (g *progressGuard) stalledRoundCount() int {
-	if g == nil {
-		return 0
-	}
-	return g.consecutiveStalledRounds
-}
-
 // observeExternalProgress invalidates exact-call observations when new runtime
 // context arrives. Delegated work can mutate or inspect state outside the parent
 // tool dispatcher, so results observed before that boundary may be stale.

@@ -90,21 +90,6 @@ type Preset struct {
 	Name     string
 }
 
-// curatedPresets are the quick-pick models a model selector offers before the
-// user has discovered a provider catalog.
-var curatedPresets = []Preset{
-	{Provider: "protonman", Model: "claude-3-7-sonnet-20250219", Name: "Claude 3.7 Sonnet"},
-	{Provider: "protonman", Model: "claude-3-5-sonnet-20241022", Name: "Claude 3.5 Sonnet"},
-	{Provider: "openai", Model: "gpt-4o", Name: "GPT-4o"},
-	{Provider: "openai", Model: "o3-mini", Name: "o3-mini"},
-	{Provider: "deepseek", Model: "deepseek-reasoner", Name: "DeepSeek-R1"},
-}
-
-// CuratedPresets returns the quick-pick models, as a copy.
-func CuratedPresets() []Preset {
-	return append([]Preset(nil), curatedPresets...)
-}
-
 // protonPrefixes mark the first-party proton catalog. These identifiers are
 // metered even when they reuse a free-tier model's upstream base name, so they
 // are checked before the free-name rules rather than after.

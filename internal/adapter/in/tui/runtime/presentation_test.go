@@ -27,34 +27,6 @@ import (
 	"time"
 )
 
-func TestBrandLockupResponsive(t *testing.T) {
-	wide := ansi.Strip(brandLockup(80))
-	lines := strings.Split(wide, "\n")
-	if len(lines) != 4 {
-		t.Fatalf("wide brand lines = %d, want 4: %q", len(lines), wide)
-	}
-	wantLogo := []string{`   /\`, `  /__\`, ` <____>`, ` /|__|\`}
-	for i, want := range wantLogo {
-		if !strings.HasPrefix(lines[i], want) {
-			t.Fatalf("wide brand line %d = %q, want prefix %q", i, lines[i], want)
-		}
-	}
-	if !strings.Contains(lines[0], "protonMAN") {
-		t.Fatalf("wide brand missing product name: %q", wide)
-	}
-	if got := brandLockupWidth(80); got > 80 {
-		t.Fatalf("wide brand width = %d, terminal width 80", got)
-	}
-
-	narrow := ansi.Strip(brandLockup(20))
-	if strings.Contains(narrow, `/__\`) || !strings.Contains(narrow, "protonMAN") {
-		t.Fatalf("narrow brand = %q, want compact protonMAN fallback", narrow)
-	}
-	if got := brandLockupWidth(20); got > 20 {
-		t.Fatalf("narrow brand width = %d, terminal width 20", got)
-	}
-}
-
 func TestBrandMarkIsSingleCell(t *testing.T) {
 	if got := ansi.StringWidth(glyphBrand); got != 1 {
 		t.Fatalf("brand mark width = %d, want 1", got)

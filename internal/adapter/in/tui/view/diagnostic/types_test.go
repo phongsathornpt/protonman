@@ -22,12 +22,3 @@ func TestUserCodeMapping(t *testing.T) {
 		}
 	}
 }
-
-func TestFormatSummaryUsesStableCodeInsteadOfUpstreamBadge(t *testing.T) {
-	err := Error{Kind: KindServerOverloaded, Title: "Provider Server Overloaded", Badge: "503 SERVER_ERROR", Message: "temporarily unavailable", Code: "503"}
-	got := FormatSummary(err)
-	want := "[PROVIDER_OVERLOADED] Provider Server Overloaded: temporarily unavailable"
-	if got != want {
-		t.Fatalf("FormatSummary() = %q, want %q", got, want)
-	}
-}

@@ -121,7 +121,7 @@ func TestParseProfileRejectsOldNames(t *testing.T) {
 }
 
 func TestDefaultSystemPromptGroundsCodingToolUse(t *testing.T) {
-	prompt := DefaultSystemPrompt()
+	rendered := prompt.Render(prompt.Spec{})
 	for _, marker := range []string{
 		"UNIVERSAL",
 		"primary software engineering agent",
@@ -132,8 +132,8 @@ func TestDefaultSystemPromptGroundsCodingToolUse(t *testing.T) {
 		"never prefix, rename, qualify, or invent",
 		"verify the result",
 	} {
-		if !strings.Contains(prompt, marker) {
-			t.Fatalf("default system prompt missing %q:\n%s", marker, prompt)
+		if !strings.Contains(rendered, marker) {
+			t.Fatalf("default system prompt missing %q:\n%s", marker, rendered)
 		}
 	}
 }

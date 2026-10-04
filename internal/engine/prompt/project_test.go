@@ -18,7 +18,7 @@ func TestLoadProjectInstructionsUsesOverride(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "AGENTS.override.md"), []byte("override rules"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	got, err := LoadProjectInstructions(dir)
+	got, err := LoadProjectInstructionsWithPolicy(context.Background(), nil, dir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -33,7 +33,7 @@ func TestLoadProjectInstructionsBoundsLargeFiles(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "AGENTS.md"), []byte(content), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	got, err := LoadProjectInstructions(dir)
+	got, err := LoadProjectInstructionsWithPolicy(context.Background(), nil, dir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -43,9 +43,9 @@ func TestLoadProjectInstructionsBoundsLargeFiles(t *testing.T) {
 }
 
 func TestLoadProjectInstructionsMissingIsEmpty(t *testing.T) {
-	got, err := LoadProjectInstructions(t.TempDir())
+	got, err := LoadProjectInstructionsWithPolicy(context.Background(), nil, t.TempDir())
 	if err != nil || got != "" {
-		t.Fatalf("LoadProjectInstructions() = %q, %v", got, err)
+		t.Fatalf("LoadProjectInstructionsWithPolicy() = %q, %v", got, err)
 	}
 }
 
@@ -101,7 +101,7 @@ func TestLoadProjectInstructionsTruncationPreservesUTF8Boundary(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "AGENTS.md"), []byte(content), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	got, err := LoadProjectInstructions(dir)
+	got, err := LoadProjectInstructionsWithPolicy(context.Background(), nil, dir)
 	if err != nil {
 		t.Fatal(err)
 	}

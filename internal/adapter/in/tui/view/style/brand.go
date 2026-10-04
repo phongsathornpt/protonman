@@ -1,10 +1,6 @@
 package style
 
-import (
-	"strings"
-
-	"github.com/charmbracelet/x/ansi"
-)
+import "github.com/charmbracelet/x/ansi"
 
 const (
 	ProductName           = "protonMAN"
@@ -26,20 +22,6 @@ func CompactLogoLines() []string {
 	return append([]string(nil), compactLogoLines[:]...)
 }
 
-// CompactLogoWidth returns the maximum visual cell width of the four-line mark.
-func CompactLogoWidth() int {
-	maxWidth := 0
-	for _, line := range compactLogoLines {
-		maxWidth = max(maxWidth, ansi.StringWidth(line))
-	}
-	return maxWidth
-}
-
-// CompactBrand renders the compatibility Unicode compact brand identity.
-func CompactBrand(width int) string {
-	return CompactBrandWithIcons(width, UnicodeIcons)
-}
-
 // CompactBrandWithIcons renders Protonman's single-line compact brand identity
 // with the supplied terminal capability profile. The full four-line ASCII logo
 // remains unchanged because it does not depend on a patched font.
@@ -53,32 +35,4 @@ func CompactBrandWithIcons(width int, icons IconSet) string {
 		return BrandMarkStyle.Render(icons.Brand) + " " + BrandStyle.Render(ProductName)
 	}
 	return BrandStyle.Render(ansi.Truncate(ProductName, width, ""))
-}
-
-// BrandLockup renders Protonman's compact character mark. The product name is
-// aligned at CompactLogoTextColumn so text aligns consistently with the logo.
-func BrandLockup(width int) string {
-	if width <= 0 {
-		return ""
-	}
-	if width < MinCompactBrandWidth {
-		return CompactBrand(width)
-	}
-
-	lines := make([]string, len(compactLogoLines))
-	for i, line := range compactLogoLines {
-		lines[i] = BrandMarkStyle.Render(line)
-	}
-	gap := max(0, CompactLogoTextColumn-ansi.StringWidth(compactLogoLines[0]))
-	available := max(1, width-CompactLogoTextColumn)
-	lines[0] += strings.Repeat(" ", gap) + BrandStyle.Render(ansi.Truncate(ProductName, available, ""))
-	return strings.Join(lines, "\n")
-}
-
-func BrandLockupWidth(width int) int {
-	maxWidth := 0
-	for _, line := range strings.Split(BrandLockup(width), "\n") {
-		maxWidth = max(maxWidth, ansi.StringWidth(line))
-	}
-	return maxWidth
 }

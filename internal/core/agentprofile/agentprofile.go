@@ -93,15 +93,6 @@ func ProfileNames() []string {
 // ProfileList joins every known profile name.
 func ProfileList(separator string) string { return strings.Join(ProfileNames(), separator) }
 
-// ProfileSchemaDescription renders the profile vocabulary for tool schemas.
-func ProfileSchemaDescription() string {
-	parts := make([]string, 0, len(specs))
-	for _, spec := range specs {
-		parts = append(parts, "'"+string(spec.Profile)+"' ("+spec.Description+")")
-	}
-	return "The Protonman agent profile: " + strings.Join(parts, ", ") + "."
-}
-
 // SubagentProfileSchemaDescription renders the delegatable vocabulary for schemas.
 func SubagentProfileSchemaDescription() string {
 	parts := make([]string, 0, len(SubagentProfiles()))

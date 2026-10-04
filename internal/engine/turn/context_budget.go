@@ -20,10 +20,6 @@ import (
 
 const estimatedBytesPerToken = 3
 
-func validateContextBudget(languageModel port.LanguageModel, request domain.Request) error {
-	return validateContextBudgetWithVisionPolicy(languageModel, request, modelprofile.DefaultVisionPolicy())
-}
-
 func validateContextBudgetWithVisionPolicy(languageModel port.LanguageModel, request domain.Request, visionPolicy modelprofile.VisionPolicy) error {
 	limits := usecase.ModelTokenLimits(languageModel)
 	if limits.ContextWindow <= 0 && limits.MaxInputTokens <= 0 && limits.MaxOutputTokens <= 0 {
@@ -53,10 +49,6 @@ func validateContextBudgetWithVisionPolicy(languageModel port.LanguageModel, req
 	return fmt.Errorf("%w: model %q estimated input %d tokens plus %d reserved output exceeds %d-token context window", ErrContextBudgetExceeded, languageModel.ModelID(), estimated, reserve, limits.ContextWindow)
 }
 
-func estimateRequestTokens(request domain.Request) (int, error) {
-	return estimateRequestTokensWithVisionPolicy(request, modelprofile.DefaultVisionPolicy())
-}
-
 func estimateRequestTokensWithVisionPolicy(request domain.Request, visionPolicy modelprofile.VisionPolicy) (int, error) {
 	visionPolicy = modelprofile.EffectiveVisionPolicy(modelprofile.Resolved{VisionPolicy: visionPolicy})
 	transportNeutral := request
@@ -84,10 +76,6 @@ func estimateRequestTokensWithVisionPolicy(request domain.Request, visionPolicy 
 		textAndFramingTokens = (len(payload) + estimatedBytesPerToken - 1) / estimatedBytesPerToken
 	}
 	return textAndFramingTokens + imageTokens, nil
-}
-
-func estimateImageTokens(data string) int {
-	return estimateImageTokensWithPolicy(data, modelprofile.DefaultVisionPolicy())
 }
 
 func estimateImageTokensWithPolicy(data string, policy modelprofile.VisionPolicy) int {
@@ -177,10 +165,6 @@ func effectiveInputBudget(limits domain.TokenLimits, requestedOutput int) int {
 		}
 	}
 	return budget
-}
-
-func compactRequestToModelBudget(request domain.Request, limits domain.TokenLimits, policy modelprofile.CompactionPolicy) (domain.Request, conversation.CompactionDecision, error) {
-	return compactRequestToModelBudgetWithVisionPolicy(request, limits, policy, modelprofile.DefaultVisionPolicy())
 }
 
 func compactRequestToModelBudgetWithVisionPolicy(request domain.Request, limits domain.TokenLimits, policy modelprofile.CompactionPolicy, visionPolicy modelprofile.VisionPolicy) (domain.Request, conversation.CompactionDecision, error) {

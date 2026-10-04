@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
+	"github.com/phongsathornpt/protonman/internal/core/modelprofile"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/engine/toolcall"
@@ -270,7 +271,7 @@ func TestLoopDoesNotTreatMaxInputTokensAsTotalContext(t *testing.T) {
 func TestLoopRejectsRequestedOutputBeyondPublishedLimit(t *testing.T) {
 	request := domain.Request{Messages: []domain.Message{{Role: domain.RoleUser, Content: "hello"}}, Options: domain.ModelOptions{MaxOutputTokens: 1024}}
 	languageModel := &sdkTestModel{tokenLimits: domain.TokenLimits{MaxOutputTokens: 512}}
-	if err := validateContextBudget(languageModel, request); !errors.Is(err, ErrContextBudgetExceeded) {
+	if err := validateContextBudgetWithVisionPolicy(languageModel, request, modelprofile.DefaultVisionPolicy()); !errors.Is(err, ErrContextBudgetExceeded) {
 		t.Fatalf("validateContextBudget() error = %v", err)
 	}
 }

@@ -144,9 +144,6 @@ func ProjectRoot(workDir string) string { return filepath.Join(workDir, RootDirN
 // ProjectConfig returns the canonical project-local config path for new data.
 func ProjectConfig(workDir string) string { return filepath.Join(ProjectRoot(workDir), ConfigFileName) }
 
-// ProjectSkills returns the canonical project-local skills directory for new data.
-func ProjectSkills(workDir string) string { return filepath.Join(ProjectRoot(workDir), SkillsDir) }
-
 // ProjectSkillsLock returns the path to the workspace root skills-lock.json.
 func ProjectSkillsLock(workDir string) string { return filepath.Join(workDir, SkillsLockFileName) }
 

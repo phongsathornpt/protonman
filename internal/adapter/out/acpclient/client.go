@@ -213,10 +213,6 @@ type envelope struct {
 	Error   *RPCError       `json:"error,omitempty"`
 }
 
-func Start(ctx context.Context, binary string, onEvent func(Event)) (*Client, error) {
-	return StartCommand(ctx, CommandSpec{Path: binary, Args: []string{"--acp"}}, onEvent)
-}
-
 // StartCommand starts an ACP agent using the supplied executable and argument
 // vector. This is the generic entry point used by Desktop integrations whose
 // launcher does not accept Protonman's --acp flag.

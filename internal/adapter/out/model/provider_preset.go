@@ -241,12 +241,6 @@ func ProviderHasUsableAuth(providerName, baseURL, apiKey string) bool {
 	return preset != nil && !preset.RequiresKey
 }
 
-// ResolveProviderBaseURL returns the configured endpoint or the preset default
-// for a known provider. Unknown providers retain the historical Protonman default.
-func ResolveProviderBaseURL(providerName string, configuredURL string) string {
-	return ResolveProviderBaseURLForProtocol(providerName, "", configuredURL)
-}
-
 // ResolveProviderBaseURLForProtocol resolves defaults using explicit protocol
 // when a custom provider name does not match a built-in preset.
 func ResolveProviderBaseURLForProtocol(providerName, providerType, configuredURL string) string {
