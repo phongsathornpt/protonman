@@ -49,10 +49,10 @@ func TestParseContext(t *testing.T) {
 func TestMatchesRanking(t *testing.T) {
 	agents := DefaultAgents()
 	files := []Item{
-		{Kind: ItemKindFile, Name: "cmd/protonman/main.go", Description: "Go source", PrefixTag: "[file]"},
-		{Kind: ItemKindFile, Name: "internal/adapter/in/tui/composer.go", Description: "Go source", PrefixTag: "[file]"},
-		{Kind: ItemKindDir, Name: "internal/adapter", Description: "Directory", PrefixTag: "[dir]"},
-		{Kind: ItemKindFile, Name: "README.md", Description: "Markdown", PrefixTag: "[file]"},
+		{Kind: ItemKindFile, Name: "cmd/protonman/main.go", Description: "Go source"},
+		{Kind: ItemKindFile, Name: "internal/adapter/in/tui/composer.go", Description: "Go source"},
+		{Kind: ItemKindDir, Name: "internal/adapter", Description: "Directory"},
+		{Kind: ItemKindFile, Name: "README.md", Description: "Markdown"},
 	}
 
 	// Empty query: agents pinned at top, then files

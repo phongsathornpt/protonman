@@ -51,14 +51,21 @@ func TestComposerCardAdaptiveModeStyles(t *testing.T) {
 		m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 		m.resize(80, 24)
 		view := m.promptView()
-		top := strings.Split(view, "\n")[0]
-		expected := m.buildComposerTopRail(80, tuistyle.ComposerBorderFocused, tuistyle.UnicodeIcons, false)
+		lines := strings.Split(view, "\n")
+		top := lines[0]
+		expected := m.buildComposerTopRail(80, tuistyle.ComposerBorderFocused, tuistyle.UnicodeIcons)
 		if top != expected {
 			t.Fatalf("focused agent mode top rail = %q, want %q", top, expected)
 		}
 		plain := ansi.Strip(top)
-		if !strings.Contains(plain, "universal") || !strings.Contains(plain, "ask") {
-			t.Fatalf("missing profile or mode badge: %q", plain)
+		if !strings.Contains(plain, "universal") {
+			t.Fatalf("missing profile badge: %q", plain)
+		}
+		if strings.Contains(plain, "ask") {
+			t.Fatalf("top rail should not carry the permission badge: %q", plain)
+		}
+		if bottom := ansi.Strip(lines[len(lines)-1]); !strings.Contains(bottom, "ask") {
+			t.Fatalf("bottom rail should carry the permission metric: %q", bottom)
 		}
 	})
 
@@ -68,7 +75,7 @@ func TestComposerCardAdaptiveModeStyles(t *testing.T) {
 		m.setBashMode(true)
 		view := m.promptView()
 		top := strings.Split(view, "\n")[0]
-		expected := m.buildComposerTopRail(80, tuistyle.ComposerBorderBash, tuistyle.UnicodeIcons, false)
+		expected := m.buildComposerTopRail(80, tuistyle.ComposerBorderBash, tuistyle.UnicodeIcons)
 		if top != expected {
 			t.Fatalf("bash mode top rail = %q, want %q", top, expected)
 		}
@@ -84,7 +91,7 @@ func TestComposerCardAdaptiveModeStyles(t *testing.T) {
 		m.setPlanEnabled(true)
 		view := m.promptView()
 		top := strings.Split(view, "\n")[0]
-		expected := m.buildComposerTopRail(80, tuistyle.ComposerBorderPlan, tuistyle.UnicodeIcons, false)
+		expected := m.buildComposerTopRail(80, tuistyle.ComposerBorderPlan, tuistyle.UnicodeIcons)
 		if top != expected {
 			t.Fatalf("plan mode top rail = %q, want %q", top, expected)
 		}
@@ -103,7 +110,7 @@ func TestComposerCardAdaptiveModeStyles(t *testing.T) {
 		})
 		view := m.promptView()
 		top := strings.Split(view, "\n")[0]
-		expected := m.buildComposerTopRail(80, tuistyle.ComposerBorderWarning, tuistyle.UnicodeIcons, false)
+		expected := m.buildComposerTopRail(80, tuistyle.ComposerBorderWarning, tuistyle.UnicodeIcons)
 		if top != expected {
 			t.Fatalf("permission mode top rail = %q, want %q", top, expected)
 		}
@@ -114,14 +121,14 @@ func TestComposerCardAdaptiveModeStyles(t *testing.T) {
 		m.resize(80, 24)
 		view := m.promptView()
 		top := strings.Split(view, "\n")[0]
-		expected := m.buildComposerTopRail(80, tuistyle.ComposerBorderError, tuistyle.UnicodeIcons, false)
+		expected := m.buildComposerTopRail(80, tuistyle.ComposerBorderError, tuistyle.UnicodeIcons)
 		if top != expected {
 			t.Fatalf("deny mode top rail = %q, want %q", top, expected)
 		}
 	})
 }
 
-func TestComposerCardMultilineExpansionAndLineCounter(t *testing.T) {
+func TestComposerCardMultilineExpansion(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	m.resize(80, 24)
 
@@ -130,9 +137,6 @@ func TestComposerCardMultilineExpansionAndLineCounter(t *testing.T) {
 	lines1 := strings.Split(view1, "\n")
 	if len(lines1) != 3 {
 		t.Fatalf("1 line prompt card should have 3 lines, got %d", len(lines1))
-	}
-	if strings.Contains(lines1[0], "lines") {
-		t.Fatalf("single line card should not have line count indicator: %q", lines1[0])
 	}
 
 	// 3 lines
@@ -145,8 +149,8 @@ func TestComposerCardMultilineExpansionAndLineCounter(t *testing.T) {
 	if len(lines3) != 5 { // top + 3 middle + bottom = 5
 		t.Fatalf("3 line prompt card should have 5 lines, got %d", len(lines3))
 	}
-	if !strings.Contains(lines3[0], "3 lines") {
-		t.Fatalf("3 line prompt card missing line count indicator: %q", lines3[0])
+	if strings.Contains(ansi.Strip(lines3[0]), " lines") {
+		t.Fatalf("top rail should not carry a line-count badge: %q", lines3[0])
 	}
 
 	// 6 lines
@@ -158,9 +162,6 @@ func TestComposerCardMultilineExpansionAndLineCounter(t *testing.T) {
 	lines6 := strings.Split(view6, "\n")
 	if len(lines6) != 8 { // top + 6 prompt rows + bottom = 8
 		t.Fatalf("6 line prompt card should show 6 prompt rows, got %d total rows", len(lines6))
-	}
-	if !strings.Contains(lines6[0], "6 lines") {
-		t.Fatalf("6 line prompt card missing line count indicator: %q", lines6[0])
 	}
 
 	for i, line := range lines6 {
@@ -200,7 +201,7 @@ func TestComposerCardAttachmentChipStripAndBackspaceRemoval(t *testing.T) {
 		t.Fatalf("expected nil cmd on attachment removal, got %v", cmd)
 	}
 
-	if len(m.panes.bottom.composer.attachments.localImages) != 0 {
+	if m.panes.bottom.composer.attachments.Len() != 0 {
 		t.Fatalf("attachment was not removed on backspace in empty prompt")
 	}
 
@@ -261,5 +262,70 @@ func TestComposerCardContextualPlaceholders(t *testing.T) {
 	m.setBashMode(false)
 	if got, want := m.panes.bottom.prompt().Placeholder, "Ask universal to build, test, or type / for commands…"; got != want {
 		t.Fatalf("agent restored placeholder = %q, want %q", got, want)
+	}
+}
+
+func TestComposerCardModelBadgeFollowsHeaderVisibility(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.resize(110, 24)
+	m.activeModel = "claude-sonnet-4-5"
+	label := modelFooterLabel(m.activeModel)
+	if label == "" {
+		t.Fatal("expected a model footer label")
+	}
+
+	top := ansi.Strip(strings.Split(m.promptView(), "\n")[0])
+	if strings.Contains(top, label) {
+		t.Fatalf("model badge should stay in the session header when visible: %q", top)
+	}
+
+	// A short viewport hides the session header; the card then carries the model.
+	m.resize(110, 16)
+	m.panes.bottom.push(&slashPaneView{})
+	top = ansi.Strip(strings.Split(m.promptView(), "\n")[0])
+	if !strings.Contains(top, label) {
+		t.Fatalf("model badge missing when the session header is hidden: %q", top)
+	}
+}
+
+func TestComposerCardBottomMetricOwnsPermission(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.resize(80, 24)
+	lines := strings.Split(m.promptView(), "\n")
+	if bottom := ansi.Strip(lines[len(lines)-1]); !strings.Contains(bottom, "ask") {
+		t.Fatalf("bottom rail should carry the permission mode: %q", bottom)
+	}
+
+	m.setPlanEnabled(true)
+	lines = strings.Split(m.promptView(), "\n")
+	top := ansi.Strip(lines[0])
+	bottom := ansi.Strip(lines[len(lines)-1])
+	if !strings.Contains(top, "plan · read-only") {
+		t.Fatalf("plan badge missing from the top rail: %q", top)
+	}
+	if strings.Contains(bottom, "plan") {
+		t.Fatalf("bottom metric should not repeat the plan badge: %q", bottom)
+	}
+}
+
+func TestComposerCardBadgeMarkersFollowIconSet(t *testing.T) {
+	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+	m.resize(80, 24)
+	m.icons = tuistyle.ASCIIIcons
+
+	m.setBashMode(true)
+	top := ansi.Strip(strings.Split(m.promptView(), "\n")[0])
+	if !strings.Contains(top, tuistyle.ASCIIBash+"bash direct") {
+		t.Fatalf("bash badge should use the ASCII icon marker: %q", top)
+	}
+
+	m.setBashMode(false)
+	m.setPlanEnabled(true)
+	top = ansi.Strip(strings.Split(m.promptView(), "\n")[0])
+	if !strings.Contains(top, tuistyle.ASCIIPlan+"plan · read-only") {
+		t.Fatalf("plan badge should use the ASCII icon marker: %q", top)
+	}
+	if strings.Contains(top, tuistyle.UnicodePlan) {
+		t.Fatalf("plan badge should not fall back to the Unicode marker: %q", top)
 	}
 }

@@ -1,6 +1,11 @@
 package slashview
 
-import "testing"
+import (
+	"strings"
+	"testing"
+
+	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/style"
+)
 
 func TestCatalogContainsCanonicalCommandsOnly(t *testing.T) {
 	catalog := Catalog()
@@ -76,11 +81,11 @@ func TestSkillMatchesCarryPresentationMetadata(t *testing.T) {
 	matches := Matches(context, nil, []Skill{
 		{Name: "pdf-processing", Description: "work with pdf files", Scope: "user", Active: true},
 		{Name: "slides", Description: "presentations", Scope: "project"},
-	})
+	}, tuistyle.UnicodeIcons)
 	if len(matches) != 1 {
 		t.Fatalf("matches = %#v", matches)
 	}
-	if matches[0].Name != "pdf-processing" || matches[0].PrefixTag != "[x]" || matches[0].Scope != "user" {
+	if matches[0].Name != "pdf-processing" || matches[0].PrefixTag != strings.TrimSpace(tuistyle.UnicodeTodoActive) || matches[0].Scope != "user" {
 		t.Fatalf("match = %#v", matches[0])
 	}
 }
@@ -108,7 +113,7 @@ func TestLowConcurrencyArgumentMatches(t *testing.T) {
 	if !ok {
 		t.Fatal("ParseContext returned false")
 	}
-	matches := Matches(context, Catalog(), nil)
+	matches := Matches(context, Catalog(), nil, tuistyle.UnicodeIcons)
 	if len(matches) != 1 || matches[0].Name != "auto" {
 		t.Fatalf("matches = %#v, want auto", matches)
 	}
@@ -183,9 +188,9 @@ func TestCommandMatchesIncludeActiveSkills(t *testing.T) {
 		{Name: "golang-code-review", Description: "review go code", Active: true},
 		{Name: "inactive-skill", Description: "golang test", Active: false},
 	}
-	matches := Matches(context, catalog, skills)
+	matches := Matches(context, catalog, skills, tuistyle.UnicodeIcons)
 	if len(matches) != 2 {
-		t.Fatalf("expected 2 matches (/goal and [skill] golang-code-review), got %d", len(matches))
+		t.Fatalf("expected 2 matches (/goal and the golang-code-review skill), got %d", len(matches))
 	}
 	if matches[0].Name != "goal" {
 		t.Fatalf("matches[0].Name = %q, want goal", matches[0].Name)
@@ -193,8 +198,8 @@ func TestCommandMatchesIncludeActiveSkills(t *testing.T) {
 	if matches[1].Name != "golang-code-review" {
 		t.Fatalf("matches[1].Name = %q, want golang-code-review", matches[1].Name)
 	}
-	if matches[1].PrefixTag != "[skill]" {
-		t.Fatalf("matches[1].PrefixTag = %q, want [skill]", matches[1].PrefixTag)
+	if matches[1].PrefixTag != strings.TrimSpace(tuistyle.UnicodeIcons.Skill) {
+		t.Fatalf("matches[1].PrefixTag = %q, want the skill icon", matches[1].PrefixTag)
 	}
 	if matches[1].Argument != ArgumentRest {
 		t.Fatalf("matches[1].Argument = %v, want ArgumentRest", matches[1].Argument)

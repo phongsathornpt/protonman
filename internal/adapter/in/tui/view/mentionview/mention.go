@@ -135,7 +135,6 @@ func DefaultAgents() []Item {
 			Kind:        ItemKindAgent,
 			Name:        string(spec.profile),
 			Description: spec.description,
-			PrefixTag:   "[agent]",
 		})
 	}
 	return items

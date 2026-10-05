@@ -15,7 +15,6 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/paneutil"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/mentionview"
-	panecommon "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/pane/common"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/slashview"
 	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/style"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/textview"
@@ -112,7 +111,7 @@ func (v *slashPaneView) Render(ctx paneRenderContext) string {
 	}
 	rows := v.commandRows(ctx)
 	if layoutModeForHeight(ctx.height) != layoutTiny {
-		width := panecommon.PaneHelpWidth(ctx.width)
+		width := dropdownRowWidth(ctx.width)
 		statusText := v.selectionStatusText()
 		helpWidth := max(1, width-ansi.StringWidth(statusText)-1)
 		rows = append(rows, paneHelpStatusLine(width, slashPickerHelp(helpWidth), statusText))
@@ -129,7 +128,7 @@ func (v *slashPaneView) commandRows(ctx paneRenderContext) []string {
 	}
 	start, end := paneWindow(len(items), v.picker.Index(), maxSlashRows, layoutModeForHeight(ctx.height))
 	rows := make([]string, 0, end-start)
-	available := panecommon.PaneHelpWidth(ctx.width)
+	available := slashPickerWidth(ctx.width)
 	nameColumnWidth := 0
 	for i := start; i < end; i++ {
 		entry, ok := items[i].(slashListItem)
@@ -145,9 +144,11 @@ func (v *slashPaneView) commandRows(ctx paneRenderContext) []string {
 		}
 		prefix := "  "
 		nameStyle := bodyStyle
+		descriptionStyle := mutedStyle
 		if i == v.picker.Index() {
 			prefix = tuistyle.SelectionStyle.Render(glyphPrompt)
 			nameStyle = tuistyle.SelectionStyle
+			descriptionStyle = systemStyle
 		}
 		name := entry.Title()
 		description := entry.Description()
@@ -159,7 +160,7 @@ func (v *slashPaneView) commandRows(ctx paneRenderContext) []string {
 		descriptionWidth := max(1, available-nameColumnWidth-2)
 		description = truncateWithEllipsis(description, descriptionWidth)
 		gap := strings.Repeat(" ", max(2, nameColumnWidth-nameWidth+2))
-		rows = append(rows, prefix+nameStyle.Render(name)+gap+mutedStyle.Render(description))
+		rows = append(rows, prefix+nameStyle.Render(name)+gap+descriptionStyle.Render(description))
 	}
 	return rows
 }
@@ -191,7 +192,7 @@ func (v *slashPaneView) selectionStatusText() string {
 }
 
 func (v *slashPaneView) selectionStatus(width int) string {
-	return paneRightStatus(width, v.selectionStatusText())
+	return dropdownStatusRow(width, v.selectionStatusText())
 }
 
 func (v *slashPaneView) HandlePaneKey(ctx paneRenderContext, message tea.KeyPressMsg) paneKeyResult {
@@ -275,7 +276,7 @@ func (m *bubbleModel) slashMatches() []slashCommand {
 			})
 		}
 	}
-	return slashview.Matches(context, slashCatalog, items)
+	return slashview.Matches(context, slashCatalog, items, tuistyle.OrUnicodeIcons(m.icons))
 }
 
 func (m *bubbleModel) slashState() *slashPaneView {
@@ -358,6 +359,25 @@ func (m *bubbleModel) acceptSlash(run bool) (applied bool, command tea.Cmd) {
 
 func truncateWithEllipsis(s string, maxLen int) string {
 	return textview.TruncateEllipsis(s, maxLen)
+}
+
+// dropdownRowWidth returns the full row width that lets dropdown rows share
+// the composer card's inner edges: a two-cell prefix plus content ending at
+// column width-2, matching the card's content columns.
+func dropdownRowWidth(width int) int {
+	return max(1, width-2)
+}
+
+// dropdownStatusRow right-aligns a dropdown status counter to the same row
+// width as the item rows.
+func dropdownStatusRow(width int, text string) string {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return ""
+	}
+	total := dropdownRowWidth(width)
+	text = truncateWithEllipsis(text, total)
+	return strings.Repeat(" ", max(0, total-ansi.StringWidth(text))) + mutedStyle.Render(text)
 }
 
 const maxMentionRows = 6
@@ -443,7 +463,7 @@ func (v *mentionPaneView) Render(ctx paneRenderContext) string {
 	}
 	rows := v.itemRows(ctx)
 	if layoutModeForHeight(ctx.height) != layoutTiny {
-		width := panecommon.PaneHelpWidth(ctx.width)
+		width := dropdownRowWidth(ctx.width)
 		statusText := v.selectionStatusText()
 		helpWidth := max(1, width-ansi.StringWidth(statusText)-1)
 		rows = append(rows, paneHelpStatusLine(width, mentionPickerHelp(helpWidth), statusText))
@@ -460,7 +480,7 @@ func (v *mentionPaneView) itemRows(ctx paneRenderContext) []string {
 	}
 	start, end := paneWindow(len(items), v.picker.Index(), maxMentionRows, layoutModeForHeight(ctx.height))
 	rows := make([]string, 0, end-start)
-	available := panecommon.PaneHelpWidth(ctx.width)
+	available := mentionPickerWidth(ctx.width)
 	nameColumnWidth := 0
 	for i := start; i < end; i++ {
 		entry, ok := items[i].(mentionListItem)
@@ -476,9 +496,11 @@ func (v *mentionPaneView) itemRows(ctx paneRenderContext) []string {
 		}
 		prefix := "  "
 		nameStyle := bodyStyle
+		descriptionStyle := mutedStyle
 		if i == v.picker.Index() {
 			prefix = tuistyle.SelectionStyle.Render(glyphPrompt)
 			nameStyle = tuistyle.SelectionStyle
+			descriptionStyle = systemStyle
 		}
 		name := entry.Title()
 		description := entry.Description()
@@ -490,7 +512,7 @@ func (v *mentionPaneView) itemRows(ctx paneRenderContext) []string {
 		descriptionWidth := max(1, available-nameColumnWidth-2)
 		description = truncateWithEllipsis(description, descriptionWidth)
 		gap := strings.Repeat(" ", max(2, nameColumnWidth-nameWidth+2))
-		rows = append(rows, prefix+nameStyle.Render(name)+gap+mutedStyle.Render(description))
+		rows = append(rows, prefix+nameStyle.Render(name)+gap+descriptionStyle.Render(description))
 	}
 	return rows
 }
@@ -522,7 +544,7 @@ func (v *mentionPaneView) selectionStatusText() string {
 }
 
 func (v *mentionPaneView) selectionStatus(width int) string {
-	return paneRightStatus(width, v.selectionStatusText())
+	return dropdownStatusRow(width, v.selectionStatusText())
 }
 
 func (v *mentionPaneView) HandlePaneKey(ctx paneRenderContext, message tea.KeyPressMsg) paneKeyResult {
@@ -594,7 +616,6 @@ func scanWorkspaceFiles(workDir string) []mentionview.Item {
 					Kind:        mentionview.ItemKindDir,
 					Name:        relPath,
 					Description: "Directory",
-					PrefixTag:   "[dir]",
 				})
 				walk(fullPath, depth+1)
 			} else {
@@ -614,7 +635,6 @@ func scanWorkspaceFiles(workDir string) []mentionview.Item {
 					Kind:        mentionview.ItemKindFile,
 					Name:        relPath,
 					Description: sizeStr,
-					PrefixTag:   "[file]",
 				})
 			}
 
@@ -735,8 +755,23 @@ func (m *bubbleModel) mentionMatches() []mentionview.Item {
 	if !ok {
 		return nil
 	}
+	icons := tuistyle.OrUnicodeIcons(m.icons)
 	agents := mentionview.DefaultAgents()
+	for i := range agents {
+		agents[i].PrefixTag = strings.TrimSpace(icons.Agent)
+	}
 	workspaceFiles := m.getWorkspaceMentionItems()
+	if len(workspaceFiles) > 0 {
+		marked := make([]mentionview.Item, len(workspaceFiles))
+		copy(marked, workspaceFiles)
+		dirTag := strings.TrimSpace(icons.Dir)
+		for i := range marked {
+			if marked[i].Kind == mentionview.ItemKindDir {
+				marked[i].PrefixTag = dirTag
+			}
+		}
+		workspaceFiles = marked
+	}
 	return mentionview.Matches(ctx, agents, workspaceFiles)
 }
 

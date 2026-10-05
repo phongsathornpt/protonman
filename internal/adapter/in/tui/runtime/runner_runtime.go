@@ -139,10 +139,5 @@ func (m *bubbleModel) syncPromptPlaceholder() {
 	if m == nil || m.panes.bottom == nil {
 		return
 	}
-	mode := permission.ModeAsk
-	if m.service != nil {
-		mode = m.service.Mode()
-	}
-	hasRunner := m.runner != nil
-	m.panes.bottom.setPlaceholder(promptPlaceholder(hasRunner, mode, m.planMode))
+	m.panes.bottom.setPlaceholder(promptPlaceholder(m.runner != nil))
 }

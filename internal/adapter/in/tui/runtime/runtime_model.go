@@ -145,28 +145,27 @@ type executionPolicyState struct {
 }
 
 type presentationModelState struct {
-	viewport             viewport.Model
-	spinner              spinner.Model
-	help                 help.Model
-	keys                 bubbleKeyMap
-	planMode             bool
-	reducedMotion        bool
-	icons                tuistyle.IconSet
-	panes                paneState
-	mentionCache         workspaceFileCache
-	nextID               uint64
-	layout               layoutState
-	viewportViewCache    viewportViewCache
-	liveViewCache        string
-	liveViewCacheValid   bool
-	sessionHeaderCache   sessionHeaderCache
-	keyboardCapability   keyboardCapability
-	transientNotice      string
-	transientNoticeID    uint64
-	promptAnimationPhase int
-	memoryActivities     chan corememory.Activity
-	navMode              bool
-	focusedCellIndex     int
+	viewport           viewport.Model
+	spinner            spinner.Model
+	help               help.Model
+	keys               bubbleKeyMap
+	planMode           bool
+	reducedMotion      bool
+	icons              tuistyle.IconSet
+	panes              paneState
+	mentionCache       workspaceFileCache
+	nextID             uint64
+	layout             layoutState
+	viewportViewCache  viewportViewCache
+	liveViewCache      string
+	liveViewCacheValid bool
+	sessionHeaderCache sessionHeaderCache
+	keyboardCapability keyboardCapability
+	transientNotice    string
+	transientNoticeID  uint64
+	memoryActivities   chan corememory.Activity
+	navMode            bool
+	focusedCellIndex   int
 }
 
 type viewportViewCache struct {

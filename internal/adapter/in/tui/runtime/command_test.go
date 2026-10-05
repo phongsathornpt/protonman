@@ -13,6 +13,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/reasoningpolicy"
 	turnmsg "github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/turn"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/slashview"
+	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/style"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/app"
@@ -730,9 +731,40 @@ func TestSlashAutocompleteUsesBubblesListPresentation(t *testing.T) {
 	view := &slashPaneView{}
 	view.sync(newPaneRenderContext(model))
 	rendered := view.Render(newPaneRenderContext(model))
-	for _, want := range []string{"[ ] skill-01", "[ ] skill-02", "Description for skill 01", "user"} {
+	pending := strings.TrimSpace(tuistyle.UnicodeTodoPending)
+	for _, want := range []string{pending + " skill-01", pending + " skill-02", "Description for skill 01", "user"} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("bubbles slash list missing %q:\n%s", want, rendered)
+		}
+	}
+}
+
+func TestSlashDropdownRowsShareComposerGutter(t *testing.T) {
+	for _, width := range []int{40, 60, 80, 120} {
+		model := newTestSkillsModel(t, 3)
+		model.resize(width, 24)
+		model.panes.bottom.prompt().SetValue("/skills ")
+		if !model.slashOpen() {
+			t.Fatalf("width %d: expected slash open for /skills ", width)
+		}
+		model.syncSlashView()
+		view := model.slashState()
+		if view == nil {
+			t.Fatalf("width %d: expected slash pane state", width)
+		}
+		lines := strings.Split(view.Render(newPaneRenderContext(model)), "\n")
+		if len(lines) < 2 {
+			t.Fatalf("width %d: expected item rows and a help row, got %q", width, lines)
+		}
+		limit := width - 2
+		for i, line := range lines[:len(lines)-1] {
+			if got := ansi.StringWidth(line); got > limit {
+				t.Fatalf("width %d item row %d width = %d, want <= %d: %q", width, i, got, limit, line)
+			}
+		}
+		helpRow := lines[len(lines)-1]
+		if got := ansi.StringWidth(helpRow); got != limit {
+			t.Fatalf("width %d help row width = %d, want %d: %q", width, got, limit, helpRow)
 		}
 	}
 }
@@ -1443,8 +1475,8 @@ func TestActiveSkillSlashCompletion(t *testing.T) {
 	for _, match := range matches {
 		if match.Name == "golang-code-review" {
 			foundActive = true
-			if match.PrefixTag != "[skill]" {
-				t.Fatalf("expected PrefixTag [skill], got %q", match.PrefixTag)
+			if wantTag := strings.TrimSpace(tuistyle.UnicodeIcons.Skill); match.PrefixTag != wantTag {
+				t.Fatalf("expected skill icon tag %q, got %q", wantTag, match.PrefixTag)
 			}
 			if match.Argument != slashview.ArgumentRest {
 				t.Fatalf("expected ArgumentRest, got %v", match.Argument)

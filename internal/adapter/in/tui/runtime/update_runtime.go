@@ -10,10 +10,10 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/clipboardimage"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/composer"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/questionbridge"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/transientnotice"
 	turnmsg "github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/turn"
-	"github.com/phongsathornpt/protonman/internal/core/permission"
 )
 
 type clipboardImageLoadedMsg struct {
@@ -49,7 +49,7 @@ func (m *bubbleModel) beginClipboardImagePaste() tea.Cmd {
 		return nil
 	}
 	prompt := m.panes.bottom.prompt()
-	return loadClipboardImage(prompt.Value(), len(m.panes.bottom.composer.attachments.localImages))
+	return loadClipboardImage(prompt.Value(), m.panes.bottom.composer.attachments.Len())
 }
 
 func (m *bubbleModel) updateClipboardImageLoaded(message clipboardImageLoadedMsg) tea.Cmd {
@@ -60,7 +60,7 @@ func (m *bubbleModel) updateClipboardImageLoaded(message clipboardImageLoadedMsg
 		return nil
 	}
 	prompt := m.panes.bottom.prompt()
-	if prompt.Value() != message.draftText || len(m.panes.bottom.composer.attachments.localImages) != message.draftAttachments {
+	if prompt.Value() != message.draftText || m.panes.bottom.composer.attachments.Len() != message.draftAttachments {
 		if message.path != "" {
 			_ = os.Remove(message.path)
 		}
@@ -77,7 +77,7 @@ func (m *bubbleModel) updateClipboardImageLoaded(message clipboardImageLoadedMsg
 		m.requestRelayout()
 		return nil
 	}
-	m.panes.bottom.composer.attachments.attachTemporaryImage(prompt, message.path)
+	m.panes.bottom.composer.attachments.AttachTemporary(prompt, message.path)
 	m.syncSlashView()
 	m.requestRelayout()
 	return nil
@@ -139,13 +139,13 @@ func (m *bubbleModel) updateTerminalEvent(msg tea.Msg) (tea.Cmd, bool) {
 		if prompt == nil {
 			return nil, true
 		}
-		if path, ok := localImagePathFromPaste(message.Content, m.workDir); ok {
+		if path, ok := composer.LocalImagePathFromPaste(message.Content, m.workDir); ok {
 			m.panes.bottom.attachImage(path)
 			m.syncSlashView()
 			m.requestRelayout()
 			return nil, true
 		}
-		cleaned := normalizePastedPath(message.Content, m.workDir)
+		cleaned := composer.NormalizePastedPath(message.Content, m.workDir)
 		updated, command := prompt.Update(tea.PasteMsg{Content: cleaned})
 		*prompt = updated
 		m.syncSlashView()
@@ -269,15 +269,7 @@ func (m *bubbleModel) updateAnimationEvent(msg tea.Msg) (tea.Cmd, bool) {
 		if m.historyState != nil {
 			m.historyState.UpdateActiveSpinner(m.spinnerIndicator())
 		}
-		prompt := m.panes.bottom.prompt()
-		animateComposer := !m.reducedMotion && m.panes.bottom.composerVisible() &&
-			prompt != nil && prompt.Focused() &&
-			m.permissionView() == nil &&
-			(m.service == nil || m.service.Mode() != permission.ModeDeny)
-		if animateComposer {
-			m.promptAnimationPhase++
-		}
-		m.refreshStatusAndComposerFrame(animateComposer)
+		m.refreshStatusFrame()
 		return command, true
 	case cursor.BlinkMsg:
 		if m.reducedMotion {

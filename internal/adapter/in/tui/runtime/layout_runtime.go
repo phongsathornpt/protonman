@@ -298,8 +298,7 @@ func (m *bubbleModel) buildFrameLayout() frameLayout {
 	if m.panes.bottom.composerVisible() {
 		if profile.Mode == panecommon.LayoutTiny || m.layout.width < 24 {
 			frame.divider = chromeDivider(m.layout.width)
-			keepLowerRule := frame.top == ""
-			frame.composer = composerContentView(m.promptView(), keepLowerRule)
+			frame.composer = m.promptView()
 		} else {
 			topAbove := false
 			if top := m.panes.bottom.top(); top != nil && top.PresentationMode() != paneBelowComposer {
@@ -308,7 +307,7 @@ func (m *bubbleModel) buildFrameLayout() frameLayout {
 			if frame.top != "" && topAbove {
 				frame.divider = chromeDivider(m.layout.width)
 			}
-			frame.composer = composerContentView(m.promptView(), true)
+			frame.composer = m.promptView()
 		}
 	}
 	for _, part := range []string{frame.header, frame.divider, frame.status, frame.top, frame.composer} {
@@ -328,10 +327,6 @@ func chromeDivider(width int) string {
 	return mutedStyle.Render(strings.Repeat("─", max(1, width)))
 }
 
-func composerContentView(view string, keepLowerRule bool) string {
-	return view
-}
-
 type viewportScrollSnapshot struct {
 	follow      bool
 	yOffset     int
@@ -349,18 +344,25 @@ func (m *bubbleModel) reconcileLayout() {
 	}
 	m.layout.dirty = false
 	m.preparePaneViews()
-	m.updateComposerHeightLimit()
+	frame, reusable := m.updateComposerHeightLimit()
+	if !reusable {
+		frame = m.buildFrameLayout()
+	}
 	scroll := m.captureViewportScroll()
-	m.applyFrameLayout(scroll, m.buildFrameLayout())
+	m.applyFrameLayout(scroll, frame)
 }
 
-func (m *bubbleModel) updateComposerHeightLimit() {
+// updateComposerHeightLimit derives the composer's row cap from the space left
+// by the rest of the frame. It returns the frame it measured along with whether
+// that frame is still valid: changing MaxHeight alters prompt height, so a
+// frame built at the old cap must be rebuilt by the caller.
+func (m *bubbleModel) updateComposerHeightLimit() (frameLayout, bool) {
 	if m == nil || m.layout.width <= 0 || m.layout.height <= 0 || m.panes.bottom == nil || !m.panes.bottom.composerVisible() {
-		return
+		return frameLayout{}, false
 	}
 	prompt := m.panes.bottom.prompt()
 	if prompt == nil {
-		return
+		return frameLayout{}, false
 	}
 
 	frame := m.buildFrameLayout()
@@ -368,11 +370,12 @@ func (m *bubbleModel) updateComposerHeightLimit() {
 	availableRows := m.layout.height - minTranscriptViewportRows - fixedHeight
 	maxRows := min(maxComposerVisibleRows, max(1, availableRows))
 	if prompt.MaxHeight == maxRows {
-		return
+		return frame, true
 	}
 
 	prompt.MaxHeight = maxRows
 	prompt.SetWidth(composerUsableWidth(m.layout.width))
+	return frameLayout{}, false
 }
 
 func (m *bubbleModel) preparePaneViews() {
@@ -441,10 +444,6 @@ func (m *bubbleModel) refreshFrameLayout() {
 }
 
 func (m *bubbleModel) refreshStatusFrame() {
-	m.refreshStatusAndComposerFrame(false)
-}
-
-func (m *bubbleModel) refreshStatusAndComposerFrame(animateComposer bool) {
 	if m == nil {
 		return
 	}
@@ -461,22 +460,9 @@ func (m *bubbleModel) refreshStatusAndComposerFrame(animateComposer bool) {
 		m.requestRelayout()
 		return
 	}
-	var newComposer string
-	if animateComposer && m.panes.bottom.composerVisible() {
-		profile := m.layoutProfile()
-		keepLowerRule := profile.Mode != panecommon.LayoutTiny || m.layout.frame.top == ""
-		newComposer = composerContentView(m.promptView(), keepLowerRule)
-		if lipgloss.Height(newComposer) != lipgloss.Height(m.layout.frame.composer) {
-			m.requestRelayout()
-			return
-		}
-	}
 	m.layout.generation++
 	m.layout.frame.generation = m.layout.generation
 	m.layout.frame.status = newStatus
-	if animateComposer && m.panes.bottom.composerVisible() {
-		m.layout.frame.composer = newComposer
-	}
 	m.invalidateLiveView()
 }
 
@@ -487,9 +473,7 @@ func (m *bubbleModel) refreshComposerFrame() {
 	if !m.panes.bottom.composerVisible() {
 		return
 	}
-	profile := m.layoutProfile()
-	keepLowerRule := profile.Mode != panecommon.LayoutTiny || m.layout.frame.top == ""
-	newComposer := composerContentView(m.promptView(), keepLowerRule)
+	newComposer := m.promptView()
 	oldComposerHeight := 0
 	if m.layout.frame.composer != "" {
 		oldComposerHeight = lipgloss.Height(m.layout.frame.composer)

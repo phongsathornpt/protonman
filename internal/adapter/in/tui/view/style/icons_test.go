@@ -48,7 +48,7 @@ func TestIconProfilesPreservePrefixWidthContract(t *testing.T) {
 			icons.Composer, icons.Prompt, icons.Mark, icons.Tool, icons.ToolSuccess, icons.ToolError,
 			icons.ToolDenied, icons.Web, icons.Read, icons.Dir, icons.Search, icons.Exec,
 			icons.Edit, icons.Skill, icons.Agent, icons.Git, icons.Generic,
-			icons.TodoPending, icons.TodoActive,
+			icons.TodoPending, icons.TodoActive, icons.Plan, icons.Bash,
 		}
 		for _, glyph := range prefixes {
 			if got := ansi.StringWidth(glyph); got != 2 {

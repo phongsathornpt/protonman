@@ -1440,22 +1440,11 @@ func TestAppendPaneGroupPreservesOverlappingSlices(t *testing.T) {
 }
 
 func TestPromptPlaceholderReflectsRunnerState(t *testing.T) {
-	if got := promptPlaceholder(false, permission.ModeAsk, false); got != "Message or /command…" {
+	if got := promptPlaceholder(false); got != "Message or /command…" {
 		t.Fatalf("no runner placeholder = %q", got)
 	}
-
-	for _, tc := range []struct {
-		mode permission.Mode
-		plan bool
-	}{
-		{permission.ModeAsk, false},
-		{permission.ModeAlwaysApprove, false},
-		{permission.ModeDeny, false},
-		{permission.ModeAsk, true},
-	} {
-		if got := promptPlaceholder(true, tc.mode, tc.plan); got != "Ask universal to build, test, or type / for commands…" {
-			t.Fatalf("runner placeholder = %q, want contextual guidance", got)
-		}
+	if got := promptPlaceholder(true); got != "Ask universal to build, test, or type / for commands…" {
+		t.Fatalf("runner placeholder = %q, want contextual guidance", got)
 	}
 
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())

@@ -7,8 +7,40 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 )
+
+func TestMentionDropdownRowsShareComposerGutter(t *testing.T) {
+	for _, width := range []int{40, 80} {
+		m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
+		m.resize(width, 24)
+		m.panes.bottom.prompt().SetValue("@")
+		m.panes.bottom.prompt().CursorEnd()
+		m.syncSlashView()
+		if !m.mentionOpen() {
+			t.Fatalf("width %d: expected the mention pane to open", width)
+		}
+		state := m.mentionState()
+		if state == nil {
+			t.Fatalf("width %d: expected mention pane state", width)
+		}
+		lines := strings.Split(state.Render(newPaneRenderContext(m)), "\n")
+		if len(lines) < 2 {
+			t.Fatalf("width %d: expected item rows and a help row, got %q", width, lines)
+		}
+		limit := width - 2
+		for i, line := range lines[:len(lines)-1] {
+			if got := ansi.StringWidth(line); got > limit {
+				t.Fatalf("width %d item row %d width = %d, want <= %d: %q", width, i, got, limit, line)
+			}
+		}
+		helpRow := lines[len(lines)-1]
+		if got := ansi.StringWidth(helpRow); got != limit {
+			t.Fatalf("width %d help row width = %d, want %d: %q", width, got, limit, helpRow)
+		}
+	}
+}
 
 func TestMentionPopupTrigger(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())

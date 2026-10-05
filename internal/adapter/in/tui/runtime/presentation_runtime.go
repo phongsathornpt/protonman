@@ -25,9 +25,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/feature/agent"
 )
 
-func promptPlaceholder(hasRunner bool, mode permission.Mode, planMode bool) string {
-	_ = mode
-	_ = planMode
+func promptPlaceholder(hasRunner bool) string {
 	if !hasRunner {
 		return "Message or /command…"
 	}
@@ -67,7 +65,6 @@ func (m *bubbleModel) renderComposerCard() string {
 	icons := tuistyle.OrUnicodeIcons(m.icons)
 	prompt := m.panes.bottom.prompt()
 	focused := prompt.Focused()
-	animated := false
 	bashMode := m.panes.bottom.bashMode()
 
 	borderStyle := tuistyle.ComposerBorderNormal
@@ -82,17 +79,16 @@ func (m *bubbleModel) renderComposerCard() string {
 		borderStyle = tuistyle.ComposerBorderPlan
 	case focused:
 		borderStyle = tuistyle.ComposerBorderFocused
-		animated = m.busy && !m.reducedMotion
 	}
 
-	topBorder := m.buildComposerTopRail(totalWidth, borderStyle, icons, animated)
+	topBorder := m.buildComposerTopRail(totalWidth, borderStyle, icons)
 	bottomBorder := m.buildComposerBottomRail(totalWidth, borderStyle, icons)
 
 	rows := make([]string, 0, 8)
 	rows = append(rows, topBorder)
 
 	// Attachments strip (if any)
-	if len(m.panes.bottom.composer.attachments.localImages) > 0 {
+	if m.panes.bottom.composer.attachments.Len() > 0 {
 		chips := m.panes.bottom.composer.attachments.RenderChips(innerUsableWidth, icons)
 		if chips != "" {
 			rows = append(rows, m.formatComposerCardRow(chips, innerUsableWidth, borderStyle, icons))
@@ -122,7 +118,7 @@ func (m *bubbleModel) formatComposerCardRow(content string, innerWidth int, bord
 	return left + content + right
 }
 
-func (m *bubbleModel) buildComposerTopRail(totalWidth int, borderStyle lipgloss.Style, icons tuistyle.IconSet, animated bool) string {
+func (m *bubbleModel) buildComposerTopRail(totalWidth int, borderStyle lipgloss.Style, icons tuistyle.IconSet) string {
 	cornerLeft := borderStyle.Render(icons.CardTopLeft)
 	cornerRight := borderStyle.Render(icons.CardTopRight)
 	avail := totalWidth - 2
@@ -134,9 +130,9 @@ func (m *bubbleModel) buildComposerTopRail(totalWidth int, borderStyle lipgloss.
 	var leftBadge string
 	switch {
 	case bashMode:
-		leftBadge = borderStyle.Render(icons.CardHorizontal) + " " + tuistyle.ComposerBadgeBashStyle.Render("! bash direct") + " "
+		leftBadge = borderStyle.Render(icons.CardHorizontal) + " " + tuistyle.ComposerBadgeBashStyle.Render(icons.Bash+"bash direct") + " "
 	case m.planMode:
-		leftBadge = borderStyle.Render(icons.CardHorizontal) + " " + tuistyle.ComposerBadgePlanStyle.Render("📋 plan · read-only") + " "
+		leftBadge = borderStyle.Render(icons.CardHorizontal) + " " + tuistyle.ComposerBadgePlanStyle.Render(icons.Plan+"plan · read-only") + " "
 	default:
 		prof, err := agentprofile.ParseProfile(strings.TrimSpace(m.agentProfile))
 		if err != nil || !prof.Valid() {
@@ -147,26 +143,13 @@ func (m *bubbleModel) buildComposerTopRail(totalWidth int, borderStyle lipgloss.
 			brandGlyph += " "
 		}
 		profBadge := tuistyle.ComposerBadgeActiveStyle.Render(fmt.Sprintf("%s%s", brandGlyph, string(prof)))
-		modeBadge := tuistyle.ComposerBadgeStyle.Render(m.permissionModeLabel())
-		if totalWidth >= 60 {
-			leftBadge = borderStyle.Render(icons.CardHorizontal) + " " + profBadge + " " + borderStyle.Render(icons.CardHorizontal) + " " + modeBadge + " "
-		} else {
-			leftBadge = borderStyle.Render(icons.CardHorizontal) + " " + profBadge + " "
-		}
+		leftBadge = borderStyle.Render(icons.CardHorizontal) + " " + profBadge + " "
 	}
 
-	rightParts := make([]string, 0, 2)
-	prompt := m.panes.bottom.prompt()
-	if prompt != nil && prompt.LineCount() > 1 {
-		rightParts = append(rightParts, tuistyle.ComposerLineCountStyle.Render(fmt.Sprintf("%d lines", prompt.LineCount())))
-	}
 	modelName := modelFooterLabel(m.activeModel)
-	if totalWidth >= 70 && strings.TrimSpace(modelName) != "" && !bashMode {
-		rightParts = append(rightParts, tuistyle.ComposerBadgeStyle.Render(modelName))
-	}
 	var rightBadge string
-	if len(rightParts) > 0 {
-		rightBadge = " " + strings.Join(rightParts, " ") + " " + borderStyle.Render(icons.CardHorizontal)
+	if totalWidth >= 70 && strings.TrimSpace(modelName) != "" && !bashMode && !m.layoutProfile().ShowHeader {
+		rightBadge = " " + tuistyle.ComposerBadgeStyle.Render(modelName) + " " + borderStyle.Render(icons.CardHorizontal)
 	}
 
 	leftW := ansi.StringWidth(leftBadge)
@@ -183,9 +166,7 @@ func (m *bubbleModel) buildComposerTopRail(totalWidth int, borderStyle lipgloss.
 	}
 
 	var middleRail string
-	if animated && fillWidth > 0 {
-		middleRail = renderAnimatedPromptDivider(fillWidth, m.promptAnimationPhase)
-	} else if fillWidth > 0 {
+	if fillWidth > 0 {
 		middleRail = borderStyle.Render(strings.Repeat(icons.CardHorizontal, fillWidth))
 	}
 
@@ -200,13 +181,19 @@ func (m *bubbleModel) buildComposerBottomRail(totalWidth int, borderStyle lipglo
 		return cornerLeft + cornerRight
 	}
 
-	permission := m.permissionModeLabel()
+	mode := ""
+	if !m.planMode {
+		mode = m.permissionModeLabel()
+	}
 	reasoning := reasoningpolicy.EffortLabel(m.reasoningEffort)
 	var rightText string
-	if reasoning != "" && reasoning != permission {
-		rightText = reasoning + " · " + permission
-	} else {
-		rightText = permission
+	switch {
+	case reasoning != "" && mode != "":
+		rightText = reasoning + " · " + mode
+	case reasoning != "":
+		rightText = reasoning
+	default:
+		rightText = mode
 	}
 	rightBadge := tuistyle.ComposerContextMetricStyle.Render(rightText)
 	var rightPart string
@@ -254,30 +241,6 @@ func (m *bubbleModel) buildComposerBottomRail(totalWidth int, borderStyle lipglo
 	middleRail := borderStyle.Render(strings.Repeat(icons.CardHorizontal, max(1, fillWidth)))
 
 	return cornerLeft + leftPart + middleRail + rightPart + cornerRight
-}
-
-func renderAnimatedPromptDivider(width, phase int) string {
-	width = max(1, width)
-	segmentWidth := min(5, width)
-	maxStart := width - segmentWidth
-	if maxStart > 0 {
-		cycle := maxStart * 2
-		phase = ((phase % cycle) + cycle) % cycle
-		if phase > maxStart {
-			phase = cycle - phase
-		}
-	} else {
-		phase = 0
-	}
-	parts := make([]string, 0, 3)
-	if phase > 0 {
-		parts = append(parts, tuistyle.PromptDividerIdle.Render(strings.Repeat("─", phase)))
-	}
-	parts = append(parts, tuistyle.PromptDividerFocused.Render(strings.Repeat("─", segmentWidth)))
-	if tail := width - phase - segmentWidth; tail > 0 {
-		parts = append(parts, tuistyle.PromptDividerIdle.Render(strings.Repeat("─", tail)))
-	}
-	return strings.Join(parts, "")
 }
 
 func (m *bubbleModel) modeChip() string {

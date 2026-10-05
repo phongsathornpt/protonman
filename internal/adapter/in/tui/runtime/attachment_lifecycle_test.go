@@ -43,8 +43,8 @@ func TestHistoryNavigationDoesNotReplaceAttachmentDraft(t *testing.T) {
 	if pane.composer.historyPos != beforePos {
 		t.Fatalf("history position = %d, want %d", pane.composer.historyPos, beforePos)
 	}
-	if len(pane.composer.attachments.localImages) != 1 {
-		t.Fatalf("attachments = %d, want 1", len(pane.composer.attachments.localImages))
+	if got := pane.composer.attachments.Len(); got != 1 {
+		t.Fatalf("attachments = %d, want 1", got)
 	}
 }
 

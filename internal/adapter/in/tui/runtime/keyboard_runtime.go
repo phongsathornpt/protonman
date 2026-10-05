@@ -10,6 +10,7 @@ import (
 	"charm.land/bubbles/v2/textarea"
 	tea "charm.land/bubbletea/v2"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/cmdpolicy"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/composer"
 	tuiconv "github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/conversation"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/mentionview"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/slashview"
@@ -96,9 +97,9 @@ func (m *bubbleModel) composerInput() tuiconv.QueuedInput {
 		return tuiconv.QueuedInput{}
 	}
 	prompt := m.panes.bottom.prompt()
-	attachments := m.panes.bottom.composer.attachments.snapshot(prompt)
+	attachments := m.panes.bottom.composer.attachments.Snapshot(prompt)
 	return tuiconv.QueuedInput{
-		Text:        stripAttachmentPlaceholders(prompt.Value(), attachments),
+		Text:        composer.StripPlaceholders(prompt.Value(), attachments),
 		Attachments: attachments,
 	}
 }
@@ -157,7 +158,7 @@ func (m *bubbleModel) submit() tea.Cmd {
 		}
 		if len(expanded.ImagePaths) > 0 {
 			for _, imgPath := range expanded.ImagePaths {
-				m.panes.bottom.composer.attachments.attachImage(&m.panes.bottom.composer.input, imgPath)
+				m.panes.bottom.composer.attachments.Attach(&m.panes.bottom.composer.input, imgPath)
 			}
 			input = m.composerInput()
 		}
@@ -174,7 +175,7 @@ func (m *bubbleModel) submit() tea.Cmd {
 			return nil
 		}
 		if len(input.Attachments) > 0 {
-			m.panes.bottom.composer.attachments.release()
+			m.panes.bottom.composer.attachments.Release()
 		}
 		m.resetPrompt()
 		m.panes.bottom.remove(slashViewID)
@@ -183,7 +184,7 @@ func (m *bubbleModel) submit() tea.Cmd {
 		return nil
 	}
 	if len(input.Attachments) > 0 {
-		m.panes.bottom.composer.attachments.release()
+		m.panes.bottom.composer.attachments.Release()
 	}
 	m.resetPrompt()
 	m.panes.bottom.remove(slashViewID)
