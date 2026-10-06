@@ -291,6 +291,34 @@ func (s *Session) ExecutePrompt(
 				delete(pendingToolCalls, callID)
 			}
 
+		case app.EventUsage:
+			used := event.Usage.TotalTokens
+			if used <= 0 {
+				used = event.Usage.InputTokens + event.Usage.OutputTokens
+			}
+			size := 0
+			s.mu.Lock()
+			runner := s.runner
+			s.mu.Unlock()
+			if runner != nil {
+				size = app.ModelContextWindow(runner)
+			}
+			if size <= 0 {
+				size = 128000
+			}
+			return notifier(RPCNotification{
+				JSONRPC: "2.0",
+				Method:  "session/update",
+				Params: map[string]any{
+					"sessionId": s.id,
+					"update": map[string]any{
+						"sessionUpdate": "usage_update",
+						"used":          used,
+						"size":          size,
+					},
+				},
+			})
+
 		case app.EventCompleted:
 			if event.Message.ToolCalls != nil || event.Text != "" {
 				turnMessages = append(turnMessages, event.Message)
@@ -342,6 +370,23 @@ func (s *Session) ExecutePrompt(
 	if saveErr != nil {
 		return SessionPromptResult{}, fmt.Errorf("save session %q: %w", s.id, saveErr)
 	}
+
+	messages := s.Messages()
+	preview := session.Preview(session.FromModelMessages(messages))
+	title := sessionListTitle(s.id, s.workspaceName, preview)
+	updatedAt := time.Now().UTC().Format(time.RFC3339Nano)
+	_ = notifier(RPCNotification{
+		JSONRPC: "2.0",
+		Method:  "session/update",
+		Params: map[string]any{
+			"sessionId": s.id,
+			"update": map[string]any{
+				"sessionUpdate": "session_info_update",
+				"title":         title,
+				"updatedAt":     updatedAt,
+			},
+		},
+	})
 
 	return SessionPromptResult{StopReason: StopReasonEndTurn}, nil
 }

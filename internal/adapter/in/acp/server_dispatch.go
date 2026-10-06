@@ -30,6 +30,15 @@ func (s *Server) advertisedSessionCapabilities() SessionCapabilities {
 func (s *Server) dispatch(ctx context.Context, request RPCRequest, output io.Writer) (any, *RPCNotification, error) {
 	switch request.Method {
 	case "initialize":
+		var params InitializeParams
+		if len(request.Params) > 0 {
+			if err := json.Unmarshal(request.Params, &params); err != nil {
+				return nil, nil, fmt.Errorf("decode initialize: %w", err)
+			}
+		}
+		s.mu.Lock()
+		s.clientCapabilities = params.ClientCapabilities
+		s.mu.Unlock()
 		return InitializeResult{
 			ProtocolVersion: ProtocolVersion,
 			AgentCapabilities: AgentCapabilities{

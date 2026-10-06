@@ -69,7 +69,7 @@ func (c *controller) RefreshProviders() {
 		return
 	}
 
-	callCtx, cancel := context.WithTimeout(c.ctx, 5*time.Second)
+	callCtx, cancel := context.WithTimeout(c.context(), 5*time.Second)
 	defer cancel()
 
 	var result acpProvidersListResult
@@ -120,7 +120,7 @@ func (c *controller) SaveProvider(params ProvidersSaveParams, onDone func(err er
 	c.mu.Unlock()
 	c.notify()
 
-	go func() {
+	c.spawn(func() {
 		defer func() {
 			c.mu.Lock()
 			c.providerUpdating = false
@@ -129,7 +129,7 @@ func (c *controller) SaveProvider(params ProvidersSaveParams, onDone func(err er
 			c.notify()
 		}()
 
-		callCtx, cancel := context.WithTimeout(c.ctx, 10*time.Second)
+		callCtx, cancel := context.WithTimeout(c.context(), 10*time.Second)
 		defer cancel()
 
 		var result acpProvidersSaveResult
@@ -155,7 +155,7 @@ func (c *controller) SaveProvider(params ProvidersSaveParams, onDone func(err er
 		if onDone != nil {
 			onDone(nil)
 		}
-	}()
+	})
 }
 
 func (c *controller) DeleteProvider(providerName string, onDone func(err error)) {
@@ -174,7 +174,7 @@ func (c *controller) DeleteProvider(providerName string, onDone func(err error))
 	c.mu.Unlock()
 	c.notify()
 
-	go func() {
+	c.spawn(func() {
 		defer func() {
 			c.mu.Lock()
 			c.providerUpdating = false
@@ -183,7 +183,7 @@ func (c *controller) DeleteProvider(providerName string, onDone func(err error))
 			c.notify()
 		}()
 
-		callCtx, cancel := context.WithTimeout(c.ctx, 5*time.Second)
+		callCtx, cancel := context.WithTimeout(c.context(), 5*time.Second)
 		defer cancel()
 
 		var result struct {
@@ -213,7 +213,7 @@ func (c *controller) DeleteProvider(providerName string, onDone func(err error))
 		if onDone != nil {
 			onDone(nil)
 		}
-	}()
+	})
 }
 
 func (c *controller) FetchProviderModels(providerID, baseURL, apiKey, providerType string, onDone func(models []string, err error)) {
@@ -238,7 +238,7 @@ func (c *controller) FetchProviderModels(providerID, baseURL, apiKey, providerTy
 	c.mu.Unlock()
 	c.notify()
 
-	go func() {
+	c.spawn(func() {
 		defer func() {
 			c.mu.Lock()
 			delete(c.providerModelsLoading, providerID)
@@ -247,7 +247,7 @@ func (c *controller) FetchProviderModels(providerID, baseURL, apiKey, providerTy
 			c.notify()
 		}()
 
-		callCtx, cancel := context.WithTimeout(c.ctx, 8*time.Second)
+		callCtx, cancel := context.WithTimeout(c.context(), 8*time.Second)
 		defer cancel()
 
 		var result acpProvidersModelsResult
@@ -285,7 +285,7 @@ func (c *controller) FetchProviderModels(providerID, baseURL, apiKey, providerTy
 		if onDone != nil {
 			onDone(models, nil)
 		}
-	}()
+	})
 }
 
 func cloneProviderModels(src map[string][]string) map[string][]string {

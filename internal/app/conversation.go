@@ -42,6 +42,7 @@ const (
 	EventToolResult     = turn.EventToolResult
 	EventMemoryActivity = turn.EventMemoryActivity
 	EventRetryScheduled = turn.EventRetryScheduled
+	EventUsage          = turn.EventUsage
 	EventCompleted      = turn.EventCompleted
 	EventFailed         = turn.EventFailed
 )
@@ -51,6 +52,15 @@ var (
 	ErrToolDispatchUnavailable = turn.ErrToolDispatchUnavailable
 	ErrUnresolvedToolCall      = turn.ErrUnresolvedToolCall
 )
+
+// ModelContextWindow returns the context window size of the conversation's model, if known.
+func ModelContextWindow(conversation Conversation) int {
+	loop, ok := conversation.(*turn.Loop)
+	if !ok || loop == nil {
+		return 0
+	}
+	return loop.ContextWindow()
+}
 
 // ReasoningPolicy returns the explicit reasoning policy when the underlying
 // conversation supports session-local reasoning control.

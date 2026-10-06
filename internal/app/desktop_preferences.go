@@ -29,6 +29,7 @@ type DesktopPreferencesRepository interface {
 type DesktopPreferences struct {
 	repository DesktopPreferencesRepository
 	mu         sync.RWMutex
+	saveMu     sync.Mutex
 	state      DesktopPreferencesState
 	loaded     bool
 }
@@ -56,6 +57,8 @@ func (p *DesktopPreferences) Load(ctx context.Context) (DesktopPreferencesState,
 	if p == nil {
 		return DesktopPreferencesState{}, nil
 	}
+	p.saveMu.Lock()
+	defer p.saveMu.Unlock()
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if p.loaded || p.repository == nil {
@@ -89,6 +92,15 @@ func (p *DesktopPreferences) Snapshot() DesktopPreferencesState {
 	return p.cloneStateLocked()
 }
 
+func (p *DesktopPreferences) save(ctx context.Context) error {
+	p.saveMu.Lock()
+	defer p.saveMu.Unlock()
+	if p.repository == nil {
+		return nil
+	}
+	return p.repository.Save(ctx, p.Snapshot())
+}
+
 // TogglePin toggles the pinned status of a session and saves the change.
 func (p *DesktopPreferences) TogglePin(ctx context.Context, sessionID string) (bool, error) {
 	if p == nil {
@@ -109,16 +121,9 @@ func (p *DesktopPreferences) TogglePin(ctx context.Context, sessionID string) (b
 		p.state.PinnedSessions = append(p.state.PinnedSessions, sessionID)
 		pinned = true
 	}
-	cloned := p.cloneStateLocked()
-	repo := p.repository
 	p.mu.Unlock()
 
-	if repo != nil {
-		if err := repo.Save(ctx, cloned); err != nil {
-			return pinned, err
-		}
-	}
-	return pinned, nil
+	return pinned, p.save(ctx)
 }
 
 // SetCustomTitle updates or deletes a custom title for a session and saves the change.
@@ -141,14 +146,9 @@ func (p *DesktopPreferences) SetCustomTitle(ctx context.Context, sessionID, titl
 	} else {
 		p.state.CustomTitles[sessionID] = title
 	}
-	cloned := p.cloneStateLocked()
-	repo := p.repository
 	p.mu.Unlock()
 
-	if repo != nil {
-		return repo.Save(ctx, cloned)
-	}
-	return nil
+	return p.save(ctx)
 }
 
 // SetFilterMode updates the current filter mode (all, running, pinned) and saves the change.
@@ -163,14 +163,9 @@ func (p *DesktopPreferences) SetFilterMode(ctx context.Context, mode string) err
 
 	p.mu.Lock()
 	p.state.FilterMode = mode
-	cloned := p.cloneStateLocked()
-	repo := p.repository
 	p.mu.Unlock()
 
-	if repo != nil {
-		return repo.Save(ctx, cloned)
-	}
-	return nil
+	return p.save(ctx)
 }
 
 // SetTheme updates the UI theme (dark, light, slate-dark, slate-light) and saves the change.
@@ -182,14 +177,9 @@ func (p *DesktopPreferences) SetTheme(ctx context.Context, theme string) error {
 
 	p.mu.Lock()
 	p.state.Theme = theme
-	cloned := p.cloneStateLocked()
-	repo := p.repository
 	p.mu.Unlock()
 
-	if repo != nil {
-		return repo.Save(ctx, cloned)
-	}
-	return nil
+	return p.save(ctx)
 }
 
 // RemoveSession cleans up any pinned state or custom title when a session is deleted.
@@ -214,18 +204,12 @@ func (p *DesktopPreferences) RemoveSession(ctx context.Context, sessionID string
 			changed = true
 		}
 	}
-	if !changed {
-		p.mu.Unlock()
-		return nil
-	}
-	cloned := p.cloneStateLocked()
-	repo := p.repository
 	p.mu.Unlock()
 
-	if repo != nil {
-		return repo.Save(ctx, cloned)
+	if !changed {
+		return nil
 	}
-	return nil
+	return p.save(ctx)
 }
 
 // SetAgentDefaultModel updates the preferred default model for an agent and saves the change.
@@ -244,14 +228,9 @@ func (p *DesktopPreferences) SetAgentDefaultModel(ctx context.Context, agentID, 
 		p.state.AgentDefaultModels = make(map[string]string)
 	}
 	p.state.AgentDefaultModels[agentID] = model
-	cloned := p.cloneStateLocked()
-	repo := p.repository
 	p.mu.Unlock()
 
-	if repo != nil {
-		return repo.Save(ctx, cloned)
-	}
-	return nil
+	return p.save(ctx)
 }
 
 // SetAgentAvailableModels updates the cached available models for an agent and saves the change.
@@ -269,14 +248,9 @@ func (p *DesktopPreferences) SetAgentAvailableModels(ctx context.Context, agentI
 		p.state.AgentAvailableModels = make(map[string][]string)
 	}
 	p.state.AgentAvailableModels[agentID] = slices.Clone(models)
-	cloned := p.cloneStateLocked()
-	repo := p.repository
 	p.mu.Unlock()
 
-	if repo != nil {
-		return repo.Save(ctx, cloned)
-	}
-	return nil
+	return p.save(ctx)
 }
 
 func (p *DesktopPreferences) cloneStateLocked() DesktopPreferencesState {

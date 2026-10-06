@@ -2,6 +2,7 @@ package acp
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"io"
@@ -247,5 +248,73 @@ func TestPermissionBrokerCloseReleasesWaiters(t *testing.T) {
 	broker.close()
 	if _, _, err := broker.register(); err == nil {
 		t.Fatal("a closed broker must refuse new permission requests")
+	}
+}
+
+type syncBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *syncBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *syncBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
+}
+
+func TestAbandonedPermissionRequestNotifiesClientWithCancelRequest(t *testing.T) {
+	out := &syncBuffer{}
+	server := &Server{output: out}
+	broker := newPermissionBroker(server)
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan permission.Resolution, 1)
+	go func() {
+		resolution, _ := broker.request(ctx, "s1", permission.Request{CallID: "c1", ToolName: "bash"})
+		done <- resolution
+	}()
+	deadline := time.Now().Add(2 * time.Second)
+	for !strings.Contains(out.String(), requestPermissionMethod) {
+		if time.Now().After(deadline) {
+			t.Fatal("permission request was never sent")
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	cancel()
+	select {
+	case resolution := <-done:
+		if resolution.Action != permission.ActionDeny {
+			t.Fatalf("abandoned permission resolution = %#v, want deny", resolution)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("permission request did not unblock on cancel")
+	}
+	var sentID string
+	var notification string
+	for _, line := range strings.Split(strings.TrimSpace(out.String()), "\n") {
+		var frame struct {
+			ID     json.RawMessage `json:"id"`
+			Method string          `json:"method"`
+			Params struct {
+				RequestID json.RawMessage `json:"requestId"`
+			} `json:"params"`
+		}
+		if err := json.Unmarshal([]byte(line), &frame); err != nil {
+			t.Fatalf("decode frame %q: %v", line, err)
+		}
+		switch frame.Method {
+		case requestPermissionMethod:
+			sentID = string(frame.ID)
+		case methodCancelRequest:
+			notification = string(frame.Params.RequestID)
+		}
+	}
+	if sentID == "" || notification != sentID {
+		t.Fatalf("cancel_request requestId = %q, want permission request id %q\noutput: %s", notification, sentID, out.String())
 	}
 }

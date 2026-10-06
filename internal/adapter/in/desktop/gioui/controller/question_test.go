@@ -157,3 +157,93 @@ func TestQuestionRequestCancellation(t *testing.T) {
 		t.Fatalf("expected declined status on cancellation, got: %#v", value)
 	}
 }
+
+func TestElicitationRequestRoundTrip(t *testing.T) {
+	controller := newTestController()
+	controller.state.Sessions = []desktopstate.SessionState{{ID: "session-el-1", Status: desktopstate.TaskRunning}}
+	controller.state.ActiveSessionID = "session-el-1"
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	params := map[string]any{
+		"sessionId": "session-el-1",
+		"message":   "Database configuration",
+		"mode":      "form",
+		"requestedSchema": map[string]any{
+			"type":  "object",
+			"title": "Select database",
+			"properties": map[string]any{
+				"q1": map[string]any{
+					"type":        "string",
+					"title":       "Database engine",
+					"description": "Choose engine",
+					"enum":        []string{"PostgreSQL", "SQLite"},
+				},
+			},
+			"required": []string{"q1"},
+		},
+	}
+	encodedParams, _ := json.Marshal(params)
+	request := acpclient.Request{
+		ID:     json.RawMessage(`"elicitation-1"`),
+		Method: methodElicitationCreate,
+		Params: encodedParams,
+	}
+
+	result := make(chan any, 1)
+	errs := make(chan error, 1)
+	go func() {
+		value, err := controller.handleElicitationRequestFromAgent("", nil, ctx, request)
+		result <- value
+		errs <- err
+	}()
+
+	deadline := time.Now().Add(time.Second)
+	for {
+		controller.mu.RLock()
+		ready := len(controller.state.QuestionInbox) == 1
+		controller.mu.RUnlock()
+		if ready {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("elicitation request was not projected into inbox")
+		}
+		time.Sleep(time.Millisecond)
+	}
+
+	controller.mu.RLock()
+	if controller.state.QuestionInbox[0].Questions[0].Question != "Database engine" {
+		t.Fatalf("question text = %q, want Database engine", controller.state.QuestionInbox[0].Questions[0].Question)
+	}
+	controller.mu.RUnlock()
+
+	controller.ResolveQuestion(string(request.ID), desktopstate.QuestionResponse{
+		Status:          "answered",
+		Answer:          "SQLite",
+		SelectedOptions: []string{"SQLite"},
+	})
+
+	select {
+	case err := <-errs:
+		if err != nil {
+			t.Fatalf("elicitation handler error: %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("elicitation handler did not return")
+	}
+
+	value := <-result
+	respMap, ok := value.(map[string]any)
+	if !ok {
+		t.Fatalf("unexpected elicitation response type: %T", value)
+	}
+	if respMap["action"] != "accept" {
+		t.Fatalf("expected action accept, got: %v", respMap["action"])
+	}
+	content, ok := respMap["content"].(map[string]any)
+	if !ok || content["q1"] != "SQLite" {
+		t.Fatalf("unexpected content: %v", respMap["content"])
+	}
+}

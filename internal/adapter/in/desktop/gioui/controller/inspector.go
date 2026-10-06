@@ -275,7 +275,7 @@ func (c *controller) refreshSessionContextFrom(source *acpclient.Client, session
 	if !ok {
 		return
 	}
-	go func() {
+	c.spawn(func() {
 		defer tracker.finish(trackerKey, time.Now())
 		start := time.Now()
 		defer func() { logSessionRefreshTiming(contextRefreshKind, sessionID, time.Since(start)) }()
@@ -284,7 +284,7 @@ func (c *controller) refreshSessionContextFrom(source *acpclient.Client, session
 			return
 		}
 		c.applySessionContextForAgent(client, result, agentID)
-	}()
+	})
 }
 
 func (c *controller) refreshSessionMemory(sessionID string, force bool, agentIDs ...string) {
@@ -297,7 +297,7 @@ func (c *controller) refreshSessionMemoryFrom(source *acpclient.Client, sessionI
 	if !ok {
 		return
 	}
-	go func() {
+	c.spawn(func() {
 		defer tracker.finish(trackerKey, time.Now())
 		start := time.Now()
 		defer func() { logSessionRefreshTiming(memoryRefreshKind, sessionID, time.Since(start)) }()
@@ -306,7 +306,7 @@ func (c *controller) refreshSessionMemoryFrom(source *acpclient.Client, sessionI
 			return
 		}
 		c.applySessionMemoryForAgent(client, result, agentID)
-	}()
+	})
 }
 
 func (c *controller) refreshSessionRuntime(sessionID string, force bool, agentIDs ...string) {
@@ -315,7 +315,7 @@ func (c *controller) refreshSessionRuntime(sessionID string, force bool, agentID
 	if !ok {
 		return
 	}
-	go func() {
+	c.spawn(func() {
 		defer tracker.finish(trackerKey, time.Now())
 		start := time.Now()
 		defer func() { logSessionRefreshTiming(runtimeRefreshKind, sessionID, time.Since(start)) }()
@@ -331,7 +331,7 @@ func (c *controller) refreshSessionRuntime(sessionID string, force bool, agentID
 			}
 			additionalDirectories := c.additionalDirectoriesForAgent(session.AgentID, session.AdditionalDirectories)
 			params := c.mcpSessionParams(session.ID, session.Workspace, additionalDirectories)
-			callCtx, cancel := context.WithTimeout(c.ctx, reconnectRequestTimeout)
+			callCtx, cancel := context.WithTimeout(c.context(), reconnectRequestTimeout)
 			defer cancel()
 			var resumeResult struct {
 				Modes *struct {
@@ -365,7 +365,7 @@ func (c *controller) refreshSessionRuntime(sessionID string, force bool, agentID
 			return
 		}
 		c.applySessionRuntimeForAgent(client, result, agentID)
-	}()
+	})
 }
 
 func (c *controller) refreshSessionSkills(sessionID string, force bool, agentIDs ...string) {
@@ -378,14 +378,14 @@ func (c *controller) refreshSessionSkillsFrom(source *acpclient.Client, sessionI
 	if !ok {
 		return
 	}
-	go func() {
+	c.spawn(func() {
 		defer tracker.finish(trackerKey, time.Now())
 		var result sessionSkillsResult
 		if err := c.callInspector(client, "protonman/session/skills", map[string]any{"sessionId": sessionID}, &result); err != nil {
 			return
 		}
 		c.applySessionSkillsForAgent(client, result, agentID)
-	}()
+	})
 }
 
 func (c *controller) RefreshActiveSession(force bool) {
@@ -402,11 +402,7 @@ func (c *controller) RefreshActiveSession(force bool) {
 }
 
 func (c *controller) callInspector(client *acpclient.Client, method string, params any, result any) error {
-	base := c.ctx
-	if base == nil {
-		base = context.Background()
-	}
-	callCtx, cancel := context.WithTimeout(base, inspectorRequestTimeout)
+	callCtx, cancel := context.WithTimeout(c.context(), inspectorRequestTimeout)
 	defer cancel()
 	return client.Call(callCtx, method, params, result)
 }

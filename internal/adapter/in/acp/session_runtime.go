@@ -18,11 +18,19 @@ import (
 )
 
 const (
-	methodSessionRuntime           = "protonman/session/runtime"
-	methodSessionModels            = "protonman/session/models"
-	methodSessionSetModel          = "protonman/session/set_model"
-	methodSessionSetReasoning      = "protonman/session/set_reasoning"
+	methodSessionRuntime = "protonman/session/runtime"
+	methodSessionModels  = "protonman/session/models"
+
+	// Deprecated: use standard ACP method session/set_config_option with configId: model.
+	methodSessionSetModel = "protonman/session/set_model"
+
+	// Deprecated: use standard ACP method session/set_config_option with configId: reasoning.
+	methodSessionSetReasoning = "protonman/session/set_reasoning"
+
+	// Deprecated: use standard ACP method session/set_config_option with configId: lowConcurrency.
 	methodSessionSetLowConcurrency = "protonman/session/set_low_concurrency"
+
+	// Deprecated: use standard ACP method session/set_config_option with configId: permissionMode.
 	methodSessionSetPermissionMode = "protonman/session/set_permission_mode"
 )
 

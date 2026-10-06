@@ -68,7 +68,17 @@ type Server struct {
 	permissions *permissionBroker
 	// questions routes client answers to interactive clarifying questions. It is non-nil
 	// only while Serve is running.
-	questions *questionBroker
+	questions          *questionBroker
+	clientCapabilities ClientCapabilities
+}
+
+func (s *Server) supportsFormElicitation() bool {
+	if s == nil {
+		return false
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.clientCapabilities.Elicitation != nil && s.clientCapabilities.Elicitation.Form != nil
 }
 
 func New(service *toolcall.Service, registry tool.Registry, runner app.Conversation, opts ...Option) (*Server, error) {
@@ -133,11 +143,22 @@ func (s *Server) Serve(ctx context.Context, input io.Reader, output io.Writer) e
 
 	scanner := bufio.NewScanner(input)
 	scanner.Buffer(make([]byte, 0, 64*1024), 10*1024*1024)
-	var prompts sync.WaitGroup
-	asyncErrors := make(chan error, 1)
+	serveCtx, cancelServe := context.WithCancel(ctx)
+	defer cancelServe()
+	dispatcher := newRequestDispatcher(serveCtx, s, output)
+	// stop unwinds every admitted request before Serve returns, so no handler
+	// outlives the output/broker state torn down by the deferred cleanup above.
+	stop := func(err error) error {
+		cancelServe()
+		dispatcher.wait()
+		return err
+	}
 	for scanner.Scan() {
 		if err := ctx.Err(); err != nil {
-			return err
+			return stop(err)
+		}
+		if err := dispatcher.failed(); err != nil {
+			return stop(err)
 		}
 		line := bytes.TrimSpace(scanner.Bytes())
 		if len(line) == 0 {
@@ -152,59 +173,54 @@ func (s *Server) Serve(ctx context.Context, input io.Reader, output io.Writer) e
 		request, parseErr := decodeRequest(line)
 		if parseErr != nil {
 			if err := WriteJSON(output, &s.writeMu, parseErr); err != nil {
-				return err
+				return stop(err)
 			}
 			continue
 		}
+		if request.Method == methodCancelRequest {
+			dispatcher.cancelRequest(request.Params)
+			continue
+		}
 		if request.Method != "session/prompt" {
-			if err := s.handleRequest(ctx, request, output); err != nil {
-				return err
+			if err := dispatcher.submit(request); err != nil {
+				return stop(err)
 			}
 			continue
 		}
 		var params SessionPromptParams
 		if err := json.Unmarshal(request.Params, &params); err != nil {
 			if err := s.writeResponse(output, request.ID, nil, nil, fmt.Errorf("%w: %v", ErrInvalidRequest, err)); err != nil {
-				return err
+				return stop(err)
 			}
 			continue
 		}
 		params.SessionID = strings.TrimSpace(params.SessionID)
 		if params.SessionID == "" {
 			if err := s.writeResponse(output, request.ID, nil, nil, errors.New("sessionId is required")); err != nil {
-				return err
+				return stop(err)
 			}
 			continue
 		}
 		sess, ok := s.lookupSession(params.SessionID)
 		if !ok {
 			if err := s.writeResponse(output, request.ID, nil, nil, fmt.Errorf("unknown session %q", params.SessionID)); err != nil {
-				return err
+				return stop(err)
 			}
 			continue
 		}
-		prompts.Add(1)
-		go func(req RPCRequest, sess *Session, blocks []ContentBlock) {
-			defer prompts.Done()
-			notifier := func(notification RPCNotification) error { return WriteJSON(output, &s.writeMu, notification) }
-			result, promptErr := sess.ExecutePrompt(ctx, blocks, notifier)
-			if err := s.writeResponse(output, req.ID, result, nil, promptErr); err != nil {
-				select {
-				case asyncErrors <- err:
-				default:
-				}
-			}
-		}(request, sess, params.Prompt)
+		if err := dispatcher.submitPrompt(request, sess, params.Prompt); err != nil {
+			return stop(err)
+		}
 	}
 	scanErr := scanner.Err()
-	prompts.Wait()
+	// Input ended: requests already admitted run to completion so a piped
+	// script still receives every response.
+	dispatcher.wait()
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	select {
-	case err := <-asyncErrors:
+	if err := dispatcher.failed(); err != nil {
 		return err
-	default:
 	}
 	if scanErr != nil {
 		return fmt.Errorf("read ACP input: %w", scanErr)
@@ -239,17 +255,23 @@ func decodeRequest(line []byte) (RPCRequest, *RPCResponse) {
 	return request, nil
 }
 
-func (s *Server) handleRequest(ctx context.Context, request RPCRequest, output io.Writer) error {
-	if result, handled, err := s.dispatchSessionConfig(ctx, request); handled {
-		return s.writeResponse(output, request.ID, result, nil, err)
+// route resolves one request to its result, optional trailing notification, and
+// error without writing anything, so callers decide how the outcome is framed.
+func (s *Server) route(ctx context.Context, request RPCRequest, output io.Writer) (any, *RPCNotification, error) {
+	if result, notify, handled, err := s.dispatchSessionConfig(ctx, request); handled {
+		return result, notify, err
 	}
 	if result, handled, err := s.dispatchSessionRuntime(ctx, request); handled {
-		return s.writeResponse(output, request.ID, result, nil, err)
+		return result, nil, err
 	}
 	if result, handled, err := s.dispatchProviders(ctx, request); handled {
-		return s.writeResponse(output, request.ID, result, nil, err)
+		return result, nil, err
 	}
-	result, notify, err := s.dispatch(ctx, request, output)
+	return s.dispatch(ctx, request, output)
+}
+
+func (s *Server) handleRequest(ctx context.Context, request RPCRequest, output io.Writer) error {
+	result, notify, err := s.route(ctx, request, output)
 	return s.writeResponse(output, request.ID, result, notify, err)
 }
 
@@ -260,6 +282,13 @@ func (s *Server) writeResponse(output io.Writer, id json.RawMessage, result any,
 		}
 		if errors.Is(requestErr, ErrMethodNotSupported) {
 			return WriteJSON(output, &s.writeMu, RPCResponse{JSONRPC: "2.0", ID: id, Error: &RPCError{Code: CodeMethodNotFound, Message: requestErr.Error()}})
+		}
+		if errors.Is(requestErr, errRequestCancelled) {
+			return WriteJSON(output, &s.writeMu, RPCResponse{JSONRPC: "2.0", ID: id, Error: &RPCError{Code: CodeRequestCancelled, Message: "Request cancelled"}})
+		}
+		var invalid invalidRequestError
+		if errors.As(requestErr, &invalid) {
+			return WriteJSON(output, &s.writeMu, RPCResponse{JSONRPC: "2.0", ID: id, Error: &RPCError{Code: CodeInvalidRequest, Message: invalid.Error()}})
 		}
 		return WriteJSON(output, &s.writeMu, RPCResponse{JSONRPC: "2.0", ID: id, Error: &RPCError{Code: CodeServerError, Message: requestErr.Error()}})
 	}

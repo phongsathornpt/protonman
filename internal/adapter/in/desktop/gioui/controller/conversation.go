@@ -167,11 +167,28 @@ func (c *controller) handleACPEventFromAgent(agentID string, source *acpclient.C
 		c.mu.Unlock()
 		return
 	}
-	if update.Kind == "config_option_update" && isClineACPProfile(c.profiles[session.AgentID]) {
+	if update.Kind == "config_option_update" {
 		if sess := desktopstateSessionPointer(&c.state, payload.SessionID, session.AgentID); sess != nil {
-			modeID := clineModeID(payload.Update.ConfigOptions, sess.Runtime.PermissionMode)
-			autoApprove := clineAutoApproveValue(payload.Update.ConfigOptions, sess.Runtime.PermissionMode == "always-approve")
-			sess.Runtime.PermissionMode = clinePermissionMode(modeID, autoApprove)
+			if isClineACPProfile(c.profiles[session.AgentID]) {
+				modeID := clineModeID(payload.Update.ConfigOptions, sess.Runtime.PermissionMode)
+				autoApprove := clineAutoApproveValue(payload.Update.ConfigOptions, sess.Runtime.PermissionMode == "always-approve")
+				sess.Runtime.PermissionMode = clinePermissionMode(modeID, autoApprove)
+			} else {
+				for _, opt := range payload.Update.ConfigOptions {
+					val := strings.TrimSpace(acpConfigStringValue(opt.CurrentValue))
+					if val == "" {
+						continue
+					}
+					switch opt.ID {
+					case "permissionMode":
+						sess.Runtime.PermissionMode = val
+					case "model":
+						sess.Runtime.Model = val
+					case "reasoningEffort":
+						sess.Runtime.Reasoning = val
+					}
+				}
+			}
 			c.revision++
 		}
 		c.mu.Unlock()
@@ -839,11 +856,7 @@ func (c *controller) loadSessionHistory(sessionID string) {
 		c.mu.Unlock()
 		return
 	}
-	base := c.ctx
-	if base == nil {
-		base = context.Background()
-	}
-	callCtx, cancel := context.WithTimeout(base, historyLoadTimeout)
+	callCtx, cancel := context.WithTimeout(c.context(), historyLoadTimeout)
 	request := &sessionHistoryLoad{agentID: agentID, sessionID: sessionID, storageKey: storageKey, cancel: cancel}
 	if c.historyLoads == nil {
 		c.historyLoads = make(map[string]*sessionHistoryLoad)
@@ -871,7 +884,7 @@ func (c *controller) loadSessionHistory(sessionID string) {
 	}
 	params := c.sessionHistoryLoadParams(sessionID, workspace, additionalDirectories)
 
-	go func() {
+	c.spawn(func() {
 		unlock, acquired := c.lockAgentSessionContext(callCtx, agentID)
 		if !acquired {
 			c.finishSessionHistoryLoadRequest(client, sessionID, request, callCtx.Err(), nil, nil)
@@ -901,7 +914,7 @@ func (c *controller) loadSessionHistory(sessionID string) {
 			err = nil
 		}
 		c.finishSessionHistoryLoadRequest(client, sessionID, request, err, loadResult.ConfigOptions, loadResult.Models)
-	}()
+	})
 }
 
 func (c *controller) sessionHistoryLoadParams(sessionID, workspace string, additionalDirectories []string) map[string]any {
@@ -1049,11 +1062,11 @@ func (c *controller) resumeKnownSessions(agentID string, client *acpclient.Clien
 		}
 		additionalDirectories := c.additionalDirectoriesForAgent(agentID, session.AdditionalDirectories)
 		params := c.mcpSessionParams(session.ID, workspace, additionalDirectories)
-		unlock, acquired := c.lockAgentSessionContext(c.ctx, agentID)
+		unlock, acquired := c.lockAgentSessionContext(c.context(), agentID)
 		if !acquired {
 			return
 		}
-		callCtx, cancel := context.WithTimeout(c.ctx, reconnectRequestTimeout)
+		callCtx, cancel := context.WithTimeout(c.context(), reconnectRequestTimeout)
 		var resumeResult struct {
 			Modes *struct {
 				CurrentModeID string `json:"currentModeId"`
@@ -1064,7 +1077,7 @@ func (c *controller) resumeKnownSessions(agentID string, client *acpclient.Clien
 		err := client.Call(callCtx, "session/resume", params, &resumeResult)
 		cancel()
 		unlock()
-		if err != nil && !isACPMethodNotFound(err) && c.ctx.Err() == nil {
+		if err != nil && !isACPMethodNotFound(err) && c.context().Err() == nil {
 			if session.ID == activeSessionID {
 				c.setAgentStatus(agentID, "Session resume failed · "+compactError(err))
 			}
@@ -1138,7 +1151,7 @@ func (c *controller) SendExpandedPrompt(prompt ExpandedPrompt) {
 	c.mu.Unlock()
 	c.notify()
 
-	go c.runPrompt(client, session, prompt, mcpServers)
+	c.spawn(func() { c.runPrompt(client, session, prompt, mcpServers) })
 }
 
 func (c *controller) runPrompt(client *acpclient.Client, session desktopstate.SessionState, prompt ExpandedPrompt, mcpServers []map[string]any) {
@@ -1152,7 +1165,7 @@ func (c *controller) runPrompt(client *acpclient.Client, session desktopstate.Se
 	}
 	var err error
 	if c.agentSupportsSessionResume(session.AgentID) {
-		err = client.Call(c.ctx, "session/resume", params, nil)
+		err = client.Call(c.context(), "session/resume", params, nil)
 	}
 	var result struct {
 		StopReason string `json:"stopReason"`
@@ -1180,7 +1193,7 @@ func (c *controller) runPrompt(client *acpclient.Client, session desktopstate.Se
 		profile := c.profiles[session.AgentID]
 		authMethods := slices.Clone(c.agentFeatures[session.AgentID].AuthMethods)
 		c.mu.RUnlock()
-		err = promptACPWithReauthentication(c.ctx, client, profile, authMethods, promptParams, &result, func(methodName string) {
+		err = promptACPWithReauthentication(c.context(), client, profile, authMethods, promptParams, &result, func(methodName string) {
 			name := strings.TrimSpace(methodName)
 			if name == "" {
 				name = "Cline"
@@ -1234,10 +1247,10 @@ func (c *controller) CancelPrompt() {
 		return
 	}
 	c.setAgentStatus(agentID, "Cancelling…")
-	go func() {
-		callCtx, cancel := context.WithTimeout(c.ctx, reconnectRequestTimeout)
+	c.spawn(func() {
+		callCtx, cancel := context.WithTimeout(c.context(), reconnectRequestTimeout)
 		defer cancel()
-		if err := client.Call(callCtx, "session/cancel", map[string]any{"sessionId": sessionID}, nil); err != nil && c.ctx.Err() == nil {
+		if err := client.Call(callCtx, "session/cancel", map[string]any{"sessionId": sessionID}, nil); err != nil && c.context().Err() == nil {
 			c.mu.Lock()
 			if c.clients[agentID] == client {
 				c.statuses[agentID] = "Cancel failed · " + compactError(err)
@@ -1246,7 +1259,7 @@ func (c *controller) CancelPrompt() {
 			c.mu.Unlock()
 			c.notify()
 		}
-	}()
+	})
 }
 
 func (c *controller) pruneSessionRuntimeLocked() {

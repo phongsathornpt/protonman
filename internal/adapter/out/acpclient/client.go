@@ -314,6 +314,11 @@ func (c *Client) Call(ctx context.Context, method string, params any, result any
 	select {
 	case <-ctx.Done():
 		c.removePending(id)
+		_ = c.write(envelope{
+			JSONRPC: "2.0",
+			Method:  "$/cancel_request",
+			Params:  json.RawMessage(fmt.Sprintf(`{"requestId":%d}`, id)),
+		})
 		return ctx.Err()
 	case <-c.closed:
 		return ErrClosed
@@ -333,7 +338,7 @@ func (c *Client) Call(ctx context.Context, method string, params any, result any
 
 func (c *Client) Close() error {
 	c.shutdown(ErrClosed)
-	if c.cmd.Process != nil {
+	if c.cmd != nil && c.cmd.Process != nil {
 		_ = c.cmd.Process.Kill()
 	}
 	return nil
@@ -542,8 +547,12 @@ func (c *Client) removePending(id uint64) {
 
 func (c *Client) shutdown(cause error) {
 	c.once.Do(func() {
-		c.cancel()
-		_ = c.stdin.Close()
+		if c.cancel != nil {
+			c.cancel()
+		}
+		if c.stdin != nil {
+			_ = c.stdin.Close()
+		}
 		if cause == nil {
 			cause = ErrClosed
 		}
@@ -560,6 +569,8 @@ func (c *Client) shutdown(cause error) {
 		for _, ch := range pending {
 			ch <- response{err: cause}
 		}
-		close(c.closed)
+		if c.closed != nil {
+			close(c.closed)
+		}
 	})
 }

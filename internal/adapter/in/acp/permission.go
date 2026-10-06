@@ -9,7 +9,6 @@ import (
 	"strings"
 	"sync"
 
-	questiontool "github.com/phongsathornpt/protonman/internal/adapter/out/tool/question"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 )
 
@@ -93,6 +92,7 @@ func (b *permissionBroker) request(
 
 	select {
 	case <-ctx.Done():
+		b.server.cancelOutboundRequest(id)
 		return denyResolution("permission request was cancelled"), nil
 	case decision := <-waiter:
 		if decision.err != nil {
@@ -293,23 +293,7 @@ func (s *Server) handleServerResponse(broker *permissionBroker, line []byte) boo
 				decision.err = fmt.Errorf("encode question response: %w", err)
 				break
 			}
-			var result RequestQuestionResult
-			if err := json.Unmarshal(encoded, &result); err != nil {
-				decision.err = fmt.Errorf("decode question response: %w", err)
-				break
-			}
-			status := result.Status
-			if status == "" {
-				status = questiontool.StatusAnswered
-			}
-			decision = questionDecision{
-				response: questiontool.Response{
-					Status:          status,
-					Answer:          result.Answer,
-					SelectedOptions: result.SelectedOptions,
-					Answers:         result.Answers,
-				},
-			}
+			decision = s.questions.decodeOutcome(id, encoded)
 		}
 		s.questions.resolve(id, decision)
 		return true

@@ -69,6 +69,23 @@ func TestHandleRequestWithoutHandlerWritesMethodNotFound(t *testing.T) {
 	}
 }
 
+func TestCallCancellationSendsCancelNotification(t *testing.T) {
+	client, writer := newTestClient(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	var result map[string]any
+	err := client.Call(ctx, "session/slow", map[string]any{}, &result)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected context.Canceled, got %v", err)
+	}
+
+	output := writer.String()
+	if !strings.Contains(output, `"$/cancel_request"`) {
+		t.Fatalf("expected $/cancel_request in output, got %q", output)
+	}
+}
+
 func TestReadLoopBoundsQueuedReverseRequests(t *testing.T) {
 	client, _ := newTestClient(t)
 	client.requests = make(chan incomingRequest, 1)

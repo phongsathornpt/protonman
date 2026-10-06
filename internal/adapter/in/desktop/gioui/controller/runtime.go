@@ -4,6 +4,7 @@ package controller
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"github.com/phongsathornpt/protonman/internal/adapter/out/acpclient"
@@ -28,9 +29,9 @@ func (c *controller) SetRuntimeModel(provider, model string) {
 	}
 	c.agentDefaultModels[agentID] = model
 	if c.preferences != nil {
-		go func(aID, m string) {
-			_ = c.preferences.SetAgentDefaultModel(c.ctx, aID, m)
-		}(agentID, model)
+		c.persistPreference(func(ctx context.Context) error {
+			return c.preferences.SetAgentDefaultModel(ctx, agentID, model)
+		})
 	}
 	if ok && session.AgentID != "" && session.AgentID != ProtonmanAgentID {
 		desktopstate.Apply(&c.state, desktopstate.Event{
@@ -50,8 +51,8 @@ func (c *controller) SetRuntimeModel(provider, model string) {
 		c.mu.Unlock()
 		c.notify()
 		if client != nil {
-			go func() {
-				callCtx, cancel := context.WithTimeout(c.ctx, reconnectRequestTimeout)
+			c.spawn(func() {
+				callCtx, cancel := context.WithTimeout(c.context(), reconnectRequestTimeout)
 				defer cancel()
 				var result struct {
 					ConfigOptions []acpConfigOption `json:"configOptions,omitempty"`
@@ -83,7 +84,7 @@ func (c *controller) SetRuntimeModel(provider, model string) {
 						c.notify()
 					}
 				}
-			}()
+			})
 		}
 		return
 	}
@@ -131,7 +132,7 @@ func (c *controller) SetRuntimePermissionMode(value string) {
 			c.revision++
 			c.mu.Unlock()
 			c.notify()
-			go c.updateClinePermissionMode(client, agentID, sessionID, value)
+			c.spawn(func() { c.updateClinePermissionMode(client, agentID, sessionID, value) })
 			return
 		}
 		if sess := desktopstateSessionPointer(&c.state, sessionID, session.AgentID); sess != nil {
@@ -141,15 +142,15 @@ func (c *controller) SetRuntimePermissionMode(value string) {
 		c.mu.Unlock()
 		c.notify()
 		if client != nil {
-			go func() {
-				callCtx, cancel := context.WithTimeout(c.ctx, reconnectRequestTimeout)
+			c.spawn(func() {
+				callCtx, cancel := context.WithTimeout(c.context(), reconnectRequestTimeout)
 				defer cancel()
 				var result struct{}
 				_ = client.Call(callCtx, "session/set_mode", map[string]any{
 					"sessionId": sessionID,
 					"modeId":    value,
 				}, &result)
-			}()
+			})
 		}
 		return
 	}
@@ -159,10 +160,10 @@ func (c *controller) SetRuntimePermissionMode(value string) {
 
 func (c *controller) updateClinePermissionMode(client *acpclient.Client, agentID, sessionID, value string) {
 	defer c.finishRuntimeMutation(client, sessionID)
-	callCtx, cancel := context.WithTimeout(c.ctx, reconnectRequestTimeout)
+	callCtx, cancel := context.WithTimeout(c.context(), reconnectRequestTimeout)
 	defer cancel()
 	if err := setClinePermissionMode(callCtx, client, sessionID, value); err != nil {
-		if c.ctx == nil || c.ctx.Err() == nil {
+		if c.context().Err() == nil {
 			c.setRuntimeStatus(client, sessionID, "Permission mode update failed · "+compactError(err))
 		}
 		return
@@ -212,11 +213,51 @@ func (c *controller) startRuntimeMutation(method string, values map[string]any) 
 	c.mu.Unlock()
 	c.notify()
 
-	go func() {
+	c.spawn(func() {
 		defer c.finishRuntimeMutation(client, sessionID)
+
+		var configID string
+		var configVal string
+		switch method {
+		case "protonman/session/set_permission_mode":
+			configID = "permissionMode"
+			configVal = fmt.Sprint(values["permissionMode"])
+		case "protonman/session/set_reasoning":
+			configID = "reasoningEffort"
+			configVal = fmt.Sprint(values["reasoning"])
+		case "protonman/session/set_model":
+			configID = "model"
+			configVal = fmt.Sprint(values["model"])
+		}
+
+		if configID != "" {
+			callCtx, cancel := context.WithTimeout(c.context(), reconnectRequestTimeout)
+			defer cancel()
+			var setOptionResult struct {
+				ConfigOptions []acpConfigOption `json:"configOptions"`
+			}
+			err := client.Call(callCtx, "session/set_config_option", map[string]any{
+				"sessionId": sessionID,
+				"configId":  configID,
+				"value":     configVal,
+			}, &setOptionResult)
+			if err == nil {
+				c.refreshSessionRuntime(sessionID, false, agentID)
+				c.setRuntimeStatus(client, sessionID, "Runtime updated")
+				return
+			}
+			if !isACPMethodNotFound(err) {
+				if c.context().Err() == nil {
+					c.setRuntimeStatus(client, sessionID, "Runtime update failed · "+compactError(err))
+				}
+				c.refreshSessionRuntime(sessionID, true, agentID)
+				return
+			}
+		}
+
 		var result sessionRuntimeResult
 		if err := c.callInspector(client, method, params, &result); err != nil {
-			if c.ctx == nil || c.ctx.Err() == nil {
+			if c.context().Err() == nil {
 				c.setRuntimeStatus(client, sessionID, "Runtime update failed · "+compactError(err))
 			}
 			c.refreshSessionRuntime(sessionID, true, agentID)
@@ -227,7 +268,7 @@ func (c *controller) startRuntimeMutation(method string, values map[string]any) 
 			return
 		}
 		c.setRuntimeStatus(client, sessionID, "Runtime updated")
-	}()
+	})
 }
 
 func (c *controller) finishRuntimeMutation(client *acpclient.Client, sessionID string) {

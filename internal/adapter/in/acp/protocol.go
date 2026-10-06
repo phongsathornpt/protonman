@@ -17,6 +17,9 @@ const (
 	CodeInvalidParams  = -32602
 	CodeInternalError  = -32603
 	CodeServerError    = -32000
+	// CodeRequestCancelled is the ACP error code answering a request that was
+	// abandoned through $/cancel_request.
+	CodeRequestCancelled = -32800
 )
 
 type RPCRequest struct {
@@ -54,9 +57,23 @@ type ImplementationInfo struct {
 
 type ClientCapabilities struct {
 	MetaCarrier
-	FS          *ClientFSCapabilities `json:"fs,omitempty"`
-	Terminal    bool                  `json:"terminal,omitempty"`
-	Elicitation any                   `json:"elicitation,omitempty"`
+	FS          *ClientFSCapabilities    `json:"fs,omitempty"`
+	Terminal    bool                     `json:"terminal,omitempty"`
+	Elicitation *ElicitationCapabilities `json:"elicitation,omitempty"`
+}
+
+type ElicitationCapabilities struct {
+	MetaCarrier
+	Form *ElicitationFormCapabilities `json:"form,omitempty"`
+	URL  *ElicitationUrlCapabilities  `json:"url,omitempty"`
+}
+
+type ElicitationFormCapabilities struct {
+	MetaCarrier
+}
+
+type ElicitationUrlCapabilities struct {
+	MetaCarrier
 }
 
 type ClientFSCapabilities struct {
@@ -377,4 +394,50 @@ type RequestPermissionResult struct {
 		Outcome  string `json:"outcome"`
 		OptionID string `json:"optionId,omitempty"`
 	} `json:"outcome"`
+}
+
+type CreateElicitationRequest struct {
+	MetaCarrier
+	Message         string            `json:"message"`
+	Mode            string            `json:"mode"`
+	SessionID       string            `json:"sessionId"`
+	ToolCallID      string            `json:"toolCallId,omitempty"`
+	RequestedSchema ElicitationSchema `json:"requestedSchema"`
+}
+
+type ElicitationSchema struct {
+	MetaCarrier
+	Type        string                               `json:"type"`
+	Title       string                               `json:"title,omitempty"`
+	Description string                               `json:"description,omitempty"`
+	Properties  map[string]ElicitationPropertySchema `json:"properties"`
+	Required    []string                             `json:"required,omitempty"`
+}
+
+type ElicitationPropertySchema struct {
+	Type        string            `json:"type"`
+	Title       string            `json:"title,omitempty"`
+	Description string            `json:"description,omitempty"`
+	Default     any               `json:"default,omitempty"`
+	Enum        []string          `json:"enum,omitempty"`
+	Items       *MultiSelectItems `json:"items,omitempty"`
+}
+
+type MultiSelectItems struct {
+	Type  string       `json:"type,omitempty"`
+	Enum  []string     `json:"enum,omitempty"`
+	AnyOf []EnumOption `json:"anyOf,omitempty"`
+}
+
+type EnumOption struct {
+	MetaCarrier
+	Const       string `json:"const"`
+	Title       string `json:"title"`
+	Description string `json:"description,omitempty"`
+}
+
+type CreateElicitationResponse struct {
+	MetaCarrier
+	Action  string         `json:"action"`
+	Content map[string]any `json:"content,omitempty"`
 }

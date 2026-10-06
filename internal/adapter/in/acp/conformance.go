@@ -32,9 +32,12 @@ func cloneMeta(meta Meta) Meta {
 
 // StableFeature describes one stable ACP surface tracked by the conformance
 // suite. Supported means Protonman implements the feature; Advertised means it
-// is exposed through negotiated capabilities where ACP defines one.
+// is exposed through negotiated capabilities where ACP defines one. Method is
+// the ACP wire method backing the feature, when there is one; it is verified
+// against the pinned schema artifact by the conformance tests.
 type StableFeature struct {
 	Name       string
+	Method     string
 	Supported  bool
 	Advertised bool
 }
@@ -44,24 +47,24 @@ type StableFeature struct {
 // claims of support. Tests and capability serialization consume this list rather
 // than duplicating capability assumptions.
 var StableV1Coverage = []StableFeature{
-	{Name: "initialize", Supported: true, Advertised: true},
-	{Name: "session/new", Supported: true, Advertised: true},
-	{Name: "session/prompt", Supported: true, Advertised: true},
-	{Name: "session/cancel", Supported: true, Advertised: true},
-	{Name: "session/load", Supported: true, Advertised: true},
-	{Name: "session/resume", Supported: true, Advertised: true},
-	{Name: "session/list", Supported: true, Advertised: true},
-	{Name: "session/delete", Supported: true, Advertised: true},
-	{Name: "session/close", Supported: true, Advertised: true},
-	{Name: "session/set_mode", Supported: true, Advertised: true},
+	{Name: "initialize", Method: "initialize", Supported: true, Advertised: true},
+	{Name: "session/new", Method: "session/new", Supported: true, Advertised: true},
+	{Name: "session/prompt", Method: "session/prompt", Supported: true, Advertised: true},
+	{Name: "session/cancel", Method: "session/cancel", Supported: true, Advertised: true},
+	{Name: "session/load", Method: "session/load", Supported: true, Advertised: true},
+	{Name: "session/resume", Method: "session/resume", Supported: true, Advertised: true},
+	{Name: "session/list", Method: "session/list", Supported: true, Advertised: true},
+	{Name: "session/delete", Method: "session/delete", Supported: true, Advertised: true},
+	{Name: "session/close", Method: "session/close", Supported: true, Advertised: true},
+	{Name: "session/set_mode", Method: "session/set_mode", Supported: true, Advertised: true},
 	{Name: "session/additional_directories", Supported: true, Advertised: true},
-	{Name: "session/configuration", Supported: false, Advertised: false},
-	{Name: "session/usage", Supported: false, Advertised: false},
-	{Name: "session/info_update", Supported: false, Advertised: false},
-	{Name: "elicitation", Supported: false, Advertised: false},
-	{Name: "authentication", Supported: false, Advertised: false},
+	{Name: "session/configuration", Method: "session/set_config_option", Supported: true, Advertised: true},
+	{Name: "session/usage", Supported: true, Advertised: true},
+	{Name: "session/info_update", Supported: true, Advertised: true},
+	{Name: "elicitation", Method: "elicitation/create", Supported: true, Advertised: false},
+	{Name: "authentication", Method: "authenticate", Supported: false, Advertised: false},
 	{Name: "terminal_authentication", Supported: false, Advertised: false},
-	{Name: "request_cancellation", Supported: false, Advertised: false},
+	{Name: "request_cancellation", Method: "$/cancel_request", Supported: true, Advertised: true},
 }
 
 func stableFeature(name string) (StableFeature, bool) {

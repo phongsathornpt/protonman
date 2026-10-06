@@ -150,6 +150,9 @@ type controller struct {
 	creatingSession bool
 	revision        uint64
 	snapshotCache   SnapshotCache
+
+	closed  bool
+	bgTasks sync.WaitGroup
 }
 
 func New(parent context.Context, onChange func(), agents app.ACPAgents, integrations app.MCPIntegrations, preferences *app.DesktopPreferences) *controller {
@@ -210,12 +213,66 @@ func New(parent context.Context, onChange func(), agents app.ACPAgents, integrat
 	if preferences != nil && preferences.Available() {
 		instance.loadPreferences()
 	}
-	go instance.run()
+	instance.spawn(func() { instance.run() })
 	return instance
 }
 
+func (c *controller) context() context.Context {
+	if c != nil && c.ctx != nil {
+		return c.ctx
+	}
+	return context.Background()
+}
+
+func (c *controller) spawn(fn func()) {
+	if c == nil {
+		return
+	}
+	c.mu.Lock()
+	if c.closed {
+		c.mu.Unlock()
+		return
+	}
+	c.bgTasks.Add(1)
+	c.mu.Unlock()
+
+	go func() {
+		defer c.bgTasks.Done()
+		defer func() {
+			if r := recover(); r != nil {
+				// Prevent crashes from background panics
+			}
+		}()
+		fn()
+	}()
+}
+
+func (c *controller) persistPreference(fn func(ctx context.Context) error) {
+	if c == nil || c.preferences == nil {
+		return
+	}
+	c.spawn(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := fn(ctx); err != nil && !errors.Is(err, context.Canceled) {
+			c.mu.Lock()
+			if c.statuses == nil {
+				c.statuses = make(map[string]string)
+			}
+			agentID := c.activeAgentID
+			if agentID == "" {
+				agentID = ProtonmanAgentID
+			}
+			c.statuses[agentID] = "Saving preferences failed · " + compactError(err)
+			c.revision++
+			c.mu.Unlock()
+			c.notify()
+		}
+	})
+}
+
 func (c *controller) loadPreferences() {
-	state, err := c.preferences.Load(c.ctx)
+	state, err := c.preferences.Load(c.context())
 	if err != nil {
 		return
 	}
@@ -252,9 +309,9 @@ func (c *controller) SetTheme(theme string) {
 	c.notify()
 
 	if c.preferences != nil {
-		go func() {
-			_ = c.preferences.SetTheme(c.ctx, theme)
-		}()
+		c.persistPreference(func(ctx context.Context) error {
+			return c.preferences.SetTheme(ctx, theme)
+		})
 	}
 }
 
@@ -270,8 +327,15 @@ func cloneCustomTitles(m map[string]string) map[string]string {
 }
 
 func (c *controller) Close() {
-	c.cancel()
 	c.mu.Lock()
+	if c.closed {
+		c.mu.Unlock()
+		return
+	}
+	c.closed = true
+	if c.cancel != nil {
+		c.cancel()
+	}
 	clients := make([]*acpclient.Client, 0, len(c.clients))
 	for _, client := range c.clients {
 		clients = append(clients, client)
@@ -289,9 +353,11 @@ func (c *controller) Close() {
 	clear(c.messageStreamBuffers)
 	clear(c.messageStreams)
 	c.mu.Unlock()
+
 	for _, client := range clients {
 		_ = client.Close()
 	}
+	c.bgTasks.Wait()
 }
 
 func (c *controller) Snapshot() Snapshot {
@@ -368,9 +434,9 @@ func (c *controller) setAgentAvailableModelsLocked(agentID string, models []stri
 	c.agentAvailableModels[agentID] = slices.Clone(models)
 	if c.preferences != nil {
 		cloned := slices.Clone(models)
-		go func(aID string, m []string) {
-			_ = c.preferences.SetAgentAvailableModels(c.ctx, aID, m)
-		}(agentID, cloned)
+		c.persistPreference(func(ctx context.Context) error {
+			return c.preferences.SetAgentAvailableModels(ctx, agentID, cloned)
+		})
 	}
 }
 
@@ -582,7 +648,7 @@ func (c *controller) ToggleSkill(sessionID string, skillName string) {
 	}
 	c.mu.Unlock()
 
-	go func() {
+	c.spawn(func() {
 		var result struct {
 			SessionID string `json:"sessionId"`
 			Name      string `json:"name"`
@@ -595,7 +661,7 @@ func (c *controller) ToggleSkill(sessionID string, skillName string) {
 			return
 		}
 		c.refreshSessionSkills(sessionID, true, agentID)
-	}()
+	})
 }
 
 func (c *controller) TogglePinSession(sessionID string, agentIDs ...string) {
@@ -731,7 +797,7 @@ func (c *controller) NewSession() {
 	c.notify()
 	params := c.mcpNewSessionParams(workspace, additionalDirectories)
 
-	go func() {
+	c.spawn(func() {
 		defer func() {
 			c.mu.Lock()
 			c.creatingSession = false
@@ -750,7 +816,7 @@ func (c *controller) NewSession() {
 			Models        *acpModelsResult  `json:"models,omitempty"`
 		}
 		err := createACPSession(
-			c.ctx,
+			c.context(),
 			client,
 			profile,
 			features.AuthMethods,
@@ -825,33 +891,33 @@ func (c *controller) NewSession() {
 		c.revision++
 		c.mu.Unlock()
 		c.RefreshActiveSession(true)
-	}()
+	})
 }
 
 func (c *controller) run() {
 	profiles := c.sortedProfiles()
 	for _, profile := range profiles {
-		go c.superviseAgent(profile)
+		c.spawn(func() { c.superviseAgent(profile) })
 	}
-	<-c.ctx.Done()
+	<-c.context().Done()
 }
 
 func (c *controller) superviseAgent(profile app.ACPAgentProfile) {
 	delay := reconnectInitialDelay
 	for {
-		if c.ctx.Err() != nil {
+		if c.context().Err() != nil {
 			return
 		}
 		c.setAgentConnection(profile.ID, ConnectionConnecting, "Starting "+profile.DisplayName+"…")
 		var startedClient atomic.Pointer[acpclient.Client]
-		client, err := acpclient.StartCommand(c.ctx, CommandSpecForACPAgent(profile), func(event acpclient.Event) {
+		client, err := acpclient.StartCommand(c.context(), CommandSpecForACPAgent(profile), func(event acpclient.Event) {
 			if current := startedClient.Load(); current != nil {
 				c.handleACPEventForAgent(profile.ID, current, event)
 			}
 		})
 		if err != nil {
 			c.setAgentConnection(profile.ID, ConnectionReconnecting, "Start failed · "+compactError(err))
-			if !waitForReconnect(c.ctx, delay) {
+			if !waitForReconnect(c.context(), delay) {
 				return
 			}
 			delay = nextReconnectDelay(delay)
@@ -859,11 +925,11 @@ func (c *controller) superviseAgent(profile app.ACPAgentProfile) {
 		}
 		startedClient.Store(client)
 
-		features, err := initializeACP(c.ctx, client)
+		features, err := initializeACP(c.context(), client)
 		if err != nil {
 			fmt.Printf("[superviseAgent %s] initializeACP failed: %v\n", profile.ID, err)
 			_ = client.Close()
-			if c.ctx.Err() != nil {
+			if c.context().Err() != nil {
 				return
 			}
 			c.setAgentConnection(profile.ID, ConnectionReconnecting, "Connection failed · "+compactError(err))
@@ -880,6 +946,8 @@ func (c *controller) superviseAgent(profile app.ACPAgentProfile) {
 				return c.handlePermissionRequestForAgent(profile.ID, client, requestCtx, request)
 			case requestQuestionMethod:
 				return c.handleQuestionRequestForAgent(profile.ID, client, requestCtx, request)
+			case methodElicitationCreate:
+				return c.handleElicitationRequestForAgent(profile.ID, client, requestCtx, request)
 			default:
 				return nil, fmt.Errorf("%w: %s", acpclient.ErrMethodNotHandled, request.Method)
 			}
@@ -898,7 +966,7 @@ func (c *controller) superviseAgent(profile app.ACPAgentProfile) {
 		c.resumeKnownSessions(profile.ID, client)
 
 		select {
-		case <-c.ctx.Done():
+		case <-c.context().Done():
 			_ = client.Close()
 			return
 		case <-client.Done():
@@ -906,10 +974,10 @@ func (c *controller) superviseAgent(profile app.ACPAgentProfile) {
 
 		fmt.Printf("[superviseAgent %s] client done\n", profile.ID)
 		c.markAgentDisconnected(profile.ID, client)
-		if c.ctx.Err() != nil {
+		if c.context().Err() != nil {
 			return
 		}
-		if !waitForReconnect(c.ctx, delay) {
+		if !waitForReconnect(c.context(), delay) {
 			return
 		}
 	}
@@ -921,7 +989,7 @@ func (c *controller) refreshSessions(agentID string, client *acpclient.Client) e
 		return nil
 	}
 	defer c.lockAgentSession(agentID)()
-	callCtx, cancel := context.WithTimeout(c.ctx, reconnectRequestTimeout)
+	callCtx, cancel := context.WithTimeout(c.context(), reconnectRequestTimeout)
 	defer cancel()
 	var result struct {
 		Sessions []acpSession `json:"sessions"`
@@ -1035,7 +1103,11 @@ func initializeACP(ctx context.Context, client *acpclient.Client) (acpAgentFeatu
 			"title":   "Protonman Desktop",
 			"version": buildinfo.Version(),
 		},
-		"clientCapabilities": map[string]any{},
+		"clientCapabilities": map[string]any{
+			"elicitation": map[string]any{
+				"form": map[string]any{},
+			},
+		},
 	}, &result)
 	if err != nil {
 		if errors.Is(err, io.EOF) {

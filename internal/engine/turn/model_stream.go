@@ -129,6 +129,9 @@ func consumeSDKStream(ctx context.Context, round int, stream port.Stream, starte
 				"output_tokens", event.Usage.OutputTokens,
 				"total_tokens", event.Usage.TotalTokens,
 			)
+			if err := emit(ctx, sink, Event{Kind: EventUsage, Round: round, Usage: event.Usage}); err != nil {
+				return model.Message{}, nil, err
+			}
 		case domain.EventFinish:
 			if text.Len() == 0 && len(calls) == 0 {
 				return model.Message{}, nil, fmt.Errorf("model stream round %d: %w", round, ErrEmptyResponse)

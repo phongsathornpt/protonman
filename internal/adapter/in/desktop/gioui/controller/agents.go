@@ -85,10 +85,7 @@ type agentSessionLockRegistry struct {
 }
 
 func (r *agentSessionLockRegistry) lock(agentID string) func() {
-	unlock, ok := r.lockContext(context.Background(), agentID)
-	if !ok {
-		panic("background agent session lock acquisition was cancelled")
-	}
+	unlock, _ := r.lockContext(context.Background(), agentID)
 	return unlock
 }
 
@@ -140,6 +137,9 @@ func (c *controller) lockAgentSession(agentID string) func() {
 }
 
 func (c *controller) lockAgentSessionContext(ctx context.Context, agentID string) (func(), bool) {
+	if ctx == nil {
+		ctx = c.context()
+	}
 	return c.sessionLocks.lockContext(ctx, agentID)
 }
 
@@ -352,7 +352,9 @@ func (c *controller) SaveAgentProfile(originalID, id, displayName, command, args
 	c.mu.Unlock()
 	c.notify()
 
-	go c.persistAgentProfiles(next, profile, "ACP agent saved · restart Desktop to apply")
+	c.spawn(func() {
+		c.persistAgentProfiles(next, profile, "ACP agent saved · restart Desktop to apply")
+	})
 }
 
 func (c *controller) RemoveAgentProfile(agentID string) {
@@ -390,14 +392,13 @@ func (c *controller) RemoveAgentProfile(agentID string) {
 	c.mu.Unlock()
 	c.notify()
 
-	go c.persistAgentProfiles(next, app.ACPAgentProfile{}, "ACP agent removed · restart Desktop to apply")
+	c.spawn(func() {
+		c.persistAgentProfiles(next, app.ACPAgentProfile{}, "ACP agent removed · restart Desktop to apply")
+	})
 }
 
 func (c *controller) persistAgentProfiles(next map[string]app.ACPAgentProfile, changed app.ACPAgentProfile, successStatus string) {
-	ctx := c.ctx
-	if ctx == nil {
-		ctx = context.Background()
-	}
+	ctx := c.context()
 	items := CloneACPAgentProfiles(next)
 	err := c.agentProfiles.Save(ctx, items)
 
@@ -662,5 +663,7 @@ func (c *controller) ScanDeviceAgents() {
 	c.notify()
 
 	statusMsg := fmt.Sprintf("Scanned device · configured %d agent(s): %s · restart Desktop to apply", len(next), strings.Join(names, ", "))
-	go c.persistAgentProfiles(next, app.ACPAgentProfile{}, statusMsg)
+	c.spawn(func() {
+		c.persistAgentProfiles(next, app.ACPAgentProfile{}, statusMsg)
+	})
 }

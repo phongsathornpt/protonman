@@ -3,7 +3,6 @@
 package controller
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -22,10 +21,7 @@ func (c *controller) loadMCPIntegrations() {
 	if c.statuses == nil {
 		c.statuses = make(map[string]string)
 	}
-	ctx := c.ctx
-	if ctx == nil {
-		ctx = context.Background()
-	}
+	ctx := c.context()
 	items, err := c.mcpIntegrations.Load(ctx)
 	if err != nil {
 		c.mcpError = compactError(err)
@@ -112,11 +108,8 @@ func (c *controller) persistMCPIntegrations(items []desktopstate.MCPIntegrationS
 	c.mu.Unlock()
 	c.notify()
 
-	go func() {
-		ctx := c.ctx
-		if ctx == nil {
-			ctx = context.Background()
-		}
+	c.spawn(func() {
+		ctx := c.context()
 		err := c.mcpIntegrations.Save(ctx, appMCPIntegrations(items))
 		c.mu.Lock()
 		c.mcpMutation = false
@@ -134,7 +127,7 @@ func (c *controller) persistMCPIntegrations(items []desktopstate.MCPIntegrationS
 		c.revision++
 		c.mu.Unlock()
 		c.notify()
-	}()
+	})
 }
 
 func (c *controller) ReconnectMCP() {
@@ -170,11 +163,11 @@ func (c *controller) ReconnectMCP() {
 	c.mu.Unlock()
 	c.notify()
 
-	go func() {
+	c.spawn(func() {
 		for _, client := range clients {
 			_ = client.Close()
 		}
-	}()
+	})
 }
 
 func (c *controller) setMCPStatus(status string) {

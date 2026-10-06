@@ -3,6 +3,8 @@
 package controller
 
 import (
+	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"slices"
@@ -11,6 +13,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/phongsathornpt/protonman/internal/app"
 	desktopstate "github.com/phongsathornpt/protonman/internal/feature/desktop"
 )
 
@@ -331,4 +334,47 @@ type errorString string
 
 func (err errorString) Error() string {
 	return string(err)
+}
+
+func TestControllerCloseDrainsBackgroundTasks(t *testing.T) {
+	controller := newTestController()
+	completed := false
+	controller.spawn(func() {
+		time.Sleep(20 * time.Millisecond)
+		completed = true
+	})
+
+	controller.Close()
+	if !completed {
+		t.Fatal("expected Close() to wait for spawned background tasks to complete")
+	}
+}
+
+type failingPrefRepo struct{}
+
+func (f *failingPrefRepo) Load(context.Context) (app.DesktopPreferencesState, error) {
+	return app.DesktopPreferencesState{}, nil
+}
+
+func (f *failingPrefRepo) Save(context.Context, app.DesktopPreferencesState) error {
+	return errors.New("simulated disk full")
+}
+
+func TestControllerPersistPreferenceErrorSurfacesInStatus(t *testing.T) {
+	controller := newTestController()
+	controller.preferences = app.NewDesktopPreferences(&failingPrefRepo{})
+
+	notified := false
+	controller.onChange = func() { notified = true }
+
+	controller.SetTheme("dark")
+	controller.Close()
+
+	snap := controller.Snapshot()
+	if !strings.Contains(snap.Status, "Saving preferences failed") {
+		t.Fatalf("expected status to contain preference save failure, got %q", snap.Status)
+	}
+	if !notified {
+		t.Fatal("expected notification when preference persistence fails")
+	}
 }
