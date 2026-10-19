@@ -9,15 +9,16 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	runtimecomponent "github.com/phongsathornpt/protonman/internal/adapter/in/desktop/gioui/component/runtime"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/acpclient"
 	"github.com/phongsathornpt/protonman/internal/app"
 	"github.com/phongsathornpt/protonman/internal/base/buildinfo"
@@ -151,8 +152,12 @@ type controller struct {
 	revision        uint64
 	snapshotCache   SnapshotCache
 
-	closed  bool
-	bgTasks sync.WaitGroup
+	// lifecycleMu guards admission of background work. It is deliberately
+	// separate from mu so spawning never contends with (or re-enters) the state
+	// lock that callers may already hold.
+	lifecycleMu sync.Mutex
+	closed      bool
+	bgTasks     sync.WaitGroup
 }
 
 func New(parent context.Context, onChange func(), agents app.ACPAgents, integrations app.MCPIntegrations, preferences *app.DesktopPreferences) *controller {
@@ -228,19 +233,19 @@ func (c *controller) spawn(fn func()) {
 	if c == nil {
 		return
 	}
-	c.mu.Lock()
+	c.lifecycleMu.Lock()
 	if c.closed {
-		c.mu.Unlock()
+		c.lifecycleMu.Unlock()
 		return
 	}
 	c.bgTasks.Add(1)
-	c.mu.Unlock()
+	c.lifecycleMu.Unlock()
 
 	go func() {
 		defer c.bgTasks.Done()
 		defer func() {
 			if r := recover(); r != nil {
-				// Prevent crashes from background panics
+				log.Printf("desktop controller: background task panic: %v\n%s", r, debug.Stack())
 			}
 		}()
 		fn()
@@ -327,12 +332,15 @@ func cloneCustomTitles(m map[string]string) map[string]string {
 }
 
 func (c *controller) Close() {
-	c.mu.Lock()
+	c.lifecycleMu.Lock()
 	if c.closed {
-		c.mu.Unlock()
+		c.lifecycleMu.Unlock()
 		return
 	}
 	c.closed = true
+	c.lifecycleMu.Unlock()
+
+	c.mu.Lock()
 	if c.cancel != nil {
 		c.cancel()
 	}
@@ -522,13 +530,10 @@ func (c *controller) DeleteSession(sessionID string, agentIDs ...string) {
 	if len(agentIDs) > 0 {
 		targetAgentID = agentIDs[0]
 	}
-	for i := range c.state.Sessions {
-		if c.state.Sessions[i].ID == sessionID && (targetAgentID == "" || c.state.Sessions[i].AgentID == targetAgentID) {
-			targetAgentID = c.state.Sessions[i].AgentID
-			targetProjectID = c.state.Sessions[i].ProjectID
-			storageKey = desktopSessionStorageKey(c.state, c.state.Sessions[i].Ref())
-			break
-		}
+	if session, ok := SessionByID(c.state, sessionID, targetAgentID); ok {
+		targetAgentID = session.AgentID
+		targetProjectID = session.ProjectID
+		storageKey = desktopSessionStorageKey(c.state, session.Ref())
 	}
 	if storageKey == "" {
 		c.mu.Unlock()
@@ -542,7 +547,9 @@ func (c *controller) DeleteSession(sessionID string, agentIDs ...string) {
 		type sessionDeleteParams struct {
 			SessionID string `json:"sessionId"`
 		}
-		_ = client.Call(c.ctx, "session/delete", sessionDeleteParams{SessionID: sessionID}, nil)
+		callCtx, cancel := context.WithTimeout(c.context(), reconnectRequestTimeout)
+		_ = client.Call(callCtx, "session/delete", sessionDeleteParams{SessionID: sessionID}, nil)
+		cancel()
 	}
 
 	if c.preferences != nil {
@@ -595,18 +602,27 @@ func (c *controller) DeleteSession(sessionID string, agentIDs ...string) {
 	}
 }
 
+// DeleteSessionAsync removes a session without blocking the UI goroutine. The
+// remote ACP delete and local state convergence happen on a tracked background
+// task; callers observe the result through the normal snapshot/notify path.
+func (c *controller) DeleteSessionAsync(sessionID string, agentIDs ...string) {
+	c.spawn(func() { c.DeleteSession(sessionID, agentIDs...) })
+}
+
 func (c *controller) RenameSession(sessionID, newTitle string, agentIDs ...string) {
 	sessionID = strings.TrimSpace(sessionID)
 	if sessionID == "" {
 		return
 	}
+	var agentID string
+	if len(agentIDs) > 0 {
+		agentID = agentIDs[0]
+	}
 	c.mu.Lock()
-	var storageKey string
-	for _, session := range c.state.Sessions {
-		if session.ID == sessionID && (len(agentIDs) == 0 || agentIDs[0] == "" || session.AgentID == agentIDs[0]) {
-			storageKey = desktopSessionStorageKey(c.state, session.Ref())
-			break
-		}
+	session, ok := SessionByID(c.state, sessionID, agentID)
+	storageKey := ""
+	if ok {
+		storageKey = desktopSessionStorageKey(c.state, session.Ref())
 	}
 	c.mu.Unlock()
 	if storageKey == "" {
@@ -669,13 +685,15 @@ func (c *controller) TogglePinSession(sessionID string, agentIDs ...string) {
 	if sessionID == "" {
 		return
 	}
+	var agentID string
+	if len(agentIDs) > 0 {
+		agentID = agentIDs[0]
+	}
 	c.mu.Lock()
-	var storageKey string
-	for _, session := range c.state.Sessions {
-		if session.ID == sessionID && (len(agentIDs) == 0 || agentIDs[0] == "" || session.AgentID == agentIDs[0]) {
-			storageKey = desktopSessionStorageKey(c.state, session.Ref())
-			break
-		}
+	session, ok := SessionByID(c.state, sessionID, agentID)
+	storageKey := ""
+	if ok {
+		storageKey = desktopSessionStorageKey(c.state, session.Ref())
 	}
 	c.mu.Unlock()
 	if storageKey == "" {
@@ -774,28 +792,41 @@ func (c *controller) NewSession() {
 		c.mu.Unlock()
 		return
 	}
-	workspace, err := newSessionWorkspace(c.state)
+	projectID := c.state.ActiveProjectID
+	candidates := workspaceCandidates(c.state, projectID)
+	c.mu.Unlock()
+
+	workspace, err := resolveSessionWorkspace(candidates)
 	if err != nil {
+		c.mu.Lock()
 		c.statuses[agentID] = "New session unavailable · " + compactError(err)
 		c.revision++
 		c.mu.Unlock()
 		c.notify()
 		return
 	}
+	requestedAdditionalDirectories := additionalDirectories(candidates, workspace)
+
+	c.mu.Lock()
+	// Workspace resolution runs filesystem I/O without the lock, so the client
+	// or the selected project may have changed in the meantime.
+	if c.clients[agentID] != client || c.connections[agentID] != ConnectionConnected || c.creatingSession || c.state.ActiveProjectID != projectID {
+		c.mu.Unlock()
+		return
+	}
 	c.activeAgentID = agentID
 	c.creatingSession = true
 	c.statuses[agentID] = "Creating session…"
 	c.revision++
-	requestedAdditionalDirectories := c.projectAdditionalDirectoriesLocked(c.state.ActiveProjectID, workspace)
 	features := c.agentFeatures[agentID]
 	profile := c.profiles[agentID]
-	additionalDirectories := requestedAdditionalDirectories
+	sessionDirectories := requestedAdditionalDirectories
 	if !features.SupportsAdditionalDirectories {
-		additionalDirectories = nil
+		sessionDirectories = nil
 	}
 	c.mu.Unlock()
 	c.notify()
-	params := c.mcpNewSessionParams(workspace, additionalDirectories)
+	params := c.mcpNewSessionParams(workspace, sessionDirectories)
 
 	c.spawn(func() {
 		defer func() {
@@ -927,7 +958,7 @@ func (c *controller) superviseAgent(profile app.ACPAgentProfile) {
 
 		features, err := initializeACP(c.context(), client)
 		if err != nil {
-			fmt.Printf("[superviseAgent %s] initializeACP failed: %v\n", profile.ID, err)
+			log.Printf("desktop controller: ACP initialize failed for %s: %v", profile.ID, err)
 			_ = client.Close()
 			if c.context().Err() != nil {
 				return
@@ -959,7 +990,7 @@ func (c *controller) superviseAgent(profile app.ACPAgentProfile) {
 			if isACPMethodNotFound(err) {
 				c.setAgentStatus(profile.ID, "Connected · session list unavailable")
 			} else {
-				fmt.Printf("[superviseAgent %s] refreshSessions failed: %v\n", profile.ID, err)
+				log.Printf("desktop controller: session refresh failed for %s: %v", profile.ID, err)
 				c.setAgentStatus(profile.ID, "Connected · session refresh failed")
 			}
 		}
@@ -972,7 +1003,7 @@ func (c *controller) superviseAgent(profile app.ACPAgentProfile) {
 		case <-client.Done():
 		}
 
-		fmt.Printf("[superviseAgent %s] client done\n", profile.ID)
+		log.Printf("desktop controller: ACP client disconnected for %s", profile.ID)
 		c.markAgentDisconnected(profile.ID, client)
 		if c.context().Err() != nil {
 			return
@@ -997,12 +1028,17 @@ func (c *controller) refreshSessions(agentID string, client *acpclient.Client) e
 	if err := client.Call(callCtx, "session/list", map[string]any{}, &result); err != nil {
 		return err
 	}
+	c.mu.RLock()
+	candidates := workspaceCandidates(c.state, c.state.ActiveProjectID)
+	c.mu.RUnlock()
+	defaultWorkspace, _ := resolveSessionWorkspace(candidates)
+
 	c.mu.Lock()
 	if c.clients[agentID] != client {
 		c.mu.Unlock()
 		return errSessionHistoryClientChanged
 	}
-	next := projectSessions(c.state, agentID, result.Sessions)
+	next := projectSessions(c.state, agentID, result.Sessions, defaultWorkspace)
 	c.state = next
 	c.pruneSessionRuntimeLocked()
 	c.pruneSessionRefreshersLocked()
@@ -1064,8 +1100,8 @@ func (c *controller) setClient(agentID string, client *acpclient.Client) {
 	c.revision++
 	c.mu.Unlock()
 	c.notify()
-	if runtimecomponent.IsProtonmanAgent(agentID) {
-		go c.RefreshProviders()
+	if isProtonmanAgent(agentID) {
+		c.spawn(c.RefreshProviders)
 	}
 }
 
@@ -1121,7 +1157,7 @@ func initializeACP(ctx context.Context, client *acpclient.Client) (acpAgentFeatu
 	return result.features(), nil
 }
 
-func projectSessions(current desktopstate.State, agentID string, remoteSessions []acpSession) desktopstate.State {
+func projectSessions(current desktopstate.State, agentID string, remoteSessions []acpSession, defaultWorkspace string) desktopstate.State {
 	previous := make(map[string]desktopstate.SessionState, len(current.Sessions))
 	for _, session := range current.Sessions {
 		if session.AgentID == agentID || session.AgentID == "" && agentID == ProtonmanAgentID {
@@ -1162,18 +1198,16 @@ func projectSessions(current desktopstate.State, agentID string, remoteSessions 
 				session.Workspace = proj.Folders[0].Path
 			}
 		}
-		if session.Workspace == "" {
-			if defaultWS, err := newSessionWorkspace(current); err == nil && defaultWS != "" {
-				wsKey := sessionWorkspaceKey(defaultWS)
-				remoteKey := strings.TrimSpace(remote.WorkspaceKey)
-				if remoteKey == "" {
-					if parts := strings.Split(remote.ID, "-"); len(parts) >= 2 && len(parts[1]) == 16 && isHexString(parts[1]) {
-						remoteKey = parts[1]
-					}
+		if session.Workspace == "" && defaultWorkspace != "" {
+			wsKey := sessionWorkspaceKey(defaultWorkspace)
+			remoteKey := strings.TrimSpace(remote.WorkspaceKey)
+			if remoteKey == "" {
+				if parts := strings.Split(remote.ID, "-"); len(parts) >= 2 && len(parts[1]) == 16 && isHexString(parts[1]) {
+					remoteKey = parts[1]
 				}
-				if remoteKey == "" || remoteKey == wsKey || remoteKey == "workspace:"+canonicalWorkspacePath(defaultWS) {
-					session.Workspace = defaultWS
-				}
+			}
+			if remoteKey == "" || remoteKey == wsKey || remoteKey == "workspace:"+defaultWorkspace {
+				session.Workspace = defaultWorkspace
 			}
 		}
 		if len(remote.AdditionalDirectories) > 0 {
@@ -1303,27 +1337,38 @@ func addLocalSession(state desktopstate.State, sessionID, workspace, agentID str
 	return next
 }
 
-func newSessionWorkspace(state desktopstate.State) (string, error) {
+// workspaceCandidates returns the active project's configured folder paths.
+// Callers snapshot these strings under the controller lock and resolve them
+// outside it, because resolution performs filesystem I/O.
+func workspaceCandidates(state desktopstate.State, projectID string) []string {
+	for _, project := range state.Projects {
+		if project.ID != projectID {
+			continue
+		}
+		candidates := make([]string, 0, len(project.Folders))
+		for _, folder := range project.Folders {
+			if path := strings.TrimSpace(folder.Path); path != "" {
+				candidates = append(candidates, path)
+			}
+		}
+		return candidates
+	}
+	return nil
+}
+
+// resolveSessionWorkspace returns the first candidate that still exists, the
+// environment override, or the process working directory. It performs filesystem
+// I/O and must never be called while holding c.mu.
+func resolveSessionWorkspace(candidates []string) (string, error) {
 	if override := strings.TrimSpace(os.Getenv("PROTONMAN_GIO_WORKSPACE")); override != "" {
 		return existingWorkspaceDirectory(override)
-	}
-	candidates := make([]string, 0, 1)
-	for _, project := range state.Projects {
-		if project.ID == state.ActiveProjectID {
-			for _, folder := range project.Folders {
-				if strings.TrimSpace(folder.Path) != "" {
-					candidates = append(candidates, folder.Path)
-				}
-			}
-			break
-		}
 	}
 	if len(candidates) == 0 {
 		workingDirectory, err := os.Getwd()
 		if err != nil {
 			return "", err
 		}
-		candidates = append(candidates, workingDirectory)
+		candidates = []string{workingDirectory}
 	}
 	for _, candidate := range candidates {
 		if absolute, err := existingWorkspaceDirectory(candidate); err == nil {
@@ -1333,35 +1378,42 @@ func newSessionWorkspace(state desktopstate.State) (string, error) {
 	return "", errors.New("choose an existing workspace directory")
 }
 
-// projectAdditionalDirectoriesLocked returns the active project's remaining
-// folders, excluding the primary workspace and anything that no longer exists or
-// resolves to the same directory. Callers must hold c.mu.
-func (c *controller) projectAdditionalDirectoriesLocked(projectID, primary string) []string {
+func newSessionWorkspace(state desktopstate.State) (string, error) {
+	return resolveSessionWorkspace(workspaceCandidates(state, state.ActiveProjectID))
+}
+
+// additionalDirectories resolves the project's remaining folders, excluding the
+// primary workspace and stale or duplicate paths. It performs filesystem I/O and
+// must never be called while holding c.mu.
+func additionalDirectories(candidates []string, primary string) []string {
 	primary = canonicalWorkspacePath(primary)
 	directories := make([]string, 0, 2)
-	for _, project := range c.state.Projects {
-		if project.ID != projectID {
+	for _, folder := range candidates {
+		candidate := strings.TrimSpace(folder)
+		if candidate == "" {
 			continue
 		}
-		for _, folder := range project.Folders {
-			candidate := strings.TrimSpace(folder.Path)
-			if candidate == "" {
-				continue
-			}
-			// Only directories that still exist are worth authorizing; a stale
-			// folder would make the child fail the whole session registration.
-			resolved, err := existingWorkspaceDirectory(candidate)
-			if err != nil {
-				continue
-			}
-			if resolved == primary || slices.Contains(directories, resolved) {
-				continue
-			}
-			directories = append(directories, resolved)
+		// Only directories that still exist are worth authorizing; a stale
+		// folder would make the child fail the whole session registration.
+		resolved, err := existingWorkspaceDirectory(candidate)
+		if err != nil {
+			continue
 		}
-		break
+		if resolved == primary || slices.Contains(directories, resolved) {
+			continue
+		}
+		directories = append(directories, resolved)
 	}
 	return directories
+}
+
+func cloneProjectStates(projects []desktopstate.ProjectState) []desktopstate.ProjectState {
+	out := slices.Clone(projects)
+	for index := range out {
+		out[index].Folders = slices.Clone(out[index].Folders)
+		out[index].AgentIDs = slices.Clone(out[index].AgentIDs)
+	}
+	return out
 }
 
 func existingWorkspaceDirectory(candidate string) (string, error) {
@@ -1502,6 +1554,15 @@ func nextReconnectDelay(delay time.Duration) time.Duration {
 		return reconnectMaxDelay
 	}
 	return delay
+}
+
+func isProtonmanAgent(agentID string) bool {
+	switch strings.ToLower(strings.TrimSpace(agentID)) {
+	case "", ProtonmanAgentID, "proton":
+		return true
+	default:
+		return false
+	}
 }
 
 func compactError(err error) string {

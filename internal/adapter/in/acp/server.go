@@ -270,11 +270,6 @@ func (s *Server) route(ctx context.Context, request RPCRequest, output io.Writer
 	return s.dispatch(ctx, request, output)
 }
 
-func (s *Server) handleRequest(ctx context.Context, request RPCRequest, output io.Writer) error {
-	result, notify, err := s.route(ctx, request, output)
-	return s.writeResponse(output, request.ID, result, notify, err)
-}
-
 func (s *Server) writeResponse(output io.Writer, id json.RawMessage, result any, notify *RPCNotification, requestErr error) error {
 	if requestErr != nil {
 		if len(id) == 0 || string(id) == "null" {

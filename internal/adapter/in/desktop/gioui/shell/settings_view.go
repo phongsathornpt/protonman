@@ -3,14 +3,10 @@
 package shell
 
 import (
-	"log"
-
 	"gioui.org/io/key"
 	"gioui.org/layout"
 
 	settingscomponent "github.com/phongsathornpt/protonman/internal/adapter/in/desktop/gioui/component/settings"
-
-	"github.com/phongsathornpt/protonman/internal/adapter/in/desktop/gioui/component/uikit"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/desktop/gioui/controller"
 )
 
@@ -18,12 +14,10 @@ func (s *Shell) openSettingsModal() {
 	s.settingsComponent.Show()
 	s.closePopovers()
 	s.mentionActive = false
-	log.Printf("[UI] settings modal opened, activeTab=%d", s.settingsComponent.ActiveTab())
 }
 
 func (s *Shell) closeSettingsModal() {
 	s.settingsComponent.Close()
-	log.Printf("[UI] settings modal closed")
 }
 
 func (s *Shell) layoutSettingsModal(gtx layout.Context, snapshot controller.Snapshot) layout.Dimensions {
@@ -58,6 +52,6 @@ func (s *Shell) layoutSettingsContent(gtx layout.Context, snapshot controller.Sn
 
 func (s *Shell) layoutSettingsGeneralTab(gtx layout.Context, snapshot controller.Snapshot) layout.Dimensions {
 	return s.settingsComponent.LayoutGeneral(gtx, settingscomponent.GeneralInput{
-		Theme: snapshot.Theme, SystemDark: uikit.IsSystemDarkMode(), Chrome: s.settingsChrome(), OnSetTheme: s.bind.SetTheme,
+		Theme: snapshot.Theme, SystemDark: s.systemDark, Chrome: s.settingsChrome(), OnSetTheme: s.bind.SetTheme,
 	})
 }

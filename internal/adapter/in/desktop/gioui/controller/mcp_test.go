@@ -189,7 +189,7 @@ func TestProjectAdditionalDirectoriesExcludesPrimaryAndStaleFolders(t *testing.T
 	// Comparison uses the canonical form: t.TempDir() is under /var, which is a
 	// symlink to /private/var on macOS.
 	want := canonicalWorkspacePath(extra)
-	got := controller.projectAdditionalDirectoriesLocked("project-1", primary)
+	got := additionalDirectories(workspaceCandidates(controller.state, "project-1"), primary)
 	if !reflect.DeepEqual(got, []string{want}) {
 		t.Fatalf("additional directories = %#v, want only %q", got, want)
 	}
@@ -204,7 +204,7 @@ func TestProjectAdditionalDirectoriesIgnoresOtherProjects(t *testing.T) {
 	}
 
 	want := canonicalWorkspacePath(extra)
-	got := controller.projectAdditionalDirectoriesLocked("project-1", t.TempDir())
+	got := additionalDirectories(workspaceCandidates(controller.state, "project-1"), t.TempDir())
 	if len(got) != 1 || got[0] != want {
 		t.Fatalf("additional directories = %#v, want only %q", got, want)
 	}

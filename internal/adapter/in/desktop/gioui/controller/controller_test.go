@@ -33,7 +33,7 @@ func TestProjectSessionsBuildsLiveWorkspaceIndex(t *testing.T) {
 	next := projectSessions(current, ProtonmanAgentID, []acpSession{
 		{ID: "session-one", Cwd: "/workspace/alpha", UpdatedAt: "2026-09-26T08:30:00Z"},
 		{ID: "session-two", Cwd: "/workspace/beta", Title: "Beta work"},
-	})
+	}, "")
 
 	if next.ActiveSessionID != "session-one" {
 		t.Fatalf("active session = %q, want session-one", next.ActiveSessionID)
@@ -67,7 +67,7 @@ func TestProjectSessionsReplacesMissingSelection(t *testing.T) {
 		ActiveSessionID: "removed",
 		Sessions:        []desktopstate.SessionState{{ID: "removed"}},
 	}
-	next := projectSessions(current, ProtonmanAgentID, []acpSession{{ID: "remaining", Cwd: "/workspace/remaining"}})
+	next := projectSessions(current, ProtonmanAgentID, []acpSession{{ID: "remaining", Cwd: "/workspace/remaining"}}, "")
 	if next.ActiveSessionID != "remaining" {
 		t.Fatalf("active session = %q, want remaining", next.ActiveSessionID)
 	}
@@ -376,5 +376,47 @@ func TestControllerPersistPreferenceErrorSurfacesInStatus(t *testing.T) {
 	}
 	if !notified {
 		t.Fatal("expected notification when preference persistence fails")
+	}
+}
+
+type inMemoryPrefRepo struct {
+	state app.DesktopPreferencesState
+}
+
+func (m *inMemoryPrefRepo) Load(context.Context) (app.DesktopPreferencesState, error) {
+	return m.state, nil
+}
+
+func (m *inMemoryPrefRepo) Save(_ context.Context, state app.DesktopPreferencesState) error {
+	m.state = state
+	return nil
+}
+
+func TestSetAgentAvailableModelsLockedDoesNotDeadlockWithPreferences(t *testing.T) {
+	controller := newTestController()
+	controller.preferences = app.NewDesktopPreferences(&inMemoryPrefRepo{})
+
+	controller.mu.Lock()
+	controller.setAgentAvailableModelsLocked("agent-1", []string{"model-a", "model-b"})
+	controller.mu.Unlock()
+
+	controller.Close()
+
+	snap := controller.Snapshot()
+	if models := snap.AgentAvailableModels["agent-1"]; len(models) != 2 || models[0] != "model-a" {
+		t.Fatalf("unexpected available models: %#v", models)
+	}
+}
+
+func TestSetModelDoesNotDeadlockWithPreferences(t *testing.T) {
+	controller := newTestController()
+	controller.preferences = app.NewDesktopPreferences(&inMemoryPrefRepo{})
+
+	controller.SetRuntimeModel("provider-1", "model-test")
+	controller.Close()
+
+	snap := controller.Snapshot()
+	if snap.AgentDefaultModels[ProtonmanAgentID] != "model-test" {
+		t.Fatalf("unexpected default model: %q", snap.AgentDefaultModels[ProtonmanAgentID])
 	}
 }

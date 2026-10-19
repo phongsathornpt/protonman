@@ -19,6 +19,11 @@ import (
 	"github.com/phongsathornpt/protonman/internal/adapter/in/desktop/gioui/shell"
 )
 
+// themePollInterval bounds how often the event loop probes the OS appearance.
+// The probe shells out on every platform, so keeping it off the render path and
+// rate-limited matters more than reacting instantly.
+const themePollInterval = 10 * time.Second
+
 func Run(ctx context.Context, agents application.ACPAgents, mcpIntegrations application.MCPIntegrations, preferences *application.DesktopPreferences) error {
 	windowContext, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -38,18 +43,24 @@ func Run(ctx context.Context, agents application.ACPAgents, mcpIntegrations appl
 	defer ctrl.Close()
 
 	configuredTheme := uikit.NormalizeThemeMode(os.Getenv("PROTONMAN_GIO_THEME"))
-	if preferences != nil && preferences.Snapshot().Theme != "" {
-		configuredTheme = uikit.NormalizeThemeMode(preferences.Snapshot().Theme)
+	if preferences != nil {
+		if preferenceTheme := preferences.Snapshot().Theme; preferenceTheme != "" {
+			configuredTheme = uikit.NormalizeThemeMode(preferenceTheme)
+		}
 	}
-	currentResolved := uikit.ResolveThemeMode(configuredTheme, uikit.IsSystemDarkMode())
+	systemDark := uikit.IsSystemDarkMode()
+	currentResolved := uikit.ResolveThemeMode(configuredTheme, systemDark)
+	lastThemeCheck := time.Now()
 
-	// applyTheme resolves the configured mode and repaints when it actually
-	// changed, so a repeated "system" poll does not thrash the window. view is
-	// assigned immediately after construction, before any binding can fire.
+	// applyTheme must only run on the Gio event-loop goroutine: it mutates both
+	// the shell and this function's theme bookkeeping. The poller below merely
+	// requests a frame; the actual check happens in FrameEvent.
 	var view *shell.Shell
 	applyTheme := func(newConfigured string) {
 		configuredTheme = uikit.NormalizeThemeMode(newConfigured)
-		resolved := uikit.ResolveThemeMode(configuredTheme, uikit.IsSystemDarkMode())
+		systemDark = uikit.IsSystemDarkMode()
+		view.SetSystemDark(systemDark)
+		resolved := uikit.ResolveThemeMode(configuredTheme, systemDark)
 		if resolved != currentResolved {
 			currentResolved = resolved
 			view.SetTheme(shell.NewTheme(resolved))
@@ -67,7 +78,7 @@ func Run(ctx context.Context, agents application.ACPAgents, mcpIntegrations appl
 		SelectSession:            ctrl.SelectSessionForAgent,
 		SelectProject:            ctrl.SelectProject,
 		NewSession:               ctrl.NewSession,
-		DeleteSession:            func(agentID, sessionID string) { ctrl.DeleteSession(sessionID, agentID) },
+		DeleteSession:            func(agentID, sessionID string) { ctrl.DeleteSessionAsync(sessionID, agentID) },
 		RenameSession:            func(agentID, sessionID, title string) { ctrl.RenameSession(sessionID, title, agentID) },
 		TogglePinSession:         func(agentID, sessionID string) { ctrl.TogglePinSession(sessionID, agentID) },
 		ToggleSkill:              ctrl.ToggleSkill,
@@ -91,22 +102,23 @@ func Run(ctx context.Context, agents application.ACPAgents, mcpIntegrations appl
 		SaveProvider:             ctrl.SaveProvider,
 		DeleteProvider:           ctrl.DeleteProvider,
 		FetchProviderModels:      ctrl.FetchProviderModels,
-		RefreshProviders:         ctrl.RefreshProviders,
+		RefreshProviders:         ctrl.RefreshProvidersAsync,
 	})
 
-	// A "system" theme follows the OS appearance, so poll for changes the way the
-	// ACP/TUI frontends do rather than only reacting to window config events.
+	view.SetSystemDark(systemDark)
+
+	// A "system" theme follows the OS appearance. The poller only requests a
+	// repaint; FrameEvent performs the (rate-limited) OS check on the event-loop
+	// goroutine so the shell is never mutated concurrently with Layout.
 	go func() {
-		ticker := time.NewTicker(3 * time.Second)
+		ticker := time.NewTicker(themePollInterval)
 		defer ticker.Stop()
 		for {
 			select {
 			case <-windowContext.Done():
 				return
 			case <-ticker.C:
-				if configuredTheme == "system" {
-					applyTheme("system")
-				}
+				window.Invalidate()
 			}
 		}
 	}()
@@ -117,9 +129,14 @@ func Run(ctx context.Context, agents application.ACPAgents, mcpIntegrations appl
 			return event.Err
 		case app.ConfigEvent:
 			if configuredTheme == "system" {
+				lastThemeCheck = time.Now()
 				applyTheme("system")
 			}
 		case app.FrameEvent:
+			if configuredTheme == "system" && time.Since(lastThemeCheck) >= themePollInterval {
+				lastThemeCheck = time.Now()
+				applyTheme("system")
+			}
 			gtx := app.NewContext(&operations, event)
 			view.Layout(gtx, ctrl.Snapshot())
 			event.Frame(gtx.Ops)

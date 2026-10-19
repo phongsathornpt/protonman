@@ -845,7 +845,28 @@ func (c *controller) loadSessionHistory(sessionID string) {
 		c.mu.Unlock()
 		return
 	}
-	workspace := findWorkspaceForSession(c.state, session)
+	stateSnapshot := desktopstate.State{
+		ActiveProjectID: c.state.ActiveProjectID,
+		Projects:        cloneProjectStates(c.state.Projects),
+	}
+	c.mu.Unlock()
+
+	workspace := findWorkspaceForSession(stateSnapshot, session)
+
+	c.mu.Lock()
+	// Resolving the workspace performs filesystem I/O; another selection or
+	// refresh may have changed the session while the lock was released.
+	session, ok = SessionByID(c.state, sessionID, agentID)
+	if !ok {
+		c.mu.Unlock()
+		return
+	}
+	agentID = session.AgentID
+	storageKey = desktopSessionStorageKey(c.state, session.Ref())
+	if state := c.histories[storageKey]; state == HistoryStateLoading || state == HistoryStateLoaded {
+		c.mu.Unlock()
+		return
+	}
 	if workspace != "" {
 		if sess := desktopstateSessionPointer(&c.state, sessionID, agentID); sess != nil && sess.Workspace == "" {
 			sess.Workspace = workspace
@@ -1032,24 +1053,27 @@ func (c *controller) resumeKnownSessions(agentID string, client *acpclient.Clien
 	c.mu.RLock()
 	sessions := append([]desktopstate.SessionState(nil), c.state.Sessions...)
 	activeSessionID := c.state.ActiveSessionID
+	stateSnapshot := desktopstate.State{
+		ActiveProjectID: c.state.ActiveProjectID,
+		Projects:        cloneProjectStates(c.state.Projects),
+	}
 	c.mu.RUnlock()
+	defaultWorkspace, _ := resolveSessionWorkspace(workspaceCandidates(stateSnapshot, stateSnapshot.ActiveProjectID))
 	for _, session := range sessions {
 		if c.ctx.Err() != nil {
 			return
 		}
 		workspace := strings.TrimSpace(session.Workspace)
-		if workspace == "" {
-			if defaultWS, err := newSessionWorkspace(c.state); err == nil && defaultWS != "" {
-				wsKey := sessionWorkspaceKey(defaultWS)
-				sessKey := sessionWorkspaceKeyFromSession(session)
-				if sessKey == "" || sessKey == wsKey || sessKey == "workspace:"+canonicalWorkspacePath(defaultWS) {
-					workspace = defaultWS
-					c.mu.Lock()
-					if sess := desktopstateSessionPointer(&c.state, session.ID); sess != nil {
-						sess.Workspace = defaultWS
-					}
-					c.mu.Unlock()
+		if workspace == "" && defaultWorkspace != "" {
+			wsKey := sessionWorkspaceKey(defaultWorkspace)
+			sessKey := sessionWorkspaceKeyFromSession(session)
+			if sessKey == "" || sessKey == wsKey || sessKey == "workspace:"+defaultWorkspace {
+				workspace = defaultWorkspace
+				c.mu.Lock()
+				if sess := desktopstateSessionPointer(&c.state, session.ID); sess != nil && sess.Workspace == "" {
+					sess.Workspace = defaultWorkspace
 				}
+				c.mu.Unlock()
 			}
 		}
 		if session.ID == "" || workspace == "" || session.AgentID != agentID && !(session.AgentID == "" && agentID == ProtonmanAgentID) {
@@ -1117,11 +1141,22 @@ func (c *controller) SendExpandedPrompt(prompt ExpandedPrompt) {
 	agentID := c.state.ActiveAgentID
 	session, ok := SessionByID(c.state, sessionID, agentID)
 	workspace := strings.TrimSpace(session.Workspace)
-	if workspace == "" {
-		if defaultWS, err := newSessionWorkspace(c.state); err == nil && defaultWS != "" {
-			workspace = defaultWS
-			if current := desktopstateSessionPointer(&c.state, sessionID, agentID); current != nil {
-				current.Workspace = defaultWS
+	if ok && workspace == "" {
+		candidates := workspaceCandidates(c.state, c.state.ActiveProjectID)
+		c.mu.Unlock()
+		resolved, err := resolveSessionWorkspace(candidates)
+		c.mu.Lock()
+		// Resolving the workspace performs filesystem I/O; the selection may
+		// have moved while the lock was released.
+		if c.state.ActiveSessionID != sessionID || c.state.ActiveAgentID != agentID {
+			c.mu.Unlock()
+			return
+		}
+		session, ok = SessionByID(c.state, sessionID, agentID)
+		if ok && err == nil && resolved != "" {
+			workspace = resolved
+			if current := desktopstateSessionPointer(&c.state, sessionID, agentID); current != nil && current.Workspace == "" {
+				current.Workspace = resolved
 			}
 		}
 	}

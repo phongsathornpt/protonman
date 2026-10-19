@@ -61,6 +61,13 @@ type acpProvidersModelsResult struct {
 	} `json:"models"`
 }
 
+// RefreshProvidersAsync queries the ACP provider catalog on a tracked
+// background task. UI bindings must use this entry point: the synchronous call
+// performs a bounded network round-trip that would otherwise block rendering.
+func (c *controller) RefreshProvidersAsync() {
+	c.spawn(c.RefreshProviders)
+}
+
 func (c *controller) RefreshProviders() {
 	c.mu.RLock()
 	client := c.clients[ProtonmanAgentID]

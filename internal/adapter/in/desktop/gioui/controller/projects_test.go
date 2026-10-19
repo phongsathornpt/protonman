@@ -24,7 +24,7 @@ func TestProjectSessionsPreservesOtherAgentSessions(t *testing.T) {
 	next := projectSessions(state, "reviewer", []acpSession{
 		{ID: "review-session", Title: "Review updated"},
 		{ID: "review-new", Title: "New review", WorkspaceKey: "project"},
-	})
+	}, "")
 	if len(next.Sessions) != 3 {
 		t.Fatalf("sessions = %#v", next.Sessions)
 	}

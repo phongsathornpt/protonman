@@ -31,7 +31,8 @@ import (
 // renders into, and the per-frame caches. It holds no application logic; every
 // user action leaves through Bindings.
 type Shell struct {
-	theme *theme
+	theme      *theme
+	systemDark bool
 
 	// bind carries the application actions the Shell invokes. It is supplied by
 	// the composition root and defaults to no-ops so a partially wired Shell is
@@ -240,6 +241,13 @@ func (s *Shell) handleGlobalShortcuts(gtx layout.Context, snapshot controller.Sn
 	}
 }
 
+// SetSystemDark records the last observed OS appearance so render paths can
+// display the "System" theme without probing the OS themselves. It is updated
+// from the Gio event-loop goroutine alongside SetTheme.
+func (s *Shell) SetSystemDark(dark bool) {
+	s.systemDark = dark
+}
+
 // SetTheme swaps the resolved palette and discards render state that was
 // measured against the old one, so the next frame is laid out from scratch.
 func (s *Shell) SetTheme(theme *Theme) {
@@ -247,6 +255,15 @@ func (s *Shell) SetTheme(theme *Theme) {
 		return
 	}
 	s.theme = theme
+	// Cached spans embed the renderer palette, so they cannot survive a theme
+	// change. Clear the entries and reset the accounting together; resetting
+	// only the byte counters would leave the old spans outside the budget.
+	clear(s.conversationCache)
+	clear(s.conversationCodeCache)
+	clear(s.conversationResponseCache)
+	s.conversationCacheOrder = s.conversationCacheOrder[:0]
+	s.conversationCodeCacheOrder = s.conversationCodeCacheOrder[:0]
+	s.conversationResponseOrder = s.conversationResponseOrder[:0]
 	s.conversationCacheBytes = 0
 	s.conversationCodeCacheBytes = 0
 	s.conversationResponseBytes = 0

@@ -15,12 +15,13 @@ var (
 	systemThemeMu      sync.RWMutex
 	lastDetectedDark   = true
 	lastDetectionTime  time.Time
-	detectionTTL       = 1500 * time.Millisecond
+	detectionTTL       = 10 * time.Second
 	overrideDetectorFn func() bool
 )
 
 // IsSystemDarkMode returns true if the host operating system is currently using a dark theme.
-// Results are cached with a short TTL (1.5s) to avoid unnecessary process execution.
+// The probe executes a platform command, so results are cached for the same
+// interval the desktop uses to poll for appearance changes.
 func IsSystemDarkMode() bool {
 	systemThemeMu.RLock()
 	if overrideDetectorFn != nil {

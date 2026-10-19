@@ -233,15 +233,21 @@ func StartCommand(ctx context.Context, spec CommandSpec, onEvent func(Event)) (*
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		cancel()
+		_ = stdin.Close()
 		return nil, fmt.Errorf("open ACP stdout: %w", err)
 	}
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
 		cancel()
+		_ = stdin.Close()
+		_ = stdout.Close()
 		return nil, fmt.Errorf("open ACP stderr: %w", err)
 	}
 	if err := cmd.Start(); err != nil {
 		cancel()
+		_ = stdin.Close()
+		_ = stdout.Close()
+		_ = stderr.Close()
 		return nil, fmt.Errorf("start ACP agent %s: %w", spec.Path, err)
 	}
 

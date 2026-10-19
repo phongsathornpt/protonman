@@ -5,7 +5,6 @@ package settings
 import (
 	"image"
 	"image/color"
-	"log"
 	"strconv"
 	"strings"
 
@@ -98,7 +97,6 @@ func (c *Component) LayoutAgents(gtx layout.Context, input AgentsInput) layout.D
 		c.agent.EditorKey = ""
 		c.agent.ConfirmDelete = false
 		c.ClearAgentProfileEditors()
-		log.Printf("[UI] + Add ACP Agent clicked, agentEditorVisible is now true")
 		gtx.Execute(op.InvalidateCmd{})
 	}
 
@@ -170,7 +168,6 @@ func (c *Component) LayoutAgentProfileRow(gtx layout.Context, profile app.ACPAge
 		c.agent.CommandEditor.SetText(profile.Command)
 		c.agent.ArgsEditor.SetText(strings.Join(profile.Args, " "))
 		c.agent.EnvEditor.SetText(strings.Join(profile.Env, " "))
-		log.Printf("[UI] selected agent profile %q for editing", profile.ID)
 		gtx.Execute(op.InvalidateCmd{})
 	}
 

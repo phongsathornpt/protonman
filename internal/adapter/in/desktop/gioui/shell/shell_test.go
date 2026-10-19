@@ -684,3 +684,35 @@ func TestParsedThinkingCachesBySource(t *testing.T) {
 		t.Fatalf("thinking cache did not track new source: %#v", cached)
 	}
 }
+
+func TestSetThemeInvalidatesPaletteDependentCaches(t *testing.T) {
+	view := New(NewTheme("light"), Bindings{})
+	markdownKey := conversationCacheKey{sessionID: "session", itemID: "assistant", kind: desktopstate.TimelineAssistant}
+	codeKey := conversationCacheKey{sessionID: "session", itemID: "code", kind: desktopstate.TimelineAssistant}
+	responseKey := conversationCacheKey{sessionID: "session", itemID: "response", kind: desktopstate.TimelineAssistant}
+
+	view.conversationCache[markdownKey] = conversationMarkdownCache{source: "text", bytes: 10}
+	view.conversationCacheOrder = []conversationCacheKey{markdownKey}
+	view.conversationCacheBytes = 10
+	view.conversationCodeCache[codeKey] = conversationCodeCache{source: "code", lang: "go", bytes: 20}
+	view.conversationCodeCacheOrder = []conversationCacheKey{codeKey}
+	view.conversationCodeCacheBytes = 20
+	view.conversationResponseCache[responseKey] = conversationResponseCache{source: "response"}
+	view.conversationResponseOrder = []conversationCacheKey{responseKey}
+	view.conversationResponseBytes = 30
+
+	view.SetTheme(NewTheme("dark"))
+
+	if len(view.conversationCache) != 0 || len(view.conversationCodeCache) != 0 || len(view.conversationResponseCache) != 0 {
+		t.Fatalf("theme change retained palette-dependent cache entries: markdown=%d code=%d response=%d",
+			len(view.conversationCache), len(view.conversationCodeCache), len(view.conversationResponseCache))
+	}
+	if view.conversationCacheBytes != 0 || view.conversationCodeCacheBytes != 0 || view.conversationResponseBytes != 0 {
+		t.Fatalf("theme change retained cache accounting: markdown=%d code=%d response=%d",
+			view.conversationCacheBytes, view.conversationCodeCacheBytes, view.conversationResponseBytes)
+	}
+	if len(view.conversationCacheOrder) != 0 || len(view.conversationCodeCacheOrder) != 0 || len(view.conversationResponseOrder) != 0 {
+		t.Fatalf("theme change retained eviction order: markdown=%d code=%d response=%d",
+			len(view.conversationCacheOrder), len(view.conversationCodeCacheOrder), len(view.conversationResponseOrder))
+	}
+}
