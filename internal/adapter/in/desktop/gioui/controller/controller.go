@@ -27,7 +27,6 @@ import (
 
 const (
 	ProtonmanAgentID        = "protonman"
-	acpAgentsEnvironment    = "PROTONMAN_ACP_AGENTS_JSON"
 	reconnectInitialDelay   = time.Second
 	reconnectMaxDelay       = 8 * time.Second
 	reconnectRequestTimeout = 15 * time.Second
@@ -57,13 +56,6 @@ type Snapshot struct {
 	State                 desktopstate.State
 	Connection            ConnectionPhase
 	Status                string
-	ActiveAgentID         string
-	AgentProfiles         []app.ACPAgentProfile
-	AgentConnections      map[string]ConnectionPhase
-	AgentStatuses         map[string]string
-	AgentConfigOverridden bool
-	AgentUpdating         bool
-	AgentError            string
 	CreatingSession       bool
 	HistoryState          HistoryState
 	RuntimeUpdating       bool
@@ -97,15 +89,14 @@ type controller struct {
 	cancel   context.CancelFunc
 	onChange func()
 
-	sessionLocks  agentSessionLockRegistry
-	mu            sync.RWMutex
-	state         desktopstate.State
-	profiles      map[string]app.ACPAgentProfile
-	clients       map[string]*acpclient.Client
-	agentFeatures map[string]acpAgentFeatures
-	connections   map[string]ConnectionPhase
-	statuses      map[string]string
-	activeAgentID string
+	sessionLocks agentSessionLockRegistry
+	mu           sync.RWMutex
+	state        desktopstate.State
+	profile      ACPAgentProfile
+	client       *acpclient.Client
+	features     acpAgentFeatures
+	connection   ConnectionPhase
+	status       string
 
 	preferences           *app.DesktopPreferences
 	pinnedSessions        []string
@@ -138,11 +129,6 @@ type controller struct {
 	skillsRefresh           *sessionRefreshTracker
 	runtimeMutation         string
 
-	agentProfiles         app.ACPAgents
-	agentMutation         bool
-	agentConfigOverridden bool
-	agentError            string
-
 	mcpIntegrations app.MCPIntegrations
 	mcpMutation     bool
 	mcpReconnect    bool
@@ -160,24 +146,16 @@ type controller struct {
 	bgTasks     sync.WaitGroup
 }
 
-func New(parent context.Context, onChange func(), agents app.ACPAgents, integrations app.MCPIntegrations, preferences *app.DesktopPreferences) *controller {
+func New(parent context.Context, onChange func(), integrations app.MCPIntegrations, preferences *app.DesktopPreferences) *controller {
 	ctx, cancel := context.WithCancel(parent)
-	defaults := []app.ACPAgentProfile{DefaultACPAgentProfile()}
-	profiles, profileErr := agents.Resolve(ctx, defaults, os.Getenv(acpAgentsEnvironment))
-	agentError := ""
-	if profileErr != nil {
-		profiles = defaults
-		agentError = compactError(profileErr)
-	}
+	profile := DefaultACPAgentProfile()
 	instance := &controller{
 		ctx:                     ctx,
 		cancel:                  cancel,
 		onChange:                onChange,
-		profiles:                make(map[string]app.ACPAgentProfile, len(profiles)),
-		clients:                 make(map[string]*acpclient.Client, len(profiles)),
-		agentFeatures:           make(map[string]acpAgentFeatures, len(profiles)),
-		connections:             make(map[string]ConnectionPhase, len(profiles)),
-		statuses:                make(map[string]string, len(profiles)),
+		profile:                 CloneACPAgentProfile(profile),
+		connection:              ConnectionConnecting,
+		status:                  "Starting Protonman…",
 		histories:               make(map[string]HistoryState),
 		historyLoads:            make(map[string]*sessionHistoryLoad),
 		historyStaging:          make(map[string][]desktopstate.Event),
@@ -192,9 +170,6 @@ func New(parent context.Context, onChange func(), agents app.ACPAgents, integrat
 		memoryRefresh:           newSessionRefreshTracker(memoryRefreshInterval),
 		runtimeRefresh:          newSessionRefreshTracker(runtimeRefreshInterval),
 		skillsRefresh:           newSessionRefreshTracker(skillsRefreshInterval),
-		agentProfiles:           agents,
-		agentConfigOverridden:   strings.TrimSpace(os.Getenv(acpAgentsEnvironment)) != "",
-		agentError:              agentError,
 		mcpIntegrations:         integrations,
 		preferences:             preferences,
 		pinnedSessions:          make([]string, 0),
@@ -206,12 +181,6 @@ func New(parent context.Context, onChange func(), agents app.ACPAgents, integrat
 		filterMode:              "all",
 		theme:                   "system",
 	}
-	for _, profile := range profiles {
-		instance.profiles[profile.ID] = CloneACPAgentProfile(profile)
-		instance.connections[profile.ID] = ConnectionConnecting
-		instance.statuses[profile.ID] = "Starting " + profile.DisplayName + "…"
-	}
-	instance.activeAgentID = preferredAgentID(profiles)
 	if integrations.Available() {
 		instance.loadMCPIntegrations()
 	}
@@ -261,14 +230,7 @@ func (c *controller) persistPreference(fn func(ctx context.Context) error) {
 		defer cancel()
 		if err := fn(ctx); err != nil && !errors.Is(err, context.Canceled) {
 			c.mu.Lock()
-			if c.statuses == nil {
-				c.statuses = make(map[string]string)
-			}
-			agentID := c.activeAgentID
-			if agentID == "" {
-				agentID = ProtonmanAgentID
-			}
-			c.statuses[agentID] = "Saving preferences failed · " + compactError(err)
+			c.status = "Saving preferences failed · " + compactError(err)
 			c.revision++
 			c.mu.Unlock()
 			c.notify()
@@ -344,11 +306,8 @@ func (c *controller) Close() {
 	if c.cancel != nil {
 		c.cancel()
 	}
-	clients := make([]*acpclient.Client, 0, len(c.clients))
-	for _, client := range c.clients {
-		clients = append(clients, client)
-	}
-	clear(c.clients)
+	client := c.client
+	c.client = nil
 	for sessionID, load := range c.historyLoads {
 		load.cancel()
 		delete(c.historyLoads, sessionID)
@@ -362,10 +321,10 @@ func (c *controller) Close() {
 	clear(c.messageStreams)
 	c.mu.Unlock()
 
-	for _, client := range clients {
+	c.bgTasks.Wait()
+	if client != nil {
 		_ = client.Close()
 	}
-	c.bgTasks.Wait()
 }
 
 func (c *controller) Snapshot() Snapshot {
@@ -376,15 +335,8 @@ func (c *controller) Snapshot() Snapshot {
 	}
 	snapshot := Snapshot{
 		State:                 desktopstate.ClonePresentationState(c.state),
-		Connection:            c.connections[c.activeAgentID],
-		Status:                c.statuses[c.activeAgentID],
-		ActiveAgentID:         c.activeAgentID,
-		AgentProfiles:         CloneACPAgentProfiles(c.profiles),
-		AgentConnections:      make(map[string]ConnectionPhase, len(c.connections)),
-		AgentStatuses:         make(map[string]string, len(c.statuses)),
-		AgentConfigOverridden: c.agentConfigOverridden,
-		AgentUpdating:         c.agentMutation,
-		AgentError:            c.agentError,
+		Connection:            c.connection,
+		Status:                c.status,
 		CreatingSession:       c.creatingSession,
 		HistoryState:          HistoryStateUnloaded,
 		RuntimeUpdating:       c.runtimeMutation != "",
@@ -405,12 +357,6 @@ func (c *controller) Snapshot() Snapshot {
 		ProviderModelsLoading: cloneBoolMap(c.providerModelsLoading),
 		ProviderUpdating:      c.providerUpdating,
 		ProviderError:         c.providerError,
-	}
-	for agentID, phase := range c.connections {
-		snapshot.AgentConnections[agentID] = phase
-	}
-	for agentID, status := range c.statuses {
-		snapshot.AgentStatuses[agentID] = status
 	}
 	for agentID, model := range c.agentDefaultModels {
 		snapshot.AgentDefaultModels[agentID] = model
@@ -454,7 +400,7 @@ func (c *controller) setAgentAvailableModelsLocked(agentID string, models []stri
 // the UI immutable while avoiding clones of unrelated state.
 func (c *controller) advanceSnapshotCacheForTimelineLocked(sessionID string, agentIDs ...string) bool {
 	cache := &c.snapshotCache
-	agentID := c.state.ActiveAgentID
+	agentID := ProtonmanAgentID
 	if len(agentIDs) > 0 && agentIDs[0] != "" {
 		agentID = agentIDs[0]
 	}
@@ -483,10 +429,18 @@ func (c *controller) advanceSnapshotCacheForTimelineLocked(sessionID string, age
 }
 
 func (c *controller) selectSession(sessionID string) {
-	c.SelectSessionForAgent("", sessionID)
+	c.SelectSessionForAgent(ProtonmanAgentID, sessionID)
+}
+
+func (c *controller) SelectSession(agentID, sessionID string) {
+	if strings.TrimSpace(agentID) == "" {
+		agentID = ProtonmanAgentID
+	}
+	c.SelectSessionForAgent(agentID, sessionID)
 }
 
 func (c *controller) SelectSessionForAgent(agentID, sessionID string) {
+	agentID = ProtonmanAgentID
 	c.mu.Lock()
 	previousSessionID := c.state.ActiveSessionID
 	previousAgentID := c.state.ActiveAgentID
@@ -497,11 +451,6 @@ func (c *controller) SelectSessionForAgent(agentID, sessionID string) {
 	})
 	if session, ok := SessionByID(c.state, c.state.ActiveSessionID, c.state.ActiveAgentID); ok {
 		c.state.ActiveProjectID = session.ProjectID
-		if strings.TrimSpace(session.AgentID) != "" {
-			c.activeAgentID = session.AgentID
-		} else {
-			c.activeAgentID = ProtonmanAgentID
-		}
 	}
 	c.pruneInactiveSessionHistoryLocked(c.state.ActiveSessionID, previousSessionID,
 		desktopstate.SessionRef{AgentID: c.state.ActiveAgentID, SessionID: c.state.ActiveSessionID},
@@ -516,22 +465,40 @@ func (c *controller) SelectSessionForAgent(agentID, sessionID string) {
 	c.RefreshActiveSession(true)
 }
 
+// SelectProject selects the project that owns Protonman sessions in the sidebar.
+func (c *controller) SelectProject(projectID string) {
+	c.mu.Lock()
+	c.state.ActiveProjectID = projectID
+	c.revision++
+	c.snapshotCache = SnapshotCache{}
+	c.mu.Unlock()
+	c.notify()
+}
+
+// DeleteSessionAsync removes a session without blocking the UI goroutine.
+func (c *controller) DeleteSessionAsync(sessionID string, agentIDs ...string) {
+	c.spawn(func() { c.DeleteSession(sessionID, agentIDs...) })
+}
+
 func (c *controller) DeleteSession(sessionID string, agentIDs ...string) {
 	sessionID = strings.TrimSpace(sessionID)
 	if sessionID == "" {
 		return
 	}
+	targetAgentID := ProtonmanAgentID
+	if len(agentIDs) > 0 && strings.TrimSpace(agentIDs[0]) != "" {
+		targetAgentID = ProtonmanAgentID
+	}
 	c.mu.Lock()
 	var (
-		targetAgentID   string
 		targetProjectID string
 		storageKey      string
 	)
-	if len(agentIDs) > 0 {
-		targetAgentID = agentIDs[0]
-	}
 	if session, ok := SessionByID(c.state, sessionID, targetAgentID); ok {
 		targetAgentID = session.AgentID
+		if strings.TrimSpace(targetAgentID) == "" {
+			targetAgentID = ProtonmanAgentID
+		}
 		targetProjectID = session.ProjectID
 		storageKey = desktopSessionStorageKey(c.state, session.Ref())
 	}
@@ -539,8 +506,8 @@ func (c *controller) DeleteSession(sessionID string, agentIDs ...string) {
 		c.mu.Unlock()
 		return
 	}
-	client := c.clients[targetAgentID]
-	activeSessionDeleted := c.state.ActiveSessionID == sessionID && (c.state.ActiveAgentID == "" || c.state.ActiveAgentID == targetAgentID)
+	client := c.client
+	activeSessionDeleted := c.state.ActiveSessionID == sessionID
 	c.mu.Unlock()
 
 	if client != nil {
@@ -558,13 +525,12 @@ func (c *controller) DeleteSession(sessionID string, agentIDs ...string) {
 
 	c.mu.Lock()
 	newSessions := make([]desktopstate.SessionState, 0, len(c.state.Sessions))
-	var fallbackSessionID, fallbackAgentID string
+	var fallbackSessionID string
 	for _, sess := range c.state.Sessions {
-		if sess.ID != sessionID || sess.AgentID != targetAgentID {
+		if sess.ID != sessionID {
 			newSessions = append(newSessions, sess)
-			if activeSessionDeleted && sess.AgentID == targetAgentID && sess.ProjectID == targetProjectID && fallbackSessionID == "" {
+			if activeSessionDeleted && sess.ProjectID == targetProjectID && fallbackSessionID == "" {
 				fallbackSessionID = sess.ID
-				fallbackAgentID = sess.AgentID
 			}
 		}
 	}
@@ -572,7 +538,7 @@ func (c *controller) DeleteSession(sessionID string, agentIDs ...string) {
 
 	if activeSessionDeleted {
 		c.state.ActiveSessionID = fallbackSessionID
-		c.state.ActiveAgentID = fallbackAgentID
+		c.state.ActiveAgentID = ProtonmanAgentID
 	}
 
 	if load, ok := c.historyLoads[storageKey]; ok {
@@ -596,17 +562,10 @@ func (c *controller) DeleteSession(sessionID string, agentIDs ...string) {
 	c.mu.Unlock()
 
 	if activeSessionDeleted && fallbackSessionID != "" {
-		c.SelectSessionForAgent(fallbackAgentID, fallbackSessionID)
+		c.SelectSessionForAgent(ProtonmanAgentID, fallbackSessionID)
 	} else {
 		c.notify()
 	}
-}
-
-// DeleteSessionAsync removes a session without blocking the UI goroutine. The
-// remote ACP delete and local state convergence happen on a tracked background
-// task; callers observe the result through the normal snapshot/notify path.
-func (c *controller) DeleteSessionAsync(sessionID string, agentIDs ...string) {
-	c.spawn(func() { c.DeleteSession(sessionID, agentIDs...) })
 }
 
 func (c *controller) RenameSession(sessionID, newTitle string, agentIDs ...string) {
@@ -614,12 +573,8 @@ func (c *controller) RenameSession(sessionID, newTitle string, agentIDs ...strin
 	if sessionID == "" {
 		return
 	}
-	var agentID string
-	if len(agentIDs) > 0 {
-		agentID = agentIDs[0]
-	}
 	c.mu.Lock()
-	session, ok := SessionByID(c.state, sessionID, agentID)
+	session, ok := SessionByID(c.state, sessionID, ProtonmanAgentID)
 	storageKey := ""
 	if ok {
 		storageKey = desktopSessionStorageKey(c.state, session.Ref())
@@ -657,12 +612,12 @@ func (c *controller) ToggleSkill(sessionID string, skillName string) {
 		return
 	}
 	c.mu.Lock()
-	client, agentID := c.clientForSessionLocked(sessionID, c.state.ActiveAgentID)
-	if client == nil || c.connections[agentID] != ConnectionConnected {
-		c.mu.Unlock()
+	client := c.client
+	connected := c.connection == ConnectionConnected
+	c.mu.Unlock()
+	if client == nil || !connected {
 		return
 	}
-	c.mu.Unlock()
 
 	c.spawn(func() {
 		var result struct {
@@ -676,7 +631,7 @@ func (c *controller) ToggleSkill(sessionID string, skillName string) {
 		}, &result); err != nil {
 			return
 		}
-		c.refreshSessionSkills(sessionID, true, agentID)
+		c.refreshSessionSkills(sessionID, true, ProtonmanAgentID)
 	})
 }
 
@@ -685,12 +640,8 @@ func (c *controller) TogglePinSession(sessionID string, agentIDs ...string) {
 	if sessionID == "" {
 		return
 	}
-	var agentID string
-	if len(agentIDs) > 0 {
-		agentID = agentIDs[0]
-	}
 	c.mu.Lock()
-	session, ok := SessionByID(c.state, sessionID, agentID)
+	session, ok := SessionByID(c.state, sessionID, ProtonmanAgentID)
 	storageKey := ""
 	if ok {
 		storageKey = desktopSessionStorageKey(c.state, session.Ref())
@@ -783,12 +734,8 @@ func extractModelsFromACP(options []acpConfigOption, modelsResult *acpModelsResu
 
 func (c *controller) NewSession() {
 	c.mu.Lock()
-	agentID := c.activeAgentID
-	if agentID == "" {
-		agentID = c.agentForProjectLocked(c.state.ActiveProjectID)
-	}
-	client := c.clients[agentID]
-	if c.connections[agentID] != ConnectionConnected || client == nil || c.creatingSession {
+	client := c.client
+	if c.connection != ConnectionConnected || client == nil || c.creatingSession {
 		c.mu.Unlock()
 		return
 	}
@@ -799,7 +746,7 @@ func (c *controller) NewSession() {
 	workspace, err := resolveSessionWorkspace(candidates)
 	if err != nil {
 		c.mu.Lock()
-		c.statuses[agentID] = "New session unavailable · " + compactError(err)
+		c.status = "New session unavailable \u00b7 " + compactError(err)
 		c.revision++
 		c.mu.Unlock()
 		c.notify()
@@ -808,18 +755,15 @@ func (c *controller) NewSession() {
 	requestedAdditionalDirectories := additionalDirectories(candidates, workspace)
 
 	c.mu.Lock()
-	// Workspace resolution runs filesystem I/O without the lock, so the client
-	// or the selected project may have changed in the meantime.
-	if c.clients[agentID] != client || c.connections[agentID] != ConnectionConnected || c.creatingSession || c.state.ActiveProjectID != projectID {
+	if c.client != client || c.connection != ConnectionConnected || c.creatingSession || c.state.ActiveProjectID != projectID {
 		c.mu.Unlock()
 		return
 	}
-	c.activeAgentID = agentID
 	c.creatingSession = true
-	c.statuses[agentID] = "Creating session…"
+	c.status = "Creating session\u2026"
 	c.revision++
-	features := c.agentFeatures[agentID]
-	profile := c.profiles[agentID]
+	features := c.features
+	profile := c.profile
 	sessionDirectories := requestedAdditionalDirectories
 	if !features.SupportsAdditionalDirectories {
 		sessionDirectories = nil
@@ -837,7 +781,7 @@ func (c *controller) NewSession() {
 			c.notify()
 		}()
 
-		defer c.lockAgentSession(agentID)()
+		defer c.lockAgentSession()()
 		var result struct {
 			SessionID string `json:"sessionId"`
 			Modes     *struct {
@@ -859,10 +803,10 @@ func (c *controller) NewSession() {
 					methodName = "agent"
 				}
 				if strings.HasPrefix(strings.ToLower(methodName), "sign in with ") {
-					c.setAgentStatus(agentID, methodName+"…")
+					c.setStatus(methodName + "\u2026")
 					return
 				}
-				c.setAgentStatus(agentID, "Signing in with "+methodName+"…")
+				c.setStatus("Signing in with " + methodName + "\u2026")
 			},
 		)
 		if err == nil && strings.TrimSpace(result.SessionID) == "" {
@@ -870,15 +814,16 @@ func (c *controller) NewSession() {
 		}
 
 		c.mu.Lock()
-		if c.clients[agentID] != client {
+		if c.client != client {
 			c.mu.Unlock()
 			return
 		}
 		if err != nil {
-			c.statuses[agentID] = "New session failed · " + compactError(err)
+			c.status = "New session failed \u00b7 " + compactError(err)
 			c.mu.Unlock()
 			return
 		}
+		agentID := ProtonmanAgentID
 		c.state = addLocalSession(c.state, result.SessionID, workspace, agentID)
 		if models, currentModel := extractModelsFromACP(result.ConfigOptions, result.Models); len(models) > 0 {
 			c.setAgentAvailableModelsLocked(agentID, models)
@@ -900,12 +845,7 @@ func (c *controller) NewSession() {
 		}
 		if result.Modes != nil && strings.TrimSpace(result.Modes.CurrentModeID) != "" {
 			if sess := desktopstateSessionPointer(&c.state, result.SessionID, agentID); sess != nil {
-				modeID := strings.TrimSpace(result.Modes.CurrentModeID)
-				if isClineACPProfile(profile) {
-					sess.Runtime.PermissionMode = clinePermissionMode(modeID, clineAutoApproveValue(result.ConfigOptions, false))
-				} else {
-					sess.Runtime.PermissionMode = modeID
-				}
+				sess.Runtime.PermissionMode = strings.TrimSpace(result.Modes.CurrentModeID)
 			}
 		}
 		c.state.ActiveSessionID = result.SessionID
@@ -914,10 +854,9 @@ func (c *controller) NewSession() {
 		storageKey := desktopSessionStorageKey(c.state, desktopstate.SessionRef{AgentID: agentID, SessionID: result.SessionID})
 		c.histories[storageKey] = HistoryStateLoaded
 		c.clearMessageStreamsLocked(result.SessionID, agentID)
-		c.setProjectDefaultAgentLocked(c.state.ActiveProjectID, agentID)
-		c.statuses[agentID] = "Session created"
+		c.status = "Session created"
 		if len(requestedAdditionalDirectories) > 0 && !features.SupportsAdditionalDirectories {
-			c.statuses[agentID] = "Session created · agent uses the primary folder only"
+			c.status = "Session created \u00b7 agent uses the primary folder only"
 		}
 		c.revision++
 		c.mu.Unlock()
@@ -926,28 +865,26 @@ func (c *controller) NewSession() {
 }
 
 func (c *controller) run() {
-	profiles := c.sortedProfiles()
-	for _, profile := range profiles {
-		c.spawn(func() { c.superviseAgent(profile) })
-	}
+	c.spawn(func() { c.superviseProtonman() })
 	<-c.context().Done()
 }
 
-func (c *controller) superviseAgent(profile app.ACPAgentProfile) {
+func (c *controller) superviseProtonman() {
+	profile := c.profile
 	delay := reconnectInitialDelay
 	for {
 		if c.context().Err() != nil {
 			return
 		}
-		c.setAgentConnection(profile.ID, ConnectionConnecting, "Starting "+profile.DisplayName+"…")
+		c.setConnection(ConnectionConnecting, "Starting "+profile.DisplayName+"\u2026")
 		var startedClient atomic.Pointer[acpclient.Client]
 		client, err := acpclient.StartCommand(c.context(), CommandSpecForACPAgent(profile), func(event acpclient.Event) {
 			if current := startedClient.Load(); current != nil {
-				c.handleACPEventForAgent(profile.ID, current, event)
+				c.handleACPEventFrom(current, event)
 			}
 		})
 		if err != nil {
-			c.setAgentConnection(profile.ID, ConnectionReconnecting, "Start failed · "+compactError(err))
+			c.setConnection(ConnectionReconnecting, "Start failed \u00b7 "+compactError(err))
 			if !waitForReconnect(c.context(), delay) {
 				return
 			}
@@ -963,38 +900,38 @@ func (c *controller) superviseAgent(profile app.ACPAgentProfile) {
 			if c.context().Err() != nil {
 				return
 			}
-			c.setAgentConnection(profile.ID, ConnectionReconnecting, "Connection failed · "+compactError(err))
+			c.setConnection(ConnectionReconnecting, "Connection failed \u00b7 "+compactError(err))
 			if !waitForReconnect(c.ctx, delay) {
 				return
 			}
 			delay = nextReconnectDelay(delay)
 			continue
 		}
-		c.setAgentFeatures(profile.ID, features)
+		c.setFeatures(features)
 		client.SetRequestHandler(func(requestCtx context.Context, request acpclient.Request) (any, error) {
 			switch request.Method {
 			case requestPermissionMethod:
-				return c.handlePermissionRequestForAgent(profile.ID, client, requestCtx, request)
+				return c.handlePermissionRequestFrom(client, requestCtx, request)
 			case requestQuestionMethod:
-				return c.handleQuestionRequestForAgent(profile.ID, client, requestCtx, request)
+				return c.handleQuestionRequestFrom(client, requestCtx, request)
 			case methodElicitationCreate:
-				return c.handleElicitationRequestForAgent(profile.ID, client, requestCtx, request)
+				return c.handleElicitationRequestFrom(client, requestCtx, request)
 			default:
 				return nil, fmt.Errorf("%w: %s", acpclient.ErrMethodNotHandled, request.Method)
 			}
 		})
 
-		c.setClient(profile.ID, client)
+		c.setClient(client)
 		delay = reconnectInitialDelay
-		if err := c.refreshSessions(profile.ID, client); err != nil {
+		if err := c.refreshSessions(client); err != nil {
 			if isACPMethodNotFound(err) {
-				c.setAgentStatus(profile.ID, "Connected · session list unavailable")
+				c.setStatus("Connected \u00b7 session list unavailable")
 			} else {
 				log.Printf("desktop controller: session refresh failed for %s: %v", profile.ID, err)
-				c.setAgentStatus(profile.ID, "Connected · session refresh failed")
+				c.setStatus("Connected \u00b7 session refresh failed")
 			}
 		}
-		c.resumeKnownSessions(profile.ID, client)
+		c.resumeKnownSessions(client)
 
 		select {
 		case <-c.context().Done():
@@ -1004,7 +941,7 @@ func (c *controller) superviseAgent(profile app.ACPAgentProfile) {
 		}
 
 		log.Printf("desktop controller: ACP client disconnected for %s", profile.ID)
-		c.markAgentDisconnected(profile.ID, client)
+		c.markDisconnected(client)
 		if c.context().Err() != nil {
 			return
 		}
@@ -1014,12 +951,12 @@ func (c *controller) superviseAgent(profile app.ACPAgentProfile) {
 	}
 }
 
-func (c *controller) refreshSessions(agentID string, client *acpclient.Client) error {
-	if !c.agentSupportsSessionList(agentID) {
-		c.setAgentStatus(agentID, "Connected · session list unavailable")
+func (c *controller) refreshSessions(client *acpclient.Client) error {
+	if !c.supportsSessionList() {
+		c.setStatus("Connected \u00b7 session list unavailable")
 		return nil
 	}
-	defer c.lockAgentSession(agentID)()
+	defer c.lockAgentSession()()
 	callCtx, cancel := context.WithTimeout(c.context(), reconnectRequestTimeout)
 	defer cancel()
 	var result struct {
@@ -1034,11 +971,11 @@ func (c *controller) refreshSessions(agentID string, client *acpclient.Client) e
 	defaultWorkspace, _ := resolveSessionWorkspace(candidates)
 
 	c.mu.Lock()
-	if c.clients[agentID] != client {
+	if c.client != client {
 		c.mu.Unlock()
 		return errSessionHistoryClientChanged
 	}
-	next := projectSessions(c.state, agentID, result.Sessions, defaultWorkspace)
+	next := projectSessions(c.state, ProtonmanAgentID, result.Sessions, defaultWorkspace)
 	c.state = next
 	c.pruneSessionRuntimeLocked()
 	c.pruneSessionRefreshersLocked()
@@ -1051,12 +988,12 @@ func (c *controller) refreshSessions(agentID string, client *acpclient.Client) e
 	return nil
 }
 
-func (c *controller) setAgentConnection(agentID string, phase ConnectionPhase, status string) {
+func (c *controller) setConnection(phase ConnectionPhase, status string) {
 	c.mu.Lock()
-	c.connections[agentID] = phase
-	c.statuses[agentID] = status
-	if agentID == c.activeAgentID {
-		c.mcpReconnect = c.mcpReconnect && phase != ConnectionConnected
+	c.connection = phase
+	c.status = status
+	if phase != ConnectionConnected {
+		c.mcpReconnect = c.mcpReconnect && false
 	}
 	c.revision++
 	c.mu.Unlock()
@@ -1065,58 +1002,47 @@ func (c *controller) setAgentConnection(agentID string, phase ConnectionPhase, s
 
 func (c *controller) setStatus(status string) {
 	c.mu.Lock()
-	if c.statuses == nil {
-		c.statuses = make(map[string]string)
-	}
-	c.statuses[c.activeAgentID] = status
+	c.status = status
 	c.revision++
 	c.mu.Unlock()
 	c.notify()
 }
 
-func (c *controller) setAgentStatus(agentID, status string) {
+func (c *controller) setFeatures(features acpAgentFeatures) {
 	c.mu.Lock()
-	if c.statuses == nil {
-		c.statuses = make(map[string]string)
-	}
-	c.statuses[agentID] = status
-	c.revision++
+	features.AuthMethods = slices.Clone(features.AuthMethods)
+	c.features = features
 	c.mu.Unlock()
-	c.notify()
 }
 
-func (c *controller) setClient(agentID string, client *acpclient.Client) {
+func (c *controller) setClient(client *acpclient.Client) {
 	c.mu.Lock()
-	c.clients[agentID] = client
-	c.connections[agentID] = ConnectionConnected
+	c.client = client
+	c.connection = ConnectionConnected
 	status := "Connected"
 	if c.mcpError != "" {
-		status = "Connected · MCP settings unavailable"
+		status = "Connected \u00b7 MCP settings unavailable"
 	}
-	c.statuses[agentID] = status
-	if len(c.clients) >= len(c.profiles) {
-		c.mcpReconnect = false
-	}
+	c.status = status
+	c.mcpReconnect = false
 	c.revision++
 	c.mu.Unlock()
 	c.notify()
-	if isProtonmanAgent(agentID) {
-		c.spawn(c.RefreshProviders)
-	}
+	c.spawn(c.RefreshProviders)
 }
 
-func (c *controller) markAgentDisconnected(agentID string, client *acpclient.Client) {
+func (c *controller) markDisconnected(client *acpclient.Client) {
 	c.mu.Lock()
-	if c.clients[agentID] != client {
+	if c.client != client {
 		c.mu.Unlock()
 		return
 	}
-	delete(c.clients, agentID)
-	delete(c.agentFeatures, agentID)
-	c.connections[agentID] = ConnectionReconnecting
-	c.statuses[agentID] = "Disconnected · retrying"
-	c.resetAgentTransientSessionStateLocked(agentID)
-	c.state = desktopstate.MarkAgentDisconnected(c.state, agentID)
+	c.client = nil
+	c.features = acpAgentFeatures{}
+	c.connection = ConnectionReconnecting
+	c.status = "Disconnected \u00b7 retrying"
+	c.resetTransientSessionStateLocked()
+	c.state = desktopstate.MarkAgentDisconnected(c.state, ProtonmanAgentID)
 	c.revision++
 	c.mu.Unlock()
 	c.notify()
@@ -1407,6 +1333,15 @@ func additionalDirectories(candidates []string, primary string) []string {
 	return directories
 }
 
+func projectByID(state desktopstate.State, projectID string) (desktopstate.ProjectState, bool) {
+	for _, project := range state.Projects {
+		if project.ID == projectID {
+			return project, true
+		}
+	}
+	return desktopstate.ProjectState{}, false
+}
+
 func cloneProjectStates(projects []desktopstate.ProjectState) []desktopstate.ProjectState {
 	out := slices.Clone(projects)
 	for index := range out {
@@ -1556,15 +1491,6 @@ func nextReconnectDelay(delay time.Duration) time.Duration {
 	return delay
 }
 
-func isProtonmanAgent(agentID string) bool {
-	switch strings.ToLower(strings.TrimSpace(agentID)) {
-	case "", ProtonmanAgentID, "proton":
-		return true
-	default:
-		return false
-	}
-}
-
 func compactError(err error) string {
 	message := strings.TrimSpace(err.Error())
 	runes := []rune(message)
@@ -1580,4 +1506,26 @@ func shortID(id string) string {
 		return id
 	}
 	return string(runes[:8])
+}
+
+func protonAgentIDForClient(current *acpclient.Client, source *acpclient.Client) string {
+	if source == nil || current == nil {
+		return ""
+	}
+	if source != current {
+		return ""
+	}
+	return ProtonmanAgentID
+}
+
+func (c *controller) isCurrentClient(client *acpclient.Client) bool {
+	return client != nil && c.client == client
+}
+
+func (c *controller) clientCurrentCompat(agentID string, client *acpclient.Client) bool {
+	return c.isCurrentClient(client)
+}
+
+func (c *controller) clientForSession(sessionID string, agentIDs ...string) (*acpclient.Client, string) {
+	return c.client, ProtonmanAgentID
 }

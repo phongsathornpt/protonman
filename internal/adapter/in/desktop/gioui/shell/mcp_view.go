@@ -3,8 +3,6 @@
 package shell
 
 import (
-	"encoding/json"
-
 	"gioui.org/layout"
 
 	settingscomponent "github.com/phongsathornpt/protonman/internal/adapter/in/desktop/gioui/component/settings"
@@ -21,17 +19,6 @@ func (s *Shell) syncMCPIntegrationEditors(state desktopstate.State) {
 		})
 	}
 	s.settingsComponent.SyncMCPIntegrationEditors(s.syncRevision, items)
-}
-
-func mcpJSONList(values []string) string {
-	if len(values) == 0 {
-		return "[]"
-	}
-	encoded, err := json.Marshal(values)
-	if err != nil {
-		return "[]"
-	}
-	return string(encoded)
 }
 
 func (s *Shell) layoutMCPIntegrationsPanel(gtx layout.Context, snapshot controller.Snapshot) layout.Dimensions {

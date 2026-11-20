@@ -117,50 +117,6 @@ func (s *Shell) layoutButtonStyle(gtx layout.Context, button *widget.Clickable, 
 	return dims
 }
 
-func (s *Shell) layoutAgentCapsuleButton(gtx layout.Context, button *widget.Clickable, label string, action func()) layout.Dimensions {
-	if button.Clicked(gtx) && action != nil {
-		action()
-	}
-	gtx.Constraints.Min.Y = gtx.Dp(28)
-	semantic.Button.Add(gtx.Ops)
-	semantic.DescriptionOp(label).Add(gtx.Ops)
-	background := s.theme.Colors.SurfaceContainerHigh
-	foreground := s.theme.Colors.OnSurface
-	if button.Hovered() {
-		background = s.theme.Colors.SurfaceContainerHighest
-	}
-	dims := button.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-		return s.roundedSurface(gtx, shapeMedium, background, func(gtx layout.Context) layout.Dimensions {
-			return uikit.Inset{Top: 4, Bottom: 4, Left: 10, Right: 10}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-				if strings.HasSuffix(label, " ▾") || strings.HasSuffix(label, " ▴") {
-					clean := strings.TrimSuffix(strings.TrimSuffix(label, " ▾"), " ▴")
-					chevronKind := uikit.KindChevronDown
-					if strings.HasSuffix(label, " ▴") {
-						chevronKind = uikit.KindChevronUp
-					}
-					return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
-						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-							return s.layoutLabel(gtx, clean, textLabelMedium, font.SemiBold, foreground, 1)
-						}),
-						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-							return uikit.Inset{Left: 4}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-								return uikit.LayoutActionIcon(gtx, chevronKind, 10, foreground)
-							})
-						}),
-					)
-				}
-				return s.layoutLabel(gtx, label, textLabelMedium, font.SemiBold, foreground, 1)
-			})
-		})
-	})
-	if gtx.Focused(button) {
-		widget.Border{Color: s.theme.Colors.Primary, CornerRadius: shapeMedium, Width: 1}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-			return layout.Dimensions{Size: dims.Size}
-		})
-	}
-	return dims
-}
-
 func (s *Shell) layoutLabel(gtx layout.Context, value string, size unit.Sp, weight font.Weight, color color.NRGBA, maxLines int) layout.Dimensions {
 	material := op.Record(gtx.Ops)
 	paint.ColorOp{Color: color}.Add(gtx.Ops)
