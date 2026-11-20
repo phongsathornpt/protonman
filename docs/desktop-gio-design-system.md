@@ -23,7 +23,6 @@ surfaces remain migration-in-progress until running-window and visual parity
 checks pass. The Gio client now also projects goal/TODO/memory inspectors and
 session runtime controls through the typed ACP extensions. MCP configuration
 uses the same client-owned definitions and explicit reconnect semantics. Gio
-also supervises configured ACP agent profiles, routes each session through its
 owning process, and exposes a progressively disclosed profile editor. Native
 notifications remain a follow-up capability.
 
@@ -117,12 +116,12 @@ forcing horizontal overflow.
 
 The desktop application is structured as a native macOS 3-column split-view workbench adhering to Apple Human Interface Guidelines:
 
-1. **Unified Top Toolbar (60dp)**: Aligned across panes with the native window titlebar. Contains icon-driven sidebar toggle (`◧`), project/session context, active session title, active agent selector (`▾`), connection status pill, and inspector toggle (`◨`).
+1. **Unified Top Toolbar (60dp)**: Aligned across panes with the native window titlebar. Contains icon-driven sidebar toggle (`◧`), project/session context, active session title, connection status pill, and inspector toggle (`◨`).
 2. **Left Sidebar (260dp, 220dp below a 900dp window width, full-height and collapsible)**:
    - Extends the full window height in a quiet `surfaceDim` background.
    - Top bar with the Protonman brand and a compact new-session icon action, thread search on its own row below, and a Projects section label.
    - Collapsible project directory groups with toggle chevrons (`▾`/`▸`) and hover `+` quick action to start new threads directly in that workspace. Expanded empty projects display an inline `"No conversations yet"` + `"+ New"` CTA. Pinned sessions sit under their own collapsible group header above projects.
-   - Active thread visual anchoring: prominent 3dp rounded accent indicator bar (`Primary`) on the leading edge of the active session card, filled pill (`primaryContainer` on `onPrimaryContainer`) with an 8dp horizontal gutter, 44dp minimum row height, colored status dots, and relative timestamps. Hover actions (pin, rename, delete) reveal on the active or hovered row, and non-default agents get a compact identity badge. Full arrow key navigation (`UpArrow`/`DownArrow`) traverses between threads and smoothly transitions into search.
+   - Active thread visual anchoring: prominent 3dp rounded accent indicator bar (`Primary`) on the leading edge of the active session card, filled pill (`primaryContainer` on `onPrimaryContainer`) with an 8dp horizontal gutter, 44dp minimum row height, colored status dots, and relative timestamps. Hover actions (pin, rename, delete) reveal on the active or hovered row. Full arrow key navigation (`UpArrow`/`DownArrow`) traverses between threads and smoothly transitions into search.
 3. **Center Conversation Pane (Flexible width, max 840dp text constraint)**:
    - Clean canvas stream: AI assistant messages flow directly onto the canvas (`surface`) without enclosing card borders.
    - User prompts rendered as refined rounded speech bubbles (`shapeLarge` / 12-14dp radius) in elevated `secondaryContainer`.
@@ -175,7 +174,6 @@ conversation timeline, composer, permission panel, and scrollable inspector
 form the current Gio slice. The inspector also contains a progressively
 disclosed MCP integration editor with labeled JSON inputs, runtime-only
 environment resolution, and an explicit ACP reconnect action. The top workspace
-surface owns a keyboard-accessible agent selector; a horizontal, bounded choice
 strip appears only while the selector is open. The inspector adds a profile list
 and a 44dp-minimum editor for agent ID, display name, command, arguments, and
 environment variable names. At narrow widths the inspector is an explicit
@@ -210,30 +208,11 @@ sessions receive standard `mcpServers` fields. Applying changed definitions to
 existing sessions requires the explicit reconnect action, which is refused
 while any session is active.
 
-## ACP agent profiles
+## ACP agent
 
-Gio resolves profiles in this order:
-
-1. `PROTONMAN_ACP_AGENTS_JSON`;
-2. the application-owned `acp.agents.v1` user preference; then
-3. the built-in Protonman `--acp` profile.
-
-Each profile stores an ID, display name, executable, argument vector, and
-environment variable names. Processes start through `acpclient.StartCommand`
-without a shell. Persisted profiles and the editor store names only; values are
-resolved from the Gio process environment at launch and are never persisted.
-The process-level `PROTONMAN_ACP_AGENTS_JSON` override may additionally provide
-`KEY=value` runtime entries; those values remain in memory only and are never
-written to the repository. The override continues to take precedence until it
-is removed.
-
-Every profile has an independent supervised client and reconnect loop. New
-sessions use the selected project default agent, while existing sessions always
-route history, prompts, cancellation, permissions, and ACP events through their
-recorded `AgentID`. Disconnecting one process pauses only its sessions and
-removes only its permission requests. Goal, TODO, Memory, and runtime controls
-remain restricted to Protonman sessions. Profile edits persist immediately but
-apply to process launch on the next Desktop restart.
+Gio drives exactly one supervised ACP process: `protonman --acp`, started
+through `acpclient.StartCommand` without a shell. There is no multi-agent
+selection and no third-party ACP support.
 
 ## Parity matrix
 
@@ -251,7 +230,7 @@ apply to process launch on the next Desktop restart.
 | Runtime controls | In progress | Model, reasoning, low-concurrency, and mutation parity |
 | MCP integrations | In progress | Persistence, ACP payload, busy-session refusal, and visual parity |
 | Native notifications | Pending | Permission, completion, and failure parity |
-| Custom ACP agents/settings | In progress | Persistence, routing, restart, and visual parity |
+| Protonman ACP process | In progress | Supervision, reconnect, and visual parity |
 | Default desktop command | Complete | Gio is the only desktop target; remaining parity checks stay tracked above |
 
 ## Build and run
@@ -273,8 +252,6 @@ make desktop-run
 Environment:
 
 - `PROTONMAN_BINARY`: ACP executable override used by local development.
-- `PROTONMAN_ACP_AGENTS_JSON`: complete ACP profile array override; takes
-  precedence over user configuration for the lifetime of the process.
 - `PROTONMAN_GIO_WORKSPACE`: authoritative existing workspace directory for
   create-session actions; an invalid override fails instead of falling back to
   another directory.

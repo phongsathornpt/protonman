@@ -23,20 +23,3 @@ func TestIsProtonmanAgent(t *testing.T) {
 		t.Error("expected IsProtonmanAgent(\"cline\") to be false")
 	}
 }
-
-func TestIsClineProvider(t *testing.T) {
-	if !runtime.IsClineProvider("cline", "", nil, nil) {
-		t.Error("expected cline agent id to select the cline provider path")
-	}
-	if !runtime.IsClineProvider("other", "cline-free", nil, nil) {
-		t.Error("expected a cline provider name to select the cline provider path")
-	}
-	if !runtime.IsClineProvider("other", "", []string{"cline/anthropic/claude"}, nil) {
-		t.Error("expected a cline-routed model to select the cline provider path")
-	}
-	for _, agentID := range []string{"protonman", "proton", ""} {
-		if runtime.IsClineProvider(agentID, "", nil, nil) {
-			t.Errorf("expected protonman agent %q to never use the cline provider path", agentID)
-		}
-	}
-}

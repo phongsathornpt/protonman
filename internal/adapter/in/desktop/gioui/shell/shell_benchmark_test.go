@@ -16,7 +16,6 @@ import (
 	"gioui.org/unit"
 
 	"github.com/phongsathornpt/protonman/internal/adapter/in/desktop/gioui/controller"
-	"github.com/phongsathornpt/protonman/internal/app"
 	desktopstate "github.com/phongsathornpt/protonman/internal/feature/desktop"
 )
 
@@ -141,12 +140,11 @@ func BenchmarkSidebarRowsCacheMatchesManyProjects(b *testing.B) {
 			Status:    desktopstate.TaskIdle,
 		}
 	}
-	profiles := []app.ACPAgentProfile{controller.DefaultACPAgentProfile()}
-	_, cache := buildSidebarRows(state, profiles)
+	_, cache := buildSidebarRows(state)
 	b.ReportAllocs()
 	b.ResetTimer()
 	for range b.N {
-		if !cache.matches(state, profiles) {
+		if !cache.matches(state) {
 			b.Fatal("unchanged sidebar state did not match cache")
 		}
 	}
@@ -165,7 +163,7 @@ func BenchmarkSidebarRowsSnapshotRevisionHit(b *testing.B) {
 				state.Projects[index] = desktopstate.ProjectState{ID: projectID, Name: "Project " + id}
 				state.Sessions[index] = desktopstate.SessionState{ID: "session-" + id, ProjectID: projectID, AgentID: controller.ProtonmanAgentID, Title: "Session " + id}
 			}
-			snapshot := controller.Snapshot{State: state, AgentProfiles: []app.ACPAgentProfile{controller.DefaultACPAgentProfile()}, Revision: 1}
+			snapshot := controller.Snapshot{State: state, Revision: 1}
 			view := New(NewTheme("light"), Bindings{})
 			view.sidebarRows(snapshot)
 			b.ReportAllocs()
@@ -563,9 +561,8 @@ func benchmarkShellSnapshot() controller.Snapshot {
 			Projects:        []desktopstate.ProjectState{{ID: "project", Name: "project"}},
 			Sessions:        sessions,
 		},
-		AgentProfiles: []app.ACPAgentProfile{controller.DefaultACPAgentProfile()},
-		Connection:    controller.ConnectionConnected,
-		Status:        "Connected",
-		Revision:      1,
+		Connection: controller.ConnectionConnected,
+		Status:     "Connected",
+		Revision:   1,
 	}
 }

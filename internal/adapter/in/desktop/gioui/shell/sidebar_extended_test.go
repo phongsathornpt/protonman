@@ -12,7 +12,6 @@ import (
 	"gioui.org/op"
 	"gioui.org/unit"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/desktop/gioui/controller"
-	"github.com/phongsathornpt/protonman/internal/app"
 	desktopstate "github.com/phongsathornpt/protonman/internal/feature/desktop"
 )
 
@@ -41,11 +40,10 @@ func TestBuildSidebarRowsWithOptions_PinnedAndCustomTitles(t *testing.T) {
 			{ID: "s3", ProjectID: "p2", AgentID: controller.ProtonmanAgentID, Title: "Default S3", Status: desktopstate.TaskCompleted, LastActivityAt: activity.Add(2 * time.Minute)},
 		},
 	}
-	profiles := []app.ACPAgentProfile{controller.DefaultACPAgentProfile()}
 	pinnedSessions := []string{"s2"}
 	customTitles := map[string]string{"s1": "Custom Title For S1"}
 
-	rows, cache := buildSidebarRowsWithOptions(state, profiles, pinnedSessions, customTitles)
+	rows, cache := buildSidebarRowsWithOptions(state, pinnedSessions, customTitles)
 
 	// Expected rows:
 	// 0: Pinned header (SessionCount: 1)
@@ -74,39 +72,31 @@ func TestBuildSidebarRowsWithOptions_PinnedAndCustomTitles(t *testing.T) {
 	}
 
 	// Test cache matching
-	if !cache.matchesWithOptions(state, profiles, cache.filterMode, pinnedSessions, customTitles) {
+	if !cache.matchesWithOptions(state, cache.filterMode, pinnedSessions, customTitles) {
 		t.Fatal("cache should match original inputs")
 	}
 
 	// Cache should invalidate if pinned sessions change
-	if cache.matchesWithOptions(state, profiles, cache.filterMode, []string{"s1"}, customTitles) {
+	if cache.matchesWithOptions(state, cache.filterMode, []string{"s1"}, customTitles) {
 		t.Fatal("cache should not match when pinned sessions change")
 	}
 
 	// Cache should invalidate if custom title changes
 	diffTitles := map[string]string{"s1": "Different Title"}
-	if cache.matchesWithOptions(state, profiles, cache.filterMode, pinnedSessions, diffTitles) {
+	if cache.matchesWithOptions(state, cache.filterMode, pinnedSessions, diffTitles) {
 		t.Fatal("cache should not match when custom titles change")
 	}
 }
 
-func TestSidebarCacheInvalidatesOnAgentDisplayNameChange(t *testing.T) {
+func TestSidebarCacheMatchesProtonOnlySessions(t *testing.T) {
 	state := desktopstate.State{
 		Projects: []desktopstate.ProjectState{{ID: "p1", Name: "Project"}},
-		Sessions: []desktopstate.SessionState{{ID: "s1", ProjectID: "p1", AgentID: "reviewer", Title: "Review"}},
+		Sessions: []desktopstate.SessionState{{ID: "s1", ProjectID: "p1", AgentID: controller.ProtonmanAgentID, Title: "Review"}},
 	}
-	profiles := []app.ACPAgentProfile{{ID: "reviewer", DisplayName: "Reviewer"}}
-	_, cache := buildSidebarRowsWithOptions(state, profiles, nil, nil)
+	_, cache := buildSidebarRowsWithOptions(state, nil, nil)
 
-	if !cache.matchesWithOptions(state, profiles, cache.filterMode, nil, nil) {
+	if !cache.matchesWithOptions(state, cache.filterMode, nil, nil) {
 		t.Fatal("cache should match identical inputs")
-	}
-
-	// A renamed agent profile must invalidate the cached subtitle even though the
-	// session's agent ID is unchanged.
-	renamed := []app.ACPAgentProfile{{ID: "reviewer", DisplayName: "Reviewer Renamed"}}
-	if cache.matchesWithOptions(state, renamed, cache.filterMode, nil, nil) {
-		t.Fatal("cache matched after an agent display name changed")
 	}
 }
 
@@ -115,13 +105,12 @@ func TestSidebarCachePinnedEqualityTreatsNilAndEmptyAlike(t *testing.T) {
 		Projects: []desktopstate.ProjectState{{ID: "p1", Name: "Project"}},
 		Sessions: []desktopstate.SessionState{{ID: "s1", ProjectID: "p1", AgentID: controller.ProtonmanAgentID, Title: "T"}},
 	}
-	profiles := []app.ACPAgentProfile{{ID: controller.ProtonmanAgentID, DisplayName: "Protonman"}}
-	_, cache := buildSidebarRowsWithOptions(state, profiles, nil, nil)
+	_, cache := buildSidebarRowsWithOptions(state, nil, nil)
 
-	if !cache.matchesWithOptions(state, profiles, cache.filterMode, []string{}, nil) {
+	if !cache.matchesWithOptions(state, cache.filterMode, []string{}, nil) {
 		t.Fatal("nil and empty pinned sets should compare equal")
 	}
-	if cache.matchesWithOptions(state, profiles, cache.filterMode, []string{"s1"}, nil) {
+	if cache.matchesWithOptions(state, cache.filterMode, []string{"s1"}, nil) {
 		t.Fatal("cache matched after the pinned set changed")
 	}
 }

@@ -66,7 +66,7 @@ func (c *Component) layoutSidebar(gtx layout.Context, snapshot Snapshot) layout.
 	}
 	gtx.Execute(op.InvalidateCmd{At: nextMinute})
 
-	allRows := c.Rows(Model{State: snapshot.State, AgentProfiles: snapshot.AgentProfiles, Pinned: snapshot.PinnedSessions, CustomTitles: snapshot.CustomTitles, FilterMode: snapshot.FilterMode, Revision: snapshot.Revision})
+	allRows := c.Rows(Model{State: snapshot.State, Pinned: snapshot.PinnedSessions, CustomTitles: snapshot.CustomTitles, FilterMode: snapshot.FilterMode, Revision: snapshot.Revision})
 	rows := c.DisplayRows(allRows, c.searchEditor.Text(), snapshot.FilterMode, snapshot.Revision)
 	if snapshot.State.ActiveSessionID != "" && snapshot.State.ActiveSessionID != c.lastEnsuredSessionID {
 		c.lastEnsuredSessionID = snapshot.State.ActiveSessionID

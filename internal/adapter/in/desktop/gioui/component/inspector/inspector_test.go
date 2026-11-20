@@ -19,7 +19,7 @@ func TestVisibilityOverrideAndSessionReset(t *testing.T) {
 	}
 }
 
-func TestPanelCountTracksTabAndAgentType(t *testing.T) {
+func TestPanelCountTracksTab(t *testing.T) {
 	component := New()
 	if got := component.PanelCount(Snapshot{}); got != 3 {
 		t.Fatalf("plan panel count = %d, want 3", got)
@@ -27,8 +27,5 @@ func TestPanelCountTracksTabAndAgentType(t *testing.T) {
 	component.SetActiveTab(1)
 	if got := component.PanelCount(Snapshot{}); got != 1 {
 		t.Fatalf("memory panel count = %d, want 1", got)
-	}
-	if got := component.PanelCount(Snapshot{ExternalAgent: true}); got != 1 {
-		t.Fatalf("external-agent panel count = %d, want 1", got)
 	}
 }

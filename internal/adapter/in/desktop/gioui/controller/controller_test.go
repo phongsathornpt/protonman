@@ -76,29 +76,18 @@ func TestProjectSessionsReplacesMissingSelection(t *testing.T) {
 	}
 }
 
-func TestSessionActionsTargetAgentWhenACPIDsCollide(t *testing.T) {
+func TestSessionActionsTargetProtonSession(t *testing.T) {
 	ctrl := newTestController()
-	ctrl.state.Sessions = append(ctrl.state.Sessions, desktopstate.SessionState{
-		ID: "session-1", AgentID: "reviewer", ProjectID: "review-project", Title: "Reviewer session",
-	})
-	ref := desktopstate.SessionRef{AgentID: "reviewer", SessionID: "session-1"}
+	ref := desktopstate.SessionRef{AgentID: ProtonmanAgentID, SessionID: "session-1"}
 	key := desktopSessionStorageKey(ctrl.state, ref)
 
-	ctrl.RenameSession("session-1", "Scoped title", "reviewer")
+	ctrl.RenameSession("session-1", "Scoped title")
 	if got := ctrl.customTitles[key]; got != "Scoped title" {
 		t.Fatalf("scoped title = %q, want Scoped title", got)
 	}
-	if _, ok := ctrl.customTitles["session-1"]; ok {
-		t.Fatal("renaming one agent's session must not set the colliding session title")
-	}
-	ctrl.TogglePinSession("session-1", "reviewer")
-	if !slices.Contains(ctrl.pinnedSessions, key) || slices.Contains(ctrl.pinnedSessions, "session-1") {
-		t.Fatalf("pin state is not scoped to reviewer: %#v", ctrl.pinnedSessions)
-	}
-
-	ctrl.DeleteSession("session-1", "reviewer")
-	if len(ctrl.state.Sessions) != 1 || ctrl.state.Sessions[0].AgentID != ProtonmanAgentID {
-		t.Fatalf("delete removed the wrong session set: %#v", ctrl.state.Sessions)
+	ctrl.TogglePinSession("session-1")
+	if !slices.Contains(ctrl.pinnedSessions, key) {
+		t.Fatalf("pin state missing proton key: %#v", ctrl.pinnedSessions)
 	}
 }
 

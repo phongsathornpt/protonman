@@ -16,7 +16,6 @@ import (
 	"gioui.org/widget/material"
 
 	"github.com/phongsathornpt/protonman/internal/adapter/in/desktop/gioui/component/uikit"
-	"github.com/phongsathornpt/protonman/internal/app"
 	"github.com/phongsathornpt/protonman/internal/base/modelcatalogpolicy"
 	desktopstate "github.com/phongsathornpt/protonman/internal/feature/desktop"
 )
@@ -46,13 +45,9 @@ var popoverPermissionModeOptions = []struct {
 
 type ModelPopoverInput struct {
 	Session               desktopstate.SessionState
-	ActiveAgentID         string
-	AgentProfiles         []app.ACPAgentProfile
-	AgentDefaultModels    map[string]string
 	ActiveProvider        string
 	Providers             []desktopstate.ProviderState
 	ProviderModels        map[string][]string
-	AgentAvailableModels  map[string][]string
 	Enabled               bool
 	Chrome                Chrome
 	OnSetModel            func(provider, model string)
@@ -83,35 +78,6 @@ func IsProtonmanAgent(agentID string) bool {
 	return lower == "" || lower == "protonman" || lower == "proton"
 }
 
-func IsClineProvider(agentID, provider string, models []string, profiles []app.ACPAgentProfile) bool {
-	if IsProtonmanAgent(agentID) {
-		return false
-	}
-	lowerAgent := strings.ToLower(strings.TrimSpace(agentID))
-	if strings.Contains(lowerAgent, "cline") {
-		return true
-	}
-	lowerProv := strings.ToLower(strings.TrimSpace(provider))
-	if strings.Contains(lowerProv, "cline") {
-		return true
-	}
-	for _, prof := range profiles {
-		if strings.EqualFold(prof.ID, agentID) {
-			if strings.Contains(strings.ToLower(prof.DisplayName), "cline") ||
-				strings.Contains(strings.ToLower(prof.Command), "cline") {
-				return true
-			}
-		}
-	}
-	for _, m := range models {
-		lower := strings.ToLower(strings.TrimSpace(m))
-		if strings.HasPrefix(lower, "cline/") || strings.HasPrefix(lower, "cline-free/") {
-			return true
-		}
-	}
-	return false
-}
-
 func (c *Component) LayoutModelPopover(gtx layout.Context, input ModelPopoverInput) layout.Dimensions {
 	if c.widgets.ModelPopoverCloseButton.Clicked(gtx) {
 		c.ClosePopovers()
@@ -126,22 +92,10 @@ func (c *Component) LayoutModelPopover(gtx layout.Context, input ModelPopoverInp
 
 	currentModel := strings.TrimSpace(input.Session.Runtime.Model)
 	currentProvider := strings.TrimSpace(input.Session.Runtime.Provider)
-	agentID := strings.TrimSpace(input.Session.AgentID)
-	if agentID == "" {
-		agentID = strings.TrimSpace(input.ActiveAgentID)
-	}
-	if agentID == "" {
-		agentID = "protonman"
-	}
-	agentName := app.AgentDisplayName(input.AgentProfiles, agentID)
-	isProton := IsProtonmanAgent(agentID)
-
-	if currentModel == "" && input.AgentDefaultModels != nil {
-		currentModel = strings.TrimSpace(input.AgentDefaultModels[agentID])
-	}
+	agentName := "Protonman"
 
 	activeProvider := currentProvider
-	if isProton {
+	{
 		if strings.TrimSpace(c.widgets.PopoverActiveProviderTab) != "" {
 			activeProvider = strings.TrimSpace(c.widgets.PopoverActiveProviderTab)
 		} else if activeProvider == "" {
@@ -155,18 +109,13 @@ func (c *Component) LayoutModelPopover(gtx layout.Context, input ModelPopoverInp
 
 	searchQuery := strings.ToLower(strings.TrimSpace(c.widgets.ModelSearchEditor.Text()))
 	var rawModels []string
-	if isProton {
+	{
 		if strings.EqualFold(activeProvider, currentProvider) && len(input.Session.AvailableModels) > 0 {
 			rawModels = input.Session.AvailableModels
 		} else if cached, ok := input.ProviderModels[strings.ToLower(activeProvider)]; ok && len(cached) > 0 {
 			rawModels = cached
 		} else {
 			rawModels = modelcatalogpolicy.FallbackModelsForProvider(activeProvider)
-		}
-	} else {
-		rawModels = input.Session.AvailableModels
-		if len(rawModels) == 0 && input.AgentAvailableModels != nil {
-			rawModels = input.AgentAvailableModels[agentID]
 		}
 	}
 
@@ -188,7 +137,7 @@ func (c *Component) LayoutModelPopover(gtx layout.Context, input ModelPopoverInp
 				children := make([]layout.FlexChild, 0, 6)
 
 				children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-					return c.layoutModelPopoverHeader(gtx, agentName, isProton, chrome, input.OnManageProviders)
+					return c.layoutModelPopoverHeader(gtx, agentName, true, chrome, input.OnManageProviders)
 				}))
 
 				children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
@@ -197,7 +146,7 @@ func (c *Component) LayoutModelPopover(gtx layout.Context, input ModelPopoverInp
 					})
 				}))
 
-				if isProton {
+				{
 					children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 						return c.layoutPopoverProviderTabs(gtx, providerTabsInput{
 							Providers:      input.Providers,
@@ -217,7 +166,7 @@ func (c *Component) LayoutModelPopover(gtx layout.Context, input ModelPopoverInp
 					}))
 				}
 
-				supportsFreeGrouping := IsClineProvider(agentID, currentProvider, rawModels, input.AgentProfiles) && modelcatalogpolicy.HasAnyFreeModel(rawModels)
+				supportsFreeGrouping := false && modelcatalogpolicy.HasAnyFreeModel(rawModels)
 				var modelItems []modelPopoverListItem
 				if supportsFreeGrouping {
 					freeFiltered, otherFiltered := modelcatalogpolicy.PartitionModels(filteredModels)
@@ -267,14 +216,11 @@ func (c *Component) LayoutModelPopover(gtx layout.Context, input ModelPopoverInp
 				}
 
 				effectiveSelectedModel := currentModel
-				if isProton && !strings.EqualFold(activeProvider, currentProvider) {
+				if !strings.EqualFold(activeProvider, currentProvider) {
 					effectiveSelectedModel = ""
 				}
 
-				targetProvider := currentProvider
-				if isProton {
-					targetProvider = activeProvider
-				}
+				targetProvider := activeProvider
 
 				children = append(children, layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
 					if len(rawModels) == 0 {

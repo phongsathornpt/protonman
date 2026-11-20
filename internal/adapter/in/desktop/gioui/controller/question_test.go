@@ -35,7 +35,7 @@ func TestQuestionRequestRoundTrip(t *testing.T) {
 	result := make(chan any, 1)
 	errs := make(chan error, 1)
 	go func() {
-		value, err := controller.handleQuestionRequestFromAgent("", nil, ctx, request)
+		value, err := controller.handleQuestionRequestFrom(nil, ctx, request)
 		result <- value
 		errs <- err
 	}()
@@ -61,9 +61,10 @@ func TestQuestionRequestRoundTrip(t *testing.T) {
 	if controller.state.QuestionInbox[0].Questions[0].Question != "Which framework should we use?" {
 		t.Fatalf("question text = %q", controller.state.QuestionInbox[0].Questions[0].Question)
 	}
+	reqID := controller.state.QuestionInbox[0].RequestID
 	controller.mu.RUnlock()
 
-	controller.ResolveQuestion(string(request.ID), desktopstate.QuestionResponse{
+	controller.ResolveQuestion(reqID, desktopstate.QuestionResponse{
 		Status:          "answered",
 		Answer:          "Gio",
 		SelectedOptions: []string{"Gio"},
@@ -120,7 +121,7 @@ func TestQuestionRequestCancellation(t *testing.T) {
 	result := make(chan any, 1)
 	errs := make(chan error, 1)
 	go func() {
-		value, err := controller.handleQuestionRequestFromAgent("", nil, ctx, request)
+		value, err := controller.handleQuestionRequestFrom(nil, ctx, request)
 		result <- value
 		errs <- err
 	}()
@@ -194,7 +195,7 @@ func TestElicitationRequestRoundTrip(t *testing.T) {
 	result := make(chan any, 1)
 	errs := make(chan error, 1)
 	go func() {
-		value, err := controller.handleElicitationRequestFromAgent("", nil, ctx, request)
+		value, err := controller.handleElicitationRequestFrom(nil, ctx, request)
 		result <- value
 		errs <- err
 	}()
@@ -217,9 +218,10 @@ func TestElicitationRequestRoundTrip(t *testing.T) {
 	if controller.state.QuestionInbox[0].Questions[0].Question != "Database engine" {
 		t.Fatalf("question text = %q, want Database engine", controller.state.QuestionInbox[0].Questions[0].Question)
 	}
+	reqID := controller.state.QuestionInbox[0].RequestID
 	controller.mu.RUnlock()
 
-	controller.ResolveQuestion(string(request.ID), desktopstate.QuestionResponse{
+	controller.ResolveQuestion(reqID, desktopstate.QuestionResponse{
 		Status:          "answered",
 		Answer:          "SQLite",
 		SelectedOptions: []string{"SQLite"},

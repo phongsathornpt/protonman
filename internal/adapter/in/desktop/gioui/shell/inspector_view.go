@@ -12,7 +12,6 @@ import (
 
 	inspectorcomponent "github.com/phongsathornpt/protonman/internal/adapter/in/desktop/gioui/component/inspector"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/desktop/gioui/component/uikit"
-	"github.com/phongsathornpt/protonman/internal/app"
 	desktopstate "github.com/phongsathornpt/protonman/internal/feature/desktop"
 
 	"github.com/phongsathornpt/protonman/internal/adapter/in/desktop/gioui/controller"
@@ -61,9 +60,7 @@ func (s *Shell) syncRuntimeEditors(state desktopstate.State) {
 func (s *Shell) layoutInspector(gtx layout.Context, session desktopstate.SessionState, snapshot controller.Snapshot, compact bool) layout.Dimensions {
 	return s.inspectorComponent.Layout(gtx, inspectorcomponent.ViewInput{
 		Snapshot: inspectorcomponent.Snapshot{
-			ExternalAgent: !protonmanSession(session),
-			Connected:     sessionConnection(snapshot, session.AgentID) == controller.ConnectionConnected,
-			AgentName:     app.AgentDisplayName(snapshot.AgentProfiles, session.AgentID),
+			Connected: sessionConnection(snapshot, session.AgentID) == controller.ConnectionConnected,
 		},
 		Chrome: s.inspectorChrome(),
 		Panel: func(gtx layout.Context, tab, index int) layout.Dimensions {
@@ -93,10 +90,6 @@ func (s *Shell) layoutInspectorPanel(gtx layout.Context, session desktopstate.Se
 	default:
 		return s.layoutGoalPanel(gtx, session)
 	}
-}
-
-func protonmanSession(session desktopstate.SessionState) bool {
-	return session.AgentID == "" || session.AgentID == controller.ProtonmanAgentID
 }
 
 func (s *Shell) layoutGoalPanel(gtx layout.Context, session desktopstate.SessionState) layout.Dimensions {

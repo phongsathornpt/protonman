@@ -219,7 +219,7 @@ func (c *controller) beginSessionRefresh(sessionID string, force bool, kind sess
 		agentID = agentIDs[0]
 	}
 	if source != nil {
-		if sourceAgentID := c.agentIDForClientLocked(source); sourceAgentID != "" {
+		if sourceAgentID := protonAgentIDForClient(c.client, source); sourceAgentID != "" {
 			agentID = sourceAgentID
 		}
 	}
@@ -227,8 +227,8 @@ func (c *controller) beginSessionRefresh(sessionID string, force bool, kind sess
 	if !ok || sessionID != c.state.ActiveSessionID || (c.state.ActiveAgentID != "" && c.state.ActiveAgentID != session.AgentID) || (session.AgentID != "" && session.AgentID != ProtonmanAgentID && kind != runtimeRefreshKind) {
 		return nil, nil, "", "", false
 	}
-	client, agentID := c.clientForSessionLocked(sessionID, session.AgentID)
-	if client == nil || c.connections[agentID] != ConnectionConnected || source != nil && !c.clientCurrentLocked(agentID, source) {
+	client, agentID := c.clientForSession(sessionID, session.AgentID)
+	if client == nil || c.connection != ConnectionConnected || source != nil && !c.clientCurrentCompat(agentID, source) {
 		return nil, nil, "", "", false
 	}
 	var tracker *sessionRefreshTracker
@@ -283,7 +283,7 @@ func (c *controller) refreshSessionContextFrom(source *acpclient.Client, session
 		if err := c.callInspector(client, "protonman/session/context", map[string]any{"sessionId": sessionID}, &result); err != nil {
 			return
 		}
-		c.applySessionContextForAgent(client, result, agentID)
+		c.applySessionContext(client, result, agentID)
 	})
 }
 
@@ -305,7 +305,7 @@ func (c *controller) refreshSessionMemoryFrom(source *acpclient.Client, sessionI
 		if err := c.callInspector(client, "protonman/session/memory", map[string]any{"sessionId": sessionID}, &result); err != nil {
 			return
 		}
-		c.applySessionMemoryForAgent(client, result, agentID)
+		c.applySessionMemory(client, result, agentID)
 	})
 }
 
@@ -326,45 +326,13 @@ func (c *controller) refreshSessionRuntime(sessionID string, force bool, agentID
 			return
 		}
 		if session.AgentID != "" && session.AgentID != ProtonmanAgentID {
-			if !c.agentSupportsSessionResume(session.AgentID) {
-				return
-			}
-			additionalDirectories := c.additionalDirectoriesForAgent(session.AgentID, session.AdditionalDirectories)
-			params := c.mcpSessionParams(session.ID, session.Workspace, additionalDirectories)
-			callCtx, cancel := context.WithTimeout(c.context(), reconnectRequestTimeout)
-			defer cancel()
-			var resumeResult struct {
-				Modes *struct {
-					CurrentModeID string `json:"currentModeId"`
-				} `json:"modes,omitempty"`
-				ConfigOptions []acpConfigOption `json:"configOptions"`
-				Models        *acpModelsResult  `json:"models,omitempty"`
-			}
-			if err := client.Call(callCtx, "session/resume", params, &resumeResult); err == nil {
-				if models, currentModel := extractModelsFromACP(resumeResult.ConfigOptions, resumeResult.Models); len(models) > 0 {
-					c.mu.Lock()
-					c.setAgentAvailableModelsLocked(session.AgentID, models)
-					if sess := desktopstateSessionPointer(&c.state, session.ID, session.AgentID); sess != nil {
-						sess.AvailableModels = models
-						if currentModel != "" && sess.Runtime.Model == "" {
-							sess.Runtime.Model = currentModel
-						}
-						c.revision++
-					}
-					c.mu.Unlock()
-					c.notify()
-				}
-				if resumeResult.Modes != nil && c.isClineAgent(session.AgentID) {
-					c.setClinePermissionModeFromACP(session.AgentID, session.ID, resumeResult.Modes.CurrentModeID, resumeResult.ConfigOptions)
-				}
-			}
 			return
 		}
 		var result sessionRuntimeResult
 		if err := c.callInspector(client, "protonman/session/runtime", map[string]any{"sessionId": sessionID}, &result); err != nil {
 			return
 		}
-		c.applySessionRuntimeForAgent(client, result, agentID)
+		c.applySessionRuntime(client, result, agentID)
 	})
 }
 
@@ -384,7 +352,7 @@ func (c *controller) refreshSessionSkillsFrom(source *acpclient.Client, sessionI
 		if err := c.callInspector(client, "protonman/session/skills", map[string]any{"sessionId": sessionID}, &result); err != nil {
 			return
 		}
-		c.applySessionSkillsForAgent(client, result, agentID)
+		c.applySessionSkills(client, result, agentID)
 	})
 }
 
@@ -457,21 +425,17 @@ func projectSessionRuntime(result sessionRuntimeResult) desktopstate.RuntimeSett
 	}
 }
 
-func (c *controller) applySessionContext(client *acpclient.Client, result sessionContextResult) bool {
-	return c.applySessionContextForAgent(client, result, "")
-}
-
-func (c *controller) applySessionContextForAgent(client *acpclient.Client, result sessionContextResult, agentID string) bool {
+func (c *controller) applySessionContext(client *acpclient.Client, result sessionContextResult, agentID string) bool {
 	sessionID := strings.TrimSpace(result.SessionID)
 	if client == nil || sessionID == "" {
 		return false
 	}
 	c.mu.Lock()
 	if agentID == "" {
-		agentID = c.agentIDForClientLocked(client)
+		agentID = protonAgentIDForClient(c.client, client)
 	}
 	session, ok := SessionByID(c.state, sessionID, agentID)
-	if !ok || sessionID != c.state.ActiveSessionID || c.state.ActiveAgentID != "" && c.state.ActiveAgentID != session.AgentID || !c.clientCurrentLocked(session.AgentID, client) {
+	if !ok || sessionID != c.state.ActiveSessionID || c.state.ActiveAgentID != "" && c.state.ActiveAgentID != session.AgentID || !c.isCurrentClient(client) {
 		c.mu.Unlock()
 		return false
 	}
@@ -487,21 +451,17 @@ func (c *controller) applySessionContextForAgent(client *acpclient.Client, resul
 	return true
 }
 
-func (c *controller) applySessionMemory(client *acpclient.Client, result sessionMemoryResult) bool {
-	return c.applySessionMemoryForAgent(client, result, "")
-}
-
-func (c *controller) applySessionMemoryForAgent(client *acpclient.Client, result sessionMemoryResult, agentID string) bool {
+func (c *controller) applySessionMemory(client *acpclient.Client, result sessionMemoryResult, agentID string) bool {
 	sessionID := strings.TrimSpace(result.SessionID)
 	if client == nil || sessionID == "" {
 		return false
 	}
 	c.mu.Lock()
 	if agentID == "" {
-		agentID = c.agentIDForClientLocked(client)
+		agentID = protonAgentIDForClient(c.client, client)
 	}
 	session, ok := SessionByID(c.state, sessionID, agentID)
-	if !ok || sessionID != c.state.ActiveSessionID || c.state.ActiveAgentID != "" && c.state.ActiveAgentID != session.AgentID || !c.clientCurrentLocked(session.AgentID, client) {
+	if !ok || sessionID != c.state.ActiveSessionID || c.state.ActiveAgentID != "" && c.state.ActiveAgentID != session.AgentID || !c.isCurrentClient(client) {
 		c.mu.Unlock()
 		return false
 	}
@@ -517,21 +477,17 @@ func (c *controller) applySessionMemoryForAgent(client *acpclient.Client, result
 	return true
 }
 
-func (c *controller) applySessionRuntime(client *acpclient.Client, result sessionRuntimeResult) bool {
-	return c.applySessionRuntimeForAgent(client, result, "")
-}
-
-func (c *controller) applySessionRuntimeForAgent(client *acpclient.Client, result sessionRuntimeResult, agentID string) bool {
+func (c *controller) applySessionRuntime(client *acpclient.Client, result sessionRuntimeResult, agentID string) bool {
 	sessionID := strings.TrimSpace(result.SessionID)
 	if client == nil || sessionID == "" {
 		return false
 	}
 	c.mu.Lock()
 	if agentID == "" {
-		agentID = c.agentIDForClientLocked(client)
+		agentID = protonAgentIDForClient(c.client, client)
 	}
 	session, ok := SessionByID(c.state, sessionID, agentID)
-	if !ok || sessionID != c.state.ActiveSessionID || c.state.ActiveAgentID != "" && c.state.ActiveAgentID != session.AgentID || !c.clientCurrentLocked(session.AgentID, client) {
+	if !ok || sessionID != c.state.ActiveSessionID || c.state.ActiveAgentID != "" && c.state.ActiveAgentID != session.AgentID || !c.isCurrentClient(client) {
 		c.mu.Unlock()
 		return false
 	}
@@ -594,21 +550,17 @@ func cleanModelList(models []string) []string {
 	return out
 }
 
-func (c *controller) applySessionSkills(client *acpclient.Client, result sessionSkillsResult) bool {
-	return c.applySessionSkillsForAgent(client, result, "")
-}
-
-func (c *controller) applySessionSkillsForAgent(client *acpclient.Client, result sessionSkillsResult, agentID string) bool {
+func (c *controller) applySessionSkills(client *acpclient.Client, result sessionSkillsResult, agentID string) bool {
 	sessionID := strings.TrimSpace(result.SessionID)
 	if client == nil || sessionID == "" {
 		return false
 	}
 	c.mu.Lock()
 	if agentID == "" {
-		agentID = c.agentIDForClientLocked(client)
+		agentID = protonAgentIDForClient(c.client, client)
 	}
 	session, ok := SessionByID(c.state, sessionID, agentID)
-	if !ok || sessionID != c.state.ActiveSessionID || c.state.ActiveAgentID != "" && c.state.ActiveAgentID != session.AgentID || !c.clientCurrentLocked(session.AgentID, client) {
+	if !ok || sessionID != c.state.ActiveSessionID || c.state.ActiveAgentID != "" && c.state.ActiveAgentID != session.AgentID || !c.isCurrentClient(client) {
 		c.mu.Unlock()
 		return false
 	}

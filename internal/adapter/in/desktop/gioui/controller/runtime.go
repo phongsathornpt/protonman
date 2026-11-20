@@ -47,7 +47,7 @@ func (c *controller) SetRuntimeModel(provider, model string) {
 			},
 		})
 		c.revision++
-		client := c.clients[agentID]
+		client := c.client
 		c.mu.Unlock()
 		c.notify()
 		if client != nil {
@@ -119,22 +119,11 @@ func (c *controller) SetRuntimePermissionMode(value string) {
 	sessionID := strings.TrimSpace(c.state.ActiveSessionID)
 	session, ok := SessionByID(c.state, sessionID, c.state.ActiveAgentID)
 	if ok && session.AgentID != "" && session.AgentID != ProtonmanAgentID {
-		agentID := session.AgentID
-		client := c.clients[agentID]
-		profile := c.profiles[agentID]
-		if isClineACPProfile(profile) {
-			if client == nil || c.connections[agentID] != ConnectionConnected || SessionBusy(session.Status) || c.runtimeMutation != "" {
-				c.mu.Unlock()
-				return
-			}
-			c.runtimeMutation = SessionRefStorageKey(desktopstate.SessionRef{AgentID: agentID, SessionID: sessionID})
-			c.statuses[agentID] = "Updating permission mode…"
-			c.revision++
-			c.mu.Unlock()
-			c.notify()
-			c.spawn(func() { c.updateClinePermissionMode(client, agentID, sessionID, value) })
-			return
-		}
+		c.mu.Unlock()
+		return
+	}
+	if ok {
+		client := c.client
 		if sess := desktopstateSessionPointer(&c.state, sessionID, session.AgentID); sess != nil {
 			sess.Runtime.PermissionMode = value
 			c.revision++
@@ -158,32 +147,6 @@ func (c *controller) SetRuntimePermissionMode(value string) {
 	c.setRuntimeChoice("protonman/session/set_permission_mode", "permissionMode", value)
 }
 
-func (c *controller) updateClinePermissionMode(client *acpclient.Client, agentID, sessionID, value string) {
-	defer c.finishRuntimeMutation(client, sessionID)
-	callCtx, cancel := context.WithTimeout(c.context(), reconnectRequestTimeout)
-	defer cancel()
-	if err := setClinePermissionMode(callCtx, client, sessionID, value); err != nil {
-		if c.context().Err() == nil {
-			c.setRuntimeStatus(client, sessionID, "Permission mode update failed · "+compactError(err))
-		}
-		return
-	}
-
-	c.mu.Lock()
-	session, ok := SessionByID(c.state, sessionID, agentID)
-	if !ok || session.AgentID != agentID || !c.clientCurrentLocked(agentID, client) {
-		c.mu.Unlock()
-		return
-	}
-	if current := desktopstateSessionPointer(&c.state, sessionID, agentID); current != nil {
-		current.Runtime.PermissionMode = value
-		c.revision++
-	}
-	c.statuses[agentID] = "Permission mode updated"
-	c.mu.Unlock()
-	c.notify()
-}
-
 func (c *controller) setRuntimeChoice(method, field, value string) {
 	value = strings.TrimSpace(value)
 	if value == "" {
@@ -196,8 +159,8 @@ func (c *controller) startRuntimeMutation(method string, values map[string]any) 
 	c.mu.Lock()
 	sessionID := strings.TrimSpace(c.state.ActiveSessionID)
 	session, ok := SessionByID(c.state, sessionID, c.state.ActiveAgentID)
-	client, agentID := c.clientForSessionLocked(sessionID, c.state.ActiveAgentID)
-	if !ok || (session.AgentID != "" && session.AgentID != ProtonmanAgentID) || SessionBusy(session.Status) || client == nil || c.connections[agentID] != ConnectionConnected || c.runtimeMutation != "" {
+	client, agentID := c.clientForSession(sessionID, c.state.ActiveAgentID)
+	if !ok || (session.AgentID != "" && session.AgentID != ProtonmanAgentID) || SessionBusy(session.Status) || client == nil || c.connection != ConnectionConnected || c.runtimeMutation != "" {
 		c.mu.Unlock()
 		return
 	}
@@ -208,7 +171,7 @@ func (c *controller) startRuntimeMutation(method string, values map[string]any) 
 	params["sessionId"] = sessionID
 	mutationKey := SessionRefStorageKey(desktopstate.SessionRef{AgentID: agentID, SessionID: sessionID})
 	c.runtimeMutation = mutationKey
-	c.statuses[agentID] = "Updating runtime…"
+	c.status = "Updating runtime…"
 	c.revision++
 	c.mu.Unlock()
 	c.notify()
@@ -263,7 +226,7 @@ func (c *controller) startRuntimeMutation(method string, values map[string]any) 
 			c.refreshSessionRuntime(sessionID, true, agentID)
 			return
 		}
-		if !c.applySessionRuntimeForAgent(client, result, agentID) {
+		if !c.applySessionRuntime(client, result, agentID) {
 			c.setRuntimeStatus(client, sessionID, "Runtime update returned an invalid session result")
 			return
 		}
@@ -273,7 +236,7 @@ func (c *controller) startRuntimeMutation(method string, values map[string]any) 
 
 func (c *controller) finishRuntimeMutation(client *acpclient.Client, sessionID string) {
 	c.mu.Lock()
-	agentID := c.agentIDForClientLocked(client)
+	agentID := protonAgentIDForClient(c.client, client)
 	mutationKey := SessionRefStorageKey(desktopstate.SessionRef{AgentID: agentID, SessionID: sessionID})
 	if c.runtimeMutation == mutationKey || c.runtimeMutation == sessionID {
 		c.runtimeMutation = ""
@@ -285,20 +248,17 @@ func (c *controller) finishRuntimeMutation(client *acpclient.Client, sessionID s
 
 func (c *controller) setRuntimeStatus(client *acpclient.Client, sessionID, status string) {
 	c.mu.Lock()
-	agentID := c.agentIDForClientLocked(client)
+	agentID := protonAgentIDForClient(c.client, client)
 	session, ok := SessionByID(c.state, sessionID, agentID)
-	if !ok || !c.clientCurrentLocked(session.AgentID, client) {
+	if !ok || !c.isCurrentClient(client) {
 		c.mu.Unlock()
 		return
 	}
 	agentID = session.AgentID
 	if agentID == "" {
-		agentID = c.activeAgentID
-	}
-	if agentID == "" {
 		agentID = ProtonmanAgentID
 	}
-	c.statuses[agentID] = status
+	c.status = status
 	c.revision++
 	c.mu.Unlock()
 	c.notify()

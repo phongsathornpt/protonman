@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/phongsathornpt/protonman/internal/adapter/out/acpclient"
-	"github.com/phongsathornpt/protonman/internal/app"
 )
 
 const acpErrorAuthRequired = -32000
@@ -59,26 +58,9 @@ func acpCapabilityObjectAdvertised(raw json.RawMessage) bool {
 	return json.Unmarshal(raw, &capability) == nil && capability != nil
 }
 
-func (c *controller) setAgentFeatures(agentID string, features acpAgentFeatures) {
-	c.mu.Lock()
-	if c.agentFeatures == nil {
-		c.agentFeatures = make(map[string]acpAgentFeatures)
-	}
-	features.AuthMethods = slices.Clone(features.AuthMethods)
-	c.agentFeatures[agentID] = features
-	c.mu.Unlock()
-}
-
-func (c *controller) isClineAgent(agentID string) bool {
+func (c *controller) additionalDirectories(directories []string) []string {
 	c.mu.RLock()
-	profile := c.profiles[agentID]
-	c.mu.RUnlock()
-	return isClineACPProfile(profile)
-}
-
-func (c *controller) additionalDirectoriesForAgent(agentID string, directories []string) []string {
-	c.mu.RLock()
-	supported := c.agentFeatures[agentID].SupportsAdditionalDirectories
+	supported := c.features.SupportsAdditionalDirectories
 	c.mu.RUnlock()
 	if !supported {
 		return nil
@@ -86,35 +68,18 @@ func (c *controller) additionalDirectoriesForAgent(agentID string, directories [
 	return slices.Clone(directories)
 }
 
-func (c *controller) agentSupportsSessionList(agentID string) bool {
+func (c *controller) supportsSessionList() bool {
 	c.mu.RLock()
-	supported := c.agentFeatures[agentID].SupportsSessionList
+	supported := c.features.SupportsSessionList
 	c.mu.RUnlock()
 	return supported
 }
 
-func (c *controller) agentSupportsSessionResume(agentID string) bool {
+func (c *controller) supportsSessionResume() bool {
 	c.mu.RLock()
-	supported := c.agentFeatures[agentID].SupportsSessionResume
+	supported := c.features.SupportsSessionResume
 	c.mu.RUnlock()
 	return supported
-}
-
-func (c *controller) setClinePermissionModeFromACP(agentID, sessionID, modeID string, options []acpConfigOption) {
-	c.mu.Lock()
-	session, ok := SessionByID(c.state, sessionID, agentID)
-	if !ok || session.AgentID != agentID || !isClineACPProfile(c.profiles[agentID]) {
-		c.mu.Unlock()
-		return
-	}
-	if current := desktopstateSessionPointer(&c.state, sessionID, agentID); current != nil {
-		modeID = clineModeID(options, modeID)
-		autoApprove := clineAutoApproveValue(options, current.Runtime.PermissionMode == "always-approve")
-		current.Runtime.PermissionMode = clinePermissionMode(modeID, autoApprove)
-		c.revision++
-	}
-	c.mu.Unlock()
-	c.notify()
 }
 
 func acpConfigStringValue(value any) string {
@@ -122,110 +87,10 @@ func acpConfigStringValue(value any) string {
 	return strings.TrimSpace(result)
 }
 
-func clineAutoApproveValue(options []acpConfigOption, fallback bool) bool {
-	for _, option := range options {
-		if strings.TrimSpace(option.ID) != "auto_approve" {
-			continue
-		}
-		switch value := option.CurrentValue.(type) {
-		case bool:
-			return value
-		case string:
-			return strings.EqualFold(strings.TrimSpace(value), "true")
-		default:
-			return fallback
-		}
-	}
-	return fallback
-}
-
-func clineModeID(options []acpConfigOption, fallback string) string {
-	for _, option := range options {
-		if strings.TrimSpace(option.ID) == "mode" {
-			if value := acpConfigStringValue(option.CurrentValue); value != "" {
-				return value
-			}
-		}
-	}
-	if strings.TrimSpace(fallback) == "plan" {
-		return "plan"
-	}
-	return "act"
-}
-
-func clinePermissionMode(modeID string, autoApprove bool) string {
-	if strings.TrimSpace(modeID) == "plan" {
-		return "plan"
-	}
-	if autoApprove {
-		return "always-approve"
-	}
-	return "ask"
-}
-
-func setClinePermissionMode(ctx context.Context, client acpRPCClient, sessionID, permissionMode string) error {
-	modeID := "act"
-	autoApprove := false
-	switch strings.TrimSpace(permissionMode) {
-	case "ask":
-	case "plan":
-		modeID = "plan"
-	case "always-approve":
-		autoApprove = true
-	default:
-		return fmt.Errorf("unsupported Cline permission mode %q", permissionMode)
-	}
-
-	setAutoApprove := func(value bool) error {
-		var result struct {
-			ConfigOptions []acpConfigOption `json:"configOptions,omitempty"`
-		}
-		return client.Call(ctx, "session/set_config_option", map[string]any{
-			"sessionId": sessionID,
-			"configId":  "auto_approve",
-			"value":     value,
-		}, &result)
-	}
-
-	if !autoApprove {
-		if err := setAutoApprove(false); err != nil {
-			return fmt.Errorf("disable Cline auto-approval: %w", err)
-		}
-	}
-	if err := client.Call(ctx, "session/set_mode", map[string]any{
-		"sessionId": sessionID,
-		"modeId":    modeID,
-	}, &struct{}{}); err != nil {
-		return fmt.Errorf("set Cline mode %s: %w", modeID, err)
-	}
-	if autoApprove {
-		if err := setAutoApprove(true); err != nil {
-			return fmt.Errorf("enable Cline auto-approval: %w", err)
-		}
-	}
-	return nil
-}
-
-func isClineACPProfile(profile app.ACPAgentProfile) bool {
-	for _, value := range []string{profile.ID, profile.DisplayName, profile.Command} {
-		if strings.Contains(strings.ToLower(strings.TrimSpace(value)), "cline") {
-			return true
-		}
-	}
-	return false
-}
-
-func preferredACPAuthMethod(profile app.ACPAgentProfile, methods []acpAuthMethod) (acpAuthMethod, bool) {
+func preferredACPAuthMethod(_ ACPAgentProfile, methods []acpAuthMethod) (acpAuthMethod, bool) {
 	isAgentMethod := func(method acpAuthMethod) bool {
 		methodType := strings.TrimSpace(method.Type)
 		return methodType == "" || methodType == "agent"
-	}
-	if isClineACPProfile(profile) {
-		for _, method := range methods {
-			if method.ID == "cline" && isAgentMethod(method) {
-				return method, true
-			}
-		}
 	}
 	if len(methods) == 1 && strings.TrimSpace(methods[0].ID) != "" && isAgentMethod(methods[0]) {
 		return methods[0], true
@@ -240,7 +105,7 @@ type acpRPCClient interface {
 func createACPSession(
 	ctx context.Context,
 	client acpRPCClient,
-	profile app.ACPAgentProfile,
+	profile ACPAgentProfile,
 	authMethods []acpAuthMethod,
 	params any,
 	result any,
@@ -273,23 +138,12 @@ func createACPSession(
 func promptACPWithReauthentication(
 	ctx context.Context,
 	client acpRPCClient,
-	profile app.ACPAgentProfile,
-	authMethods []acpAuthMethod,
+	_ ACPAgentProfile,
+	_ []acpAuthMethod,
 	params any,
 	result any,
-	onAuthenticating func(string),
+	_ func(string),
 ) error {
-	promptErr := client.Call(ctx, "session/prompt", params, result)
-	if promptErr == nil || !isClineACPProfile(profile) || !isACPReauthenticationRequired(promptErr) {
-		return promptErr
-	}
-	method, ok := preferredACPAuthMethod(profile, authMethods)
-	if !ok {
-		return promptErr
-	}
-	if err := authenticateACPMethod(ctx, client, method, onAuthenticating); err != nil {
-		return fmt.Errorf("prompt failed: %w; re-authentication failed: %v", promptErr, err)
-	}
 	return client.Call(ctx, "session/prompt", params, result)
 }
 

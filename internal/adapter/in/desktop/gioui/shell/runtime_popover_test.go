@@ -26,9 +26,7 @@ func TestRuntimePopoverDisabledWhenBusy(t *testing.T) {
 			Reasoning: "auto",
 		},
 	}
-	snapshot := controller.Snapshot{
-		ActiveAgentID: "protonman",
-	}
+	snapshot := controller.Snapshot{}
 
 	gtx := testLayoutContext()
 

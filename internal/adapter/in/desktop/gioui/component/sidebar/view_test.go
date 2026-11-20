@@ -874,7 +874,6 @@ func TestClickingSessionDoesNotScrollOrMoveSidebar(t *testing.T) {
 		Projects:        []desktopstate.ProjectState{{ID: "p1", Name: "Project 1"}},
 		Sessions:        sessions,
 		ActiveSessionID: "s0",
-		ActiveAgentID:   "protonman",
 	}
 
 	component := New()

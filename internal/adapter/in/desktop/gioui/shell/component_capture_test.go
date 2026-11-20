@@ -4,15 +4,12 @@ package shell
 
 import (
 	"github.com/phongsathornpt/protonman/internal/adapter/in/desktop/gioui/controller"
-	"github.com/phongsathornpt/protonman/internal/app"
 	desktopstate "github.com/phongsathornpt/protonman/internal/feature/desktop"
 )
 
 func desktopCaptureSnapshot() controller.Snapshot {
 	return controller.Snapshot{
-		Connection: controller.ConnectionConnected, Status: "Connected", HistoryState: controller.HistoryStateLoaded, Revision: 1, ActiveAgentID: controller.ProtonmanAgentID,
-		AgentConnections: map[string]controller.ConnectionPhase{controller.ProtonmanAgentID: controller.ConnectionConnected, "reviewer": controller.ConnectionConnected},
-		AgentProfiles:    []app.ACPAgentProfile{{ID: controller.ProtonmanAgentID, DisplayName: "Protonman", Command: "protonman", Args: []string{"--acp"}}, {ID: "reviewer", DisplayName: "Code reviewer", Command: "review-agent"}},
+		Connection: controller.ConnectionConnected, Status: "Connected", HistoryState: controller.HistoryStateLoaded, Revision: 1,
 		State: desktopstate.State{
 			ActiveProjectID: "project", ActiveSessionID: "session",
 			Projects:     []desktopstate.ProjectState{{ID: "project", Name: "Protonman", DefaultAgentID: controller.ProtonmanAgentID}},

@@ -20,7 +20,6 @@ import (
 	"gioui.org/x/richtext"
 
 	"github.com/phongsathornpt/protonman/internal/adapter/in/desktop/gioui/controller"
-	"github.com/phongsathornpt/protonman/internal/app"
 	desktopstate "github.com/phongsathornpt/protonman/internal/feature/desktop"
 )
 
@@ -455,8 +454,7 @@ func TestBuildSidebarRowsGroupsSessionsWithoutChangingOrder(t *testing.T) {
 			{ID: "orphan", ProjectID: "missing", AgentID: controller.ProtonmanAgentID, Title: "Hidden"},
 		},
 	}
-	profiles := []app.ACPAgentProfile{controller.DefaultACPAgentProfile()}
-	rows, cache := buildSidebarRows(state, profiles)
+	rows, cache := buildSidebarRows(state)
 	want := []string{"p2", "s2", "p1", "s1", "s3"}
 	if len(rows) != len(want) {
 		t.Fatalf("sidebar rows = %#v, want ids %v", rows, want)
@@ -470,11 +468,11 @@ func TestBuildSidebarRowsGroupsSessionsWithoutChangingOrder(t *testing.T) {
 			t.Fatalf("sidebar row %d id = %q, want %q", index, actual, id)
 		}
 	}
-	if !cache.matches(state, profiles) {
+	if !cache.matches(state) {
 		t.Fatal("sidebar cache did not match the state used to build it")
 	}
 	state.Sessions[2].Status = desktopstate.TaskFailed
-	if cache.matches(state, profiles) {
+	if cache.matches(state) {
 		t.Fatal("sidebar cache matched after a visible session status changed")
 	}
 }

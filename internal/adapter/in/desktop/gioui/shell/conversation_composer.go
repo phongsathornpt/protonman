@@ -303,7 +303,7 @@ func (s *Shell) layoutComposerContextChips(gtx layout.Context, session desktopst
 	}
 	agentID := strings.TrimSpace(session.AgentID)
 	if agentID == "" {
-		agentID = strings.TrimSpace(snapshot.ActiveAgentID)
+		agentID = strings.TrimSpace(snapshot.State.ActiveAgentID)
 	}
 	if agentID == "" {
 		agentID = controller.ProtonmanAgentID

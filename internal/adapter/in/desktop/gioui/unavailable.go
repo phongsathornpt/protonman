@@ -9,7 +9,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/app"
 )
 
-func Run(_ context.Context, _ app.ACPAgents, _ app.MCPIntegrations, _ *app.DesktopPreferences) error {
+func Run(_ context.Context, _ app.MCPIntegrations, _ *app.DesktopPreferences) error {
 	return errors.New("gio desktop requires the desktop build tag (-tags desktop)")
 }
 

@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/phongsathornpt/protonman/internal/app"
 	desktopstate "github.com/phongsathornpt/protonman/internal/feature/desktop"
 )
 
@@ -21,11 +20,10 @@ func TestComponentProjectsAndCachesSidebarRows(t *testing.T) {
 				{ID: "newer", ProjectID: "workspace", AgentID: "protonman", Title: "Newer", Status: desktopstate.TaskRunning, LastActivityAt: activity.Add(time.Minute)},
 			},
 		},
-		AgentProfiles: []app.ACPAgentProfile{{ID: "protonman", DisplayName: "Protonman"}},
-		Pinned:        []string{"older"},
-		CustomTitles:  map[string]string{"older": "Pinned title"},
-		FilterMode:    "all",
-		Revision:      1,
+		Pinned:       []string{"older"},
+		CustomTitles: map[string]string{"older": "Pinned title"},
+		FilterMode:   "all",
+		Revision:     1,
 	}
 	component := New()
 	first := component.Rows(model)
@@ -101,7 +99,6 @@ func TestRowsOrderSessionsByRecencyAndHideIdleBadges(t *testing.T) {
 				{ID: "unknown", ProjectID: "project", AgentID: "protonman", Title: "proton", Status: desktopstate.TaskIdle},
 			},
 		},
-		AgentProfiles: []app.ACPAgentProfile{{ID: "protonman", DisplayName: "Protonman"}},
 	}
 
 	rows := BuildRows(model).Rows()
@@ -158,11 +155,9 @@ func TestActiveSessionKeepsPositionWhenItsActivityUpdates(t *testing.T) {
 				{ID: "active", ProjectID: "workspace", AgentID: "protonman", Title: "Active", LastActivityAt: activity},
 			},
 			ActiveSessionID: "active",
-			ActiveAgentID:   "protonman",
 		},
-		AgentProfiles: []app.ACPAgentProfile{{ID: "protonman", DisplayName: "Protonman"}},
-		FilterMode:    "all",
-		Revision:      1,
+		FilterMode: "all",
+		Revision:   1,
 	}
 	component := New()
 
@@ -193,11 +188,9 @@ func TestNonActiveSessionsStillSortByRecency(t *testing.T) {
 				{ID: "c", ProjectID: "workspace", AgentID: "protonman", Title: "C", LastActivityAt: activity.Add(2 * time.Minute)},
 			},
 			ActiveSessionID: "active",
-			ActiveAgentID:   "protonman",
 		},
-		AgentProfiles: []app.ACPAgentProfile{{ID: "protonman", DisplayName: "Protonman"}},
-		FilterMode:    "all",
-		Revision:      1,
+		FilterMode: "all",
+		Revision:   1,
 	}
 	component := New()
 	if got := indexOfSession(component.Rows(model), "active"); got != 3 {
@@ -300,7 +293,6 @@ func TestRowsCacheMatchesIgnoresSelectionChangesToPreventSwapping(t *testing.T) 
 				{ID: "s2", ProjectID: "p1", AgentID: "protonman", Title: "Two", LastActivityAt: activity.Add(time.Minute)},
 			},
 			ActiveSessionID: "s1",
-			ActiveAgentID:   "protonman",
 		},
 	}
 	cache := BuildRows(modelA)
@@ -308,7 +300,7 @@ func TestRowsCacheMatchesIgnoresSelectionChangesToPreventSwapping(t *testing.T) 
 		t.Fatal("cache should match identical modelA")
 	}
 
-	// Changing ActiveSessionID or ActiveAgentID must NOT invalidate cache,
+	// Changing ActiveSessionID must NOT invalidate cache,
 	// otherwise selecting a session row would re-sort and swap positions under
 	// the cursor. Selection is applied at render time, not in row projection.
 	modelB := modelA
@@ -317,10 +309,6 @@ func TestRowsCacheMatchesIgnoresSelectionChangesToPreventSwapping(t *testing.T) 
 		t.Fatal("cache should match when only ActiveSessionID changes")
 	}
 
-	modelB.State.ActiveAgentID = "reviewer"
-	if !cache.Matches(modelB) {
-		t.Fatal("cache should match when only ActiveAgentID changes")
-	}
 }
 
 func TestClickSessionDoesNotSwapPosition(t *testing.T) {
@@ -333,11 +321,9 @@ func TestClickSessionDoesNotSwapPosition(t *testing.T) {
 				{ID: "s2", ProjectID: "workspace", AgentID: "protonman", Title: "Second", LastActivityAt: activity.Add(time.Minute)},
 			},
 			ActiveSessionID: "s1",
-			ActiveAgentID:   "protonman",
 		},
-		AgentProfiles: []app.ACPAgentProfile{{ID: "protonman", DisplayName: "Protonman"}},
-		FilterMode:    "all",
-		Revision:      1,
+		FilterMode: "all",
+		Revision:   1,
 	}
 	component := New()
 
@@ -398,7 +384,6 @@ func TestClickSessionWithPresentationStateDoesNotSwapPosition(t *testing.T) {
 			{ID: "s2", ProjectID: "workspace", AgentID: "protonman", Title: "Second", LastActivityAt: activity.Add(time.Minute)},
 		},
 		ActiveSessionID: "s1",
-		ActiveAgentID:   "protonman",
 	}
 
 	component := New()
@@ -406,10 +391,9 @@ func TestClickSessionWithPresentationStateDoesNotSwapPosition(t *testing.T) {
 
 	// Initial render with presentation clone (as controller.Snapshot produces)
 	model1 := Model{
-		State:         desktopstate.ClonePresentationState(baseState),
-		AgentProfiles: []app.ACPAgentProfile{{ID: "protonman", DisplayName: "Protonman"}},
-		FilterMode:    "all",
-		Revision:      revision,
+		State:      desktopstate.ClonePresentationState(baseState),
+		FilterMode: "all",
+		Revision:   revision,
 	}
 	rows1 := component.Rows(model1)
 	s2IdxBefore := indexOfSession(rows1, "s2")
@@ -422,10 +406,9 @@ func TestClickSessionWithPresentationStateDoesNotSwapPosition(t *testing.T) {
 	baseState.ActiveSessionID = "s2"
 	revision++
 	model2 := Model{
-		State:         desktopstate.ClonePresentationState(baseState),
-		AgentProfiles: []app.ACPAgentProfile{{ID: "protonman", DisplayName: "Protonman"}},
-		FilterMode:    "all",
-		Revision:      revision,
+		State:      desktopstate.ClonePresentationState(baseState),
+		FilterMode: "all",
+		Revision:   revision,
 	}
 	rows2 := component.Rows(model2)
 	s2IdxAfter := indexOfSession(rows2, "s2")
@@ -439,10 +422,9 @@ func TestClickSessionWithPresentationStateDoesNotSwapPosition(t *testing.T) {
 	baseState.ActiveSessionID = "s1"
 	revision++
 	model3 := Model{
-		State:         desktopstate.ClonePresentationState(baseState),
-		AgentProfiles: []app.ACPAgentProfile{{ID: "protonman", DisplayName: "Protonman"}},
-		FilterMode:    "all",
-		Revision:      revision,
+		State:      desktopstate.ClonePresentationState(baseState),
+		FilterMode: "all",
+		Revision:   revision,
 	}
 	rows3 := component.Rows(model3)
 	if indexOfSession(rows3, "s2") != s2IdxBefore || indexOfSession(rows3, "s1") != s1IdxBefore {

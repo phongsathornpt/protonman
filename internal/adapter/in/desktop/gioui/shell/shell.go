@@ -277,7 +277,6 @@ func (s *Shell) Layout(gtx layout.Context, snapshot controller.Snapshot) layout.
 	s.syncConversation(snapshot.State)
 	s.syncRuntimeEditors(snapshot.State)
 	s.syncMCPIntegrationEditors(snapshot.State)
-	s.syncAgentProfileEditors(snapshot)
 	s.handleGlobalShortcuts(gtx, snapshot)
 	paint.Fill(gtx.Ops, s.theme.Colors.Surface)
 
@@ -296,12 +295,6 @@ func (s *Shell) Layout(gtx layout.Context, snapshot controller.Snapshot) layout.
 		return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 				return s.layoutTopBar(gtx, snapshot)
-			}),
-			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				if !s.settingsComponent.AgentSelectorVisible() {
-					return layout.Dimensions{}
-				}
-				return s.layoutAgentSelectorBar(gtx, snapshot)
 			}),
 			layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
 				return s.layoutMain(gtx, snapshot)

@@ -24,7 +24,7 @@ import (
 // rate-limited matters more than reacting instantly.
 const themePollInterval = 10 * time.Second
 
-func Run(ctx context.Context, agents application.ACPAgents, mcpIntegrations application.MCPIntegrations, preferences *application.DesktopPreferences) error {
+func Run(ctx context.Context, mcpIntegrations application.MCPIntegrations, preferences *application.DesktopPreferences) error {
 	windowContext, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -39,7 +39,7 @@ func Run(ctx context.Context, agents application.ACPAgents, mcpIntegrations appl
 		window.Perform(system.ActionClose)
 	}()
 
-	ctrl := controller.New(windowContext, window.Invalidate, agents, mcpIntegrations, preferences)
+	ctrl := controller.New(windowContext, window.Invalidate, mcpIntegrations, preferences)
 	defer ctrl.Close()
 
 	configuredTheme := uikit.NormalizeThemeMode(os.Getenv("PROTONMAN_GIO_THEME"))
@@ -95,10 +95,6 @@ func Run(ctx context.Context, agents application.ACPAgents, mcpIntegrations appl
 		SaveMCPIntegration:       ctrl.SaveMCPIntegration,
 		RemoveMCPIntegration:     ctrl.RemoveMCPIntegration,
 		ReconnectMCP:             ctrl.ReconnectMCP,
-		SelectAgent:              ctrl.SelectAgent,
-		SaveAgentProfile:         ctrl.SaveAgentProfile,
-		RemoveAgentProfile:       ctrl.RemoveAgentProfile,
-		ScanDeviceAgents:         ctrl.ScanDeviceAgents,
 		SaveProvider:             ctrl.SaveProvider,
 		DeleteProvider:           ctrl.DeleteProvider,
 		FetchProviderModels:      ctrl.FetchProviderModels,

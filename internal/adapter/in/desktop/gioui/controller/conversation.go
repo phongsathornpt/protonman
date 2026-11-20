@@ -103,19 +103,8 @@ func (c *controller) handleACPEvent(event acpclient.Event) {
 	c.handleACPEventFrom(nil, event)
 }
 
-func (c *controller) handleACPEventFor(client *acpclient.Client, event acpclient.Event) {
-	c.handleACPEventFrom(client, event)
-}
-
-func (c *controller) handleACPEventForAgent(agentID string, client *acpclient.Client, event acpclient.Event) {
-	c.handleACPEventFromAgent(agentID, client, event)
-}
-
 func (c *controller) handleACPEventFrom(source *acpclient.Client, event acpclient.Event) {
-	c.handleACPEventFromAgent("", source, event)
-}
-
-func (c *controller) handleACPEventFromAgent(agentID string, source *acpclient.Client, event acpclient.Event) {
+	agentID := ProtonmanAgentID
 	if event.Method != "session/update" {
 		return
 	}
@@ -135,8 +124,8 @@ func (c *controller) handleACPEventFromAgent(agentID string, source *acpclient.C
 
 	c.mu.Lock()
 	if source != nil {
-		currentAgentID := c.agentIDForClientLocked(source)
-		if currentAgentID == "" || agentID != "" && currentAgentID != agentID {
+		currentAgentID := protonAgentIDForClient(c.client, source)
+		if currentAgentID == "" {
 			c.mu.Unlock()
 			return
 		}
@@ -152,12 +141,7 @@ func (c *controller) handleACPEventFromAgent(agentID string, source *acpclient.C
 		modeID := strings.TrimSpace(payload.Update.ModeID)
 		if modeID != "" {
 			if sess := desktopstateSessionPointer(&c.state, payload.SessionID, session.AgentID); sess != nil {
-				if isClineACPProfile(c.profiles[session.AgentID]) {
-					autoApprove := sess.Runtime.PermissionMode == "always-approve"
-					sess.Runtime.PermissionMode = clinePermissionMode(modeID, autoApprove)
-				} else {
-					sess.Runtime.PermissionMode = modeID
-				}
+				sess.Runtime.PermissionMode = modeID
 				c.revision++
 				c.mu.Unlock()
 				c.notify()
@@ -169,11 +153,7 @@ func (c *controller) handleACPEventFromAgent(agentID string, source *acpclient.C
 	}
 	if update.Kind == "config_option_update" {
 		if sess := desktopstateSessionPointer(&c.state, payload.SessionID, session.AgentID); sess != nil {
-			if isClineACPProfile(c.profiles[session.AgentID]) {
-				modeID := clineModeID(payload.Update.ConfigOptions, sess.Runtime.PermissionMode)
-				autoApprove := clineAutoApproveValue(payload.Update.ConfigOptions, sess.Runtime.PermissionMode == "always-approve")
-				sess.Runtime.PermissionMode = clinePermissionMode(modeID, autoApprove)
-			} else {
+			{
 				for _, opt := range payload.Update.ConfigOptions {
 					val := strings.TrimSpace(acpConfigStringValue(opt.CurrentValue))
 					if val == "" {
@@ -740,7 +720,7 @@ func (c *controller) eventsForSessionUpdateLocked(payload sessionUpdatePayload, 
 		if update.Text == "" {
 			return desktopstate.Event{}, false
 		}
-		streamKey := messageStreamKey{sessionID: update.SessionID, kind: update.Kind}
+		streamKey := messageStreamKey{agentID: update.AgentID, sessionID: update.SessionID, kind: update.Kind}
 		itemID := c.messageStreams[streamKey]
 		eventKind := desktopstate.EventTimelineUpserted
 		if itemID == "" {
@@ -872,8 +852,8 @@ func (c *controller) loadSessionHistory(sessionID string) {
 			sess.Workspace = workspace
 		}
 	}
-	client, agentID := c.clientForSessionLocked(sessionID, agentID)
-	if client == nil || c.connections[agentID] != ConnectionConnected {
+	client, agentID := c.clientForSession(sessionID)
+	if client == nil || c.connection != ConnectionConnected {
 		c.mu.Unlock()
 		return
 	}
@@ -895,18 +875,18 @@ func (c *controller) loadSessionHistory(sessionID string) {
 	}
 	c.historyStagingBytes[storageKey] = 0
 	delete(c.historyStagingTruncated, storageKey)
-	c.clearMessageStreamsLocked(sessionID, agentID)
+	c.clearMessageStreamsLocked(sessionID)
 	c.revision++
 	c.mu.Unlock()
 	c.notify()
-	additionalDirectories := c.additionalDirectoriesForAgent(agentID, session.AdditionalDirectories)
+	additionalDirectories := c.additionalDirectories(session.AdditionalDirectories)
 	if workspace == "" {
 		additionalDirectories = nil
 	}
 	params := c.sessionHistoryLoadParams(sessionID, workspace, additionalDirectories)
 
 	c.spawn(func() {
-		unlock, acquired := c.lockAgentSessionContext(callCtx, agentID)
+		unlock, acquired := c.lockAgentSessionContext(callCtx)
 		if !acquired {
 			c.finishSessionHistoryLoadRequest(client, sessionID, request, callCtx.Err(), nil, nil)
 			return
@@ -965,9 +945,9 @@ func (c *controller) finishSessionHistoryLoadRequest(client *acpclient.Client, s
 		delete(c.historyLoads, storageKey)
 		request.cancel()
 	}
-	current, currentAgentID := c.clientForSessionLocked(sessionID, agentID)
-	if currentAgentID != "" {
-		agentID = currentAgentID
+	current, resolvedAgentID := c.clientForSession(sessionID)
+	if resolvedAgentID != "" {
+		agentID = resolvedAgentID
 	}
 	currentClient := current != nil && current == client
 	if !currentClient {
@@ -978,7 +958,7 @@ func (c *controller) finishSessionHistoryLoadRequest(client *acpclient.Client, s
 	delete(c.historyStaging, storageKey)
 	delete(c.historyStagingBytes, storageKey)
 	delete(c.historyStagingTruncated, storageKey)
-	c.clearMessageStreamsLocked(sessionID, agentID)
+	c.clearMessageStreamsLocked(sessionID)
 	active := isSessionActive(c.state, sessionID, agentID)
 	applyStaged := loadErr == nil && active
 	if applyStaged {
@@ -999,7 +979,7 @@ func (c *controller) finishSessionHistoryLoadRequest(client *acpclient.Client, s
 		c.mu.Lock()
 		if currentClient && loadErr == nil && isSessionActive(c.state, sessionID, agentID) {
 			c.applyStagedHistoryEventsLocked(sessionID, coalesced, agentID)
-			c.clearMessageStreamsLocked(sessionID, agentID)
+			c.clearMessageStreamsLocked(sessionID)
 		}
 		c.mu.Unlock()
 	}
@@ -1020,16 +1000,16 @@ func (c *controller) finishSessionHistoryLoadRequest(client *acpclient.Client, s
 		}
 		c.histories[storageKey] = HistoryStateLoaded
 		if truncated {
-			c.statuses[agentID] = "Connected · recent session history loaded"
+			c.status = "Connected · recent session history loaded"
 		} else {
-			c.statuses[agentID] = "Connected · session history loaded"
+			c.status = "Connected · session history loaded"
 		}
 	} else if loadErr == nil || errors.Is(loadErr, context.Canceled) {
 		c.histories[storageKey] = HistoryStateUnloaded
 	} else {
 		c.histories[storageKey] = HistoryStateUnloaded
 		if active {
-			c.statuses[agentID] = "Session history failed · " + compactError(loadErr)
+			c.status = "Session history failed · " + compactError(loadErr)
 		}
 	}
 	c.revision++
@@ -1046,8 +1026,8 @@ func (c *controller) finishSessionHistoryLoadRequest(client *acpclient.Client, s
 	}
 }
 
-func (c *controller) resumeKnownSessions(agentID string, client *acpclient.Client) {
-	if !c.agentSupportsSessionResume(agentID) {
+func (c *controller) resumeKnownSessions(client *acpclient.Client) {
+	if !c.supportsSessionResume() {
 		return
 	}
 	c.mu.RLock()
@@ -1076,7 +1056,7 @@ func (c *controller) resumeKnownSessions(agentID string, client *acpclient.Clien
 				c.mu.Unlock()
 			}
 		}
-		if session.ID == "" || workspace == "" || session.AgentID != agentID && !(session.AgentID == "" && agentID == ProtonmanAgentID) {
+		if session.ID == "" || workspace == "" || (session.AgentID != "" && session.AgentID != ProtonmanAgentID) {
 			continue
 		}
 		if sessKey := sessionWorkspaceKeyFromSession(session); sessKey != "" {
@@ -1084,9 +1064,9 @@ func (c *controller) resumeKnownSessions(agentID string, client *acpclient.Clien
 				continue
 			}
 		}
-		additionalDirectories := c.additionalDirectoriesForAgent(agentID, session.AdditionalDirectories)
+		additionalDirectories := c.additionalDirectories(session.AdditionalDirectories)
 		params := c.mcpSessionParams(session.ID, workspace, additionalDirectories)
-		unlock, acquired := c.lockAgentSessionContext(c.context(), agentID)
+		unlock, acquired := c.lockAgentSessionContext(c.context())
 		if !acquired {
 			return
 		}
@@ -1103,12 +1083,12 @@ func (c *controller) resumeKnownSessions(agentID string, client *acpclient.Clien
 		unlock()
 		if err != nil && !isACPMethodNotFound(err) && c.context().Err() == nil {
 			if session.ID == activeSessionID {
-				c.setAgentStatus(agentID, "Session resume failed · "+compactError(err))
+				c.setStatus("Session resume failed · " + compactError(err))
 			}
 		} else if err == nil {
 			if models, currentModel := extractModelsFromACP(resumeResult.ConfigOptions, resumeResult.Models); len(models) > 0 {
 				c.mu.Lock()
-				c.setAgentAvailableModelsLocked(agentID, models)
+				c.setAgentAvailableModelsLocked(ProtonmanAgentID, models)
 				if sess := desktopstateSessionPointer(&c.state, session.ID); sess != nil {
 					sess.AvailableModels = models
 					if currentModel != "" && sess.Runtime.Model == "" {
@@ -1119,8 +1099,14 @@ func (c *controller) resumeKnownSessions(agentID string, client *acpclient.Clien
 				c.mu.Unlock()
 				c.notify()
 			}
-			if resumeResult.Modes != nil && c.isClineAgent(agentID) {
-				c.setClinePermissionModeFromACP(agentID, session.ID, resumeResult.Modes.CurrentModeID, resumeResult.ConfigOptions)
+			if resumeResult.Modes != nil && strings.TrimSpace(resumeResult.Modes.CurrentModeID) != "" {
+				c.mu.Lock()
+				if sess := desktopstateSessionPointer(&c.state, session.ID); sess != nil {
+					sess.Runtime.PermissionMode = strings.TrimSpace(resumeResult.Modes.CurrentModeID)
+					c.revision++
+				}
+				c.mu.Unlock()
+				c.notify()
 			}
 		}
 	}
@@ -1160,9 +1146,9 @@ func (c *controller) SendExpandedPrompt(prompt ExpandedPrompt) {
 			}
 		}
 	}
-	client, agentID := c.clientForSessionLocked(sessionID, agentID)
+	client, agentID := c.clientForSession(sessionID)
 	storageKey := desktopSessionStorageKey(c.state, session.Ref())
-	if !ok || client == nil || c.connections[agentID] != ConnectionConnected || SessionBusy(session.Status) || c.histories[storageKey] == HistoryStateLoading || workspace == "" {
+	if !ok || client == nil || c.connection != ConnectionConnected || SessionBusy(session.Status) || c.histories[storageKey] == HistoryStateLoading || workspace == "" {
 		c.mu.Unlock()
 		return
 	}
@@ -1181,7 +1167,7 @@ func (c *controller) SendExpandedPrompt(prompt ExpandedPrompt) {
 			Text: prompt.DisplayText,
 		},
 	})
-	c.statuses[agentID] = "Running · " + session.Title
+	c.status = "Running · " + session.Title
 	c.revision++
 	c.mu.Unlock()
 	c.notify()
@@ -1190,16 +1176,16 @@ func (c *controller) SendExpandedPrompt(prompt ExpandedPrompt) {
 }
 
 func (c *controller) runPrompt(client *acpclient.Client, session desktopstate.SessionState, prompt ExpandedPrompt, mcpServers []map[string]any) {
-	defer c.lockAgentSession(session.AgentID)()
+	defer c.lockAgentSession()()
 	params := map[string]any{"sessionId": session.ID, "cwd": session.Workspace}
-	if additionalDirectories := c.additionalDirectoriesForAgent(session.AgentID, session.AdditionalDirectories); len(additionalDirectories) > 0 {
+	if additionalDirectories := c.additionalDirectories(session.AdditionalDirectories); len(additionalDirectories) > 0 {
 		params["additionalDirectories"] = additionalDirectories
 	}
 	if len(mcpServers) > 0 {
 		params["mcpServers"] = mcpServers
 	}
 	var err error
-	if c.agentSupportsSessionResume(session.AgentID) {
+	if c.supportsSessionResume() {
 		err = client.Call(c.context(), "session/resume", params, nil)
 	}
 	var result struct {
@@ -1225,20 +1211,20 @@ func (c *controller) runPrompt(client *acpclient.Client, session desktopstate.Se
 			"prompt":    promptBlocks,
 		}
 		c.mu.RLock()
-		profile := c.profiles[session.AgentID]
-		authMethods := slices.Clone(c.agentFeatures[session.AgentID].AuthMethods)
+		profile := c.profile
+		authMethods := slices.Clone(c.features.AuthMethods)
 		c.mu.RUnlock()
 		err = promptACPWithReauthentication(c.context(), client, profile, authMethods, promptParams, &result, func(methodName string) {
 			name := strings.TrimSpace(methodName)
 			if name == "" {
-				name = "Cline"
+				name = "Protonman"
 			}
-			c.setAgentStatus(session.AgentID, "Re-authenticating · "+name)
+			c.setStatus("Re-authenticating · " + name)
 		})
 	}
 
 	c.mu.Lock()
-	if !c.clientCurrentLocked(session.AgentID, client) {
+	if !c.isCurrentClient(client) {
 		c.mu.Unlock()
 		return
 	}
@@ -1255,14 +1241,14 @@ func (c *controller) runPrompt(client *acpclient.Client, session desktopstate.Se
 				Text: "Prompt failed: " + compactError(err),
 			},
 		})
-		c.statuses[session.AgentID] = "Prompt failed · " + compactError(err)
+		c.status = "Prompt failed · " + compactError(err)
 	} else {
 		desktopstate.Apply(&c.state, desktopstate.Event{Kind: desktopstate.EventPromptCompleted, AgentID: session.AgentID, SessionID: session.ID})
 		stopReason := strings.TrimSpace(result.StopReason)
 		if stopReason == "" {
 			stopReason = "completed"
 		}
-		c.statuses[session.AgentID] = "Connected · " + stopReason
+		c.status = "Connected · " + stopReason
 	}
 	c.revision++
 	c.mu.Unlock()
@@ -1276,19 +1262,19 @@ func (c *controller) CancelPrompt() {
 	c.mu.RLock()
 	sessionID := c.state.ActiveSessionID
 	session, ok := SessionByID(c.state, sessionID, c.state.ActiveAgentID)
-	client, agentID := c.clientForSessionLocked(sessionID, c.state.ActiveAgentID)
+	client, _ := c.clientForSession(sessionID)
 	c.mu.RUnlock()
 	if !ok || client == nil || !SessionBusy(session.Status) {
 		return
 	}
-	c.setAgentStatus(agentID, "Cancelling…")
+	c.setStatus("Cancelling…")
 	c.spawn(func() {
 		callCtx, cancel := context.WithTimeout(c.context(), reconnectRequestTimeout)
 		defer cancel()
 		if err := client.Call(callCtx, "session/cancel", map[string]any{"sessionId": sessionID}, nil); err != nil && c.context().Err() == nil {
 			c.mu.Lock()
-			if c.clients[agentID] == client {
-				c.statuses[agentID] = "Cancel failed · " + compactError(err)
+			if c.client == client {
+				c.status = "Cancel failed · " + compactError(err)
 				c.revision++
 			}
 			c.mu.Unlock()
@@ -1402,7 +1388,6 @@ func (c *controller) pruneSessionRuntimeLocked() {
 	if _, ok := live[c.runtimeMutation]; !ok {
 		c.runtimeMutation = ""
 	}
-	c.pruneAgentRuntimeLocked()
 }
 
 // pruneInactiveSessionHistoryLocked keeps the active and immediately previous
@@ -1452,9 +1437,9 @@ func (c *controller) pruneInactiveSessionHistoryLocked(activeSessionID, previous
 	}
 }
 
-func (c *controller) resetAgentTransientSessionStateLocked(agentID string) {
+func (c *controller) resetTransientSessionStateLocked() {
 	for _, session := range c.state.Sessions {
-		if session.AgentID != agentID {
+		if session.AgentID != "" && session.AgentID != ProtonmanAgentID {
 			continue
 		}
 		sessionKey := desktopSessionStorageKey(c.state, session.Ref())
@@ -1469,9 +1454,9 @@ func (c *controller) resetAgentTransientSessionStateLocked(agentID string) {
 		delete(c.historyStaging, sessionKey)
 		delete(c.historyStagingBytes, sessionKey)
 		delete(c.historyStagingTruncated, sessionKey)
-		c.clearMessageStreamsLocked(session.ID, session.AgentID)
+		c.clearMessageStreamsLocked(session.ID)
 		for _, permission := range c.state.PermissionInbox {
-			if permission.SessionID != session.ID || permission.AgentID != "" && permission.AgentID != agentID {
+			if permission.SessionID != session.ID || permission.AgentID != "" && permission.AgentID != ProtonmanAgentID {
 				continue
 			}
 			delete(c.permissionWait, permission.RequestID)

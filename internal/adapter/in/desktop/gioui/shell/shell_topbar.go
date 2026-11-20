@@ -18,7 +18,7 @@ import (
 	desktopstate "github.com/phongsathornpt/protonman/internal/feature/desktop"
 )
 
-// The window's top bar: project breadcrumb, agent selector, connection state,
+// The window's top bar: project breadcrumb, connection state,
 // and the runtime controls that sit above the conversation pane.
 func (s *Shell) layoutTopBar(gtx layout.Context, snapshot controller.Snapshot) layout.Dimensions {
 	gtx.Constraints.Min.Y = gtx.Dp(60)
@@ -69,16 +69,10 @@ func (s *Shell) layoutTopBar(gtx layout.Context, snapshot controller.Snapshot) l
 					layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 						wideInspector := gtx.Constraints.Max.X >= gtx.Dp(inspectorcomponent.WideBreakpoint)
 						agentName := compactInspectorText(activeAgentDisplayName(snapshot), 16)
-						chevronSuffix := " ▾"
-						if s.settingsComponent.AgentSelectorVisible() {
-							chevronSuffix = " ▴"
-						}
 						return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
 							layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 								return uikit.Inset{Right: 6}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-									return s.layoutAgentCapsuleButton(gtx, &s.settingsComponent.AgentWidgets().SelectorButton, agentName+chevronSuffix, func() {
-										s.settingsComponent.ToggleAgentSelector()
-									})
+									return s.layoutLabel(gtx, agentName, textLabelSmall, font.Medium, s.theme.Colors.OnSurfaceVariant, 1)
 								})
 							}),
 							layout.Rigid(func(gtx layout.Context) layout.Dimensions {

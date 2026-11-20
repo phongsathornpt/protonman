@@ -4,36 +4,35 @@ package controller
 
 import (
 	"context"
-	"fmt"
 	"testing"
 	"time"
 )
 
 func TestAgentSessionLockRegistryReleasesUnusedKeys(t *testing.T) {
 	var registry agentSessionLockRegistry
-	for index := range 1024 {
-		unlock := registry.lock(fmt.Sprintf("agent-%d", index))
+	for range 1024 {
+		unlock := registry.lock()
 		unlock()
 	}
-	if count := len(registry.locks); count != 0 {
-		t.Fatalf("retained %d idle agent locks", count)
+	if registry.locked != nil {
+		t.Fatal("retained idle session lock")
 	}
 }
 
 func TestAgentSessionLockRegistryKeepsWaitersOnSameLock(t *testing.T) {
 	var registry agentSessionLockRegistry
-	firstUnlock := registry.lock("reviewer")
+	firstUnlock := registry.lock()
 	acquired := make(chan func(), 1)
 	finished := make(chan struct{})
 	go func() {
-		unlock := registry.lock("reviewer")
+		unlock := registry.lock()
 		acquired <- unlock
 		close(finished)
 	}()
 
 	select {
 	case <-acquired:
-		t.Fatal("second operation acquired the agent lock concurrently")
+		t.Fatal("second operation acquired the session lock concurrently")
 	case <-time.After(10 * time.Millisecond):
 	}
 	firstUnlock()
@@ -42,25 +41,25 @@ func TestAgentSessionLockRegistryKeepsWaitersOnSameLock(t *testing.T) {
 	select {
 	case secondUnlock = <-acquired:
 	case <-time.After(time.Second):
-		t.Fatal("waiting operation did not acquire the agent lock")
+		t.Fatal("waiting operation did not acquire the session lock")
 	}
-	if count := len(registry.locks); count != 1 {
-		t.Fatalf("lock entries while held = %d, want 1", count)
+	if registry.locked == nil {
+		t.Fatal("session lock missing while held")
 	}
 	secondUnlock()
 	<-finished
-	if count := len(registry.locks); count != 0 {
-		t.Fatalf("retained %d released agent locks", count)
+	if registry.locked != nil {
+		t.Fatal("retained released session lock")
 	}
 }
 
 func TestAgentSessionLockRegistryCancelsWaitingAcquisition(t *testing.T) {
 	var registry agentSessionLockRegistry
-	firstUnlock := registry.lock("reviewer")
+	firstUnlock := registry.lock()
 	ctx, cancel := context.WithCancel(context.Background())
 	acquired := make(chan bool, 1)
 	go func() {
-		unlock, ok := registry.lockContext(ctx, "reviewer")
+		unlock, ok := registry.lockContext(ctx)
 		if ok {
 			unlock()
 		}
@@ -71,16 +70,16 @@ func TestAgentSessionLockRegistryCancelsWaitingAcquisition(t *testing.T) {
 	select {
 	case ok := <-acquired:
 		if ok {
-			t.Fatal("cancelled waiter acquired the agent lock")
+			t.Fatal("cancelled waiter acquired the session lock")
 		}
 	case <-time.After(time.Second):
 		t.Fatal("cancelled waiter remained blocked")
 	}
-	if count := registry.locks["reviewer"].refs; count != 1 {
-		t.Fatalf("retained waiter references = %d, want only the holder", count)
+	if registry.locked == nil || registry.locked.refs != 1 {
+		t.Fatal("retained waiter references, want only the holder")
 	}
 	firstUnlock()
-	if count := len(registry.locks); count != 0 {
-		t.Fatalf("retained %d released agent locks", count)
+	if registry.locked != nil {
+		t.Fatal("retained released session lock")
 	}
 }

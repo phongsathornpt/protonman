@@ -22,9 +22,7 @@ const (
 )
 
 type Snapshot struct {
-	ExternalAgent bool
-	Connected     bool
-	AgentName     string
+	Connected bool
 }
 
 // Chrome is the shared uikit surface; the inspector needs no extra primitives.
@@ -94,9 +92,6 @@ func (c *Component) Layout(gtx layout.Context, input ViewInput, compact bool) la
 						return chrome.BorderSurface(gtx, unit.Dp(12), chrome.Colors.SurfaceContainer, chrome.Colors.OutlineVariant, 1, func(gtx layout.Context) layout.Dimensions {
 							semantic.DescriptionOp("Session inspector panel").Add(gtx.Ops)
 							return layout.Inset{Top: 14, Bottom: 14, Left: 14, Right: 14}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-								if input.Snapshot.ExternalAgent {
-									return c.layoutExternalAgent(gtx, input.Snapshot.AgentName, chrome)
-								}
 								if input.Panel == nil {
 									return layout.Dimensions{}
 								}
@@ -110,24 +105,7 @@ func (c *Component) Layout(gtx layout.Context, input ViewInput, compact bool) la
 	})
 }
 
-func (c *Component) layoutExternalAgent(gtx layout.Context, agentName string, chrome Chrome) layout.Dimensions {
-	return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return chrome.Label(gtx, "Agent capabilities", unit.Sp(16), font.SemiBold, chrome.Colors.OnSurface, 2)
-		}),
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return chrome.Label(gtx, "This conversation uses standard ACP chat, tools, permissions, cancellation, and reconnect behavior through "+agentName+".", unit.Sp(14), font.Normal, chrome.Colors.OnSurfaceVariant, 4)
-		}),
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return chrome.Label(gtx, "Goal, TODO, Memory, and runtime controls are hidden because they are Protonman extensions.", unit.Sp(14), font.Normal, chrome.Colors.OnSurfaceVariant, 4)
-		}),
-	)
-}
-
-func (c *Component) PanelCount(snapshot Snapshot) int {
-	if snapshot.ExternalAgent {
-		return 1
-	}
+func (c *Component) PanelCount(_ Snapshot) int {
 	switch c.activeTab {
 	case 1, 2:
 		return 1
@@ -156,9 +134,6 @@ func (c *Component) layoutHeader(gtx layout.Context, input ViewInput) layout.Dim
 				)
 			}),
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				if input.Snapshot.ExternalAgent {
-					return layout.Dimensions{}
-				}
 				return layout.Inset{Top: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions { return c.layoutTabs(gtx, chrome) })
 			}),
 		)

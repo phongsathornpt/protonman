@@ -43,8 +43,6 @@ func (s *Shell) layoutSettingsContent(gtx layout.Context, snapshot controller.Sn
 		return s.layoutProvidersPanel(gtx, snapshot)
 	case settingscomponent.MCPTab:
 		return s.layoutMCPIntegrationsPanel(gtx, snapshot)
-	case settingscomponent.AgentsTab:
-		return s.layoutAgentProfilesPanel(gtx, snapshot)
 	default:
 		return s.layoutSettingsGeneralTab(gtx, snapshot)
 	}

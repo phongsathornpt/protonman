@@ -34,10 +34,6 @@ type Bindings struct {
 	SaveMCPIntegration       func(string, string, string, string)
 	RemoveMCPIntegration     func(string)
 	ReconnectMCP             func()
-	SelectAgent              func(string)
-	SaveAgentProfile         func(string, string, string, string, string, string)
-	RemoveAgentProfile       func(string)
-	ScanDeviceAgents         func()
 	SaveProvider             func(controller.ProvidersSaveParams, func(error))
 	DeleteProvider           func(string, func(error))
 	FetchProviderModels      func(string, string, string, string, func([]string, error))
@@ -110,18 +106,6 @@ func (b Bindings) withDefaults() Bindings {
 	}
 	if b.ReconnectMCP == nil {
 		b.ReconnectMCP = func() {}
-	}
-	if b.SelectAgent == nil {
-		b.SelectAgent = func(string) {}
-	}
-	if b.SaveAgentProfile == nil {
-		b.SaveAgentProfile = func(string, string, string, string, string, string) {}
-	}
-	if b.RemoveAgentProfile == nil {
-		b.RemoveAgentProfile = func(string) {}
-	}
-	if b.ScanDeviceAgents == nil {
-		b.ScanDeviceAgents = func() {}
 	}
 	if b.SaveProvider == nil {
 		b.SaveProvider = func(controller.ProvidersSaveParams, func(error)) {}

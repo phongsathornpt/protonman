@@ -126,12 +126,9 @@ func benchmarkController() *controller {
 		}
 	}
 	return &controller{
-		state:         desktopstate.State{ActiveSessionID: sessions[0].ID, Sessions: sessions},
-		profiles:      nil,
-		connections:   nil,
-		statuses:      nil,
-		activeAgentID: ProtonmanAgentID,
-		histories:     make(map[string]HistoryState),
-		revision:      1,
+		state: desktopstate.State{ActiveSessionID: sessions[0].ID, Sessions: sessions},
+
+		histories: make(map[string]HistoryState),
+		revision:  1,
 	}
 }

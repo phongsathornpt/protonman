@@ -18,7 +18,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/phongsathornpt/protonman/internal/adapter/out/acpclient"
-	"github.com/phongsathornpt/protonman/internal/app"
 	"github.com/phongsathornpt/protonman/internal/base/envconfig"
 	desktopstate "github.com/phongsathornpt/protonman/internal/feature/desktop"
 )
@@ -28,12 +27,11 @@ func newTestController() *controller {
 	profile := DefaultACPAgentProfile()
 	return &controller{
 		ctx:                 context.Background(),
-		state:               desktopstate.State{ActiveSessionID: "session-1", Sessions: []desktopstate.SessionState{{ID: "session-1", AgentID: ProtonmanAgentID, Status: desktopstate.TaskIdle}}},
-		profiles:            map[string]app.ACPAgentProfile{ProtonmanAgentID: profile},
-		clients:             map[string]*acpclient.Client{ProtonmanAgentID: client},
-		connections:         map[string]ConnectionPhase{ProtonmanAgentID: ConnectionConnected},
-		statuses:            map[string]string{ProtonmanAgentID: "Connected"},
-		activeAgentID:       ProtonmanAgentID,
+		state:               desktopstate.State{ActiveSessionID: "session-1", ActiveAgentID: ProtonmanAgentID, Sessions: []desktopstate.SessionState{{ID: "session-1", AgentID: ProtonmanAgentID, Status: desktopstate.TaskIdle}}},
+		profile:             CloneACPAgentProfile(profile),
+		client:              client,
+		connection:          ConnectionConnected,
+		status:              "Connected",
 		histories:           make(map[string]HistoryState),
 		historyStaging:      make(map[string][]desktopstate.Event),
 		historyStagingBytes: make(map[string]int), historyStagingTruncated: make(map[string]bool),
@@ -191,7 +189,7 @@ func TestSessionUpdateTextAcceptsACPContentShapes(t *testing.T) {
 
 func TestStaleClientEventsAreIgnored(t *testing.T) {
 	controller := newTestController()
-	controller.handleACPEventFor(&acpclient.Client{}, sessionChunkEvent("session-1", "agent_message_chunk", "stale"))
+	controller.handleACPEventFrom(&acpclient.Client{}, sessionChunkEvent("session-1", "agent_message_chunk", "stale"))
 	if len(controller.state.Sessions[0].Timeline) != 0 {
 		t.Fatalf("stale client event changed state: %#v", controller.state.Sessions[0].Timeline)
 	}
@@ -226,7 +224,7 @@ func TestUnknownSessionPermissionRequestsAreRejected(t *testing.T) {
 
 func TestSelectSessionRetainsImmediatelyPreviousLoadedHistory(t *testing.T) {
 	controller := newTestController()
-	controller.clients = nil
+	controller.client = nil
 	controller.state.ActiveSessionID = "session-1"
 	controller.state.Sessions = append(controller.state.Sessions, desktopstate.SessionState{
 		ID: "session-2", AgentID: ProtonmanAgentID,
@@ -286,7 +284,7 @@ func TestSelectSessionRetainsImmediatelyPreviousLoadedHistory(t *testing.T) {
 
 func TestSelectSessionEvictsPreviousHistoryWhileItCanReceiveUpdates(t *testing.T) {
 	controller := newTestController()
-	controller.clients = nil
+	controller.client = nil
 	controller.state.ActiveSessionID = "session-1"
 	controller.state.Sessions[0].Status = desktopstate.TaskRunning
 	controller.state.Sessions[0].Timeline = []desktopstate.TimelineItem{{ID: "current", Kind: desktopstate.TimelineAssistant, Text: "active history"}}
@@ -500,25 +498,18 @@ func TestPruneSessionRuntimeRemovesEveryTransientEntryForDeletedSessions(t *test
 	}
 }
 
-func TestSessionUpdatesRouteThroughOwningAgent(t *testing.T) {
+func TestStaleClientSessionUpdateIgnored(t *testing.T) {
 	controller := newTestController()
-	reviewerClient := &acpclient.Client{}
-	controller.clients["reviewer"] = reviewerClient
-	controller.connections["reviewer"] = ConnectionConnected
-	controller.state.Sessions = append(controller.state.Sessions, desktopstate.SessionState{ID: "review-session", AgentID: "reviewer", Status: desktopstate.TaskIdle})
-	controller.state.ActiveSessionID = "review-session"
-
-	controller.handleACPEventForAgent("reviewer", reviewerClient, sessionChunkEvent("session-1", "agent_message_chunk", "wrong owner"))
-	controller.handleACPEventForAgent("reviewer", reviewerClient, sessionChunkEvent("review-session", "agent_message_chunk", "owned"))
+	controller.state.ActiveSessionID = "session-1"
+	stale := &acpclient.Client{}
+	controller.handleACPEventFrom(stale, sessionChunkEvent("session-1", "agent_message_chunk", "wrong owner"))
+	controller.handleACPEventFrom(controller.client, sessionChunkEvent("session-1", "agent_message_chunk", "owned"))
 	controller.mu.Lock()
-	controller.flushMessageStreamsLocked("review-session")
+	controller.flushMessageStreamsLocked("session-1")
 	controller.mu.Unlock()
 
-	if len(controller.state.Sessions[0].Timeline) != 0 {
-		t.Fatalf("cross-agent event changed proton session: %#v", controller.state.Sessions[0].Timeline)
-	}
-	if len(controller.state.Sessions[1].Timeline) != 1 || controller.state.Sessions[1].Timeline[0].Text != "owned" {
-		t.Fatalf("reviewer timeline = %#v", controller.state.Sessions[1].Timeline)
+	if len(controller.state.Sessions[0].Timeline) != 1 || controller.state.Sessions[0].Timeline[0].Text != "owned" {
+		t.Fatalf("proton timeline = %#v", controller.state.Sessions[0].Timeline)
 	}
 }
 
@@ -555,7 +546,7 @@ func TestFinishSessionHistoryAppliesStagedEvents(t *testing.T) {
 	controller.contextRefresh = &sessionRefreshTracker{inFlight: map[string]bool{"session-1": true}}
 	controller.memoryRefresh = &sessionRefreshTracker{inFlight: map[string]bool{"session-1": true}}
 	controller.runtimeRefresh = &sessionRefreshTracker{inFlight: map[string]bool{"session-1": true}}
-	client := controller.clients[ProtonmanAgentID]
+	client := controller.client
 	controller.histories["session-1"] = HistoryStateLoading
 	controller.historyStaging["session-1"] = []desktopstate.Event{{
 		Kind:      desktopstate.EventTimelineAppended,
@@ -596,7 +587,7 @@ func TestFinishSessionHistoryTrimsOverflowedStagingToRecentEvents(t *testing.T) 
 		Item: desktopstate.TimelineItem{Kind: desktopstate.TimelineAssistant, Text: "kept recent"},
 	})
 
-	controller.finishSessionHistoryLoad(controller.clients[ProtonmanAgentID], "session-1", nil)
+	controller.finishSessionHistoryLoad(controller.client, "session-1", nil)
 
 	if controller.histories["session-1"] != HistoryStateLoaded {
 		t.Fatalf("history state = %v, want loaded", controller.histories["session-1"])
@@ -764,7 +755,7 @@ func TestFinishSessionHistoryDiscardsFailedAndStaleEvents(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			controller := newTestController()
-			current := controller.clients[ProtonmanAgentID]
+			current := controller.client
 			client := current
 			if test.name == "stale client" {
 				client = test.client
@@ -783,8 +774,8 @@ func TestFinishSessionHistoryDiscardsFailedAndStaleEvents(t *testing.T) {
 			if len(controller.state.Sessions[0].Timeline) != 0 {
 				t.Fatalf("discarded history was applied: %#v", controller.state.Sessions[0].Timeline)
 			}
-			if !strings.Contains(controller.statuses[ProtonmanAgentID], test.wantStatus) {
-				t.Fatalf("status = %q, want prefix %q", controller.statuses[ProtonmanAgentID], test.wantStatus)
+			if !strings.Contains(controller.status, test.wantStatus) {
+				t.Fatalf("status = %q, want prefix %q", controller.status, test.wantStatus)
 			}
 		})
 	}
@@ -844,7 +835,7 @@ func TestHandlePermissionRequestReturnsSelectedOutcome(t *testing.T) {
 		if ready {
 			controller.mu.RLock()
 			permission := controller.state.PermissionInbox[0]
-			status := controller.statuses[ProtonmanAgentID]
+			status := controller.status
 			controller.mu.RUnlock()
 			if permission.Title != "Run command: go test ./..." || permission.Command != "go test ./..." {
 				t.Fatalf("Cline permission details = title %q command %q", permission.Title, permission.Command)
@@ -863,7 +854,10 @@ func TestHandlePermissionRequestReturnsSelectedOutcome(t *testing.T) {
 		time.Sleep(time.Millisecond)
 	}
 
-	controller.ResolvePermission("7", "allow_once")
+	controller.mu.RLock()
+	reqID := controller.state.PermissionInbox[0].RequestID
+	controller.mu.RUnlock()
+	controller.ResolvePermission(reqID, "allow_once")
 	select {
 	case err := <-errs:
 		if err != nil {
@@ -1122,8 +1116,8 @@ func TestIsSessionActive(t *testing.T) {
 
 func TestFinishSessionHistoryLoadCancelledDoesNotSetStatus(t *testing.T) {
 	controller := newTestController()
-	current := controller.clients[ProtonmanAgentID]
-	controller.statuses[ProtonmanAgentID] = "Connected"
+	current := controller.client
+	controller.status = "Connected"
 	controller.histories["session-1"] = HistoryStateLoading
 
 	controller.finishSessionHistoryLoad(current, "session-1", context.Canceled)
@@ -1131,21 +1125,21 @@ func TestFinishSessionHistoryLoadCancelledDoesNotSetStatus(t *testing.T) {
 	if got := controller.histories["session-1"]; got != HistoryStateUnloaded {
 		t.Fatalf("history state = %v, want unloaded", got)
 	}
-	if status := controller.statuses[ProtonmanAgentID]; status != "Connected" {
+	if status := controller.status; status != "Connected" {
 		t.Fatalf("status = %q, want Connected (should not report failure on cancellation)", status)
 	}
 }
 
 func TestFinishSessionHistoryInactiveSessionFailureDoesNotCorruptActiveStatus(t *testing.T) {
 	controller := newTestController()
-	current := controller.clients[ProtonmanAgentID]
+	current := controller.client
 	controller.state.ActiveSessionID = "session-2"
 	controller.state.Sessions = append(controller.state.Sessions, desktopstate.SessionState{
 		ID:      "session-2",
 		AgentID: ProtonmanAgentID,
 		Status:  desktopstate.TaskIdle,
 	})
-	controller.statuses[ProtonmanAgentID] = "Connected"
+	controller.status = "Connected"
 	controller.histories["session-1"] = HistoryStateLoading
 
 	controller.finishSessionHistoryLoad(current, "session-1", errors.New("network failure"))
@@ -1153,7 +1147,7 @@ func TestFinishSessionHistoryInactiveSessionFailureDoesNotCorruptActiveStatus(t 
 	if got := controller.histories["session-1"]; got != HistoryStateUnloaded {
 		t.Fatalf("session-1 history state = %v, want unloaded", got)
 	}
-	if status := controller.statuses[ProtonmanAgentID]; status != "Connected" {
+	if status := controller.status; status != "Connected" {
 		t.Fatalf("active session status = %q, want Connected (inactive session error should not corrupt active session status)", status)
 	}
 }

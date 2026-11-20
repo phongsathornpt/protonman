@@ -50,11 +50,8 @@ type elicitationParams struct {
 	} `json:"requestedSchema"`
 }
 
-func (c *controller) handleQuestionRequestForAgent(agentID string, client *acpclient.Client, ctx context.Context, request acpclient.Request) (any, error) {
-	return c.handleQuestionRequestFromAgent(agentID, client, ctx, request)
-}
-
-func (c *controller) handleQuestionRequestFromAgent(agentID string, source *acpclient.Client, ctx context.Context, request acpclient.Request) (any, error) {
+func (c *controller) handleQuestionRequestFrom(source *acpclient.Client, ctx context.Context, request acpclient.Request) (any, error) {
+	agentID := ProtonmanAgentID
 	if request.Method != requestQuestionMethod {
 		return nil, fmt.Errorf("%w: %s", acpclient.ErrMethodNotHandled, request.Method)
 	}
@@ -84,11 +81,8 @@ func (c *controller) handleQuestionRequestFromAgent(agentID string, source *acpc
 	return c.promptQuestionsInternal(agentID, source, ctx, string(request.ID), params.SessionID, questions)
 }
 
-func (c *controller) handleElicitationRequestForAgent(agentID string, client *acpclient.Client, ctx context.Context, request acpclient.Request) (any, error) {
-	return c.handleElicitationRequestFromAgent(agentID, client, ctx, request)
-}
-
-func (c *controller) handleElicitationRequestFromAgent(agentID string, source *acpclient.Client, ctx context.Context, request acpclient.Request) (any, error) {
+func (c *controller) handleElicitationRequestFrom(source *acpclient.Client, ctx context.Context, request acpclient.Request) (any, error) {
+	agentID := ProtonmanAgentID
 	if request.Method != methodElicitationCreate {
 		return nil, fmt.Errorf("%w: %s", acpclient.ErrMethodNotHandled, request.Method)
 	}
@@ -229,22 +223,18 @@ func (c *controller) promptQuestionsInternal(agentID string, source *acpclient.C
 
 	waiter := make(chan desktopstate.QuestionResponse, 1)
 	c.mu.Lock()
-	if source != nil {
-		currentAgentID := c.agentIDForClientLocked(source)
-		if currentAgentID == "" || agentID != "" && currentAgentID != agentID {
-			c.mu.Unlock()
-			return desktopstate.QuestionResponse{}, errors.New("ACP client changed before question request")
-		}
-		agentID = currentAgentID
+	if source != nil && !c.isCurrentClient(source) {
+		c.mu.Unlock()
+		return desktopstate.QuestionResponse{}, errors.New("ACP client changed before question request")
 	}
 	item.AgentID = agentID
 	item.RequestID = SessionRefStorageKey(desktopstate.SessionRef{AgentID: agentID, SessionID: item.RequestID})
-	session, sessionExists := SessionByID(c.state, sessionID, agentID)
+	session, sessionExists := SessionByID(c.state, sessionID)
 	if !sessionExists {
 		c.mu.Unlock()
 		return desktopstate.QuestionResponse{}, errors.New("question request references an unknown session")
 	}
-	if agentID != "" && session.AgentID != agentID {
+	if session.AgentID != "" && session.AgentID != agentID {
 		c.mu.Unlock()
 		return desktopstate.QuestionResponse{}, errors.New("question request agent does not own the session")
 	}
@@ -258,15 +248,11 @@ func (c *controller) promptQuestionsInternal(agentID string, source *acpclient.C
 	c.questionWait[item.RequestID] = waiter
 	desktopstate.Apply(&c.state, desktopstate.Event{
 		Kind:      desktopstate.EventQuestionRequested,
-		AgentID:   agentID,
+		AgentID:   session.AgentID,
 		SessionID: sessionID,
 		Question:  item,
 	})
-	statusAgentID := agentID
-	if statusAgentID == "" {
-		statusAgentID = c.activeAgentID
-	}
-	c.statuses[statusAgentID] = "Question · " + SessionTitle(c.state, sessionID)
+	c.status = "Question · " + SessionTitle(c.state, sessionID)
 	c.revision++
 	c.mu.Unlock()
 	c.notify()
@@ -302,9 +288,13 @@ func (c *controller) finishQuestion(requestID, sessionID string, waiter chan des
 		return
 	}
 	delete(c.questionWait, requestID)
+	resolveAgent := question.AgentID
+	if sess, ok := SessionByID(c.state, sessionID); ok {
+		resolveAgent = sess.AgentID
+	}
 	desktopstate.Apply(&c.state, desktopstate.Event{
 		Kind:      desktopstate.EventQuestionResolved,
-		AgentID:   question.AgentID,
+		AgentID:   resolveAgent,
 		SessionID: sessionID,
 		RequestID: requestID,
 	})
@@ -328,7 +318,7 @@ func (c *controller) finishQuestion(requestID, sessionID string, waiter chan des
 	}
 	desktopstate.Apply(&c.state, desktopstate.Event{
 		Kind:      desktopstate.EventTimelineAppended,
-		AgentID:   question.AgentID,
+		AgentID:   resolveAgent,
 		SessionID: sessionID,
 		Item:      auditItem,
 	})
@@ -338,10 +328,10 @@ func (c *controller) finishQuestion(requestID, sessionID string, waiter chan des
 		agentID = session.AgentID
 	}
 	if agentID == "" {
-		agentID = c.activeAgentID
+		agentID = ProtonmanAgentID
 	}
-	if c.statuses[agentID] == "Question · "+SessionTitle(c.state, sessionID) {
-		c.statuses[agentID] = "Connected"
+	if c.status == "Question · "+SessionTitle(c.state, sessionID) {
+		c.status = "Connected"
 	}
 	c.revision++
 	c.mu.Unlock()

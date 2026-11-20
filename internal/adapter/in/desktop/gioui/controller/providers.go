@@ -70,7 +70,7 @@ func (c *controller) RefreshProvidersAsync() {
 
 func (c *controller) RefreshProviders() {
 	c.mu.RLock()
-	client := c.clients[ProtonmanAgentID]
+	client := c.client
 	c.mu.RUnlock()
 	if client == nil {
 		return
@@ -113,7 +113,7 @@ func (c *controller) RefreshProviders() {
 
 func (c *controller) SaveProvider(params ProvidersSaveParams, onDone func(err error)) {
 	c.mu.Lock()
-	client := c.clients[ProtonmanAgentID]
+	client := c.client
 	if client == nil {
 		c.mu.Unlock()
 		if onDone != nil {
@@ -167,7 +167,7 @@ func (c *controller) SaveProvider(params ProvidersSaveParams, onDone func(err er
 
 func (c *controller) DeleteProvider(providerName string, onDone func(err error)) {
 	c.mu.Lock()
-	client := c.clients[ProtonmanAgentID]
+	client := c.client
 	if client == nil {
 		c.mu.Unlock()
 		if onDone != nil {
@@ -229,7 +229,7 @@ func (c *controller) FetchProviderModels(providerID, baseURL, apiKey, providerTy
 		return
 	}
 	c.mu.Lock()
-	client := c.clients[ProtonmanAgentID]
+	client := c.client
 	if client == nil {
 		c.mu.Unlock()
 		if onDone != nil {

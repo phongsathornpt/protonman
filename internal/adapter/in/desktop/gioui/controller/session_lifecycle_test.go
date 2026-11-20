@@ -22,7 +22,7 @@ func TestController_DeleteSession_SmartFallback(t *testing.T) {
 	}
 	repo := &memoryPreferencesRepo{}
 	ctrl.preferences = app.NewDesktopPreferences(repo)
-	clear(ctrl.clients)
+	ctrl.client = nil
 	ctrl.pinnedSessions = []string{"s1"}
 	ctrl.customTitles = map[string]string{"s1": "Renamed"}
 

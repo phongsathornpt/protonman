@@ -25,10 +25,9 @@ const (
 	GeneralTab = iota
 	ProvidersTab
 	MCPTab
-	AgentsTab
 )
 
-var tabLabels = [...]string{"General", "Model Providers", "MCP Integrations", "ACP Agents"}
+var tabLabels = [...]string{"General", "Model Providers", "MCP Integrations"}
 
 // Chrome is the shared uikit surface; settings needs no extra primitives.
 type Chrome = uikit.Chrome
@@ -48,12 +47,8 @@ type Component struct {
 	tabButtons   [len(tabLabels)]widget.Clickable
 	list         layout.List
 	themeButtons map[string]*widget.Clickable
-	agentList    layout.List
-	agentButtons map[string]*widget.Clickable
-	agentOpen    bool
 	mcp          MCPWidgets
 	provider     ProviderWidgets
-	agent        AgentWidgets
 }
 
 // ProviderWidgets keeps editor and interaction state for Model Providers in
@@ -73,25 +68,6 @@ type ProviderWidgets struct {
 	SelectedModel                            string
 	ModelSelectButtons                       map[string]*widget.Clickable
 	ModelsDropdownButton                     widget.Clickable
-}
-
-// AgentWidgets keeps the ACP agent settings editors and interaction state in
-// the settings surface component.
-type AgentWidgets struct {
-	SelectorButton                                                  widget.Clickable
-	IDEditor, NameEditor, CommandEditor, ArgsEditor, EnvEditor      widget.Editor
-	ProfileButtons                                                  map[string]*widget.Clickable
-	ProfileLive                                                     map[string]struct{}
-	SyncRevision                                                    uint64
-	SyncRevisionSet                                                 bool
-	EditorVisible                                                   bool
-	EditorOriginalID, EditorKey                                     string
-	FormToggleButton, ScanDeviceButton                              widget.Clickable
-	SaveButton, RemoveButton, CloseButton, CancelButton             widget.Clickable
-	PresetProtonmanButton, PresetOpencodeButton, PresetClineButton  widget.Clickable
-	PresetAntigravityButton, PresetClaudeButton, PresetCustomButton widget.Clickable
-	ConfirmDelete                                                   bool
-	ConfirmDeleteButton, CancelDeleteButton                         widget.Clickable
 }
 
 // MCPWidgets stores the editor and interaction state for the MCP integration
@@ -116,20 +92,12 @@ type MCPWidgets struct {
 
 func New() *Component {
 	return &Component{
-		list: layout.List{Axis: layout.Vertical}, agentList: layout.List{Axis: layout.Horizontal},
+		list: layout.List{Axis: layout.Vertical},
 		provider: ProviderWidgets{
 			NameEditor:     widget.Editor{SingleLine: true, MaxLen: 256},
 			EndpointEditor: widget.Editor{SingleLine: true, MaxLen: 2048},
 			APIKeyEditor:   widget.Editor{SingleLine: true, MaxLen: 1024},
 			CardButtons:    make(map[string]*widget.Clickable), ModelSelectButtons: make(map[string]*widget.Clickable),
-		},
-		agent: AgentWidgets{
-			IDEditor:       widget.Editor{SingleLine: true, MaxLen: 128},
-			NameEditor:     widget.Editor{SingleLine: true, MaxLen: 256},
-			CommandEditor:  widget.Editor{SingleLine: true, MaxLen: 1024},
-			ArgsEditor:     widget.Editor{SingleLine: true, MaxLen: 4096},
-			EnvEditor:      widget.Editor{SingleLine: true, MaxLen: 4096},
-			ProfileButtons: make(map[string]*widget.Clickable), ProfileLive: make(map[string]struct{}),
 		},
 		mcp: MCPWidgets{
 			NameEditor: widget.Editor{SingleLine: true, MaxLen: 256}, CommandEditor: widget.Editor{SingleLine: true, MaxLen: 1024},
@@ -141,7 +109,6 @@ func New() *Component {
 
 func (c *Component) MCPWidgets() *MCPWidgets           { return &c.mcp }
 func (c *Component) ProviderWidgets() *ProviderWidgets { return &c.provider }
-func (c *Component) AgentWidgets() *AgentWidgets       { return &c.agent }
 
 type ProviderItem struct {
 	ID, Name, Protocol, BaseURL, DefaultModel string
@@ -303,118 +270,6 @@ func (c *Component) LayoutProviderCard(gtx layout.Context, input ProviderCardInp
 			})
 		})
 	})
-}
-
-type AgentChoice struct {
-	ID, DisplayName, Connection string
-}
-
-type AgentSelectorInput struct {
-	Profiles []AgentChoice
-	ActiveID string
-	Chrome   Chrome
-	OnSelect func(string)
-}
-
-func (c *Component) SyncAgentChoices(ids []string) {
-	if c.agentButtons == nil {
-		c.agentButtons = make(map[string]*widget.Clickable, len(ids))
-	}
-	active := make(map[string]struct{}, len(ids))
-	for _, id := range ids {
-		active[id] = struct{}{}
-		if c.agentButtons[id] == nil {
-			c.agentButtons[id] = new(widget.Clickable)
-		}
-	}
-	for id := range c.agentButtons {
-		if _, ok := active[id]; !ok {
-			delete(c.agentButtons, id)
-		}
-	}
-}
-
-func (c *Component) AgentSelectorVisible() bool { return c.agentOpen }
-func (c *Component) ToggleAgentSelector()       { c.agentOpen = !c.agentOpen }
-func (c *Component) CloseAgentSelector()        { c.agentOpen = false }
-
-func (c *Component) LayoutAgentSelector(gtx layout.Context, input AgentSelectorInput) layout.Dimensions {
-	chrome := input.Chrome
-	gtx.Constraints.Min.Y = gtx.Dp(56)
-	return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
-		layout.Flexed(1, func(gtx layout.Context) layout.Dimensions { return layout.Spacer{}.Layout(gtx) }),
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			gtx.Constraints.Min.X = gtx.Dp(320)
-			gtx.Constraints.Max.X = min(gtx.Constraints.Max.X, gtx.Dp(460))
-			return chrome.RoundedSurface(gtx, unit.Dp(8), chrome.Colors.SurfaceContainerHigh, func(gtx layout.Context) layout.Dimensions {
-				return chrome.Inset(gtx, layout.Inset{Top: 6, Bottom: 6, Left: 16, Right: 16}, func(gtx layout.Context) layout.Dimensions {
-					return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle}.Layout(gtx,
-						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-							return chrome.Label(gtx, "Choose agent", unit.Sp(14), font.Medium, chrome.Colors.OnSurfaceVariant, 1)
-						}),
-						layout.Flexed(1, func(gtx layout.Context) layout.Dimensions { return layout.Spacer{}.Layout(gtx) }),
-						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-							c.agentList.Axis = layout.Horizontal
-							return c.agentList.Layout(gtx, len(input.Profiles), func(gtx layout.Context, index int) layout.Dimensions {
-								profile := input.Profiles[index]
-								return chrome.Inset(gtx, layout.Inset{Top: 3, Bottom: 3, Left: 3, Right: 3}, func(gtx layout.Context) layout.Dimensions {
-									return c.layoutAgentChoice(gtx, profile, profile.ID == input.ActiveID, chrome, input.OnSelect)
-								})
-							})
-						}),
-					)
-				})
-			})
-		}),
-	)
-}
-
-func (c *Component) layoutAgentChoice(gtx layout.Context, profile AgentChoice, selected bool, chrome Chrome, onSelect func(string)) layout.Dimensions {
-	button := c.agentButtons[profile.ID]
-	if button == nil {
-		button = new(widget.Clickable)
-		if c.agentButtons == nil {
-			c.agentButtons = make(map[string]*widget.Clickable)
-		}
-		c.agentButtons[profile.ID] = button
-	}
-	if button.Clicked(gtx) {
-		if onSelect != nil {
-			onSelect(profile.ID)
-		}
-		c.agentOpen = false
-	}
-	background, foreground := chrome.Colors.Surface, chrome.Colors.OnSurface
-	if selected || button.Hovered() {
-		background, foreground = chrome.Colors.PrimaryContainer, chrome.Colors.OnPrimaryContainer
-	}
-	gtx.Constraints.Min.X, gtx.Constraints.Min.Y = gtx.Dp(148), gtx.Dp(44)
-	dims := button.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-		gtx.Constraints.Min.Y = gtx.Dp(44)
-		semantic.Button.Add(gtx.Ops)
-		semantic.SelectedOp(selected).Add(gtx.Ops)
-		semantic.DescriptionOp("Select agent " + profile.DisplayName + ", " + profile.Connection).Add(gtx.Ops)
-		return chrome.RoundedSurface(gtx, unit.Dp(4), background, func(gtx layout.Context) layout.Dimensions {
-			return chrome.Inset(gtx, layout.Inset{Top: 8, Bottom: 8, Left: 12, Right: 12}, func(gtx layout.Context) layout.Dimensions {
-				return chrome.Label(gtx, profile.DisplayName+" · "+agentConnectionChip(profile.Connection), unit.Sp(14), font.SemiBold, foreground, 1)
-			})
-		})
-	})
-	if gtx.Focused(button) {
-		widget.Border{Color: chrome.Colors.Primary, CornerRadius: unit.Dp(4), Width: unit.Dp(2)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions { return layout.Dimensions{Size: dims.Size} })
-	}
-	return dims
-}
-
-func agentConnectionChip(connection string) string {
-	switch connection {
-	case "connected":
-		return "ready"
-	case "reconnecting":
-		return "retrying"
-	default:
-		return "starting"
-	}
 }
 
 func (c *Component) Show() { c.open = true }

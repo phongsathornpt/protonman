@@ -18,7 +18,6 @@ import (
 	"gioui.org/widget"
 
 	"github.com/phongsathornpt/protonman/internal/adapter/in/desktop/gioui/component/uikit"
-	"github.com/phongsathornpt/protonman/internal/app"
 	desktopstate "github.com/phongsathornpt/protonman/internal/feature/desktop"
 )
 
@@ -98,12 +97,11 @@ type InteractionState struct {
 
 // Model is the immutable input used to build the row projection.
 type Model struct {
-	State         desktopstate.State
-	AgentProfiles []app.ACPAgentProfile
-	Pinned        []string
-	CustomTitles  map[string]string
-	FilterMode    string
-	Revision      uint64
+	State        desktopstate.State
+	Pinned       []string
+	CustomTitles map[string]string
+	FilterMode   string
+	Revision     uint64
 
 	// sessionSortAt maps session keys to their sort timestamps. This keeps
 	// the active session in place when its activity updates, prevents
@@ -115,7 +113,6 @@ type Model struct {
 // Snapshot is the immutable desktop state needed to render the sidebar.
 type Snapshot struct {
 	State             desktopstate.State
-	AgentProfiles     []app.ACPAgentProfile
 	PinnedSessions    []string
 	CustomTitles      map[string]string
 	FilterMode        string
@@ -729,7 +726,7 @@ func (cache RowsCache) Rows() []Row { return cache.rows }
 func (cache RowsCache) Matches(model Model) bool { return cache.matches(model) }
 
 func buildRows(model Model) RowsCache {
-	state, profiles := model.State, model.AgentProfiles
+	state := model.State
 	rows := make([]Row, 0, len(state.Sessions)+len(state.Projects)+1)
 	projects := make([]projectCacheEntry, 0, len(state.Projects))
 	sessions := make([]sessionCacheEntry, 0, len(state.Sessions))
@@ -739,14 +736,8 @@ func buildRows(model Model) RowsCache {
 		pinnedMap[id] = true
 	}
 	pinnedRows := make([]Row, 0, len(model.Pinned))
-	displayNames := make(map[string]string)
 	subtitleFor := func(agentID string) string {
-		if name, ok := displayNames[agentID]; ok {
-			return name
-		}
-		name := app.AgentDisplayName(profiles, agentID)
-		displayNames[agentID] = name
-		return name
+		return "Protonman"
 	}
 
 	for _, session := range state.Sessions {
@@ -857,7 +848,7 @@ func (cache RowsCache) matches(model Model) bool {
 		}
 		subtitle, ok := displayNames[session.AgentID]
 		if !ok {
-			subtitle = app.AgentDisplayName(model.AgentProfiles, session.AgentID)
+			subtitle = "Protonman"
 			displayNames[session.AgentID] = subtitle
 		}
 		if cached.id != session.ID || cached.projectID != session.ProjectID || cached.agentID != session.AgentID ||

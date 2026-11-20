@@ -79,16 +79,12 @@ func (s *Shell) runtimeChrome() runtimecomponent.Chrome {
 
 func (s *Shell) layoutModelPopover(gtx layout.Context, session desktopstate.SessionState, snapshot controller.Snapshot, enabled bool) layout.Dimensions {
 	return s.runtimeComponent.LayoutModelPopover(gtx, runtimecomponent.ModelPopoverInput{
-		Session:              session,
-		ActiveAgentID:        snapshot.ActiveAgentID,
-		AgentProfiles:        snapshot.AgentProfiles,
-		AgentDefaultModels:   snapshot.AgentDefaultModels,
-		ActiveProvider:       snapshot.ActiveProvider,
-		Providers:            snapshot.Providers,
-		ProviderModels:       snapshot.ProviderModels,
-		AgentAvailableModels: snapshot.AgentAvailableModels,
-		Enabled:              enabled,
-		Chrome:               s.runtimeChrome(),
+		Session:        session,
+		ActiveProvider: snapshot.ActiveProvider,
+		Providers:      snapshot.Providers,
+		ProviderModels: snapshot.ProviderModels,
+		Enabled:        enabled,
+		Chrome:         s.runtimeChrome(),
 		OnSetModel: func(provider, model string) {
 			if s.bind.SetRuntimeModel != nil {
 				s.bind.SetRuntimeModel(provider, model)

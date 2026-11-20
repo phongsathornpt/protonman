@@ -157,7 +157,7 @@ func TestInspectorProtonmanStreamlinedTabs(t *testing.T) {
 
 	// Protonman session should have 3 panels in Plan tab (Goal, Todo, Runtime)
 	view.inspectorComponent.SetActiveTab(0)
-	count := view.inspectorComponent.PanelCount(inspectorcomponent.Snapshot{ExternalAgent: !protonmanSession(session)})
+	count := view.inspectorComponent.PanelCount(inspectorcomponent.Snapshot{})
 	if count != 3 {
 		t.Fatalf("Plan tab panel count = %d, want 3", count)
 	}
@@ -204,7 +204,6 @@ func TestSettingsModalOwnsTheWindowAcrossEveryTab(t *testing.T) {
 		settingscomponent.GeneralTab,
 		settingscomponent.ProvidersTab,
 		settingscomponent.MCPTab,
-		settingscomponent.AgentsTab,
 	} {
 		sh.settingsComponent.SetActiveTab(tab)
 		var ops op.Ops

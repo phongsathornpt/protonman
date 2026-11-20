@@ -35,15 +35,8 @@ func (c *controller) handlePermissionRequest(ctx context.Context, request acpcli
 	return c.handlePermissionRequestFrom(nil, ctx, request)
 }
 
-func (c *controller) handlePermissionRequestForAgent(agentID string, client *acpclient.Client, ctx context.Context, request acpclient.Request) (any, error) {
-	return c.handlePermissionRequestFromAgent(agentID, client, ctx, request)
-}
-
 func (c *controller) handlePermissionRequestFrom(source *acpclient.Client, ctx context.Context, request acpclient.Request) (any, error) {
-	return c.handlePermissionRequestFromAgent("", source, ctx, request)
-}
-
-func (c *controller) handlePermissionRequestFromAgent(agentID string, source *acpclient.Client, ctx context.Context, request acpclient.Request) (any, error) {
+	agentID := ProtonmanAgentID
 	if request.Method != requestPermissionMethod {
 		return nil, fmt.Errorf("%w: %s", acpclient.ErrMethodNotHandled, request.Method)
 	}
@@ -85,22 +78,18 @@ func (c *controller) handlePermissionRequestFromAgent(agentID string, source *ac
 
 	waiter := make(chan string, 1)
 	c.mu.Lock()
-	if source != nil {
-		currentAgentID := c.agentIDForClientLocked(source)
-		if currentAgentID == "" || agentID != "" && currentAgentID != agentID {
-			c.mu.Unlock()
-			return nil, errors.New("ACP client changed before permission request")
-		}
-		agentID = currentAgentID
+	if source != nil && !c.isCurrentClient(source) {
+		c.mu.Unlock()
+		return nil, errors.New("ACP client changed before permission request")
 	}
 	item.AgentID = agentID
 	item.RequestID = SessionRefStorageKey(desktopstate.SessionRef{AgentID: agentID, SessionID: item.RequestID})
-	session, sessionExists := SessionByID(c.state, params.SessionID, agentID)
+	session, sessionExists := SessionByID(c.state, params.SessionID)
 	if !sessionExists {
 		c.mu.Unlock()
 		return nil, errors.New("permission request references an unknown session")
 	}
-	if agentID != "" && session.AgentID != agentID {
+	if session.AgentID != "" && session.AgentID != agentID {
 		c.mu.Unlock()
 		return nil, errors.New("permission request agent does not own the session")
 	}
@@ -118,11 +107,7 @@ func (c *controller) handlePermissionRequestFromAgent(agentID string, source *ac
 		SessionID:  params.SessionID,
 		Permission: item,
 	})
-	statusAgentID := agentID
-	if statusAgentID == "" {
-		statusAgentID = c.activeAgentID
-	}
-	c.statuses[statusAgentID] = "Permission required · " + SessionTitle(c.state, params.SessionID)
+	c.status = "Permission required · " + SessionTitle(c.state, params.SessionID)
 	c.revision++
 	c.mu.Unlock()
 	c.notify()
@@ -161,9 +146,13 @@ func (c *controller) finishPermission(requestID, sessionID string, waiter chan s
 		return
 	}
 	delete(c.permissionWait, requestID)
+	resolveAgent := perm.AgentID
+	if sess, ok := SessionByID(c.state, sessionID); ok {
+		resolveAgent = sess.AgentID
+	}
 	desktopstate.Apply(&c.state, desktopstate.Event{
 		Kind:      desktopstate.EventPermissionResolved,
-		AgentID:   perm.AgentID,
+		AgentID:   resolveAgent,
 		SessionID: sessionID,
 		RequestID: requestID,
 	})
@@ -189,7 +178,7 @@ func (c *controller) finishPermission(requestID, sessionID string, waiter chan s
 	}
 	desktopstate.Apply(&c.state, desktopstate.Event{
 		Kind:      desktopstate.EventTimelineAppended,
-		AgentID:   perm.AgentID,
+		AgentID:   resolveAgent,
 		SessionID: sessionID,
 		Item:      auditItem,
 	})
@@ -199,9 +188,9 @@ func (c *controller) finishPermission(requestID, sessionID string, waiter chan s
 		agentID = session.AgentID
 	}
 	if agentID == "" {
-		agentID = c.activeAgentID
+		agentID = ProtonmanAgentID
 	}
-	c.statuses[agentID] = "Connected · running"
+	c.status = "Connected · running"
 	c.revision++
 	c.mu.Unlock()
 	c.notify()

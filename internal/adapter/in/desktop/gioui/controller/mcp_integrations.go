@@ -18,14 +18,11 @@ func (c *controller) loadMCPIntegrations() {
 	if !c.mcpIntegrations.Available() {
 		return
 	}
-	if c.statuses == nil {
-		c.statuses = make(map[string]string)
-	}
 	ctx := c.context()
 	items, err := c.mcpIntegrations.Load(ctx)
 	if err != nil {
 		c.mcpError = compactError(err)
-		c.statuses[c.activeAgentID] = "MCP settings unavailable · " + c.mcpError
+		c.status = "MCP settings unavailable · " + c.mcpError
 		c.revision++
 		return
 	}
@@ -89,9 +86,6 @@ func (c *controller) RemoveMCPIntegration(name string) {
 
 func (c *controller) persistMCPIntegrations(items []desktopstate.MCPIntegrationState, successStatus string) {
 	c.mu.Lock()
-	if c.statuses == nil {
-		c.statuses = make(map[string]string)
-	}
 	if c.mcpMutation {
 		c.mu.Unlock()
 		c.setMCPStatus("MCP settings update already in progress")
@@ -103,7 +97,7 @@ func (c *controller) persistMCPIntegrations(items []desktopstate.MCPIntegrationS
 		return
 	}
 	c.mcpMutation = true
-	c.statuses[c.activeAgentID] = "Saving MCP settings…"
+	c.status = "Saving MCP settings…"
 	c.revision++
 	c.mu.Unlock()
 	c.notify()
@@ -115,14 +109,14 @@ func (c *controller) persistMCPIntegrations(items []desktopstate.MCPIntegrationS
 		c.mcpMutation = false
 		if err != nil {
 			c.mcpError = compactError(err)
-			c.statuses[c.activeAgentID] = "MCP settings save failed · " + c.mcpError
+			c.status = "MCP settings save failed · " + c.mcpError
 		} else {
 			c.mcpError = ""
 			desktopstate.Apply(&c.state, desktopstate.Event{
 				Kind:         desktopstate.EventIntegrationsReplaced,
 				Integrations: cloneDesktopMCPIntegrations(items),
 			})
-			c.statuses[c.activeAgentID] = successStatus
+			c.status = successStatus
 		}
 		c.revision++
 		c.mu.Unlock()
@@ -148,17 +142,15 @@ func (c *controller) ReconnectMCP() {
 			return
 		}
 	}
-	clients := make([]*acpclient.Client, 0, len(c.clients))
-	for _, client := range c.clients {
-		clients = append(clients, client)
-	}
-	if len(clients) == 0 {
+	client := c.client
+	if client == nil {
 		c.mu.Unlock()
 		c.setMCPStatus("MCP integrations saved · waiting for ACP")
 		return
 	}
+	clients := []*acpclient.Client{client}
 	c.mcpReconnect = true
-	c.statuses[c.activeAgentID] = "Reconnecting ACP with MCP integrations…"
+	c.status = "Reconnecting ACP with MCP integrations…"
 	c.revision++
 	c.mu.Unlock()
 	c.notify()
@@ -172,10 +164,7 @@ func (c *controller) ReconnectMCP() {
 
 func (c *controller) setMCPStatus(status string) {
 	c.mu.Lock()
-	if c.statuses == nil {
-		c.statuses = make(map[string]string)
-	}
-	c.statuses[c.activeAgentID] = status
+	c.status = status
 	c.revision++
 	c.mu.Unlock()
 	c.notify()

@@ -15,7 +15,6 @@ import (
 
 	sidebarcomponent "github.com/phongsathornpt/protonman/internal/adapter/in/desktop/gioui/component/sidebar"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/desktop/gioui/component/uikit"
-	"github.com/phongsathornpt/protonman/internal/app"
 	desktopstate "github.com/phongsathornpt/protonman/internal/feature/desktop"
 
 	"github.com/phongsathornpt/protonman/internal/adapter/in/desktop/gioui/controller"
@@ -29,16 +28,15 @@ type sidebarRowsCache struct {
 	filterMode string
 }
 
-func (cache sidebarRowsCache) matches(state desktopstate.State, profiles []app.ACPAgentProfile) bool {
+func (cache sidebarRowsCache) matches(state desktopstate.State) bool {
 	model := cache.model
 	model.State = state
-	model.AgentProfiles = profiles
 	return cache.cache.Matches(model)
 }
 
-func (cache sidebarRowsCache) matchesWithOptions(state desktopstate.State, profiles []app.ACPAgentProfile, filterMode string, pinnedSessions []string, customTitles map[string]string) bool {
+func (cache sidebarRowsCache) matchesWithOptions(state desktopstate.State, filterMode string, pinnedSessions []string, customTitles map[string]string) bool {
 	model := sidebarcomponent.Model{
-		State: state, AgentProfiles: profiles, FilterMode: filterMode,
+		State: state, FilterMode: filterMode,
 		Pinned: pinnedSessions, CustomTitles: customTitles,
 	}
 	return cache.cache.Matches(model)
@@ -57,7 +55,7 @@ func (s *Shell) layoutSidebar(gtx layout.Context, snapshot controller.Snapshot) 
 func (s *Shell) sidebarViewInput(snapshot controller.Snapshot) sidebarcomponent.ViewInput {
 	return sidebarcomponent.ViewInput{
 		Snapshot: sidebarcomponent.Snapshot{
-			State: snapshot.State, AgentProfiles: snapshot.AgentProfiles,
+			State:          snapshot.State,
 			PinnedSessions: snapshot.PinnedSessions, CustomTitles: snapshot.CustomTitles,
 			FilterMode: snapshot.FilterMode, Revision: snapshot.Revision,
 			Connection: string(snapshot.Connection), Status: snapshot.Status,
@@ -87,18 +85,18 @@ func (s *Shell) sidebarChrome() sidebarcomponent.Chrome {
 
 func (s *Shell) sidebarRows(snapshot controller.Snapshot) []sidebarRow {
 	return s.sidebarData.Rows(sidebarcomponent.Model{
-		State: snapshot.State, AgentProfiles: snapshot.AgentProfiles,
+		State:  snapshot.State,
 		Pinned: snapshot.PinnedSessions, CustomTitles: snapshot.CustomTitles,
 		FilterMode: snapshot.FilterMode, Revision: snapshot.Revision,
 	})
 }
 
-func buildSidebarRows(state desktopstate.State, profiles []app.ACPAgentProfile) ([]sidebarRow, sidebarRowsCache) {
-	return buildSidebarRowsWithOptions(state, profiles, nil, nil)
+func buildSidebarRows(state desktopstate.State) ([]sidebarRow, sidebarRowsCache) {
+	return buildSidebarRowsWithOptions(state, nil, nil)
 }
 
-func buildSidebarRowsWithOptions(state desktopstate.State, profiles []app.ACPAgentProfile, pinnedSessions []string, customTitles map[string]string) ([]sidebarRow, sidebarRowsCache) {
-	model := sidebarcomponent.Model{State: state, AgentProfiles: profiles, Pinned: pinnedSessions, CustomTitles: customTitles}
+func buildSidebarRowsWithOptions(state desktopstate.State, pinnedSessions []string, customTitles map[string]string) ([]sidebarRow, sidebarRowsCache) {
+	model := sidebarcomponent.Model{State: state, Pinned: pinnedSessions, CustomTitles: customTitles}
 	cache := sidebarcomponent.BuildRows(model)
 	return cache.Rows(), sidebarRowsCache{cache: cache, model: model, filterMode: model.FilterMode}
 }
