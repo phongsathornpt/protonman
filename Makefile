@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := tui
 
-.PHONY: all tui desktop desktop-run desktop-gio desktop-gio-run run dev build size install run-bin clean test test-architecture test-architecture-desktop test-desktop test-desktop-gio test-race test-e2e test-install bench bench-cpu bench-mem fmt vet lint deadcode tag tag-push help
+.PHONY: tui desktop desktop-run desktop-gio desktop-gio-run run dev build size install run-bin clean test test-architecture test-architecture-desktop test-desktop test-desktop-gio test-race test-e2e test-install bench bench-cpu bench-mem fmt vet lint deadcode tag tag-push help
 
 # Binary configuration
 BIN_DIR := bin
