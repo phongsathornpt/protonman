@@ -240,7 +240,8 @@ func (c *controller) FetchProviderModels(providerID, baseURL, apiKey, providerTy
 	if c.providerModelsLoading == nil {
 		c.providerModelsLoading = make(map[string]bool)
 	}
-	c.providerModelsLoading[providerID] = true
+	loadingKey := strings.ToLower(providerID)
+	c.providerModelsLoading[loadingKey] = true
 	c.revision++
 	c.mu.Unlock()
 	c.notify()
@@ -248,7 +249,7 @@ func (c *controller) FetchProviderModels(providerID, baseURL, apiKey, providerTy
 	c.spawn(func() {
 		defer func() {
 			c.mu.Lock()
-			delete(c.providerModelsLoading, providerID)
+			delete(c.providerModelsLoading, strings.ToLower(providerID))
 			c.revision++
 			c.mu.Unlock()
 			c.notify()

@@ -283,7 +283,7 @@ func (c *Component) layoutTestConnectionRow(gtx layout.Context, in testConnectio
 	if id == "" {
 		id = strings.TrimSpace(c.provider.NameEditor.Text())
 	}
-	isLoading := loading != nil && loading[id]
+	isLoading := loading != nil && loading[strings.ToLower(id)]
 
 	if enabled && !isLoading && c.provider.TestButton.Clicked(gtx) {
 		c.provider.TestStatus = "Connecting & discovering models…"

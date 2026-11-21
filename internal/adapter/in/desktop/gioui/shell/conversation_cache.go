@@ -10,6 +10,7 @@ import (
 	"gioui.org/x/richtext"
 
 	conversationcomponent "github.com/phongsathornpt/protonman/internal/adapter/in/desktop/gioui/component/conversation"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/desktop/gioui/component/uikit"
 	desktopstate "github.com/phongsathornpt/protonman/internal/feature/desktop"
 )
 
@@ -21,7 +22,7 @@ const (
 	maxStreamingTextBytes                = 1 << 10
 	maxConversationCacheEntries          = 512
 	maxConversationCacheBytes            = 4 << 20
-	maxConversationTextWidth     unit.Dp = 840
+	maxConversationTextWidth     unit.Dp = uikit.TimelineTextMaxWidth
 	maxConversationExpansionKeys         = 256
 	// maxMarkdownRenderBytes bounds what gets shaped through the markdown
 	// richtext path. Text shaping cost scales with total message length even

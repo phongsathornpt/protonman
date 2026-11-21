@@ -31,7 +31,7 @@ func (s *Shell) layoutCenteredCard(gtx layout.Context, content layout.Widget) la
 	}
 	return layout.Stack{Alignment: layout.Center}.Layout(gtx, layout.Stacked(func(gtx layout.Context) layout.Dimensions {
 		gtx.Constraints.Min = image.Point{}
-		gtx.Constraints.Max.X = min(gtx.Constraints.Max.X, gtx.Dp(680))
+		gtx.Constraints.Max.X = min(gtx.Constraints.Max.X, gtx.Dp(uikit.CenteredCardMaxWidth))
 		return s.roundedSurface(gtx, shapeExtraLarge, s.theme.Colors.SurfaceContainer, func(gtx layout.Context) layout.Dimensions {
 			return uikit.Inset{Top: 24, Bottom: 24, Left: 28, Right: 28}.Layout(gtx, content)
 		})

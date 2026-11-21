@@ -50,9 +50,9 @@ func (c *Component) FocusSearch(gtx layout.Context) {
 }
 
 func (c *Component) layoutSidebar(gtx layout.Context, snapshot Snapshot) layout.Dimensions {
-	width := unit.Dp(260)
-	if gtx.Constraints.Max.X < gtx.Dp(900) {
-		width = 220
+	width := uikit.SidebarWidth
+	if gtx.Constraints.Max.X < gtx.Dp(uikit.SidebarCompactBreakpoint) {
+		width = uikit.SidebarWidthCompact
 	}
 	gtx.Constraints.Min.X = gtx.Dp(width)
 	gtx.Constraints.Max.X = gtx.Dp(width)

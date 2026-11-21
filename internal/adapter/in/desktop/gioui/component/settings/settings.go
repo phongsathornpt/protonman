@@ -7,6 +7,7 @@ package settings
 
 import (
 	"image/color"
+	"strings"
 
 	"gioui.org/font"
 	"gioui.org/io/key"
@@ -126,6 +127,7 @@ type ProviderCardInput struct {
 type ProvidersInput struct {
 	Providers []ProviderItem
 	Updating  bool
+	SaveError string
 	Chrome    Chrome
 	OnAdd     func()
 	OnSelect  func(ProviderItem)
@@ -137,6 +139,14 @@ type ProvidersInput struct {
 func (c *Component) LayoutProviders(gtx layout.Context, input ProvidersInput) layout.Dimensions {
 	children := []layout.FlexChild{
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions { return input.Chrome.PanelTitle(gtx, "Model Providers") }),
+		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			if strings.TrimSpace(input.SaveError) == "" {
+				return layout.Dimensions{}
+			}
+			return input.Chrome.Inset(gtx, layout.Inset{Bottom: 8}, func(gtx layout.Context) layout.Dimensions {
+				return input.Chrome.Label(gtx, "\u2717 "+strings.TrimSpace(input.SaveError), unit.Sp(12), font.Normal, input.Chrome.Colors.OnErrorContainer, 2)
+			})
+		}),
 		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 			return input.Chrome.Inset(gtx, layout.Inset{Top: 2, Bottom: 10}, func(gtx layout.Context) layout.Dimensions {
 				return input.Chrome.Label(gtx, "Configure API keys, endpoints, and default models for LLM providers.", unit.Sp(12), font.Normal, input.Chrome.Colors.OnSurfaceVariant, 2)

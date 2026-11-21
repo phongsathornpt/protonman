@@ -13,6 +13,7 @@ import (
 	"gioui.org/layout"
 	"gioui.org/op/clip"
 	"gioui.org/op/paint"
+	"gioui.org/unit"
 	"gioui.org/widget"
 	"gioui.org/x/markdown"
 
@@ -188,8 +189,7 @@ func (s *Shell) handleGlobalShortcuts(gtx layout.Context, snapshot controller.Sn
 			case "B":
 				s.sidebarData.ToggleVisible()
 			case "I":
-				wideInspector := gtx.Constraints.Max.X >= gtx.Dp(inspectorcomponent.WideBreakpoint)
-				s.inspectorComponent.Toggle(wideInspector)
+				s.inspectorComponent.ToggleForWidth(windowWidthDp(gtx), s.sidebarData.Visible())
 			case "N":
 				if snapshot.Connection == controller.ConnectionConnected && !snapshot.CreatingSession {
 					s.bind.NewSession()
@@ -291,13 +291,14 @@ func (s *Shell) Layout(gtx layout.Context, snapshot controller.Snapshot) layout.
 			}),
 		)
 	}
+	windowWidth := windowWidthDp(gtx)
 	children = append(children, layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
 		return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				return s.layoutTopBar(gtx, snapshot)
+				return s.layoutTopBar(gtx, snapshot, windowWidth)
 			}),
 			layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-				return s.layoutMain(gtx, snapshot)
+				return s.layoutMain(gtx, snapshot, windowWidth)
 			}),
 		)
 	}))
@@ -310,6 +311,16 @@ func (s *Shell) Layout(gtx layout.Context, snapshot controller.Snapshot) layout.
 		s.layoutSettingsModal(gtx, snapshot)
 	}
 	return dims
+}
+
+// windowWidthDp converts the full window width from pixels to dp. Gio
+// constraints are in pixels, so a raw unit.Dp cast is only correct at
+// PxPerDp == 1 and diverges on HiDPI displays.
+func windowWidthDp(gtx layout.Context) unit.Dp {
+	if gtx.Constraints.Max.X <= 0 {
+		return 0
+	}
+	return gtx.Metric.PxToDp(gtx.Constraints.Max.X)
 }
 
 func (s *Shell) layoutVerticalDivider(gtx layout.Context) layout.Dimensions {
@@ -330,40 +341,55 @@ func (s *Shell) layoutHorizontalDivider(gtx layout.Context) layout.Dimensions {
 	return layout.Dimensions{Size: image.Pt(gtx.Constraints.Max.X, gtx.Dp(1))}
 }
 
-func (s *Shell) layoutMain(gtx layout.Context, snapshot controller.Snapshot) layout.Dimensions {
+func (s *Shell) layoutMain(gtx layout.Context, snapshot controller.Snapshot, windowWidth unit.Dp) layout.Dimensions {
 	session, ok := selectedSession(snapshot.State)
 	if !ok {
 		return s.roundedSurface(gtx, shapeNone, s.theme.Colors.Surface, func(gtx layout.Context) layout.Dimensions {
 			return s.layoutMainEmptyState(gtx, snapshot)
 		})
 	}
-	wideInspector := gtx.Constraints.Max.X >= gtx.Dp(inspectorcomponent.WideBreakpoint)
-	showInspector := s.inspectorComponent.ShouldShow(wideInspector)
-	if showInspector && wideInspector {
-		return layout.Flex{Axis: layout.Horizontal}.Layout(gtx,
-			layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-				return s.layoutConversationPane(gtx, session, snapshot)
-			}),
-			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				return s.layoutVerticalDivider(gtx)
-			}),
-			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-				return s.layoutInspector(gtx, session, snapshot, false)
-			}),
-		)
-	} else if showInspector {
+	sidebarVisible := s.sidebarData.Visible()
+	showInspector := s.inspectorComponent.ShouldShowForWidth(windowWidth, sidebarVisible)
+	docked := showInspector && inspectorcomponent.Docked(windowWidth, sidebarVisible)
+	if showInspector && !docked {
 		return s.layoutInspector(gtx, session, snapshot, true)
-	} else {
+	}
+	if !showInspector {
 		return s.layoutConversationPane(gtx, session, snapshot)
 	}
+	// Docked: guarantee the conversation keeps a usable minimum width by
+	// capping the inspector when the window is only just wide enough.
+	inspectorWidth := inspectorcomponent.PanelWidth
+	available := windowWidth
+	if sidebarVisible {
+		sidebar := uikit.SidebarWidth
+		if windowWidth < uikit.SidebarCompactBreakpoint {
+			sidebar = uikit.SidebarWidthCompact
+		}
+		available -= sidebar + 1
+	}
+	if maxInspector := available - uikit.ConversationMinWidth - 1; maxInspector < inspectorWidth {
+		inspectorWidth = max(uikit.InspectorMinWidth, maxInspector)
+	}
+	return layout.Flex{Axis: layout.Horizontal}.Layout(gtx,
+		layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+			return s.layoutConversationPane(gtx, session, snapshot)
+		}),
+		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			return s.layoutVerticalDivider(gtx)
+		}),
+		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+			return s.layoutInspectorFixed(gtx, session, snapshot, inspectorWidth, false)
+		}),
+	)
 }
 
 func (s *Shell) layoutConversationPane(gtx layout.Context, session desktopstate.SessionState, snapshot controller.Snapshot) layout.Dimensions {
 	children := make([]layout.FlexChild, 0, 5)
 
-	if banner := s.layoutBackgroundAttentionBanner(gtx, snapshot.State, session.AgentID, session.ID); banner.Size.Y > 0 {
+	if target := backgroundAttentionTarget(snapshot.State, session.AgentID, session.ID); target != nil {
 		children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return banner
+			return s.layoutBackgroundAttentionBanner(gtx, *target)
 		}))
 	}
 
@@ -378,7 +404,7 @@ func (s *Shell) layoutConversationPane(gtx layout.Context, session desktopstate.
 			}
 			return layout.Stack{Alignment: layout.Center}.Layout(gtx, layout.Stacked(func(gtx layout.Context) layout.Dimensions {
 				gtx.Constraints.Min = image.Point{}
-				gtx.Constraints.Max.X = min(gtx.Constraints.Max.X, gtx.Dp(960))
+				gtx.Constraints.Max.X = min(gtx.Constraints.Max.X, gtx.Dp(uikit.ConversationContentMaxWidth))
 				return uikit.Inset{Top: 4, Bottom: 4, Left: 16, Right: 16}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 					return s.layoutPermissionPanel(gtx, snapshot.State, *permission)
 				})
@@ -393,7 +419,7 @@ func (s *Shell) layoutConversationPane(gtx layout.Context, session desktopstate.
 			}
 			return layout.Stack{Alignment: layout.Center}.Layout(gtx, layout.Stacked(func(gtx layout.Context) layout.Dimensions {
 				gtx.Constraints.Min = image.Point{}
-				gtx.Constraints.Max.X = min(gtx.Constraints.Max.X, gtx.Dp(960))
+				gtx.Constraints.Max.X = min(gtx.Constraints.Max.X, gtx.Dp(uikit.ConversationContentMaxWidth))
 				return uikit.Inset{Top: 4, Bottom: 4, Left: 16, Right: 16}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 					return s.layoutQuestionPanel(gtx, snapshot.State, *question)
 				})
@@ -408,7 +434,18 @@ func (s *Shell) layoutConversationPane(gtx layout.Context, session desktopstate.
 	return layout.Flex{Axis: layout.Vertical, Alignment: layout.Middle}.Layout(gtx, children...)
 }
 
-func (s *Shell) layoutBackgroundAttentionBanner(gtx layout.Context, state desktopstate.State, currentAgentID, currentSessionID string) layout.Dimensions {
+// backgroundAttentionTarget resolves which foreign session is waiting for the
+// user, or nil when nothing needs attention. It performs no layout and emits
+// no input operations, so layoutConversationPane can decide cheaply whether
+// to append the banner child without laying anything out twice.
+type backgroundAttention struct {
+	agentID   string
+	sessionID string
+	title     string
+	kind      string
+}
+
+func backgroundAttentionTarget(state desktopstate.State, currentAgentID, currentSessionID string) *backgroundAttention {
 	var targetAgentID, targetSessionID, targetTitle, targetKind string
 	for _, p := range state.PermissionInbox {
 		if p.SessionID != currentSessionID || p.AgentID != "" && p.AgentID != currentAgentID {
@@ -435,34 +472,45 @@ func (s *Shell) layoutBackgroundAttentionBanner(gtx layout.Context, state deskto
 		}
 	}
 	if targetSessionID == "" {
-		return layout.Dimensions{}
+		return nil
 	}
 	if targetAgentID == "" {
 		if session, ok := controller.SessionByID(state, targetSessionID); ok {
 			targetAgentID = session.AgentID
 		}
 	}
-
 	sessionName := controller.SessionTitle(state, targetSessionID)
+	return &backgroundAttention{
+		agentID:   targetAgentID,
+		sessionID: targetSessionID,
+		title:     fmt.Sprintf("%s %q is waiting for %s: %s", "⚠️", sessionName, targetKind, targetTitle),
+		kind:      targetKind,
+	}
+}
+
+func (s *Shell) layoutBackgroundAttentionBanner(gtx layout.Context, target backgroundAttention) layout.Dimensions {
+	if target.sessionID == "" {
+		return layout.Dimensions{}
+	}
 	if s.backgroundAttentionButton.Clicked(gtx) {
-		s.bind.SelectSession(targetAgentID, targetSessionID)
+		s.bind.SelectSession(target.agentID, target.sessionID)
 	}
 
 	return layout.Stack{Alignment: layout.Center}.Layout(gtx, layout.Stacked(func(gtx layout.Context) layout.Dimensions {
 		gtx.Constraints.Min.X = 0
-		gtx.Constraints.Max.X = min(gtx.Constraints.Max.X, gtx.Dp(960))
+		gtx.Constraints.Max.X = min(gtx.Constraints.Max.X, gtx.Dp(uikit.ConversationContentMaxWidth))
 		return uikit.Inset{Top: 6, Bottom: 4, Left: 16, Right: 16}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 			return s.roundedBorderSurface(gtx, shapeSmall, s.theme.Colors.WarningContainer, s.theme.Colors.OutlineVariant, 1, func(gtx layout.Context) layout.Dimensions {
 				return uikit.Inset{Top: 6, Bottom: 6, Left: 12, Right: 12}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 					return layout.Flex{Axis: layout.Horizontal, Alignment: layout.Middle, Spacing: layout.SpaceBetween}.Layout(gtx,
 						layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-							msg := fmt.Sprintf("⚠️ Session %q is waiting for %s: %s", sessionName, targetKind, targetTitle)
-							return s.layoutLabel(gtx, msg, textBodySmall, font.Medium, s.theme.Colors.OnWarningContainer, 1)
+							return s.layoutLabel(gtx, target.title, textBodySmall, font.Medium, s.theme.Colors.OnWarningContainer, 1)
 						}),
 						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 							return uikit.Inset{Left: 8}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+								target := target
 								return s.layoutButton(gtx, &s.backgroundAttentionButton, "Jump to session", true, func() {
-									s.bind.SelectSession(targetAgentID, targetSessionID)
+									s.bind.SelectSession(target.agentID, target.sessionID)
 								})
 							})
 						}),

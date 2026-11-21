@@ -1500,6 +1500,38 @@ func compactError(err error) string {
 	return string(runes[:117]) + "…"
 }
 
+// promptFailureDetail keeps the full ACP error (including code and server
+// detail) in the transcript timeline, where space is less constrained than the
+// top-bar status pill.
+func promptFailureDetail(err error) string {
+	var rpcErr *acpclient.RPCError
+	if !errors.As(err, &rpcErr) {
+		return strings.TrimSpace(err.Error())
+	}
+	detail := strings.TrimSpace(rpcErr.Error())
+	if len([]rune(detail)) > 500 {
+		detail = string([]rune(detail)[:497]) + "…"
+	}
+	return detail
+}
+
+// promptFailureHint appends a short actionable hint for failures the user can
+// resolve (re-auth, missing runtime, busy session).
+func promptFailureHint(err error) string {
+	if isACPReauthenticationRequired(err) {
+		return " · sign in again, then resend"
+	}
+	message := strings.ToLower(err.Error())
+	switch {
+	case strings.Contains(message, "session is busy") || strings.Contains(message, "already running"):
+		return " · wait for the active turn or stop it first"
+	case strings.Contains(message, "no such session"), strings.Contains(message, "session not found"):
+		return " · reload the session list, then resend"
+	default:
+		return ""
+	}
+}
+
 func shortID(id string) string {
 	runes := []rune(id)
 	if len(runes) <= 8 {

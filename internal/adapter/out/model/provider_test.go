@@ -238,6 +238,21 @@ func TestProviderHasUsableAuth(t *testing.T) {
 	if ProviderHasUsableAuth("custom", "https://example.test/v1", "") {
 		t.Fatal("unknown provider without API key should not be usable")
 	}
+	if !ProviderHasUsableAuth("9router", "http://localhost:20128/v1", "") {
+		t.Fatal("local keyless gateway should match the local preset on any port")
+	}
+	if !ProviderHasUsableAuth("custom", "http://127.0.0.1:11434/v1", "") {
+		t.Fatal("loopback gateway should match the local preset on any port")
+	}
+}
+
+func TestMatchProviderPresetMatchesLoopbackHostOnAnyPort(t *testing.T) {
+	if preset := MatchProviderPreset("9router", "http://localhost:20128/v1"); preset == nil || preset.ID != DefaultOllamaName {
+		t.Fatalf("MatchProviderPreset(9router, localhost:20128) = %#v, want ollama preset", preset)
+	}
+	if preset := MatchProviderPreset("custom", "http://127.0.0.1:11434/v1"); preset == nil || preset.ID != DefaultOllamaName {
+		t.Fatalf("MatchProviderPreset(custom, 127.0.0.1:11434) = %#v, want ollama preset", preset)
+	}
 }
 
 func TestFetchAnthropicProviderModels(t *testing.T) {

@@ -122,15 +122,25 @@ func TestBackgroundAttentionBanner(t *testing.T) {
 		Source:      router.Source(),
 	}
 
-	dims := view.layoutBackgroundAttentionBanner(gtx, state, "", "session-active")
+	target := backgroundAttentionTarget(state, "", "session-active")
+	if target == nil {
+		t.Fatal("backgroundAttentionTarget expected a waiting session, got nil")
+	}
+	if target.sessionID != "session-bg" || target.kind != "permission" {
+		t.Fatalf("backgroundAttentionTarget = %+v, want session-bg/permission", target)
+	}
+	dims := view.layoutBackgroundAttentionBanner(gtx, *target)
 	if dims.Size.Y <= 0 {
 		t.Fatalf("layoutBackgroundAttentionBanner expected positive height, got %v", dims.Size)
 	}
 
 	// When current session is the waiting one, banner should not appear
-	dimsCurrent := view.layoutBackgroundAttentionBanner(gtx, state, "", "session-bg")
+	if current := backgroundAttentionTarget(state, "", "session-bg"); current != nil {
+		t.Fatalf("backgroundAttentionTarget expected nil for active session, got %+v", current)
+	}
+	dimsCurrent := view.layoutBackgroundAttentionBanner(gtx, backgroundAttention{})
 	if dimsCurrent.Size.Y != 0 {
-		t.Fatalf("layoutBackgroundAttentionBanner expected zero height for active session, got %v", dimsCurrent.Size)
+		t.Fatalf("layoutBackgroundAttentionBanner expected zero height for empty target, got %v", dimsCurrent.Size)
 	}
 	_ = selectedSession
 }

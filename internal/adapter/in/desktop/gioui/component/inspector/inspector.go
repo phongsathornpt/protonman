@@ -17,9 +17,12 @@ import (
 )
 
 const (
-	WideBreakpoint unit.Dp = 960
-	PanelWidth     unit.Dp = 336
+	PanelWidth unit.Dp = 336
 )
+
+// tabLabels is the single source of truth for inspector tabs. tabButtons must
+// stay the same length; a fourth slot would silently swallow input.
+var tabLabels = [...]string{"Plan", "Memory", "Skills"}
 
 type Snapshot struct {
 	Connected bool
@@ -32,11 +35,15 @@ type ViewInput struct {
 	Snapshot Snapshot
 	Chrome   Chrome
 	Panel    func(layout.Context, int, int) layout.Dimensions
+	// Width overrides the default panel allocation. Shell sets it from the
+	// docked-width computation so the conversation-minimum cap reaches the
+	// screen instead of being overwritten by the default width.
+	Width unit.Dp
 }
 
 type Component struct {
 	list          layout.List
-	tabButtons    [4]widget.Clickable
+	tabButtons    [len(tabLabels)]widget.Clickable
 	activeTab     int
 	visible       bool
 	visibilitySet bool
@@ -46,15 +53,40 @@ type Component struct {
 
 func New() *Component { return &Component{list: layout.List{Axis: layout.Vertical}} }
 
-func (c *Component) ShouldShow(wide bool) bool {
+// ShouldShowForWidth reports the default inspector visibility for a full
+// window width: visible only when the sidebar, divider, a usable conversation
+// pane, and the panel all fit. Unlike ShouldShow, it measures the whole
+// window instead of one pane's leftover constraints.
+func (c *Component) ShouldShowForWidth(windowWidth unit.Dp, sidebarVisible bool) bool {
 	if c.visibilitySet {
 		return c.visible
 	}
-	return wide
+	return Docked(windowWidth, sidebarVisible)
 }
 
-func (c *Component) Toggle(wide bool) {
-	c.visible = !c.ShouldShow(wide)
+// Docked reports whether the inspector fits beside the conversation pane at
+// the given full window width: sidebar plus divider plus a usable
+// conversation width plus the inspector panel. Callers computing this from
+// leftover constraints inside the main pane must pass the full window width,
+// not the post-sidebar remainder, or narrow windows will dock a panel that
+// collapses the conversation to a sliver.
+func Docked(windowWidth unit.Dp, sidebarVisible bool) bool {
+	sidebar := uikit.SidebarWidth
+	if windowWidth < uikit.SidebarCompactBreakpoint {
+		sidebar = uikit.SidebarWidthCompact
+	}
+	needed := uikit.InspectorMinWidth + uikit.ConversationMinWidth + uikit.InspectorDividerWidth
+	if sidebarVisible {
+		needed += sidebar + uikit.InspectorDividerWidth
+	}
+	return windowWidth >= needed
+}
+
+// ToggleForWidth flips the current visibility under the same whole-window
+// rule ShouldShowForWidth uses, so the Cmd/Ctrl+I shortcut and the topbar
+// button agree with the automatic dock decision.
+func (c *Component) ToggleForWidth(windowWidth unit.Dp, sidebarVisible bool) {
+	c.visible = !c.ShouldShowForWidth(windowWidth, sidebarVisible)
 	c.visibilitySet = true
 }
 
@@ -71,11 +103,14 @@ func (c *Component) ResetVisibility() {
 
 func (c *Component) ActiveTab() int { return c.activeTab }
 
-func (c *Component) SetActiveTab(tab int) { c.activeTab = max(0, min(tab, 2)) }
+func (c *Component) SetActiveTab(tab int) { c.activeTab = max(0, min(tab, len(tabLabels)-1)) }
 
 func (c *Component) Layout(gtx layout.Context, input ViewInput, compact bool) layout.Dimensions {
 	if compact {
 		gtx.Constraints.Min.X = 0
+	} else if input.Width > 0 {
+		gtx.Constraints.Min.X = gtx.Dp(input.Width)
+		gtx.Constraints.Max.X = gtx.Dp(input.Width)
 	} else {
 		gtx.Constraints.Min.X = gtx.Dp(PanelWidth)
 		gtx.Constraints.Max.X = gtx.Dp(PanelWidth)
@@ -141,7 +176,7 @@ func (c *Component) layoutHeader(gtx layout.Context, input ViewInput) layout.Dim
 }
 
 func (c *Component) layoutTabs(gtx layout.Context, chrome Chrome) layout.Dimensions {
-	tabs := [...]string{"Plan", "Memory", "Skills"}
+	tabs := tabLabels
 	if c.activeTab >= len(tabs) {
 		c.activeTab = 0
 	}

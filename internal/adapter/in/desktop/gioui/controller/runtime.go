@@ -15,6 +15,11 @@ func (c *controller) SetRuntimeModel(provider, model string) {
 	provider = strings.TrimSpace(provider)
 	model = strings.TrimSpace(model)
 	if model == "" {
+		c.mu.Lock()
+		c.status = "Runtime not updated \u00b7 no model is selected"
+		c.revision++
+		c.mu.Unlock()
+		c.notify()
 		return
 	}
 	c.mu.Lock()
@@ -91,8 +96,17 @@ func (c *controller) SetRuntimeModel(provider, model string) {
 	if provider == "" && ok {
 		provider = session.Runtime.Provider
 	}
+	currentProvider := ""
+	if ok {
+		currentProvider = session.Runtime.Provider
+	}
+	switchesProvider := provider != "" && !equalProviderID(provider, currentProvider)
 	c.mu.Unlock()
 
+	if switchesProvider {
+		c.setRuntimeModelWithProvider(provider, model)
+		return
+	}
 	params := map[string]any{
 		"model": model,
 	}
@@ -100,6 +114,94 @@ func (c *controller) SetRuntimeModel(provider, model string) {
 		params["provider"] = provider
 	}
 	c.startRuntimeMutation("protonman/session/set_model", params)
+}
+
+func equalProviderID(a, b string) bool {
+	a = strings.TrimSpace(a)
+	b = strings.TrimSpace(b)
+	if a == "" || b == "" {
+		return false
+	}
+	if strings.EqualFold(a, b) {
+		return true
+	}
+	return strings.EqualFold(strings.ReplaceAll(a, "-", ""), strings.ReplaceAll(b, "-", ""))
+}
+
+// setRuntimeModelWithProvider switches provider+model through the provider-aware
+// legacy runtime method. The standard session/set_config_option fast path only
+// carries configId=model, so it cannot move across providers: the backend
+// validates the model against the *current* provider's advertised options.
+func (c *controller) setRuntimeModelWithProvider(provider, model string) {
+	c.mu.Lock()
+	sessionID := strings.TrimSpace(c.state.ActiveSessionID)
+	session, ok := SessionByID(c.state, sessionID, c.state.ActiveAgentID)
+	client, agentID := c.clientForSession(sessionID, c.state.ActiveAgentID)
+	if !ok || (session.AgentID != "" && session.AgentID != ProtonmanAgentID) || SessionBusy(session.Status) || client == nil || c.connection != ConnectionConnected || c.runtimeMutation != "" {
+		if !ok || client == nil || c.connection != ConnectionConnected {
+			reason := runtimeBlockedReason(ok, client, c.connection, session)
+			c.status = "Runtime not updated \u00b7 " + reason
+			c.revision++
+		}
+		c.mu.Unlock()
+		if ok && client != nil && c.connection != ConnectionConnected {
+			c.notify()
+		}
+		return
+	}
+	previous := session.Runtime
+	if sess := desktopstateSessionPointer(&c.state, sessionID, session.AgentID); sess != nil {
+		sess.Runtime.Provider = provider
+		sess.Runtime.Model = model
+		c.revision++
+	}
+	params := map[string]any{"sessionId": sessionID, "provider": provider, "model": model}
+	mutationKey := SessionRefStorageKey(desktopstate.SessionRef{AgentID: agentID, SessionID: sessionID})
+	c.runtimeMutation = mutationKey
+	c.status = "Updating runtime\u2026"
+	c.revision++
+	c.mu.Unlock()
+	c.notify()
+
+	c.spawn(func() {
+		defer c.finishRuntimeMutation(client, sessionID)
+		var result sessionRuntimeResult
+		if err := c.callInspector(client, "protonman/session/set_model", params, &result); err != nil {
+			c.mu.Lock()
+			if sess := desktopstateSessionPointer(&c.state, sessionID, session.AgentID); sess != nil {
+				sess.Runtime = previous
+				c.revision++
+			}
+			c.mu.Unlock()
+			c.notify()
+			if c.context().Err() == nil {
+				c.setRuntimeStatus(client, sessionID, "Runtime update failed \u00b7 "+compactError(err))
+			}
+			c.refreshSessionRuntime(sessionID, true, agentID)
+			return
+		}
+		if !c.applySessionRuntime(client, result, agentID) {
+			c.setRuntimeStatus(client, sessionID, "Runtime update returned an invalid session result")
+			return
+		}
+		c.setRuntimeStatus(client, sessionID, "Runtime updated")
+	})
+}
+
+// runtimeBlockedReason mirrors expandedPromptBlocked for runtime mutations.
+func runtimeBlockedReason(ok bool, client *acpclient.Client, connection ConnectionPhase, session desktopstate.SessionState) string {
+	switch {
+	case !ok:
+		return "no session is selected"
+	case client == nil:
+		return "the ACP runtime is unavailable"
+	case connection != ConnectionConnected:
+		return "reconnect to the ACP runtime before updating"
+	case SessionBusy(session.Status):
+		return "wait for the active turn to finish or stop it first"
+	default:
+		return "another runtime update is in progress"
+	}
 }
 
 func (c *controller) SetRuntimeReasoning(value string) {
@@ -161,7 +263,13 @@ func (c *controller) startRuntimeMutation(method string, values map[string]any) 
 	session, ok := SessionByID(c.state, sessionID, c.state.ActiveAgentID)
 	client, agentID := c.clientForSession(sessionID, c.state.ActiveAgentID)
 	if !ok || (session.AgentID != "" && session.AgentID != ProtonmanAgentID) || SessionBusy(session.Status) || client == nil || c.connection != ConnectionConnected || c.runtimeMutation != "" {
+		if session.AgentID == "" || session.AgentID == ProtonmanAgentID {
+			reason := runtimeBlockedReason(ok, client, c.connection, session)
+			c.status = "Runtime not updated \u00b7 " + reason
+			c.revision++
+		}
 		c.mu.Unlock()
+		c.notify()
 		return
 	}
 	params := make(map[string]any, len(values)+1)
@@ -186,7 +294,7 @@ func (c *controller) startRuntimeMutation(method string, values map[string]any) 
 			configID = "permissionMode"
 			configVal = fmt.Sprint(values["permissionMode"])
 		case "protonman/session/set_reasoning":
-			configID = "reasoningEffort"
+			configID = "reasoning"
 			configVal = fmt.Sprint(values["reasoning"])
 		case "protonman/session/set_model":
 			configID = "model"

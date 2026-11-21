@@ -27,6 +27,41 @@ const (
 	ShapeFull       unit.Dp = 9999
 )
 
+// Layout tokens. Widths that more than one desktop package constrains against
+// live here, so the sidebar, inspector dock decision, and conversation
+// centering cannot silently disagree about the window geometry.
+const (
+	// SidebarWidth is the default sidebar allocation.
+	SidebarWidth unit.Dp = 260
+	// SidebarWidthCompact is the sidebar allocation on narrow windows.
+	SidebarWidthCompact unit.Dp = 220
+	// SidebarCompactBreakpoint is the window width below which the sidebar
+	// compacts.
+	SidebarCompactBreakpoint unit.Dp = 900
+	// ConversationContentMaxWidth caps centered conversation content
+	// (banner, permission/question panels, composer).
+	ConversationContentMaxWidth unit.Dp = 960
+	// ConversationMinWidth is the minimum conversation-pane width that keeps
+	// text usable when the inspector is docked.
+	ConversationMinWidth unit.Dp = 420
+	// InspectorMinWidth is the minimum inspector allocation when docked.
+	InspectorMinWidth unit.Dp = 280
+	// InspectorDividerWidth is the 1dp divider between the conversation pane
+	// and the docked inspector. Docked is the divider between the sidebar and
+	// the main pane.
+	InspectorDividerWidth unit.Dp = 1
+	// TimelineTextMaxWidth caps centered transcript text.
+	TimelineTextMaxWidth unit.Dp = 840
+	// CenteredCardMaxWidth caps the empty-session centered card.
+	CenteredCardMaxWidth unit.Dp = 680
+	// EmptyStateMaxWidth caps the starter empty-state column.
+	EmptyStateMaxWidth unit.Dp = 660
+	// UserBubbleMaxWidth caps user message bubbles.
+	UserBubbleMaxWidth unit.Dp = 680
+	// UserBubbleMinWidth is the floor below which the bubble takes the full width.
+	UserBubbleMinWidth unit.Dp = 260
+)
+
 // Text tokens, following the Material type scale names the desktop mirrors.
 const (
 	TextDisplaySmall   unit.Sp = 30

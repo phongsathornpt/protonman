@@ -58,6 +58,29 @@ func (s *Shell) syncRuntimeEditors(state desktopstate.State) {
 }
 
 func (s *Shell) layoutInspector(gtx layout.Context, session desktopstate.SessionState, snapshot controller.Snapshot, compact bool) layout.Dimensions {
+	return s.layoutInspectorFixed(gtx, session, snapshot, inspectorcomponent.PanelWidth, compact)
+}
+
+// layoutInspectorWidth clamps a resolved docked inspector width to the shared
+// min/max tokens and the space the parent actually offers.
+func layoutInspectorWidth(width unit.Dp, maxWidth unit.Dp) unit.Dp {
+	if width < uikit.InspectorMinWidth {
+		width = uikit.InspectorMinWidth
+	}
+	if width > inspectorcomponent.PanelWidth {
+		width = inspectorcomponent.PanelWidth
+	}
+	if maxWidth > 0 && width > maxWidth {
+		width = max(maxWidth, uikit.InspectorMinWidth)
+	}
+	return width
+}
+
+func (s *Shell) layoutInspectorFixed(gtx layout.Context, session desktopstate.SessionState, snapshot controller.Snapshot, width unit.Dp, compact bool) layout.Dimensions {
+	if !compact {
+		gtx.Constraints.Min.X = gtx.Dp(layoutInspectorWidth(width, gtx.Metric.PxToDp(gtx.Constraints.Max.X)))
+		gtx.Constraints.Max.X = gtx.Dp(layoutInspectorWidth(width, gtx.Metric.PxToDp(gtx.Constraints.Max.X)))
+	}
 	return s.inspectorComponent.Layout(gtx, inspectorcomponent.ViewInput{
 		Snapshot: inspectorcomponent.Snapshot{
 			Connected: sessionConnection(snapshot, session.AgentID) == controller.ConnectionConnected,
@@ -66,6 +89,7 @@ func (s *Shell) layoutInspector(gtx layout.Context, session desktopstate.Session
 		Panel: func(gtx layout.Context, tab, index int) layout.Dimensions {
 			return s.layoutInspectorPanel(gtx, session, snapshot, tab, index)
 		},
+		Width: width,
 	}, compact)
 }
 

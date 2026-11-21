@@ -217,7 +217,6 @@ func ExpandMentions(text string, workDir string) (ExpandedPrompt, error) {
 			turnPromptParts = append(turnPromptParts, fmt.Sprintf("[Requested Subagents: %s]", strings.Join(mentionedAgents, ", ")))
 		}
 	}
-
 	turnPromptParts = append(turnPromptParts, text)
 
 	if len(fileContextBlocks) > 0 {

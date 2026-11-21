@@ -123,7 +123,7 @@ func (s *Shell) layoutComposer(gtx layout.Context, session desktopstate.SessionS
 	}
 
 	return layout.Stack{Alignment: layout.Center}.Layout(gtx, layout.Stacked(func(gtx layout.Context) layout.Dimensions {
-		gtx.Constraints.Max.X = min(gtx.Constraints.Max.X, gtx.Dp(960))
+		gtx.Constraints.Max.X = min(gtx.Constraints.Max.X, gtx.Dp(uikit.ConversationContentMaxWidth))
 		return outerInset.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 			containerChildren := make([]layout.FlexChild, 0, 2)
 			if s.mentionActive && len(s.mentionItems) > 0 {
@@ -590,7 +590,10 @@ func (s *Shell) submitComposer(text string) {
 		return
 	}
 	s.composerError = ""
-	s.bind.SendPrompt(expanded)
+	if reason := s.bind.SendPrompt(expanded); reason != "" {
+		s.composerError = "Prompt not sent · " + reason
+		return
+	}
 	s.setComposerText("")
 	s.forgetComposerDraft(controller.SessionRefStorageKey(desktopstate.SessionRef{AgentID: s.activeSessionAgentID, SessionID: s.activeSessionID}))
 	s.conversationUI.Timeline().ScrollToEnd = true

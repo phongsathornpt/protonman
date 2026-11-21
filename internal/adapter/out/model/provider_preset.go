@@ -143,14 +143,9 @@ func LookupPreset(idOrName string) *SupportedProviderPreset {
 func MatchProviderPreset(providerName, baseURL string) *SupportedProviderPreset {
 	endpoint := normalizeProviderEndpoint(baseURL)
 	if endpoint != "" {
-		for i := range SupportedPresets {
-			preset := &SupportedPresets[i]
-			if endpointMatchesProviderPreset(endpoint, preset) {
-				return preset
-			}
-		}
-		// Also recognize an explicitly configured OpenCode route behind a local
-		// reverse proxy or test server.
+		// Path-scoped OpenCode routes must win over bare-host loopback
+		// matching: a local "/zen/v1" reverse proxy is authenticated Zen,
+		// not the keyless Ollama preset.
 		switch {
 		case IsOpenCodeInferenceEndpoint(endpoint):
 			return LookupPreset(DefaultOpenCodeName)
@@ -158,6 +153,12 @@ func MatchProviderPreset(providerName, baseURL string) *SupportedProviderPreset 
 			return LookupPreset("opencode-zen")
 		case IsOpenCodeGoEndpoint(endpoint):
 			return LookupPreset("opencode-go")
+		}
+		for i := range SupportedPresets {
+			preset := &SupportedPresets[i]
+			if endpointMatchesProviderPreset(endpoint, preset) {
+				return preset
+			}
 		}
 		// An explicitly configured but unknown OpenCode host/path must not
 		// silently inherit the keyless preset from the provider name.
@@ -190,8 +191,43 @@ func endpointMatchesProviderPreset(endpoint string, preset *SupportedProviderPre
 		if endpointWithoutScheme == markerWithoutScheme || strings.HasPrefix(endpointWithoutScheme, markerWithoutScheme+"/") {
 			return true
 		}
+		// Bare-host markers (for example "localhost" or "127.0.0.1") must
+		// match the same host on any port/path. Without this,
+		// "localhost:20128/v1" never matches "localhost" because the
+		// exact/prefix check above expects "localhost/..." and the default
+		// local gateway is rejected as unauthenticated.
+		if !strings.Contains(markerWithoutScheme, "/") && endpointHost(endpointWithoutScheme) == markerWithoutScheme {
+			return true
+		}
 	}
 	return false
+}
+
+func endpointHost(endpointWithoutScheme string) string {
+	hostport := endpointWithoutScheme
+	if index := strings.IndexByte(hostport, '/'); index >= 0 {
+		hostport = hostport[:index]
+	}
+	if strings.HasPrefix(hostport, "[") {
+		if end := strings.IndexByte(hostport, ']'); end >= 0 {
+			return strings.ToLower(hostport[:end+1])
+		}
+		return strings.ToLower(hostport)
+	}
+	if index := strings.LastIndexByte(hostport, ':'); index >= 0 {
+		port := hostport[index+1:]
+		numeric := port != ""
+		for _, c := range port {
+			if c < '0' || c > '9' {
+				numeric = false
+				break
+			}
+		}
+		if numeric {
+			hostport = hostport[:index]
+		}
+	}
+	return strings.ToLower(hostport)
 }
 
 func isOpenCodeEndpoint(endpoint string) bool {

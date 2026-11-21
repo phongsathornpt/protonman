@@ -138,12 +138,24 @@ func createACPSession(
 func promptACPWithReauthentication(
 	ctx context.Context,
 	client acpRPCClient,
-	_ ACPAgentProfile,
-	_ []acpAuthMethod,
+	profile ACPAgentProfile,
+	authMethods []acpAuthMethod,
 	params any,
 	result any,
-	_ func(string),
+	onAuthenticating func(string),
 ) error {
+	err := client.Call(ctx, "session/prompt", params, result)
+	if err == nil || !isACPReauthenticationRequired(err) {
+		return err
+	}
+	firstErr := err
+	method, ok := preferredACPAuthMethod(profile, authMethods)
+	if !ok {
+		return firstErr
+	}
+	if authErr := authenticateACPMethod(ctx, client, method, onAuthenticating); authErr != nil {
+		return authErr
+	}
 	return client.Call(ctx, "session/prompt", params, result)
 }
 

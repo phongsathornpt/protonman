@@ -143,7 +143,7 @@ func TestCollapsibleToolAndDiffCards(t *testing.T) {
 // switches back, and clearing the wrong session would silently lose unsent text.
 func TestSubmitComposerClearsOnlyTheActiveSessionDraft(t *testing.T) {
 	var sent controller.ExpandedPrompt
-	sh := New(NewTheme("light"), Bindings{SendPrompt: func(p controller.ExpandedPrompt) { sent = p }})
+	sh := New(NewTheme("light"), Bindings{SendPrompt: func(p controller.ExpandedPrompt) string { sent = p; return "" }})
 	// Drafts are keyed by the composite session reference so the same session id
 	// under two agents cannot share (or clobber) a draft.
 	keyA := controller.SessionRefStorageKey(desktopstate.SessionRef{AgentID: "protonman", SessionID: "session-a"})
@@ -173,11 +173,27 @@ func TestSubmitComposerClearsOnlyTheActiveSessionDraft(t *testing.T) {
 	}
 }
 
+// A blocked send must keep the text: the editor and the draft survive and the
+// helper names the reason, so the prompt is not silently lost.
+func TestSubmitComposerKeepsTextWhenSendIsBlocked(t *testing.T) {
+	sh := New(NewTheme("light"), Bindings{SendPrompt: func(controller.ExpandedPrompt) string { return "wait for the active turn" }})
+	sh.activeSessionID = "session-a"
+	sh.activeSessionAgentID = "protonman"
+	sh.setComposerText("do not lose me")
+	sh.submitComposer("do not lose me")
+	if sh.conversationUI.Editor().Text() != "do not lose me" {
+		t.Fatalf("blocked submission cleared the editor, got %q", sh.conversationUI.Editor().Text())
+	}
+	if sh.composerError != "Prompt not sent · wait for the active turn" {
+		t.Fatalf("composerError = %q, want the blocked reason", sh.composerError)
+	}
+}
+
 // A blank or whitespace-only submission must be a no-op: no prompt is sent and
 // the existing draft survives, because the user may have meant to keep typing.
 func TestSubmitComposerIgnoresBlankInput(t *testing.T) {
 	var sends int
-	sh := New(NewTheme("light"), Bindings{SendPrompt: func(controller.ExpandedPrompt) { sends++ }})
+	sh := New(NewTheme("light"), Bindings{SendPrompt: func(controller.ExpandedPrompt) string { sends++; return "" }})
 	key := controller.SessionRefStorageKey(desktopstate.SessionRef{AgentID: "protonman", SessionID: "session-a"})
 	sh.rememberComposerDraft(key, "unsent")
 	sh.activeSessionID = "session-a"

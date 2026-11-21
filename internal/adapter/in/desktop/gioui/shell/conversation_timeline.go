@@ -70,9 +70,9 @@ func (s *Shell) layoutTimelineItem(gtx layout.Context, sessionID string, index i
 					return layout.Spacer{}.Layout(gtx)
 				}),
 				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-					maxUserWidth := min(gtx.Dp(680), int(float32(gtx.Constraints.Max.X)*0.75))
-					if maxUserWidth < gtx.Dp(260) {
-						maxUserWidth = min(gtx.Constraints.Max.X, gtx.Dp(680))
+					maxUserWidth := min(gtx.Dp(uikit.UserBubbleMaxWidth), int(float32(gtx.Constraints.Max.X)*0.75))
+					if maxUserWidth < gtx.Dp(uikit.UserBubbleMinWidth) {
+						maxUserWidth = min(gtx.Constraints.Max.X, gtx.Dp(uikit.UserBubbleMaxWidth))
 					}
 					gtx.Constraints.Max.X = maxUserWidth
 					return s.roundedBorderSurface(gtx, shapeLarge, s.theme.Colors.SurfaceContainerHigh, s.theme.Colors.OutlineVariant, 1, func(gtx layout.Context) layout.Dimensions {

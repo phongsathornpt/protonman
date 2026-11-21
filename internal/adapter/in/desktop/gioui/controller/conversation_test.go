@@ -783,12 +783,13 @@ func TestFinishSessionHistoryDiscardsFailedAndStaleEvents(t *testing.T) {
 
 func TestSendPromptDoesNotMutateBusySession(t *testing.T) {
 	for _, test := range []struct {
-		name   string
-		status desktopstate.TaskStatus
-		load   HistoryState
+		name       string
+		status     desktopstate.TaskStatus
+		load       HistoryState
+		wantReason string
 	}{
-		{name: "busy", status: desktopstate.TaskRunning},
-		{name: "history loading", status: desktopstate.TaskIdle, load: HistoryStateLoading},
+		{name: "busy", status: desktopstate.TaskRunning, wantReason: "wait for the active turn"},
+		{name: "history loading", status: desktopstate.TaskIdle, load: HistoryStateLoading, wantReason: "history"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			controller := newTestController()
@@ -796,13 +797,18 @@ func TestSendPromptDoesNotMutateBusySession(t *testing.T) {
 			controller.state.Sessions[0].Status = test.status
 			controller.histories["session-1"] = test.load
 
-			controller.sendPrompt("do not send")
+			if reason := controller.SendExpandedPrompt(ExpandedPrompt{DisplayText: "do not send", TurnPrompt: "do not send"}); !strings.Contains(reason, test.wantReason) {
+				t.Fatalf("blocked reason = %q, want substring %q", reason, test.wantReason)
+			}
 
 			if got := controller.state.Sessions[0].Status; got != test.status {
 				t.Fatalf("status = %q, want %q", got, test.status)
 			}
 			if len(controller.state.Sessions[0].Timeline) != 0 {
 				t.Fatalf("busy prompt changed timeline: %#v", controller.state.Sessions[0].Timeline)
+			}
+			if !strings.Contains(controller.status, "Prompt not sent") {
+				t.Fatalf("controller status = %q, want the blocked-prompt notice", controller.status)
 			}
 		})
 	}

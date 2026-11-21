@@ -140,3 +140,59 @@ func TestProviderFormCancelDoesNotSave(t *testing.T) {
 		t.Fatal("cancelling must close the form")
 	}
 }
+
+// A provider save failure must stay visible in the providers panel instead of
+// silently closing the form: the form closes only when the store reports
+// success, and the panel error text comes from the controller snapshot.
+func TestProviderSaveClosesFormOnlyOnSuccess(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		saveErr  error
+		wantOpen bool
+	}{
+		{"success", nil, false},
+		{"failure", errTestProviderDelete, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			component := New()
+			component.OpenProviderForm("acme", "Acme", "https://acme.test", "openai", "")
+			var asked ProviderSaveParams
+
+			component.LayoutProviderForm(providersTestContext(1), providersTestInput(func(p ProviderSaveParams, done func(error)) {
+				asked = p
+				done(tc.saveErr)
+			}, nil))
+			component.provider.SaveButton.Click()
+			component.LayoutProviderForm(providersTestContext(2), providersTestInput(func(p ProviderSaveParams, done func(error)) {
+				asked = p
+				done(tc.saveErr)
+			}, nil))
+			component.LayoutProviderForm(providersTestContext(3), providersTestInput(func(p ProviderSaveParams, done func(error)) {
+				asked = p
+				done(tc.saveErr)
+			}, nil))
+
+			if asked.ProviderName != "Acme" {
+				t.Fatalf("saved provider name = %q, want Acme", asked.ProviderName)
+			}
+			if got := component.provider.FormVisible; got != tc.wantOpen {
+				t.Fatalf("form visible = %v after a %s save, want %v", got, tc.name, tc.wantOpen)
+			}
+		})
+	}
+}
+
+// The panel-level save error must render when the snapshot carries one, so a
+// failed save is not mistaken for a silent no-op.
+func TestProvidersPanelRendersSaveError(t *testing.T) {
+	component := New()
+	input := ProvidersInput{
+		Providers: []ProviderItem{{ID: "acme", Name: "Acme"}},
+		Chrome:    agentsTestChrome(),
+		SaveError: "store rejected the save",
+	}
+	dims := component.LayoutProviders(providersTestContext(1), input)
+	if dims.Size.X <= 0 {
+		t.Fatal("providers panel did not render with a save error present")
+	}
+}

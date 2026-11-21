@@ -83,7 +83,8 @@ func TestMainEmptyStateWorkspaceReadyCentering(t *testing.T) {
 		Source:      router.Source(),
 	}
 
-	dims := view.layoutMain(gtx, snapshot)
+	const windowWidth = unit.Dp(width)
+	dims := view.layoutMain(gtx, snapshot, windowWidth)
 	if dims.Size.X != width || dims.Size.Y != height {
 		t.Fatalf("layoutMain returned dims = %v, want %dx%d", dims.Size, width, height)
 	}

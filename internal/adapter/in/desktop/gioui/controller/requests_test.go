@@ -111,6 +111,55 @@ func TestPromptACPPassesThroughDirectly(t *testing.T) {
 	}
 }
 
+func TestPromptACPReauthenticatesAndRetries(t *testing.T) {
+	client := &reauthScriptClient{}
+	profile := DefaultACPAgentProfile()
+	methods := []acpAuthMethod{{ID: "proton-auth", Name: "Sign in with Proton"}}
+	var result struct {
+		StopReason string `json:"stopReason"`
+	}
+	err := promptACPWithReauthentication(
+		context.Background(),
+		client,
+		profile,
+		methods,
+		map[string]any{"sessionId": "session-1", "prompt": []any{}},
+		&result,
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("prompt with re-auth: %v", err)
+	}
+	got := []string{}
+	for _, call := range client.calls {
+		got = append(got, call.method)
+	}
+	want := []string{"session/prompt", "authenticate", "session/prompt"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("call order = %#v, want %#v", got, want)
+	}
+	if auth, ok := client.calls[1].params.(map[string]any); !ok || auth["methodId"] != "proton-auth" {
+		t.Fatalf("authenticate params = %#v, want proton method", client.calls[1].params)
+	}
+}
+
+type reauthScriptClient struct {
+	calls   []scriptedACPCall
+	prompts int
+}
+
+func (c *reauthScriptClient) Call(_ context.Context, method string, params any, result any) error {
+	c.calls = append(c.calls, scriptedACPCall{method: method, params: params})
+	if method == "session/prompt" {
+		c.prompts++
+		if c.prompts == 1 {
+			return &acpclient.RPCError{Code: -32603, Message: "Internal error", Data: json.RawMessage(`{"details":"token expired"}`)}
+		}
+		return nil
+	}
+	return nil
+}
+
 func TestIsACPReauthenticationRequired(t *testing.T) {
 	for _, test := range []struct {
 		name string

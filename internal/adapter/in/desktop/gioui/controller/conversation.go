@@ -164,7 +164,7 @@ func (c *controller) handleACPEventFrom(source *acpclient.Client, event acpclien
 						sess.Runtime.PermissionMode = val
 					case "model":
 						sess.Runtime.Model = val
-					case "reasoningEffort":
+					case "reasoning", "reasoningEffort":
 						sess.Runtime.Reasoning = val
 					}
 				}
@@ -1116,10 +1116,29 @@ func (c *controller) sendPrompt(text string) {
 	c.SendExpandedPrompt(ExpandedPrompt{DisplayText: text, TurnPrompt: text})
 }
 
-func (c *controller) SendExpandedPrompt(prompt ExpandedPrompt) {
+// expandedPromptBlocked reports why a prompt cannot be sent right now. An empty
+// reason means the prompt is sendable.
+func expandedPromptBlocked(ok bool, connected bool, busy bool, historyLoading bool, workspace string) string {
+	switch {
+	case !ok:
+		return "no session is selected"
+	case !connected:
+		return "reconnect to the ACP runtime before sending"
+	case busy:
+		return "wait for the active turn to finish or stop it first"
+	case historyLoading:
+		return "wait for session history to finish loading"
+	case workspace == "":
+		return "choose an existing workspace directory first"
+	default:
+		return ""
+	}
+}
+
+func (c *controller) SendExpandedPrompt(prompt ExpandedPrompt) string {
 	text := strings.TrimSpace(prompt.DisplayText)
 	if text == "" {
-		return
+		return ""
 	}
 	mcpServers := c.mcpServersPayload()
 	c.mu.Lock()
@@ -1136,7 +1155,7 @@ func (c *controller) SendExpandedPrompt(prompt ExpandedPrompt) {
 		// have moved while the lock was released.
 		if c.state.ActiveSessionID != sessionID || c.state.ActiveAgentID != agentID {
 			c.mu.Unlock()
-			return
+			return "the active session changed while resolving the workspace"
 		}
 		session, ok = SessionByID(c.state, sessionID, agentID)
 		if ok && err == nil && resolved != "" {
@@ -1148,9 +1167,21 @@ func (c *controller) SendExpandedPrompt(prompt ExpandedPrompt) {
 	}
 	client, agentID := c.clientForSession(sessionID)
 	storageKey := desktopSessionStorageKey(c.state, session.Ref())
-	if !ok || client == nil || c.connection != ConnectionConnected || SessionBusy(session.Status) || c.histories[storageKey] == HistoryStateLoading || workspace == "" {
+	connected := c.connection == ConnectionConnected
+	busy := ok && SessionBusy(session.Status)
+	historyLoading := c.histories[storageKey] == HistoryStateLoading
+	if !ok || client == nil || !connected || busy || historyLoading || workspace == "" {
+		reason := "the ACP runtime is unavailable"
+		if client == nil {
+			reason = "the ACP runtime is unavailable"
+		} else if blocked := expandedPromptBlocked(ok, connected, busy, historyLoading, workspace); blocked != "" {
+			reason = blocked
+		}
+		c.status = "Prompt not sent · " + reason
+		c.revision++
 		c.mu.Unlock()
-		return
+		c.notify()
+		return reason
 	}
 	c.clearMessageStreamsLocked(sessionID)
 	if current := desktopstateSessionPointer(&c.state, sessionID, agentID); current != nil {
@@ -1173,6 +1204,7 @@ func (c *controller) SendExpandedPrompt(prompt ExpandedPrompt) {
 	c.notify()
 
 	c.spawn(func() { c.runPrompt(client, session, prompt, mcpServers) })
+	return ""
 }
 
 func (c *controller) runPrompt(client *acpclient.Client, session desktopstate.SessionState, prompt ExpandedPrompt, mcpServers []map[string]any) {
@@ -1195,15 +1227,24 @@ func (c *controller) runPrompt(client *acpclient.Client, session desktopstate.Se
 		promptBlocks := []map[string]any{
 			{"type": "text", "text": prompt.TurnPrompt},
 		}
+		unreadableImages := 0
 		for _, imgPath := range prompt.ImagePaths {
 			imgBytes, readErr := os.ReadFile(imgPath)
 			if readErr != nil {
+				unreadableImages++
+				log.Printf("desktop prompt image unreadable: %s: %v", imgPath, readErr)
 				continue
 			}
 			promptBlocks = append(promptBlocks, map[string]any{
 				"type":     "image",
 				"mimeType": detectImageMIME(imgPath),
 				"data":     base64.StdEncoding.EncodeToString(imgBytes),
+			})
+		}
+		if unreadableImages > 0 {
+			promptBlocks = append(promptBlocks, map[string]any{
+				"type": "text",
+				"text": fmt.Sprintf("[System note: %d attached image(s) could not be read and were omitted.]", unreadableImages),
 			})
 		}
 		promptParams := map[string]any{
@@ -1230,6 +1271,7 @@ func (c *controller) runPrompt(client *acpclient.Client, session desktopstate.Se
 	}
 	c.clearMessageStreamsLocked(session.ID)
 	if err != nil {
+		failDetail := promptFailureDetail(err)
 		desktopstate.Apply(&c.state, desktopstate.Event{Kind: desktopstate.EventPromptFailed, AgentID: session.AgentID, SessionID: session.ID})
 		c.applyTimelineEventLocked(desktopstate.Event{
 			Kind:      desktopstate.EventTimelineAppended,
@@ -1238,10 +1280,10 @@ func (c *controller) runPrompt(client *acpclient.Client, session desktopstate.Se
 			Item: desktopstate.TimelineItem{
 				Kind: desktopstate.TimelineStatus,
 				ID:   c.nextTimelineIDLocked(session.ID, "error"),
-				Text: "Prompt failed: " + compactError(err),
+				Text: "Prompt failed: " + failDetail,
 			},
 		})
-		c.status = "Prompt failed · " + compactError(err)
+		c.status = "Prompt failed · " + compactError(err) + promptFailureHint(err)
 	} else {
 		desktopstate.Apply(&c.state, desktopstate.Event{Kind: desktopstate.EventPromptCompleted, AgentID: session.AgentID, SessionID: session.ID})
 		stopReason := strings.TrimSpace(result.StopReason)

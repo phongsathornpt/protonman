@@ -22,7 +22,7 @@ type Bindings struct {
 	TogglePinSession         func(string, string)
 	ToggleSkill              func(string, string)
 	SetFilterMode            func(string)
-	SendPrompt               func(controller.ExpandedPrompt)
+	SendPrompt               func(controller.ExpandedPrompt) string
 	CancelPrompt             func()
 	ResolvePermission        func(string, string)
 	ResolveQuestion          func(string, desktopstate.QuestionResponse)
@@ -72,7 +72,7 @@ func (b Bindings) withDefaults() Bindings {
 		b.SetFilterMode = func(string) {}
 	}
 	if b.SendPrompt == nil {
-		b.SendPrompt = func(controller.ExpandedPrompt) {}
+		b.SendPrompt = func(controller.ExpandedPrompt) string { return "" }
 	}
 	if b.CancelPrompt == nil {
 		b.CancelPrompt = func() {}

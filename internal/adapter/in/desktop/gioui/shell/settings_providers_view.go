@@ -40,7 +40,7 @@ func (s *Shell) layoutProvidersPanel(gtx layout.Context, snapshot controller.Sna
 		})
 	}
 	return s.settingsComponent.LayoutProviders(gtx, settingscomponent.ProvidersInput{
-		Providers: items, Updating: snapshot.ProviderUpdating, Chrome: s.settingsChrome(),
+		Providers: items, Updating: snapshot.ProviderUpdating, SaveError: snapshot.ProviderError, Chrome: s.settingsChrome(),
 		OnAdd: func() { s.openProviderForm("", "", "https://api.example.com/v1", "openai", "") },
 		OnSelect: func(item settingscomponent.ProviderItem) {
 			s.openProviderForm(item.ID, item.Name, item.BaseURL, item.Protocol, item.DefaultModel)

@@ -40,7 +40,7 @@ func (s *Shell) layoutEmptyState(gtx layout.Context, session desktopstate.Sessio
 	}
 	return layout.Stack{Alignment: layout.Center}.Layout(gtx, layout.Stacked(func(gtx layout.Context) layout.Dimensions {
 		gtx.Constraints.Min = image.Point{}
-		gtx.Constraints.Max.X = min(gtx.Constraints.Max.X, gtx.Dp(660))
+		gtx.Constraints.Max.X = min(gtx.Constraints.Max.X, gtx.Dp(uikit.EmptyStateMaxWidth))
 		return uikit.Inset{Top: 24, Bottom: 16, Left: 16, Right: 16}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 			return layout.Flex{Axis: layout.Vertical, Alignment: layout.Middle}.Layout(gtx,
 				layout.Rigid(func(gtx layout.Context) layout.Dimensions {

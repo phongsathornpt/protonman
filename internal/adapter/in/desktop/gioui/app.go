@@ -31,7 +31,10 @@ func Run(ctx context.Context, mcpIntegrations application.MCPIntegrations, prefe
 	var window app.Window
 	window.Option(
 		app.Title("Protonman"),
-		app.Size(unit.Dp(1180), unit.Dp(760)),
+		// Default width leaves a usable docked conversation: 260 sidebar + 1
+		// divider + ~660 conversation + 336 inspector. Narrower windows fall
+		// back to the inspector-takeover path instead of squeezing text.
+		app.Size(unit.Dp(1360), unit.Dp(800)),
 		app.MinSize(unit.Dp(760), unit.Dp(600)),
 	)
 	go func() {
