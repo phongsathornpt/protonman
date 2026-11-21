@@ -43,6 +43,10 @@ func ResolveIconKind(icon Icon) IconKind {
 }
 
 var iconKindByName = map[Icon]IconKind{
+	IconSidebar:      KindSidebar,
+	IconInspector:    KindInspector,
+	IconSend:         KindSend,
+	IconStop:         KindStop,
 	IconBrandLogo:    KindBrandLogo,
 	IconSearch:       KindSearch,
 	IconClose:        KindClose,

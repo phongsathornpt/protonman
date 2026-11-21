@@ -12,6 +12,10 @@ type Icon string
 
 // The icon vocabulary used across the desktop frontend.
 const (
+	IconSidebar      Icon = "sidebar"
+	IconInspector    Icon = "inspector"
+	IconSend         Icon = "send"
+	IconStop         Icon = "stop"
 	IconBrandLogo    Icon = "brand-logo"
 	IconSearch       Icon = "search"
 	IconClose        Icon = "close"

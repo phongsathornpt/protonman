@@ -12,6 +12,8 @@ import (
 	"gioui.org/op"
 	"gioui.org/unit"
 	"gioui.org/widget"
+
+	"github.com/phongsathornpt/protonman/internal/adapter/in/desktop/gioui/component/uikit"
 )
 
 type MCPInput struct {
@@ -227,7 +229,7 @@ func (c *Component) layoutMCPConfigurationCard(gtx layout.Context, input MCPInpu
 								c.clearMCPEditors()
 								gtx.Execute(op.InvalidateCmd{})
 							}
-							return chrome.MiniIconButton(gtx, &mcp.CloseButton, "✕", chrome.Colors.OnSurfaceVariant)
+							return chrome.ActionIcon(gtx, uikit.IconClose, 12, chrome.Colors.OnSurfaceVariant)
 						}),
 					)
 				}),

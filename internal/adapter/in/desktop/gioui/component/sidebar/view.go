@@ -947,12 +947,12 @@ func (c *Component) layoutSidebarRow(gtx layout.Context, row Row, state desktops
 								}),
 								layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 									return uikit.Inset{Left: 4}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-										return c.layoutMiniButton(gtx, c.RenameConfirmButton(), "✓", c.view.Chrome.Colors.Primary)
+										return c.layoutMiniIconButton(gtx, c.RenameConfirmButton(), "✓", c.view.Chrome.Colors.Primary)
 									})
 								}),
 								layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 									return uikit.Inset{Left: 2}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-										return c.layoutMiniButton(gtx, c.RenameCancelButton(), "✕", c.view.Chrome.Colors.OnSurfaceVariant)
+										return c.layoutMiniIconButton(gtx, c.RenameCancelButton(), "✕", c.view.Chrome.Colors.OnSurfaceVariant)
 									})
 								}),
 							)
@@ -1199,6 +1199,9 @@ func (c *Component) layoutMiniIconButton(gtx layout.Context, button *widget.Clic
 			return layout.Center.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 				if label == "✕" || label == "×" {
 					return c.view.Chrome.ActionIcon(gtx, uikit.IconClose, 12, foreground)
+				}
+				if label == "✓" {
+					return c.view.Chrome.ActionIcon(gtx, uikit.IconCheck, 12, foreground)
 				}
 				return c.view.Chrome.Label(gtx, label, uikit.TextLabelSmall, font.Bold, foreground, 1)
 			})

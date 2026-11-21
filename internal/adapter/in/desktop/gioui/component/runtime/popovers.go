@@ -473,7 +473,7 @@ func (c *Component) layoutModelSearchInput(gtx layout.Context, chrome Chrome) la
 						return layout.Dimensions{}
 					}
 					return uikit.Inset{Left: 4}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-						return chrome.MiniIconButton(gtx, &c.widgets.ModelSearchClearButton, "×", chrome.Colors.OnSurfaceVariant)
+						return chrome.ActionIcon(gtx, uikit.IconClose, 12, chrome.Colors.OnSurfaceVariant)
 					})
 				}),
 			)
