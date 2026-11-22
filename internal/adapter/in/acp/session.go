@@ -129,6 +129,30 @@ func (s *Session) SetReasoningEffort(effort domain.ReasoningEffort) error {
 	return nil
 }
 
+// restoreReasoningEffort records persisted reasoning without failing session
+// load when no cloneable runner exists yet (for example, startup without a
+// configured model leaves a nil runner). When a runner is present it behaves
+// like SetReasoningEffort; otherwise the effort is retained and applied on
+// the next runtime rebuild.
+func (s *Session) restoreReasoningEffort(effort domain.ReasoningEffort) error {
+	if !effort.Valid() {
+		return fmt.Errorf("invalid reasoning effort %q", effort)
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.runner == nil {
+		s.reasoningEffort = effort
+		return nil
+	}
+	clone, err := app.CloneConversationWithReasoning(s.runner, effort, effort != domain.ReasoningDefault)
+	if err != nil {
+		return err
+	}
+	s.runner = clone
+	s.reasoningEffort = effort
+	return nil
+}
+
 // ID returns the unique session ID.
 func (s *Session) ID() string {
 	return s.id

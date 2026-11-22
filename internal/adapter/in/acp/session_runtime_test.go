@@ -140,3 +140,30 @@ type testMockConversation struct{}
 func (testMockConversation) Run(ctx context.Context, messages []domain.Message, sink app.Sink) (app.Result, error) {
 	return app.Result{}, nil
 }
+
+func TestRestoreSessionLoadDefersReasoningWithoutRunner(t *testing.T) {
+	server := newTestServer(t, permission.ModeAlwaysApprove)
+	store, err := sessionfs.NewFileStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	server.sessionService = app.NewSessions(store)
+	sessionID := "restore-reasoning-no-runner"
+	if err := store.Save(context.Background(), sessionID, session.State{
+		SessionID:       sessionID,
+		PermissionMode:  "ask",
+		ReasoningEffort: "high",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	sess, _, err := server.loadSession(context.Background(), sessionID, "/tmp", nil)
+	if err != nil {
+		t.Fatalf("loadSession error = %v, want deferred reasoning restore", err)
+	}
+	if got := sess.ReasoningEffort(); got != domain.ReasoningHigh {
+		t.Fatalf("restored reasoning = %q, want high", got)
+	}
+	if sess.runner != nil {
+		t.Fatal("runner should stay nil when no model is configured")
+	}
+}

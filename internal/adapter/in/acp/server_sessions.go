@@ -105,7 +105,7 @@ func (s *Server) loadSession(ctx context.Context, sessionID string, cwd string, 
 				if parseErr != nil {
 					return nil, timings, fmt.Errorf("restore session reasoning %q: %w", sessionID, parseErr)
 				}
-				if err := sess.SetReasoningEffort(effort); err != nil {
+				if err := sess.restoreReasoningEffort(effort); err != nil {
 					return nil, timings, fmt.Errorf("restore session reasoning %q: %w", sessionID, err)
 				}
 			}
