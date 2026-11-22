@@ -1,6 +1,12 @@
 {
   "version": 1,
   "skills": {
+    "acp-agent-integration": {
+      "source": "local",
+      "sourceType": "project",
+      "computedHash": "9b94581798b46fe6b1e957577c701a8226da20138e4bd3e35ea5209e6cab1dcb",
+      "skillPath": ".protonman/skills/acp-agent-integration"
+    },
     "golang-code-review": {
       "source": "local",
       "sourceType": "project",

@@ -3,7 +3,7 @@ package failure
 import (
 	"testing"
 
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	domain "github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
 )
 
 func TestClassifyProviderUsesCentralModelCodes(t *testing.T) {
@@ -12,9 +12,9 @@ func TestClassifyProviderUsesCentralModelCodes(t *testing.T) {
 		code Code
 		text string
 	}{
-		{sdk.NewProviderError("openai", 400, "invalid_request", "unsupported field"), CodeModelInvalidRequest, "invalid model request"},
-		{sdk.NewProviderError("openai", 429, "rate_limit", "slow down"), CodeModelRateLimited, "rate limited"},
-		{sdk.NewProviderError("openai", 404, "model_not_found", "missing"), CodeModelUnavailable, "model unavailable"},
+		{domain.NewProviderError("openai", 400, "invalid_request", "unsupported field"), CodeModelInvalidRequest, "invalid model request"},
+		{domain.NewProviderError("openai", 429, "rate_limit", "slow down"), CodeModelRateLimited, "rate limited"},
+		{domain.NewProviderError("openai", 404, "model_not_found", "missing"), CodeModelUnavailable, "model unavailable"},
 	}
 	for _, tt := range tests {
 		got, ok := ClassifyProvider(tt.err)

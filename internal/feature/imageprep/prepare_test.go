@@ -8,7 +8,7 @@ import (
 	"image/png"
 	"testing"
 
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	domain "github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
 )
 
 func pngDataURLPayload(t *testing.T, width, height int) string {
@@ -59,9 +59,9 @@ func TestPreparePreservesSmallPNGBytes(t *testing.T) {
 
 func TestPrepareMessagesResizesRequestCopyOnly(t *testing.T) {
 	data := pngDataURLPayload(t, 2000, 2000)
-	messages := []sdk.Message{{
-		Role:  sdk.RoleUser,
-		Parts: []sdk.ContentPart{{Type: sdk.ContentPartImage, MIMEType: "image/png", Data: data}},
+	messages := []domain.Message{{
+		Role:  domain.RoleUser,
+		Parts: []domain.ContentPart{{Type: domain.ContentPartImage, MIMEType: "image/png", Data: data}},
 	}}
 	prepared, err := PrepareMessages(messages, DefaultPolicy())
 	if err != nil {

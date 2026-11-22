@@ -236,7 +236,7 @@ TUI / Headless / ACP
         ▼
 Application turn loop
         │
-        ├── Model providers / proton-sdk
+        ├── Model providers / pkg/proton-sdk
         ├── Session + memory
         └── Subagent orchestration
         │

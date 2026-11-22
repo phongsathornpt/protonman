@@ -11,7 +11,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/phongsathornpt/protonman/internal/core/tool"
-	"github.com/phongsathornpt/protonman/proton-sdk/domain"
+	"github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
 )
 
 const (

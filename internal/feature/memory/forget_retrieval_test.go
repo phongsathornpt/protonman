@@ -11,13 +11,13 @@ import (
 	corememory "github.com/phongsathornpt/protonman/internal/core/memory"
 	"github.com/phongsathornpt/protonman/internal/core/modelclient"
 	"github.com/phongsathornpt/protonman/internal/core/session"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	domain "github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
 )
 
-func memoryForgetTestRequest() sdk.Request {
-	return sdk.Request{Messages: []sdk.Message{
-		{ID: "system", Role: sdk.RoleSystem, Content: "stable system prompt"},
-		{ID: "user-1", Role: sdk.RoleUser, Content: "please run test verification"},
+func memoryForgetTestRequest() domain.Request {
+	return domain.Request{Messages: []domain.Message{
+		{ID: "system", Role: domain.RoleSystem, Content: "stable system prompt"},
+		{ID: "user-1", Role: domain.RoleUser, Content: "please run test verification"},
 	}}
 }
 
@@ -83,7 +83,7 @@ func TestExtractionCannotResurrectForgottenMemory(t *testing.T) {
 		t.Helper()
 		state := session.State{
 			SessionID: "previous", Revision: revision, WorkspaceKey: "ws", UpdatedAt: now.Add(-time.Hour),
-			Messages: []session.Message{{ID: "m1", Role: sdk.RoleUser, Content: "Run go test ./... before finishing."}},
+			Messages: []session.Message{{ID: "m1", Role: domain.RoleUser, Content: "Run go test ./... before finishing."}},
 		}
 		sessions := &extractionSessionRepo{
 			states:    map[string]session.State{"previous": state},
@@ -175,7 +175,7 @@ func TestExtractionCannotResurrectForgottenGlobalMemory(t *testing.T) {
 		t.Helper()
 		state := session.State{
 			SessionID: "previous", Revision: revision, WorkspaceKey: "ws", UpdatedAt: now.Add(-time.Hour),
-			Messages: []session.Message{{ID: "m1", Role: sdk.RoleUser, Content: "Always sign commits with SSH."}},
+			Messages: []session.Message{{ID: "m1", Role: domain.RoleUser, Content: "Always sign commits with SSH."}},
 		}
 		sessions := &extractionSessionRepo{
 			states:    map[string]session.State{"previous": state},

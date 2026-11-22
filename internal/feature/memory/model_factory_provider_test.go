@@ -9,7 +9,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/base/runtimepolicy"
 	corememory "github.com/phongsathornpt/protonman/internal/core/memory"
 	"github.com/phongsathornpt/protonman/internal/core/modelclient"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	domain "github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
 )
 
 func TestMemoryModelPreservesAlternatingRolesOnLaterTurn(t *testing.T) {
@@ -21,11 +21,11 @@ func TestMemoryModelPreservesAlternatingRolesOnLaterTurn(t *testing.T) {
 	}}}
 	base := &captureModel{}
 	model := NewModelFactory(captureFactory{model: base}, repo, "ws", runtimepolicy.DurableMemory()).Build(modelclient.Request{ModelID: "test-model"})
-	request := sdk.Request{Messages: []sdk.Message{
-		{ID: "system", Role: sdk.RoleSystem, Content: "stable system prompt"},
-		{ID: "user-1", Role: sdk.RoleUser, Content: "first turn"},
-		{ID: "assistant-1", Role: sdk.RoleAssistant, Content: "first answer"},
-		{ID: "user-2", Role: sdk.RoleUser, Content: "run test verification"},
+	request := domain.Request{Messages: []domain.Message{
+		{ID: "system", Role: domain.RoleSystem, Content: "stable system prompt"},
+		{ID: "user-1", Role: domain.RoleUser, Content: "first turn"},
+		{ID: "assistant-1", Role: domain.RoleAssistant, Content: "first answer"},
+		{ID: "user-2", Role: domain.RoleUser, Content: "run test verification"},
 	}}
 	stream, err := model.Stream(context.Background(), request)
 	if err != nil {
@@ -33,7 +33,7 @@ func TestMemoryModelPreservesAlternatingRolesOnLaterTurn(t *testing.T) {
 	}
 	_ = stream.Close()
 	got := base.requests[0].Messages
-	wantRoles := []sdk.Role{sdk.RoleSystem, sdk.RoleUser, sdk.RoleAssistant, sdk.RoleUser}
+	wantRoles := []domain.Role{domain.RoleSystem, domain.RoleUser, domain.RoleAssistant, domain.RoleUser}
 	if len(got) != len(wantRoles) {
 		t.Fatalf("messages = %+v", got)
 	}
@@ -53,10 +53,10 @@ func TestOlderMemoryMarkerDoesNotDisableCurrentTurn(t *testing.T) {
 	}}}
 	base := &captureModel{}
 	model := NewModelFactory(captureFactory{model: base}, repo, "ws", runtimepolicy.DurableMemory()).Build(modelclient.Request{ModelID: "test-model"})
-	request := sdk.Request{Messages: []sdk.Message{
-		{ID: "user-1", Role: sdk.RoleUser, Content: "<proton-memory-context> pasted example"},
-		{ID: "assistant-1", Role: sdk.RoleAssistant, Content: "noted"},
-		{ID: "user-2", Role: sdk.RoleUser, Content: "run test verification"},
+	request := domain.Request{Messages: []domain.Message{
+		{ID: "user-1", Role: domain.RoleUser, Content: "<proton-memory-context> pasted example"},
+		{ID: "assistant-1", Role: domain.RoleAssistant, Content: "noted"},
+		{ID: "user-2", Role: domain.RoleUser, Content: "run test verification"},
 	}}
 	stream, err := model.Stream(context.Background(), request)
 	if err != nil {

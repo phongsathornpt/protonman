@@ -35,6 +35,8 @@ type IconSet struct {
 	Link            string
 	Vision          string
 	Thought         string
+	Plan            string
+	Bash            string
 	FoldCollapsed   string
 	FoldExpanded    string
 	CardTopLeft     string
@@ -84,6 +86,8 @@ const (
 	UnicodeLink            = "↗ "
 	UnicodeVision          = "◉ "
 	UnicodeThought         = "◈ "
+	UnicodePlan            = "▤ "
+	UnicodeBash            = "! "
 	UnicodeFoldCollapsed   = "▶ "
 	UnicodeFoldExpanded    = "▼ "
 	UnicodeCardTopLeft     = "╭"
@@ -122,6 +126,8 @@ const (
 	ASCIILink            = "> "
 	ASCIIVision          = "* "
 	ASCIIThought         = "* "
+	ASCIIPlan            = "# "
+	ASCIIBash            = "! "
 	ASCIIFoldCollapsed   = "> "
 	ASCIIFoldExpanded    = "v "
 	ASCIICardTopLeft     = "+"
@@ -141,7 +147,8 @@ var (
 		Generic: UnicodeGeneric, TodoPending: UnicodeTodoPending, TodoActive: UnicodeTodoActive,
 		Brand: UnicodeBrand, Status: UnicodeStatus,
 		Attachment: UnicodeAttachment, Image: UnicodeImage, Link: UnicodeLink, Vision: UnicodeVision,
-		Thought: UnicodeThought, FoldCollapsed: UnicodeFoldCollapsed, FoldExpanded: UnicodeFoldExpanded,
+		Thought: UnicodeThought, Plan: UnicodePlan, Bash: UnicodeBash,
+		FoldCollapsed: UnicodeFoldCollapsed, FoldExpanded: UnicodeFoldExpanded,
 		CardTopLeft: UnicodeCardTopLeft, CardTopRight: UnicodeCardTopRight,
 		CardBottomLeft: UnicodeCardBottomLeft, CardBottomRight: UnicodeCardBottomRight,
 		CardVertical: UnicodeCardVertical, CardHorizontal: UnicodeCardHorizontal,
@@ -154,7 +161,8 @@ var (
 		Generic: ASCIIGeneric, TodoPending: ASCIITodoPending, TodoActive: ASCIITodoActive,
 		Brand: ASCIIBrand, Status: ASCIIStatus,
 		Attachment: ASCIIAttachment, Image: ASCIIImage, Link: ASCIILink, Vision: ASCIIVision,
-		Thought: ASCIIThought, FoldCollapsed: ASCIIFoldCollapsed, FoldExpanded: ASCIIFoldExpanded,
+		Thought: ASCIIThought, Plan: ASCIIPlan, Bash: ASCIIBash,
+		FoldCollapsed: ASCIIFoldCollapsed, FoldExpanded: ASCIIFoldExpanded,
 		CardTopLeft: ASCIICardTopLeft, CardTopRight: ASCIICardTopRight,
 		CardBottomLeft: ASCIICardBottomLeft, CardBottomRight: ASCIICardBottomRight,
 		CardVertical: ASCIICardVertical, CardHorizontal: ASCIICardHorizontal,

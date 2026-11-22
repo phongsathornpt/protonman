@@ -5,6 +5,7 @@ import (
 
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/composer"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/keyboardpolicy"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/paneutil"
 )
@@ -194,8 +195,8 @@ func (m *bubbleModel) handlePromptKey(message tea.KeyPressMsg) tea.Cmd {
 		m.setBashMode(false)
 		return nil
 	}
-	if !m.panes.bottom.bashMode() && key.Matches(message, composerKeys.ExitBash) && len(m.panes.bottom.composer.attachments.localImages) > 0 {
-		cleanText := strings.TrimSpace(stripAttachmentPlaceholders(prompt.Value(), m.panes.bottom.composer.attachments.snapshot(nil)))
+	if !m.panes.bottom.bashMode() && key.Matches(message, composerKeys.ExitBash) && m.panes.bottom.composer.attachments.Len() > 0 {
+		cleanText := strings.TrimSpace(composer.StripPlaceholders(prompt.Value(), m.panes.bottom.composer.attachments.Snapshot(nil)))
 		if cleanText == "" {
 			if m.panes.bottom.composer.attachments.RemoveLast(prompt) {
 				m.requestRelayout()

@@ -2,6 +2,8 @@ package slashview
 
 import (
 	"strings"
+
+	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/style"
 )
 
 type ArgumentMode uint8
@@ -227,7 +229,8 @@ type Skill struct {
 	Active      bool
 }
 
-func Matches(context Context, catalog []Command, skills []Skill) []Command {
+func Matches(context Context, catalog []Command, skills []Skill, icons tuistyle.IconSet) []Command {
+	icons = tuistyle.OrUnicodeIcons(icons)
 	if context.Kind == ContextLowConcurrency {
 		options := []Command{
 			{Name: "auto", Description: "use provider/model recommendation"},
@@ -248,11 +251,11 @@ func Matches(context Context, catalog []Command, skills []Skill) []Command {
 			if context.Query != "" && !FuzzyContains(skill.Name, context.Query) && !FuzzyContains(skill.Description, context.Query) {
 				continue
 			}
-			box := "[ ]"
+			tag := strings.TrimSpace(icons.TodoPending)
 			if skill.Active {
-				box = "[x]"
+				tag = strings.TrimSpace(icons.TodoActive)
 			}
-			matches = append(matches, Command{Name: skill.Name, Description: skill.Description, PrefixTag: box, Scope: skill.Scope})
+			matches = append(matches, Command{Name: skill.Name, Description: skill.Description, PrefixTag: tag, Scope: skill.Scope})
 		}
 		return matches
 	}
@@ -272,7 +275,7 @@ func Matches(context Context, catalog []Command, skills []Skill) []Command {
 		matches = append(matches, Command{
 			Name:        skill.Name,
 			Description: skill.Description,
-			PrefixTag:   "[skill]",
+			PrefixTag:   strings.TrimSpace(icons.Skill),
 			Argument:    ArgumentRest,
 			EchoUser:    true,
 		})

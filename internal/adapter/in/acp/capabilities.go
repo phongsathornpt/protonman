@@ -8,6 +8,7 @@ import "encoding/json"
 func (c SessionCapabilities) MarshalJSON() ([]byte, error) {
 	type wire struct {
 		Meta                  Meta      `json:"_meta,omitempty"`
+		List                  *struct{} `json:"list,omitempty"`
 		Resume                *struct{} `json:"resume,omitempty"`
 		Delete                *struct{} `json:"delete,omitempty"`
 		Close                 *struct{} `json:"close,omitempty"`
@@ -16,6 +17,7 @@ func (c SessionCapabilities) MarshalJSON() ([]byte, error) {
 
 	out := wire{
 		Meta:   c.Meta,
+		List:   c.List,
 		Resume: c.Resume,
 		Delete: c.Delete,
 		Close:  c.Close,

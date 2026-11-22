@@ -14,8 +14,8 @@ import (
 	"github.com/phongsathornpt/protonman/internal/engine/toolcall"
 	"github.com/phongsathornpt/protonman/internal/engine/turn"
 	"github.com/phongsathornpt/protonman/internal/feature/skill"
-	"github.com/phongsathornpt/protonman/proton-sdk/domain"
-	"github.com/phongsathornpt/protonman/proton-sdk/port"
+	"github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
+	"github.com/phongsathornpt/protonman/pkg/proton-sdk/port"
 )
 
 func (c *Coordinator) execute(ctx context.Context, req Request) (Result, error) {

@@ -6,7 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	domain "github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
+	port "github.com/phongsathornpt/protonman/pkg/proton-sdk/port"
+	usecase "github.com/phongsathornpt/protonman/pkg/proton-sdk/usecase"
 )
 
 func TestCloneMessagesCopiesToolArguments(t *testing.T) {
@@ -59,24 +61,24 @@ type metadataTestModel struct{}
 
 func (*metadataTestModel) Provider() string { return "test" }
 func (*metadataTestModel) ModelID() string  { return "model" }
-func (*metadataTestModel) Capabilities() sdk.ModelCapabilities {
-	return sdk.ModelCapabilities{Streaming: true}
+func (*metadataTestModel) Capabilities() domain.ModelCapabilities {
+	return domain.ModelCapabilities{Streaming: true}
 }
-func (*metadataTestModel) Metadata() sdk.ModelMetadata {
-	return sdk.ModelMetadata{TokenLimits: sdk.TokenLimits{
+func (*metadataTestModel) Metadata() domain.ModelMetadata {
+	return domain.ModelMetadata{TokenLimits: domain.TokenLimits{
 		ContextWindow: 1000, MaxInputTokens: 800, MaxOutputTokens: 200,
 	}}
 }
-func (*metadataTestModel) Stream(context.Context, sdk.Request) (sdk.Stream, error) {
+func (*metadataTestModel) Stream(context.Context, domain.Request) (port.Stream, error) {
 	return nil, nil
 }
 
 func TestModelDecoratorsPreserveCanonicalMetadata(t *testing.T) {
-	base := sdk.LanguageModel(&metadataTestModel{})
+	base := port.LanguageModel(&metadataTestModel{})
 	wrapped := withSessionID(base, "session")
 	wrapped = withContextWindow(wrapped, 1200)
 
-	metadata := sdk.ModelMetadataOf(wrapped)
+	metadata := usecase.ModelMetadataOf(wrapped)
 	if metadata.TokenLimits.ContextWindow != 1200 {
 		t.Fatalf("context window = %d, want 1200", metadata.TokenLimits.ContextWindow)
 	}

@@ -104,11 +104,3 @@ func WithExecutionTimeout(timeout time.Duration) Option {
 		return nil
 	}
 }
-
-// WithCallGuard attaches an execution guard.
-func WithCallGuard(guard CallGuard) Option {
-	return func(service *Service) error {
-		service.guard = guard
-		return nil
-	}
-}

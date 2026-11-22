@@ -15,7 +15,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/engine/toolcall"
 	"github.com/phongsathornpt/protonman/internal/feature/skill"
 	tododomain "github.com/phongsathornpt/protonman/internal/feature/todo"
-	"github.com/phongsathornpt/protonman/proton-sdk/domain"
+	"github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
 )
 
 // BubbleTeaUI is the Bubble Tea terminal adapter over Protonman services.
@@ -60,10 +60,10 @@ func NewBubbleTea(
 	options ...BubbleTeaOption,
 ) (*BubbleTeaUI, error) {
 	if service == nil {
-		return nil, errors.New("Bubble Tea UI service is required")
+		return nil, errors.New("bubble tea UI service is required")
 	}
 	if registry == nil {
-		return nil, errors.New("Bubble Tea UI registry is required")
+		return nil, errors.New("bubble tea UI registry is required")
 	}
 	ui := &BubbleTeaUI{
 		service:        service,
@@ -85,11 +85,6 @@ func NewBubbleTea(
 	ui.finalAgentProfile = ui.agentConfig.Profile
 	ui.finalReasoningEffort = ui.agentConfig.ReasoningEffort
 	return ui, nil
-}
-
-// QuestionBridge returns the question bridge that satisfies questiontool.Prompter.
-func (ui *BubbleTeaUI) QuestionBridge() *questionbridge.Bridge {
-	return ui.questionBridge
 }
 
 // PermissionPrompt adapts a synchronous service permission request into a

@@ -23,6 +23,10 @@ const (
 	InstallDir = "PROTONMAN_INSTALL_DIR"
 	// PinnedVersion pins the release tag `protonman update` installs.
 	PinnedVersion = "PROTONMAN_VERSION"
+	// Timing enables diagnostic stage timings on latency-sensitive paths such as
+	// ACP session/load and the desktop history-load sequence. It only affects
+	// diagnostics; behavior and the default wire payload are unchanged when unset.
+	Timing = "PROTONMAN_TIMING"
 )
 
 // Value reads one canonical Protonman environment variable.

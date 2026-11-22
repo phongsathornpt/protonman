@@ -9,7 +9,7 @@ import (
 
 	"github.com/phongsathornpt/protonman/internal/app"
 	"github.com/phongsathornpt/protonman/internal/platform/appdirs"
-	"github.com/phongsathornpt/protonman/proton-sdk/domain"
+	"github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
 )
 
 // Classify maps an arbitrary runtime/provider error into a structured presentation error.
@@ -24,11 +24,12 @@ func Classify(err error, activeProvider string, activeModel string) Error {
 	// 1. Cancellation check
 	if errors.Is(err, context.Canceled) || strings.Contains(err.Error(), "context canceled") || strings.Contains(err.Error(), "UICancelledError") {
 		return Error{
-			Kind:      KindCancelled,
-			Title:     "Turn Cancelled",
-			Badge:     "CANCELLED",
-			Message:   "The turn was cancelled by the user.",
-			Retryable: true,
+			Kind:       KindCancelled,
+			Title:      "Turn Cancelled",
+			Badge:      "CANCELLED",
+			Message:    "The turn was cancelled by the user.",
+			RawDetails: err.Error(),
+			Retryable:  true,
 		}
 	}
 
@@ -438,10 +439,7 @@ func Classify(err error, activeProvider string, activeModel string) Error {
 	}
 
 	// 23. Generic Fallback
-	cleanMsg := effMessage
-	if strings.HasPrefix(cleanMsg, "turn failed: ") {
-		cleanMsg = strings.TrimPrefix(cleanMsg, "turn failed: ")
-	}
+	cleanMsg := strings.TrimPrefix(effMessage, "turn failed: ")
 
 	return Error{
 		Kind:        KindGeneric,

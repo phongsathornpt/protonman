@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -14,6 +15,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/sessionfs"
 	"github.com/phongsathornpt/protonman/internal/app"
+	"github.com/phongsathornpt/protonman/internal/base/envconfig"
 	"github.com/phongsathornpt/protonman/internal/core/conversation"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 	"github.com/phongsathornpt/protonman/internal/core/session"
@@ -21,7 +23,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/engine/toolcall"
 	applicationturn "github.com/phongsathornpt/protonman/internal/engine/turn"
 	"github.com/phongsathornpt/protonman/internal/feature/agent"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	domain "github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
 )
 
 func TestACPInitializeAndPrompt(t *testing.T) {
@@ -336,6 +338,251 @@ func TestACPSessionLoadAndReplay(t *testing.T) {
 	}
 }
 
+func TestACPSessionLoadCanDeferRemoteModelDiscovery(t *testing.T) {
+	ctx := context.Background()
+	store, err := sessionfs.NewFileStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	const sessionID = "deferred-model-load"
+	if err := store.Save(ctx, sessionID, session.State{
+		SessionID:      sessionID,
+		PermissionMode: "ask",
+		ModelProvider:  "runanyware",
+		ModelID:        "mimo-v2.6-pro",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	server := newTestServer(t, permission.ModeAsk)
+	server.sessionService = app.NewSessions(store)
+	sessionRuntimeControls.Store(server, sessionRuntimeControl{
+		defaults: SessionRuntimeSettings{Provider: "runanyware", Model: "mimo-v2.6-pro"},
+	})
+	defer sessionRuntimeControls.Delete(server)
+
+	discoverCalls := 0
+	sessionModelOptionsProviders.Store(server, SessionModelOptionsProvider(func(context.Context, SessionRuntimeSettings) ([]SessionConfigSelectOption, error) {
+		discoverCalls++
+		return []SessionConfigSelectOption{{Value: "remote-model", Name: "Remote Model"}}, nil
+	}))
+	defer sessionModelOptionsProviders.Delete(server)
+
+	deferredParams, err := json.Marshal(SessionLoadParams{
+		MetaCarrier: MetaCarrier{Meta: Meta{
+			"protonman": json.RawMessage(`{"deferModelDiscovery":true}`),
+		}},
+		SessionID: sessionID,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, _, err := server.dispatch(ctx, RPCRequest{Method: "session/load", Params: deferredParams}, &bytes.Buffer{})
+	if err != nil {
+		t.Fatalf("deferred session/load error = %v", err)
+	}
+	deferred, ok := result.(SessionLoadResult)
+	if !ok {
+		t.Fatalf("deferred session/load result = %T, want SessionLoadResult", result)
+	}
+	if discoverCalls != 0 {
+		t.Fatalf("model discovery calls during deferred load = %d, want 0", discoverCalls)
+	}
+	deferredModels, _ := findSessionConfigOption(deferred.ConfigOptions, configIDModel)
+	if len(deferredModels.Options) != 1 || deferredModels.Options[0].Value != "mimo-v2.6-pro" {
+		t.Fatalf("deferred model options = %#v, want only the current model", deferredModels.Options)
+	}
+
+	regularParams, err := json.Marshal(SessionLoadParams{SessionID: sessionID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, _, err = server.dispatch(ctx, RPCRequest{Method: "session/load", Params: regularParams}, &bytes.Buffer{})
+	if err != nil {
+		t.Fatalf("regular session/load error = %v", err)
+	}
+	regular, ok := result.(SessionLoadResult)
+	if !ok {
+		t.Fatalf("regular session/load result = %T, want SessionLoadResult", result)
+	}
+	if discoverCalls != 1 {
+		t.Fatalf("model discovery calls after regular load = %d, want 1", discoverCalls)
+	}
+	regularModels, _ := findSessionConfigOption(regular.ConfigOptions, configIDModel)
+	if !selectOptionContains(regularModels, "remote-model") {
+		t.Fatalf("regular model options = %#v, want discovered model", regularModels.Options)
+	}
+}
+
+func TestACPSessionLoadEmitsStageTimingsWhenEnabled(t *testing.T) {
+	t.Setenv(envconfig.Timing, "1")
+	server := newTestServer(t, permission.ModeAsk)
+	created, _, err := server.dispatch(context.Background(), RPCRequest{Method: "session/new"}, &bytes.Buffer{})
+	if err != nil {
+		t.Fatalf("session/new error = %v", err)
+	}
+	sessionID := created.(SessionNewResult).SessionID
+	sess, ok := server.lookupSession(sessionID)
+	if !ok {
+		t.Fatalf("session %q not found", sessionID)
+	}
+	sess.SetMessages([]domain.Message{
+		{ID: domain.NewMessageID(), Role: domain.RoleUser, Content: "hello"},
+		{ID: domain.NewMessageID(), Role: domain.RoleAssistant, Content: "world"},
+	})
+
+	params, err := json.Marshal(SessionLoadParams{SessionID: sessionID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, _, err := server.dispatch(context.Background(), RPCRequest{Method: "session/load", Params: params}, &bytes.Buffer{})
+	if err != nil {
+		t.Fatalf("session/load error = %v", err)
+	}
+	loaded, ok := result.(SessionLoadResult)
+	if !ok {
+		t.Fatalf("session/load result = %T, want SessionLoadResult", result)
+	}
+	if loaded.Meta == nil {
+		t.Fatal("expected timing metadata on the load result")
+	}
+	var parsed struct {
+		Timings struct {
+			TotalUs        int64 `json:"totalUs"`
+			ReplayUs       int64 `json:"replayUs"`
+			ReplayMessages int   `json:"replayMessages"`
+		} `json:"timings"`
+	}
+	if err := json.Unmarshal(loaded.Meta["protonman"], &parsed); err != nil {
+		t.Fatalf("decode timing metadata: %v", err)
+	}
+	if parsed.Timings.ReplayMessages != 2 {
+		t.Fatalf("replayMessages = %d, want 2", parsed.Timings.ReplayMessages)
+	}
+	if parsed.Timings.TotalUs < parsed.Timings.ReplayUs {
+		t.Fatalf("total (%dus) is less than replay (%dus)", parsed.Timings.TotalUs, parsed.Timings.ReplayUs)
+	}
+}
+
+func TestACPSessionLoadOmitsStageTimingsByDefault(t *testing.T) {
+	t.Setenv(envconfig.Timing, "")
+	server := newTestServer(t, permission.ModeAsk)
+	created, _, err := server.dispatch(context.Background(), RPCRequest{Method: "session/new"}, &bytes.Buffer{})
+	if err != nil {
+		t.Fatalf("session/new error = %v", err)
+	}
+	sessionID := created.(SessionNewResult).SessionID
+
+	params, err := json.Marshal(SessionLoadParams{SessionID: sessionID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, _, err := server.dispatch(context.Background(), RPCRequest{Method: "session/load", Params: params}, &bytes.Buffer{})
+	if err != nil {
+		t.Fatalf("session/load error = %v", err)
+	}
+	loaded, ok := result.(SessionLoadResult)
+	if !ok {
+		t.Fatalf("session/load result = %T, want SessionLoadResult", result)
+	}
+	if loaded.Meta != nil {
+		t.Fatalf("timing metadata leaked without %s: %#v", envconfig.Timing, loaded.Meta)
+	}
+}
+
+func TestACPSessionLoadWithSymlinkCwd(t *testing.T) {
+	ctx := context.Background()
+	realDir := t.TempDir()
+	parentDir := t.TempDir()
+	symlinkDir := filepath.Join(parentDir, "symlink-workspace")
+	if err := os.Symlink(realDir, symlinkDir); err != nil {
+		t.Skipf("symlinks not supported: %v", err)
+	}
+
+	store, err := sessionfs.NewFileStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	const sessionID = "symlink-load-session"
+	wsKey := session.WorkspaceKey(realDir)
+	if err := store.Save(ctx, sessionID, session.State{
+		SessionID:      sessionID,
+		WorkspaceKey:   wsKey,
+		WorkspaceName:  filepath.Base(realDir),
+		PermissionMode: "ask",
+		Messages: []session.Message{
+			{Role: model.RoleUser, Content: "Hello from symlink session"},
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	server := newTestServer(t, permission.ModeAsk)
+	server.sessionService = app.NewSessions(store)
+
+	// Load using symlinked path - should resolve and match wsKey without error
+	params, err := json.Marshal(SessionLoadParams{
+		SessionID: sessionID,
+		Cwd:       symlinkDir,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var output bytes.Buffer
+	result, _, err := server.dispatch(ctx, RPCRequest{Method: "session/load", Params: params}, &output)
+	if err != nil {
+		t.Fatalf("session/load with symlink cwd failed: %v", err)
+	}
+	if _, ok := result.(SessionLoadResult); !ok {
+		t.Fatalf("expected SessionLoadResult, got %T", result)
+	}
+}
+
+func TestACPSessionLoadWithEmptyCwd(t *testing.T) {
+	ctx := context.Background()
+	store, err := sessionfs.NewFileStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	const sessionID = "empty-cwd-load-session"
+	if err := store.Save(ctx, sessionID, session.State{
+		SessionID:      sessionID,
+		WorkspaceKey:   "0123456789abcdef",
+		WorkspaceName:  "remote-project",
+		PermissionMode: "ask",
+		Messages: []session.Message{
+			{Role: model.RoleUser, Content: "Hello from remote session"},
+			{Role: model.RoleAssistant, Content: "Response from remote session"},
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	server := newTestServer(t, permission.ModeAsk)
+	server.sessionService = app.NewSessions(store)
+
+	// Load with empty cwd - should succeed and replay history without "belongs to another workspace"
+	params, err := json.Marshal(SessionLoadParams{
+		SessionID: sessionID,
+		Cwd:       "",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var output bytes.Buffer
+	result, _, err := server.dispatch(ctx, RPCRequest{Method: "session/load", Params: params}, &output)
+	if err != nil {
+		t.Fatalf("session/load with empty cwd failed: %v", err)
+	}
+	if _, ok := result.(SessionLoadResult); !ok {
+		t.Fatalf("expected SessionLoadResult, got %T", result)
+	}
+	out := output.String()
+	if !strings.Contains(out, "Hello from remote session") {
+		t.Fatalf("expected replayed message in output, got: %s", out)
+	}
+}
+
 func TestACPPromptSurfacesPersistenceFailure(t *testing.T) {
 	store := invalidSessionStore(t)
 	server := newTestServerWithRunner(t, permission.ModeAlwaysApprove, &streamingACPRunner{})
@@ -551,6 +798,18 @@ func TestACPUnknownMethod(t *testing.T) {
 	}
 	if !strings.Contains(output.String(), "not supported") {
 		t.Fatalf("unknown method response = %s", output.String())
+	}
+	var resp RPCResponse
+	for line := range bytes.SplitSeq(bytes.TrimSpace(output.Bytes()), []byte("\n")) {
+		if len(bytes.TrimSpace(line)) == 0 {
+			continue
+		}
+		if err := json.Unmarshal(line, &resp); err != nil {
+			t.Fatalf("decode unknown method response: %v", err)
+		}
+	}
+	if resp.Error == nil || resp.Error.Code != CodeMethodNotFound {
+		t.Fatalf("unknown method error = %#v, want code %d", resp.Error, CodeMethodNotFound)
 	}
 }
 
@@ -809,7 +1068,7 @@ func TestACPReasoningSlashPersistsAndValidatesModelProfile(t *testing.T) {
 	if handled, _, err := sess.handleSlashCommand(context.Background(), model.Message{}, "/reasoning high", notify); !handled || err != nil {
 		t.Fatalf("/reasoning high = handled %v, err %v", handled, err)
 	}
-	if got := sess.ReasoningEffort(); got != sdk.ReasoningHigh {
+	if got := sess.ReasoningEffort(); got != domain.ReasoningHigh {
 		t.Fatalf("reasoning effort = %q, want high", got)
 	}
 	loaded, found, err := store.Load(context.Background(), "reasoning-session")
@@ -819,13 +1078,13 @@ func TestACPReasoningSlashPersistsAndValidatesModelProfile(t *testing.T) {
 	if handled, _, err := sess.handleSlashCommand(context.Background(), model.Message{}, "/reasoning xhigh", notify); !handled || err == nil {
 		t.Fatalf("/reasoning xhigh = handled %v, err %v", handled, err)
 	}
-	if got := sess.ReasoningEffort(); got != sdk.ReasoningHigh {
+	if got := sess.ReasoningEffort(); got != domain.ReasoningHigh {
 		t.Fatalf("unsupported override changed effort to %q", got)
 	}
 	if handled, _, err := sess.handleSlashCommand(context.Background(), model.Message{}, "/reasoning auto", notify); !handled || err != nil {
 		t.Fatalf("/reasoning auto = handled %v, err %v", handled, err)
 	}
-	if got := sess.ReasoningEffort(); got != sdk.ReasoningDefault {
+	if got := sess.ReasoningEffort(); got != domain.ReasoningDefault {
 		t.Fatalf("reasoning effort = %q, want auto", got)
 	}
 }
@@ -845,7 +1104,7 @@ func TestACPSessionLoadRestoresReasoningEffort(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := sess.ReasoningEffort(); got != sdk.ReasoningHigh {
+	if got := sess.ReasoningEffort(); got != domain.ReasoningHigh {
 		t.Fatalf("restored reasoning = %q, want high", got)
 	}
 }

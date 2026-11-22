@@ -18,7 +18,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/engine/turn"
 	"github.com/phongsathornpt/protonman/internal/feature/agent"
 	tododomain "github.com/phongsathornpt/protonman/internal/feature/todo"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	domain "github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
 	"strings"
 	"testing"
 	"time"
@@ -27,20 +27,20 @@ import (
 func TestAgentRuntimeStateSurvivesBubbleModelRestart(t *testing.T) {
 	coord := agent.NewCoordinator(nil, nil, nil, nil)
 	defer coord.Close()
-	state := newAgentRuntimeState(config.AgentConfig{MaxToolCalls: 17, Profile: "intelligence", SubagentsEnabled: true, ReasoningEffort: sdk.ReasoningHigh}, true)
+	state := newAgentRuntimeState(config.AgentConfig{MaxToolCalls: 17, Profile: "intelligence", SubagentsEnabled: true, ReasoningEffort: domain.ReasoningHigh}, true)
 	first := newBubbleModel(context.Background(), nil, nil, nil, nil, newPermissionBridge(), "")
 	first.agents = app.NewAgents(coord)
 	state.apply(first)
 	first.maxToolCalls = 23
 	first.agentProfile = "strength"
 	first.subagentsEnabled = false
-	first.reasoningEffort = sdk.ReasoningLow
+	first.reasoningEffort = domain.ReasoningLow
 	coord.SetEnabled(false)
 	state.capture(first)
 	restarted := newBubbleModel(context.Background(), nil, nil, nil, nil, newPermissionBridge(), "")
 	restarted.agents = app.NewAgents(coord)
 	state.apply(restarted)
-	if restarted.maxToolCalls != 23 || restarted.agentProfile != "strength" || restarted.subagentsEnabled || restarted.reasoningEffort != sdk.ReasoningLow {
+	if restarted.maxToolCalls != 23 || restarted.agentProfile != "strength" || restarted.subagentsEnabled || restarted.reasoningEffort != domain.ReasoningLow {
 		t.Fatalf("restart state = tool_calls=%d profile=%q subagents=%v reasoning=%q", restarted.maxToolCalls, restarted.agentProfile, restarted.subagentsEnabled, restarted.reasoningEffort)
 	}
 	if coord.Enabled() {
@@ -548,11 +548,11 @@ func TestScrolledViewportSurvivesLiveAgentChromeStress(t *testing.T) {
 }
 
 func TestAgentRuntimeStatePreservesReasoningPreferenceAcrossRestart(t *testing.T) {
-	state := newAgentRuntimeState(config.AgentConfig{ReasoningEffort: sdk.ReasoningHigh}, true)
+	state := newAgentRuntimeState(config.AgentConfig{ReasoningEffort: domain.ReasoningHigh}, true)
 	first := newBubbleModel(context.Background(), nil, nil, nil, nil, newPermissionBridge(), "")
 	state.apply(first)
-	first.reasoningEffort = sdk.ReasoningDefault
-	first.reasoningPreference = sdk.ReasoningHigh
+	first.reasoningEffort = domain.ReasoningDefault
+	first.reasoningPreference = domain.ReasoningHigh
 	first.reasoningPreferenceSet = true
 	first.reasoningPreferenceSource = reasoningPreferenceSession
 	first.reasoningCompatibilityFallback = true
@@ -560,7 +560,7 @@ func TestAgentRuntimeStatePreservesReasoningPreferenceAcrossRestart(t *testing.T
 
 	restarted := newBubbleModel(context.Background(), nil, nil, nil, nil, newPermissionBridge(), "")
 	state.apply(restarted)
-	if restarted.reasoningEffort != sdk.ReasoningDefault || restarted.reasoningPreference != sdk.ReasoningHigh {
+	if restarted.reasoningEffort != domain.ReasoningDefault || restarted.reasoningPreference != domain.ReasoningHigh {
 		t.Fatalf("restart effective=%q preference=%q, want auto/high", restarted.reasoningEffort, restarted.reasoningPreference)
 	}
 	if !restarted.reasoningPreferenceSet || restarted.reasoningPreferenceSource != reasoningPreferenceSession || !restarted.reasoningCompatibilityFallback {

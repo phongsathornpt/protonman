@@ -7,7 +7,8 @@ import (
 
 	"github.com/phongsathornpt/protonman/internal/core/modelcatalog"
 	"github.com/phongsathornpt/protonman/internal/core/modelconfig"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	domain "github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
+	port "github.com/phongsathornpt/protonman/pkg/proton-sdk/port"
 )
 
 type mockLanguageModel struct {
@@ -17,16 +18,16 @@ type mockLanguageModel struct {
 
 func (m *mockLanguageModel) ModelID() string  { return m.modelID }
 func (m *mockLanguageModel) Provider() string { return m.provider }
-func (m *mockLanguageModel) Capabilities() sdk.ModelCapabilities {
-	return sdk.ModelCapabilities{Streaming: true}
+func (m *mockLanguageModel) Capabilities() domain.ModelCapabilities {
+	return domain.ModelCapabilities{Streaming: true}
 }
-func (m *mockLanguageModel) Stream(ctx context.Context, req sdk.Request) (sdk.Stream, error) {
+func (m *mockLanguageModel) Stream(ctx context.Context, req domain.Request) (port.Stream, error) {
 	return nil, nil
 }
 
 type mockFactory struct{}
 
-func (f *mockFactory) Build(req Request) sdk.LanguageModel {
+func (f *mockFactory) Build(req Request) port.LanguageModel {
 	return &mockLanguageModel{
 		modelID:  req.ModelID,
 		provider: req.ProviderName,

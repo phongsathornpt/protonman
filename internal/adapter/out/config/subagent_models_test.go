@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	domain "github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
 )
 
 func TestLoadSubagentModelsDefaultsToInherit(t *testing.T) {
@@ -171,11 +171,11 @@ func TestLoadSubagentReasoningMergesFieldWise(t *testing.T) {
 		t.Fatal(err)
 	}
 	strength := snapshot.Agent.Subagents["strength"]
-	if strength.Provider != "protonman" || strength.Model != "coding-model" || strength.ReasoningEffort != sdk.ReasoningHigh {
+	if strength.Provider != "protonman" || strength.Model != "coding-model" || strength.ReasoningEffort != domain.ReasoningHigh {
 		t.Fatalf("strength config = %#v, want preserved model with project reasoning override", strength)
 	}
 	agility := snapshot.Agent.Subagents["agility"]
-	if agility.Provider != "opencode" || agility.Model != "fast-model" || agility.ReasoningEffort != sdk.ReasoningLow {
+	if agility.Provider != "opencode" || agility.Model != "fast-model" || agility.ReasoningEffort != domain.ReasoningLow {
 		t.Fatalf("agility config = %#v, want project model with preserved user reasoning", agility)
 	}
 }
@@ -198,7 +198,7 @@ func TestLoadSubagentReasoningAllowsInheritedModel(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := snapshot.Agent.Subagents["intelligence"]
-	if got.Provider != "" || got.Model != "" || got.ReasoningEffort != sdk.ReasoningHigh {
+	if got.Provider != "" || got.Model != "" || got.ReasoningEffort != domain.ReasoningHigh {
 		t.Fatalf("intelligence config = %#v, want inherited model with high reasoning", got)
 	}
 }

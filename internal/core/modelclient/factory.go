@@ -6,7 +6,7 @@ import (
 
 	"github.com/phongsathornpt/protonman/internal/core/modelcatalog"
 	"github.com/phongsathornpt/protonman/internal/core/modelconfig"
-	"github.com/phongsathornpt/protonman/proton-sdk/port"
+	"github.com/phongsathornpt/protonman/pkg/proton-sdk/port"
 )
 
 // Request contains provider-neutral inputs for one language model client.

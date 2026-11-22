@@ -8,7 +8,8 @@ import (
 	"sync"
 
 	"github.com/phongsathornpt/protonman/internal/core/modelconfig"
-	"github.com/phongsathornpt/protonman/proton-sdk/domain"
+	"github.com/phongsathornpt/protonman/internal/core/permission"
+	"github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
 )
 
 const (
@@ -17,6 +18,7 @@ const (
 	configIDModel          = "model"
 	configIDReasoning      = "reasoning"
 	configIDLowConcurrency = "lowConcurrency"
+	configIDPermissionMode = "permissionMode"
 )
 
 // SessionConfigSelectOption is one selectable value in an ACP session config option.
@@ -80,21 +82,21 @@ func sessionModelOptionsProviderFor(server *Server) (SessionModelOptionsProvider
 	return provider, ok && provider != nil
 }
 
-func (s *Server) dispatchSessionConfig(ctx context.Context, request RPCRequest) (any, bool, error) {
+func (s *Server) dispatchSessionConfig(ctx context.Context, request RPCRequest) (any, *RPCNotification, bool, error) {
 	if request.Method != methodSessionSetConfigOption {
-		return nil, false, nil
+		return nil, nil, false, nil
 	}
 	var params SetSessionConfigOptionParams
 	if err := json.Unmarshal(request.Params, &params); err != nil {
-		return nil, true, fmt.Errorf("decode %s: %w", methodSessionSetConfigOption, err)
+		return nil, nil, true, fmt.Errorf("decode %s: %w", methodSessionSetConfigOption, err)
 	}
-	sess, err := s.runtimeSession(params.SessionID)
+	sess, err := s.runtimeSession(ctx, params.SessionID)
 	if err != nil {
-		return nil, true, err
+		return nil, nil, true, err
 	}
 	value, err := decodeSessionConfigStringValue(params)
 	if err != nil {
-		return nil, true, err
+		return nil, nil, true, err
 	}
 
 	switch strings.TrimSpace(params.ConfigID) {
@@ -102,39 +104,60 @@ func (s *Server) dispatchSessionConfig(ctx context.Context, request RPCRequest) 
 		options := s.sessionConfigOptions(ctx, sess)
 		modelOption, ok := findSessionConfigOption(options, configIDModel)
 		if !ok || !selectOptionContains(modelOption, value) {
-			return nil, true, fmt.Errorf("model %q is not an advertised session config value", value)
+			return nil, nil, true, fmt.Errorf("model %q is not an advertised session config value", value)
 		}
 		if err := s.updateSessionRuntime(ctx, sess, func(next *SessionRuntimeSettings) {
 			next.Model = value
 		}); err != nil {
-			return nil, true, err
+			return nil, nil, true, err
 		}
 
 	case configIDReasoning:
 		effort, parseErr := domain.ParseReasoningEffort(value)
 		if parseErr != nil {
-			return nil, true, parseErr
+			return nil, nil, true, parseErr
 		}
 		if err := s.setSessionReasoning(ctx, sess, effort); err != nil {
-			return nil, true, err
+			return nil, nil, true, err
 		}
 
 	case configIDLowConcurrency:
 		setting, parseErr := modelconfig.ParseLowConcurrencySetting(value)
 		if parseErr != nil {
-			return nil, true, parseErr
+			return nil, nil, true, parseErr
 		}
 		if err := s.updateSessionRuntime(ctx, sess, func(next *SessionRuntimeSettings) {
 			next.LowConcurrency = setting.String()
 		}); err != nil {
-			return nil, true, err
+			return nil, nil, true, err
+		}
+
+	case configIDPermissionMode:
+		mode, parseErr := permission.ParseMode(value)
+		if parseErr != nil {
+			return nil, nil, true, parseErr
+		}
+		if err := s.setSessionPermissionMode(ctx, sess, mode); err != nil {
+			return nil, nil, true, err
 		}
 
 	default:
-		return nil, true, fmt.Errorf("unknown session config option %q", params.ConfigID)
+		return nil, nil, true, fmt.Errorf("unknown session config option %q", params.ConfigID)
 	}
 
-	return SetSessionConfigOptionResult{ConfigOptions: s.sessionConfigOptions(ctx, sess)}, true, nil
+	options := s.sessionConfigOptions(ctx, sess)
+	notify := &RPCNotification{
+		JSONRPC: "2.0",
+		Method:  "session/update",
+		Params: map[string]any{
+			"sessionId": sess.id,
+			"update": map[string]any{
+				"sessionUpdate": "config_option_update",
+				"configOptions": options,
+			},
+		},
+	}
+	return SetSessionConfigOptionResult{ConfigOptions: options}, notify, true, nil
 }
 
 func decodeSessionConfigStringValue(params SetSessionConfigOptionParams) (string, error) {
@@ -154,6 +177,10 @@ func decodeSessionConfigStringValue(params SetSessionConfigOptionParams) (string
 }
 
 func (s *Server) sessionConfigOptions(ctx context.Context, sess *Session) []SessionConfigOption {
+	return s.sessionConfigOptionsWithModelDiscovery(ctx, sess, true)
+}
+
+func (s *Server) sessionConfigOptionsWithModelDiscovery(ctx context.Context, sess *Session, discoverModels bool) []SessionConfigOption {
 	if sess == nil {
 		return nil
 	}
@@ -164,9 +191,11 @@ func (s *Server) sessionConfigOptions(ctx context.Context, sess *Session) []Sess
 	options := make([]SessionConfigOption, 0, 3)
 
 	modelValues := []SessionConfigSelectOption{{Value: settings.Model, Name: settings.Model}}
-	if provider, ok := sessionModelOptionsProviderFor(s); ok {
-		if discovered, err := provider(ctx, settings); err == nil && len(discovered) > 0 {
-			modelValues = ensureCurrentConfigValue(discovered, settings.Model)
+	if discoverModels {
+		if provider, ok := sessionModelOptionsProviderFor(s); ok {
+			if discovered, err := provider(ctx, settings); err == nil && len(discovered) > 0 {
+				modelValues = ensureCurrentConfigValue(discovered, settings.Model)
+			}
 		}
 	}
 	if strings.TrimSpace(settings.Model) != "" {
@@ -214,6 +243,25 @@ func (s *Server) sessionConfigOptions(ctx context.Context, sess *Session) []Sess
 		Type:         "select",
 		CurrentValue: settings.LowConcurrency,
 		Options:      lowValues,
+	})
+
+	permissionValues := []SessionConfigSelectOption{
+		{Value: "ask", Name: "Ask", Description: "Interactive confirmation before tool execution (default)"},
+		{Value: "always-approve", Name: "Always Approve", Description: "Autonomous execution without confirmation prompts"},
+	}
+	if settings.PermissionMode == "plan" {
+		permissionValues = append(permissionValues, SessionConfigSelectOption{
+			Value: "plan", Name: "Plan", Description: "Read-only inspection mode",
+		})
+	}
+	options = append(options, SessionConfigOption{
+		ID:           configIDPermissionMode,
+		Name:         "Permission mode",
+		Description:  "Permission prompting policy for tool execution",
+		Category:     "_protonman_permission",
+		Type:         "select",
+		CurrentValue: settings.PermissionMode,
+		Options:      permissionValues,
 	})
 	return options
 }

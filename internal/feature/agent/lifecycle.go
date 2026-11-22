@@ -13,7 +13,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/base/contextutil"
 	"github.com/phongsathornpt/protonman/internal/base/failure"
 	"github.com/phongsathornpt/protonman/internal/engine/toolcall"
-	"github.com/phongsathornpt/protonman/proton-sdk/port"
+	"github.com/phongsathornpt/protonman/pkg/proton-sdk/port"
 )
 
 func (c *Coordinator) Spawn(ctx context.Context, req Request) (Handle, error) {

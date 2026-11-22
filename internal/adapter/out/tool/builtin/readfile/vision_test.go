@@ -9,54 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-
-	"github.com/phongsathornpt/protonman/internal/feature/imageprep"
 )
-
-func TestVisionTargetDimensionsUsesPatchBudget(t *testing.T) {
-	for _, tc := range []struct {
-		name                  string
-		width, height         int
-		wantWidth, wantHeight int
-	}{
-		{
-			name:       "small fits inside budget",
-			width:      800,
-			height:     600,
-			wantWidth:  800,
-			wantHeight: 600,
-		},
-		{
-			name:       "long side caps at 2048",
-			width:      4000,
-			height:     2000,
-			wantWidth:  2048,
-			wantHeight: 1024,
-		},
-		{
-			name:       "patch budget caps square image",
-			width:      2000,
-			height:     2000,
-			wantWidth:  1600,
-			wantHeight: 1600,
-		},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			gotW, gotH := visionTargetDimensions(tc.width, tc.height)
-			if gotW != tc.wantWidth || gotH != tc.wantHeight {
-				t.Fatalf("visionTargetDimensions(%d, %d) = (%d, %d), want (%d, %d)", tc.width, tc.height, gotW, gotH, tc.wantWidth, tc.wantHeight)
-			}
-			if gotW > imageprep.DefaultMaxDimension || gotH > imageprep.DefaultMaxDimension {
-				t.Fatalf("dimension (%d, %d) exceeds max %d", gotW, gotH, imageprep.DefaultMaxDimension)
-			}
-			patchesWide := (gotW + imageprep.PatchSize - 1) / imageprep.PatchSize
-			patchesHigh := (gotH + imageprep.PatchSize - 1) / imageprep.PatchSize
-			if patchesWide*patchesHigh > imageprep.DefaultMaxPatches {
-				t.Fatalf("patches %d exceed max %d", patchesWide*patchesHigh, imageprep.DefaultMaxPatches)
-			}
-		})
-	}
-}
 
 func TestEstimateVisionTokensUsesProviderNeutralPatches(t *testing.T) {
 	est1 := estimateVisionTokens(10, 10)

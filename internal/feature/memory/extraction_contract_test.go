@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/phongsathornpt/protonman/internal/core/session"
-	"github.com/phongsathornpt/protonman/proton-sdk/domain"
+	"github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
 )
 
 func TestParseExtractionOutputAcceptsIntroAndFencedJSON(t *testing.T) {

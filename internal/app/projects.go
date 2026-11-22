@@ -6,7 +6,7 @@ import (
 
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 	project "github.com/phongsathornpt/protonman/internal/core/project"
-	"github.com/phongsathornpt/protonman/proton-sdk/domain"
+	"github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
 )
 
 type ProjectDiscoveryOptions = project.Options

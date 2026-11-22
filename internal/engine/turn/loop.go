@@ -19,8 +19,9 @@ import (
 	"github.com/phongsathornpt/protonman/internal/engine/prompt"
 	"github.com/phongsathornpt/protonman/internal/engine/toolcall"
 	"github.com/phongsathornpt/protonman/internal/feature/skill"
-	"github.com/phongsathornpt/protonman/proton-sdk/domain"
-	"github.com/phongsathornpt/protonman/proton-sdk/port"
+	"github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
+	"github.com/phongsathornpt/protonman/pkg/proton-sdk/port"
+	"github.com/phongsathornpt/protonman/pkg/proton-sdk/usecase"
 )
 
 const (
@@ -132,6 +133,8 @@ const (
 	EventRetryScheduled EventKind = "retry_scheduled"
 	// EventMemoryActivity reports when durable memory is included in a model request or unavailable.
 	EventMemoryActivity EventKind = "memory_activity"
+	// EventUsage reports token usage from a completed model round.
+	EventUsage EventKind = "usage"
 	// EventCompleted marks a final model response with no further tool calls.
 	EventCompleted EventKind = "completed"
 	// EventFailed reports a terminal loop failure.
@@ -148,6 +151,7 @@ type Event struct {
 	Retry          domain.RetryEvent
 	Message        model.Message
 	MemoryActivity corememory.Activity
+	Usage          domain.Usage
 	Err            error
 }
 
@@ -303,6 +307,14 @@ func (l *Loop) CloneWithTools(tools *toolcall.Service) (*Loop, error) {
 	}
 	clone.skills = append([]skill.CatalogItem(nil), l.skills...)
 	return &clone, nil
+}
+
+// ContextWindow returns the context window size of the language model in tokens, or 0 if unknown.
+func (l *Loop) ContextWindow() int {
+	if l == nil || l.languageModel == nil {
+		return 0
+	}
+	return usecase.ModelTokenLimits(l.languageModel).ContextWindow
 }
 
 // Run executes model responses until one has no tool calls or another runtime safety bound is reached.
@@ -583,7 +595,6 @@ func (l *Loop) Run(ctx context.Context, messages []model.Message, sink Sink) (Re
 				terminalReason = "runtime_event_flush_failed"
 				return l.failWithResult(ctx, sink, round, checkpoint(), err)
 			}
-			history = append(history, assistant)
 			turnMessages = append(turnMessages, assistant)
 			terminalReason = "completed"
 			if safetyBudgetFallback {

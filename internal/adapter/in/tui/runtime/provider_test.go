@@ -11,7 +11,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/app"
 	"github.com/phongsathornpt/protonman/internal/core/modelprofile"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	domain "github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
 	"strings"
 	"testing"
 )
@@ -1004,8 +1004,7 @@ func TestProviderSelectFilteredSelectionUsesVisibleItem(t *testing.T) {
 	if !ok || item.name != "beta" {
 		t.Fatalf("filtered selection = %#v, %t; want beta", item, ok)
 	}
-	updated, cmd := bModel.Update(testKey(tea.KeyEnter))
-	bModel = updated.(*bubbleModel)
+	_, cmd := bModel.Update(testKey(tea.KeyEnter))
 	if cmd == nil {
 		t.Fatal("expected provider selection command")
 	}
@@ -1146,14 +1145,14 @@ func TestProviderSwitchToOpenCodeUsesBuiltInDefaultWithoutCatalog(t *testing.T) 
 
 func TestActivatedProviderReconcilesUnsupportedThinking(t *testing.T) {
 	m := newTestSkillsModel(t, 1)
-	m.reasoningEffort = sdk.ReasoningHigh
+	m.reasoningEffort = domain.ReasoningHigh
 	noReasoning := false
 	m.modelCatalogs.Set("custom", []model.RemoteModel{{ID: "plain-model", Reasoning: &modelprofile.CatalogReasoning{Supported: &noReasoning}}})
 	id := nextAsyncOperationID()
 	m.activeProviderSave = id
 	updated, _ := m.Update(providerSavedMsg{operationID: id, providerName: "custom", providerType: "openai", baseURL: "https://custom.example/v1", apiKey: "key", modelID: "plain-model", activated: true})
 	m = updated.(*bubbleModel)
-	if m.reasoningEffort != sdk.ReasoningDefault {
+	if m.reasoningEffort != domain.ReasoningDefault {
 		t.Fatalf("reasoning = %q, want auto after provider activation", m.reasoningEffort)
 	}
 }

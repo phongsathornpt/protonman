@@ -2,7 +2,7 @@ package modelsetup
 
 import (
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
-	"github.com/phongsathornpt/protonman/proton-sdk/domain"
+	"github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
 )
 
 func ActiveProviderName(names []string, index int) string {

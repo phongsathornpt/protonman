@@ -4,14 +4,14 @@ import (
 	"testing"
 
 	"github.com/phongsathornpt/protonman/internal/core/modelprofile"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	domain "github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
 )
 
 func TestChoicesKeepsAutoFirst(t *testing.T) {
 	profile := modelprofile.Resolved{}
-	profile.Reasoning.Levels = []sdk.ReasoningEffort{sdk.ReasoningLow, sdk.ReasoningHigh}
+	profile.Reasoning.Levels = []domain.ReasoningEffort{domain.ReasoningLow, domain.ReasoningHigh}
 	got := Choices(profile)
-	want := []sdk.ReasoningEffort{sdk.ReasoningDefault, sdk.ReasoningLow, sdk.ReasoningHigh}
+	want := []domain.ReasoningEffort{domain.ReasoningDefault, domain.ReasoningLow, domain.ReasoningHigh}
 	if len(got) != len(want) {
 		t.Fatalf("Choices() = %v, want %v", got, want)
 	}

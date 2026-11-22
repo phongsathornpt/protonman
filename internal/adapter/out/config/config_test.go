@@ -11,7 +11,7 @@ import (
 
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 	"github.com/phongsathornpt/protonman/internal/platform/sandbox"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	domain "github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
 )
 
 func TestLoadLayeredConfigRequiresProjectTrust(t *testing.T) {
@@ -610,17 +610,17 @@ func TestAgentReasoningEffortConfig(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if snapshot.Agent.ReasoningEffort != sdk.ReasoningHigh {
+	if snapshot.Agent.ReasoningEffort != domain.ReasoningHigh {
 		t.Fatalf("reasoning_effort = %q, want high", snapshot.Agent.ReasoningEffort)
 	}
-	if err := SaveUserReasoningEffort(homeDir, sdk.ReasoningDefault); err != nil {
+	if err := SaveUserReasoningEffort(homeDir, domain.ReasoningDefault); err != nil {
 		t.Fatal(err)
 	}
 	snapshot, err = Load(context.Background(), Options{HomeDir: homeDir, WorkDir: workDir})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if snapshot.Agent.ReasoningEffort != sdk.ReasoningDefault {
+	if snapshot.Agent.ReasoningEffort != domain.ReasoningDefault {
 		t.Fatalf("saved auto reasoning_effort = %q", snapshot.Agent.ReasoningEffort)
 	}
 }
@@ -774,7 +774,7 @@ func TestConcurrentUserConfigMutationsDoNotLoseFields(t *testing.T) {
 		wg.Add(2)
 		go func() {
 			defer wg.Done()
-			if err := SaveUserReasoningEffort(homeDir, sdk.ReasoningHigh); err != nil {
+			if err := SaveUserReasoningEffort(homeDir, domain.ReasoningHigh); err != nil {
 				t.Errorf("save reasoning: %v", err)
 			}
 		}()
@@ -790,7 +790,7 @@ func TestConcurrentUserConfigMutationsDoNotLoseFields(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if snapshot.Agent.ReasoningEffort != sdk.ReasoningHigh {
+	if snapshot.Agent.ReasoningEffort != domain.ReasoningHigh {
 		t.Fatalf("reasoning = %q, want high", snapshot.Agent.ReasoningEffort)
 	}
 	if snapshot.Agent.MaxToolCalls < 40 {

@@ -6,7 +6,7 @@ import (
 
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	domain "github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
 )
 
 type stagedProgressRuntimeContext struct {
@@ -36,9 +36,9 @@ func TestLoopRuntimeContextInvalidatesSuppressedReadObservation(t *testing.T) {
 		{events: repeatedReadEvents("read-1")},
 		{events: repeatedReadEvents("read-2")},
 		{events: repeatedReadEvents("read-3")},
-		{events: []sdk.Event{
-			{Kind: sdk.EventTextDelta, Text: "verified after delegated change"},
-			{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
+		{events: []domain.Event{
+			{Kind: domain.EventTextDelta, Text: "verified after delegated change"},
+			{Kind: domain.EventFinish, FinishReason: domain.FinishStop},
 		}},
 	}}
 	loop, handler := newTestLoop(t, client, permission.ActionAllow, WithRuntimeContextProvider(provider))
@@ -79,9 +79,9 @@ func TestLoopRuntimeContextCancelsStaleForcedNoProgressSynthesis(t *testing.T) {
 		{events: repeatedReadEvents("read-3")},
 		{events: repeatedReadEvents("read-4")},
 		{events: repeatedReadEvents("read-5")},
-		{events: []sdk.Event{
-			{Kind: sdk.EventTextDelta, Text: "verified after late delegated change"},
-			{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
+		{events: []domain.Event{
+			{Kind: domain.EventTextDelta, Text: "verified after late delegated change"},
+			{Kind: domain.EventFinish, FinishReason: domain.FinishStop},
 		}},
 	}}
 	loop, handler := newTestLoop(t, client, permission.ActionAllow, WithRuntimeContextProvider(provider))

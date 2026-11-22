@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/phongsathornpt/protonman/internal/core/permission"
-	"github.com/phongsathornpt/protonman/proton-sdk/domain"
+	"github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
 )
 
 // UserSettingsRepository persists portable user-level preferences.

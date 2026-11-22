@@ -69,26 +69,58 @@ func TestHandleRequestWithoutHandlerWritesMethodNotFound(t *testing.T) {
 	}
 }
 
+func TestCallCancellationSendsCancelNotification(t *testing.T) {
+	client, writer := newTestClient(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	var result map[string]any
+	err := client.Call(ctx, "session/slow", map[string]any{}, &result)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected context.Canceled, got %v", err)
+	}
+
+	output := writer.String()
+	if !strings.Contains(output, `"$/cancel_request"`) {
+		t.Fatalf("expected $/cancel_request in output, got %q", output)
+	}
+}
+
 func TestReadLoopBoundsQueuedReverseRequests(t *testing.T) {
 	client, _ := newTestClient(t)
 	client.requests = make(chan incomingRequest, 1)
 	input := strings.NewReader(
 		`{"jsonrpc":"2.0","id":1,"method":"first","params":{}}` + "\n" +
-			`{"jsonrpc":"2.0","id":2,"method":"second","params":{}}` + "\n",
+			`{"jsonrpc":"2.0","id":2,"method":"second","params":{}}` + "\n" +
+			`{"jsonrpc":"2.0","id":3,"method":"third","params":{}}` + "\n",
 	)
 	client.readLoop(input)
 
 	if got := len(client.requests); got != 1 {
-		t.Fatalf("queued reverse requests = %d, want bounded capacity 1", got)
+		t.Fatalf("queued reverse requests = %d, want the first queued request preserved", got)
 	}
 	queued := <-client.requests
 	if string(queued.request.ID) != "1" {
-		t.Fatalf("queued request ID = %s, want 1", queued.request.ID)
+		t.Fatalf("queued request ID = %s, want oldest queued request 1 preserved", queued.request.ID)
 	}
 	select {
 	case <-client.closed:
 	default:
 		t.Fatal("queue overflow did not shut down the ACP connection")
+	}
+}
+
+func TestReadBoundedLineDiscardsOversizedInputAndResumesAtNextLine(t *testing.T) {
+	reader := bufio.NewReader(strings.NewReader("oversized-line\nnext\n"))
+
+	line, oversized, err := readBoundedLine(reader, len("large\n"))
+	if err != nil || !oversized || len(line) != 0 {
+		t.Fatalf("oversized line = %q, oversized=%v, err=%v", line, oversized, err)
+	}
+
+	line, oversized, err = readBoundedLine(reader, len("next\n"))
+	if err != nil || oversized || string(line) != "next\n" {
+		t.Fatalf("following line = %q, oversized=%v, err=%v", line, oversized, err)
 	}
 }
 
@@ -180,6 +212,9 @@ func TestHelperACPProcess(t *testing.T) {
 		fmt.Fprint(os.Stderr, "create ACP server: config load failed")
 		bufio.NewReader(os.Stdin).ReadString('\n')
 		os.Exit(1)
+	case "exit_without_stderr":
+		bufio.NewReader(os.Stdin).ReadString('\n')
+		os.Exit(2)
 	case "rpc_error":
 		reader := bufio.NewReader(os.Stdin)
 		if _, err := reader.ReadString('\n'); err != nil {
@@ -218,15 +253,6 @@ func startHelperClient(t *testing.T, mode string) *Client {
 	return client
 }
 
-func waitForDone(t *testing.T, client *Client) {
-	t.Helper()
-	select {
-	case <-client.Done():
-	case <-time.After(10 * time.Second):
-		t.Fatal("client did not shut down")
-	}
-}
-
 func TestStderrTailIsReportedOnAbnormalExit(t *testing.T) {
 	client := startHelperClient(t, "stderr_then_exit")
 
@@ -253,6 +279,29 @@ func TestStderrTailIsReportedOnAbnormalExit(t *testing.T) {
 	}
 }
 
+func TestProcessExitErrorIsReportedWhenStderrIsEmpty(t *testing.T) {
+	client := startHelperClient(t, "exit_without_stderr")
+
+	type outcome struct{ err error }
+	result := make(chan outcome, 1)
+	go func() {
+		var payload map[string]any
+		result <- outcome{err: client.Call(context.Background(), "initialize", map[string]any{}, &payload)}
+	}()
+
+	select {
+	case got := <-result:
+		if got.err == nil {
+			t.Fatal("expected error, got nil")
+		}
+		if errors.Is(got.err, io.EOF) || !strings.Contains(got.err.Error(), "exit status 2") {
+			t.Fatalf("call error = %v, want exit status 2 rather than bare EOF", got.err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("call did not return after the child exited")
+	}
+}
+
 func TestJSONRPCErrorResponsePropagates(t *testing.T) {
 	client := startHelperClient(t, "rpc_error")
 
@@ -266,6 +315,53 @@ func TestJSONRPCErrorResponsePropagates(t *testing.T) {
 	if rpcError.Code != -32601 || !strings.Contains(rpcError.Message, "session/list is not supported") {
 		t.Fatalf("rpc error = %#v", rpcError)
 	}
+}
+
+func TestRPCErrorIncludesBoundedDetails(t *testing.T) {
+	t.Run("details field", func(t *testing.T) {
+		err := (&RPCError{
+			Code:    -32603,
+			Message: "Internal error",
+			Data:    json.RawMessage(`{"details":"provider rejected request\ncheck credentials"}`),
+		}).Error()
+		if want := "ACP error -32603: Internal error: provider rejected request check credentials"; err != want {
+			t.Fatalf("error = %q, want %q", err, want)
+		}
+	})
+
+	t.Run("message field", func(t *testing.T) {
+		err := (&RPCError{
+			Code:    -32603,
+			Message: "Internal error",
+			Data:    json.RawMessage(`{"message":"provider request failed"}`),
+		}).Error()
+		if want := "ACP error -32603: Internal error: provider request failed"; err != want {
+			t.Fatalf("error = %q, want %q", err, want)
+		}
+	})
+
+	t.Run("oversized details", func(t *testing.T) {
+		detail := strings.Repeat("x", 600)
+		err := (&RPCError{
+			Code:    -32603,
+			Message: "Internal error",
+			Data:    json.RawMessage(`{"details":"` + detail + `"}`),
+		}).Error()
+		if got, want := len([]rune(err)), len("ACP error -32603: Internal error: ")+512; got != want {
+			t.Fatalf("error rune count = %d, want %d", got, want)
+		}
+	})
+
+	t.Run("other data is not dumped", func(t *testing.T) {
+		err := (&RPCError{
+			Code:    -32603,
+			Message: "Internal error",
+			Data:    json.RawMessage(`{"trace":"private implementation detail"}`),
+		}).Error()
+		if strings.Contains(err, "private implementation detail") {
+			t.Fatalf("error leaked arbitrary data: %q", err)
+		}
+	})
 }
 
 func TestMalformedStdoutLineDoesNotBreakFraming(t *testing.T) {

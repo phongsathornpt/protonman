@@ -23,7 +23,7 @@ import (
 	coretelemetry "github.com/phongsathornpt/protonman/internal/core/telemetry"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/platform/telemetry"
-	"github.com/phongsathornpt/protonman/proton-sdk/domain"
+	"github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
 )
 
 func configureACPMCP(ctx context.Context, cwd string, registry tool.Registry, configs []acp.MCPServerConfig) (io.Closer, error) {
@@ -109,10 +109,13 @@ func run(ctx context.Context, args []string) error {
 			acp.WithMemories(memories),
 			acp.WithAgents(app.NewAgents(runtimeState.coordinator)),
 			acpSessionRuntimeOption(runtimeState),
+			acp.WithSessionConfigModelOptions(acpSessionModelOptionsProvider(runtimeState)),
+			acp.WithProvidersControl(acpProvidersControl(runtimeState)),
 			acp.WithSessionRegistryFactory(func(sessionID, cwd string, additionalDirectories []string) (tool.Registry, error) {
 				return runtimeState.registryForACPSession(sessionID, cwd, additionalDirectories)
 			}),
 			acp.WithMCPRegistryConfigurer(configureACPMCP),
+			acp.WithSkills(runtimeState.skills, runtimeState.application.SaveActiveSkills),
 		)
 		if serverErr != nil {
 			return fmt.Errorf("create ACP server: %w", serverErr)
@@ -198,8 +201,6 @@ func run(ctx context.Context, args []string) error {
 	}
 	return nil
 }
-
-func truthy(value string) bool { return envconfig.Truthy(value) }
 
 func configuredTelemetryObserver() (coretelemetry.Observer, error) {
 	switch strings.ToLower(envconfig.Value(envconfig.Telemetry)) {

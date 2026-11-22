@@ -91,7 +91,7 @@ func (m *bubbleModel) updateImageSubmissionPrepared(message imageSubmissionPrepa
 		m.requestRelayout()
 		return nil
 	}
-	cleanupQueuedInputAttachments(message.input)
+	cleanupQueuedAttachments(message.input)
 	if history := submissionHistoryText(message.input); history != "" {
 		m.panes.bottom.recordHistory(history)
 	}
@@ -121,12 +121,12 @@ func (m *bubbleModel) cancelImagePreparation() bool {
 
 func (m *bubbleModel) restoreCanceledImageSubmission(input tuiconv.QueuedInput) {
 	if m == nil || m.panes.bottom == nil || m.panes.bottom.prompt() == nil {
-		cleanupQueuedInputAttachments(input)
+		cleanupQueuedAttachments(input)
 		return
 	}
 	prompt := m.panes.bottom.prompt()
-	if strings.TrimSpace(prompt.Value()) != "" || len(m.panes.bottom.composer.attachments.localImages) > 0 {
-		cleanupQueuedInputAttachments(input)
+	if strings.TrimSpace(prompt.Value()) != "" || m.panes.bottom.composer.attachments.Len() > 0 {
+		cleanupQueuedAttachments(input)
 		return
 	}
 	m.restoreSubmissionToComposer(input)
@@ -134,13 +134,13 @@ func (m *bubbleModel) restoreCanceledImageSubmission(input tuiconv.QueuedInput) 
 
 func (m *bubbleModel) restoreSubmissionToComposer(input tuiconv.QueuedInput) {
 	if m == nil || m.panes.bottom == nil || m.panes.bottom.prompt() == nil {
-		cleanupQueuedInputAttachments(input)
+		cleanupQueuedAttachments(input)
 		return
 	}
 	prompt := m.panes.bottom.prompt()
-	if strings.TrimSpace(prompt.Value()) != "" || len(m.panes.bottom.composer.attachments.localImages) > 0 {
+	if strings.TrimSpace(prompt.Value()) != "" || m.panes.bottom.composer.attachments.Len() > 0 {
 		if m.conversation == nil || !m.conversation.EnqueueInput(input) {
-			cleanupQueuedInputAttachments(input)
+			cleanupQueuedAttachments(input)
 		}
 		return
 	}
@@ -148,7 +148,7 @@ func (m *bubbleModel) restoreSubmissionToComposer(input tuiconv.QueuedInput) {
 	prompt.CursorEnd()
 	for _, attachment := range input.Attachments {
 		if attachment.Temporary {
-			m.panes.bottom.composer.attachments.attachTemporaryImage(prompt, attachment.Path)
+			m.panes.bottom.composer.attachments.AttachTemporary(prompt, attachment.Path)
 			continue
 		}
 		m.panes.bottom.attachImage(attachment.Path)

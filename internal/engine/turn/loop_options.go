@@ -8,7 +8,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/core/workspace"
 	"github.com/phongsathornpt/protonman/internal/engine/prompt"
 	"github.com/phongsathornpt/protonman/internal/feature/skill"
-	"github.com/phongsathornpt/protonman/proton-sdk/domain"
+	"github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
 )
 
 // Option configures a Loop during construction.
@@ -85,18 +85,6 @@ func WithMaxToolCalls(calls int) Option {
 			return fmt.Errorf("%w: max tool calls cannot be negative", ErrInvalidLoop)
 		}
 		loop.maxToolCalls = calls
-		return nil
-	}
-}
-
-// WithMaxIdenticalNoProgressResults bounds the number of consecutive identical
-// read-only results before the turn stops.
-func WithMaxIdenticalNoProgressResults(limit int) Option {
-	return func(loop *Loop) error {
-		if limit < 0 {
-			return fmt.Errorf("%w: max identical no-progress results cannot be negative", ErrInvalidLoop)
-		}
-		loop.maxIdenticalNoProgressResults = limit
 		return nil
 	}
 }

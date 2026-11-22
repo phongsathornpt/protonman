@@ -22,12 +22,6 @@ func finalizeSafetyBudgetResponse(
 	return finalizeDisabledToolCallResponse(ctx, sink, round, assistant, SafetyBudgetFallback, "safety-budget")
 }
 
-// finalizeMaxToolCallResponse remains as a compatibility wrapper for older tests
-// and internal callers while max_tool_calls is treated as a hard safety override.
-func finalizeMaxToolCallResponse(ctx context.Context, sink Sink, round int, assistant model.Message) (model.Message, error) {
-	return finalizeSafetyBudgetResponse(ctx, sink, round, assistant)
-}
-
 func finalizeNoProgressToolCallResponse(
 	ctx context.Context,
 	sink Sink,

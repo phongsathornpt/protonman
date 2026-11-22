@@ -12,7 +12,9 @@ import (
 	"time"
 
 	"github.com/phongsathornpt/protonman/internal/base/runtimepolicy"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	domain "github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
+	port "github.com/phongsathornpt/protonman/pkg/proton-sdk/port"
+	usecase "github.com/phongsathornpt/protonman/pkg/proton-sdk/usecase"
 )
 
 func TestOpenCodeSDKAdapterAlwaysSendsClientIdentity(t *testing.T) {
@@ -37,7 +39,7 @@ func TestOpenCodeSDKAdapterAlwaysSendsClientIdentity(t *testing.T) {
 	if model.Provider() != DefaultOpenCodeName {
 		t.Fatalf("provider = %q", model.Provider())
 	}
-	stream, err := model.Stream(context.Background(), sdk.Request{Messages: []sdk.Message{{Role: sdk.RoleUser, Content: "hi"}}})
+	stream, err := model.Stream(context.Background(), domain.Request{Messages: []domain.Message{{Role: domain.RoleUser, Content: "hi"}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,7 +62,7 @@ func TestOpenCodeSDKAdapterSendsSessionIdentityWhenPresent(t *testing.T) {
 	}))
 	defer server.Close()
 	model := newSDKOpenAILanguageModel(DefaultOpenCodeName, server.URL, "", "test", WithSessionID("session-1"))
-	stream, err := model.Stream(context.Background(), sdk.Request{Messages: []sdk.Message{{Role: sdk.RoleUser, Content: "hi"}}})
+	stream, err := model.Stream(context.Background(), domain.Request{Messages: []domain.Message{{Role: domain.RoleUser, Content: "hi"}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -78,9 +80,9 @@ func TestAnthropicSDKAdapterSendsSessionIdentityWhenPresent(t *testing.T) {
 	defer server.Close()
 
 	model := newSDKAnthropicLanguageModel("anthropic", server.URL, "", "claude-test", WithSessionID(" session-anthropic "))
-	stream, err := model.Stream(context.Background(), sdk.Request{
-		Messages: []sdk.Message{{Role: sdk.RoleUser, Content: "hi"}},
-		Metadata: sdk.RequestMetadata{SessionID: "caller-session"},
+	stream, err := model.Stream(context.Background(), domain.Request{
+		Messages: []domain.Message{{Role: domain.RoleUser, Content: "hi"}},
+		Metadata: domain.RequestMetadata{SessionID: "caller-session"},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -123,11 +125,11 @@ func TestOpenCodeFreeRetryPreservesSessionIdentity(t *testing.T) {
 	defer server.Close()
 
 	model := newSDKOpenAILanguageModel(DefaultOpenCodeName, server.URL, "", "nemotron-3.5-lightning-free", WithSessionID("session-retry"))
-	stream, err := model.Stream(context.Background(), sdk.Request{Messages: []sdk.Message{{Role: sdk.RoleUser, Content: "hi"}}})
+	stream, err := model.Stream(context.Background(), domain.Request{Messages: []domain.Message{{Role: domain.RoleUser, Content: "hi"}}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	result, err := sdk.CollectStep(context.Background(), stream)
+	result, err := usecase.CollectStep(context.Background(), stream)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -137,16 +139,16 @@ func TestOpenCodeFreeRetryPreservesSessionIdentity(t *testing.T) {
 }
 
 type emptyRetryTestModel struct {
-	streams  []sdk.Stream
+	streams  []port.Stream
 	requests int
 }
 
 func (*emptyRetryTestModel) Provider() string { return DefaultOpenCodeName }
 func (*emptyRetryTestModel) ModelID() string  { return "nemotron-3.5-lightning-free" }
-func (*emptyRetryTestModel) Capabilities() sdk.ModelCapabilities {
-	return sdk.ModelCapabilities{Streaming: true, Tools: true}
+func (*emptyRetryTestModel) Capabilities() domain.ModelCapabilities {
+	return domain.ModelCapabilities{Streaming: true, Tools: true}
 }
-func (m *emptyRetryTestModel) Stream(context.Context, sdk.Request) (sdk.Stream, error) {
+func (m *emptyRetryTestModel) Stream(context.Context, domain.Request) (port.Stream, error) {
 	m.requests++
 	if len(m.streams) == 0 {
 		return nil, errors.New("no test stream remains")
@@ -157,35 +159,35 @@ func (m *emptyRetryTestModel) Stream(context.Context, sdk.Request) (sdk.Stream, 
 }
 
 type emptyRetryTestStream struct {
-	events []sdk.Event
+	events []domain.Event
 	err    error
 	index  int
 }
 
-func (s *emptyRetryTestStream) Next(context.Context) (sdk.Event, error) {
+func (s *emptyRetryTestStream) Next(context.Context) (domain.Event, error) {
 	if s.index < len(s.events) {
 		event := s.events[s.index]
 		s.index++
 		return event, nil
 	}
 	if s.err != nil {
-		return sdk.Event{}, s.err
+		return domain.Event{}, s.err
 	}
-	return sdk.Event{}, io.EOF
+	return domain.Event{}, io.EOF
 }
 func (*emptyRetryTestStream) Close() error { return nil }
 
 func TestEmptyStreamRetryRecoversFromEmptyFinish(t *testing.T) {
-	base := &emptyRetryTestModel{streams: []sdk.Stream{
-		&emptyRetryTestStream{events: []sdk.Event{{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop}}},
-		&emptyRetryTestStream{events: []sdk.Event{{Kind: sdk.EventTextDelta, Text: "recovered"}, {Kind: sdk.EventFinish, FinishReason: sdk.FinishStop}}},
+	base := &emptyRetryTestModel{streams: []port.Stream{
+		&emptyRetryTestStream{events: []domain.Event{{Kind: domain.EventFinish, FinishReason: domain.FinishStop}}},
+		&emptyRetryTestStream{events: []domain.Event{{Kind: domain.EventTextDelta, Text: "recovered"}, {Kind: domain.EventFinish, FinishReason: domain.FinishStop}}},
 	}}
 	model := withEmptyStreamRetry(base, 2, 0)
-	stream, err := model.Stream(context.Background(), sdk.Request{Messages: []sdk.Message{{Role: sdk.RoleUser, Content: "hi"}}})
+	stream, err := model.Stream(context.Background(), domain.Request{Messages: []domain.Message{{Role: domain.RoleUser, Content: "hi"}}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	result, err := sdk.CollectStep(context.Background(), stream)
+	result, err := usecase.CollectStep(context.Background(), stream)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -195,65 +197,65 @@ func TestEmptyStreamRetryRecoversFromEmptyFinish(t *testing.T) {
 }
 
 func TestEmptyStreamRetryRecoversFromIncompleteStreamBeforeOutput(t *testing.T) {
-	base := &emptyRetryTestModel{streams: []sdk.Stream{
-		&emptyRetryTestStream{err: sdk.ErrIncompleteStream},
-		&emptyRetryTestStream{events: []sdk.Event{{Kind: sdk.EventTextDelta, Text: "ok"}, {Kind: sdk.EventFinish, FinishReason: sdk.FinishStop}}},
+	base := &emptyRetryTestModel{streams: []port.Stream{
+		&emptyRetryTestStream{err: domain.ErrIncompleteStream},
+		&emptyRetryTestStream{events: []domain.Event{{Kind: domain.EventTextDelta, Text: "ok"}, {Kind: domain.EventFinish, FinishReason: domain.FinishStop}}},
 	}}
-	stream, err := withEmptyStreamRetry(base, 2, 0).Stream(context.Background(), sdk.Request{Messages: []sdk.Message{{Role: sdk.RoleUser, Content: "hi"}}})
+	stream, err := withEmptyStreamRetry(base, 2, 0).Stream(context.Background(), domain.Request{Messages: []domain.Message{{Role: domain.RoleUser, Content: "hi"}}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	result, err := sdk.CollectStep(context.Background(), stream)
+	result, err := usecase.CollectStep(context.Background(), stream)
 	if err != nil || result.Text != "ok" || base.requests != 2 {
 		t.Fatalf("result=%q requests=%d err=%v", result.Text, base.requests, err)
 	}
 }
 
 func TestStreamRetryRecoversFromRetryableProviderStreamError(t *testing.T) {
-	providerErr := sdk.NewProviderError(DefaultOpenCodeName, 0, "ProviderResponseStreamError", "upstream stream failed")
-	base := &emptyRetryTestModel{streams: []sdk.Stream{
+	providerErr := domain.NewProviderError(DefaultOpenCodeName, 0, "ProviderResponseStreamError", "upstream stream failed")
+	base := &emptyRetryTestModel{streams: []port.Stream{
 		&emptyRetryTestStream{err: providerErr},
-		&emptyRetryTestStream{events: []sdk.Event{
-			{Kind: sdk.EventTextDelta, Text: "recovered"},
-			{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
+		&emptyRetryTestStream{events: []domain.Event{
+			{Kind: domain.EventTextDelta, Text: "recovered"},
+			{Kind: domain.EventFinish, FinishReason: domain.FinishStop},
 		}},
 	}}
-	stream, err := withStreamRetryPolicy(base, 2, 0, 0, 0, 0).Stream(context.Background(), sdk.Request{Messages: []sdk.Message{{Role: sdk.RoleUser, Content: "hi"}}})
+	stream, err := withStreamRetryPolicy(base, 2, 0, 0, 0, 0).Stream(context.Background(), domain.Request{Messages: []domain.Message{{Role: domain.RoleUser, Content: "hi"}}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	result, err := sdk.CollectStep(context.Background(), stream)
+	result, err := usecase.CollectStep(context.Background(), stream)
 	if err != nil || result.Text != "recovered" || base.requests != 2 {
 		t.Fatalf("result=%q requests=%d err=%v, want recovered/2", result.Text, base.requests, err)
 	}
 }
 
 func TestStreamRetryDoesNotReplayRetryableProviderErrorAfterVisibleText(t *testing.T) {
-	providerErr := sdk.NewProviderError(DefaultOpenCodeName, 0, "ProviderResponseStreamError", "upstream stream failed")
-	base := &emptyRetryTestModel{streams: []sdk.Stream{
-		&emptyRetryTestStream{events: []sdk.Event{{Kind: sdk.EventTextDelta, Text: "partial"}}, err: providerErr},
-		&emptyRetryTestStream{events: []sdk.Event{{Kind: sdk.EventTextDelta, Text: "duplicate"}, {Kind: sdk.EventFinish, FinishReason: sdk.FinishStop}}},
+	providerErr := domain.NewProviderError(DefaultOpenCodeName, 0, "ProviderResponseStreamError", "upstream stream failed")
+	base := &emptyRetryTestModel{streams: []port.Stream{
+		&emptyRetryTestStream{events: []domain.Event{{Kind: domain.EventTextDelta, Text: "partial"}}, err: providerErr},
+		&emptyRetryTestStream{events: []domain.Event{{Kind: domain.EventTextDelta, Text: "duplicate"}, {Kind: domain.EventFinish, FinishReason: domain.FinishStop}}},
 	}}
-	stream, err := withStreamRetryPolicy(base, 2, 0, 0, 0, 0).Stream(context.Background(), sdk.Request{Messages: []sdk.Message{{Role: sdk.RoleUser, Content: "hi"}}})
+	stream, err := withStreamRetryPolicy(base, 2, 0, 0, 0, 0).Stream(context.Background(), domain.Request{Messages: []domain.Message{{Role: domain.RoleUser, Content: "hi"}}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = sdk.CollectStep(context.Background(), stream)
+	_, err = usecase.CollectStep(context.Background(), stream)
 	if !errors.Is(err, providerErr) || base.requests != 1 {
 		t.Fatalf("err=%v requests=%d, want original provider error/1", err, base.requests)
 	}
 }
 
 func TestStreamRetryUsesSDKRetryAfterLimit(t *testing.T) {
-	providerErr := sdk.NewProviderError(DefaultOpenCodeName, http.StatusTooManyRequests, "rate_limit_error", "slow down")
-	providerErr.RateLimit = &sdk.RateLimitInfo{RetryAfter: 10 * time.Second}
-	base := &emptyRetryTestModel{streams: []sdk.Stream{
+	providerErr := domain.NewProviderError(DefaultOpenCodeName, http.StatusTooManyRequests, "rate_limit_error", "slow down")
+	providerErr.RateLimit = &domain.RateLimitInfo{RetryAfter: 10 * time.Second}
+	base := &emptyRetryTestModel{streams: []port.Stream{
 		&emptyRetryTestStream{err: providerErr},
-		&emptyRetryTestStream{events: []sdk.Event{{Kind: sdk.EventTextDelta, Text: "should not replay"}}},
+		&emptyRetryTestStream{events: []domain.Event{{Kind: domain.EventTextDelta, Text: "should not replay"}}},
 	}}
 	policy := streamRetryPolicy(0, 0)
 	policy.MaxRetryAfter = 5 * time.Second
-	stream, err := withStreamRetryPolicyConfig(base, 2, policy, 0, 0, 0).Stream(context.Background(), sdk.Request{Messages: []sdk.Message{{Role: sdk.RoleUser, Content: "hi"}}})
+	stream, err := withStreamRetryPolicyConfig(base, 2, policy, 0, 0, 0).Stream(context.Background(), domain.Request{Messages: []domain.Message{{Role: domain.RoleUser, Content: "hi"}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -265,19 +267,19 @@ func TestStreamRetryUsesSDKRetryAfterLimit(t *testing.T) {
 }
 
 func TestEmptyStreamRetryReplaysToolOnlyAttemptWithoutDuplicatingCall(t *testing.T) {
-	toolCall := sdk.ToolCall{ID: "call-1", Name: "read", Arguments: json.RawMessage(`{"path":"README.md"}`)}
-	base := &emptyRetryTestModel{streams: []sdk.Stream{
-		&emptyRetryTestStream{events: []sdk.Event{{Kind: sdk.EventToolCall, ToolCall: toolCall}}, err: sdk.ErrIncompleteStream},
-		&emptyRetryTestStream{events: []sdk.Event{
-			{Kind: sdk.EventToolCall, ToolCall: toolCall},
-			{Kind: sdk.EventFinish, FinishReason: sdk.FinishToolCalls},
+	toolCall := domain.ToolCall{ID: "call-1", Name: "read", Arguments: json.RawMessage(`{"path":"README.md"}`)}
+	base := &emptyRetryTestModel{streams: []port.Stream{
+		&emptyRetryTestStream{events: []domain.Event{{Kind: domain.EventToolCall, ToolCall: toolCall}}, err: domain.ErrIncompleteStream},
+		&emptyRetryTestStream{events: []domain.Event{
+			{Kind: domain.EventToolCall, ToolCall: toolCall},
+			{Kind: domain.EventFinish, FinishReason: domain.FinishToolCalls},
 		}},
 	}}
-	stream, err := withEmptyStreamRetry(base, 2, 0).Stream(context.Background(), sdk.Request{Messages: []sdk.Message{{Role: sdk.RoleUser, Content: "inspect"}}})
+	stream, err := withEmptyStreamRetry(base, 2, 0).Stream(context.Background(), domain.Request{Messages: []domain.Message{{Role: domain.RoleUser, Content: "inspect"}}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	result, err := sdk.CollectStep(context.Background(), stream)
+	result, err := usecase.CollectStep(context.Background(), stream)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -287,76 +289,76 @@ func TestEmptyStreamRetryReplaysToolOnlyAttemptWithoutDuplicatingCall(t *testing
 }
 
 func TestEmptyStreamRetryFlushesBufferedToolCallOnTerminalFinish(t *testing.T) {
-	toolCall := sdk.ToolCall{ID: "call-1", Name: "read", Arguments: json.RawMessage(`{"path":"README.md"}`)}
-	base := &emptyRetryTestModel{streams: []sdk.Stream{
-		&emptyRetryTestStream{events: []sdk.Event{
-			{Kind: sdk.EventToolCall, ToolCall: toolCall},
-			{Kind: sdk.EventFinish, FinishReason: sdk.FinishToolCalls},
+	toolCall := domain.ToolCall{ID: "call-1", Name: "read", Arguments: json.RawMessage(`{"path":"README.md"}`)}
+	base := &emptyRetryTestModel{streams: []port.Stream{
+		&emptyRetryTestStream{events: []domain.Event{
+			{Kind: domain.EventToolCall, ToolCall: toolCall},
+			{Kind: domain.EventFinish, FinishReason: domain.FinishToolCalls},
 		}},
 	}}
-	stream, err := withEmptyStreamRetry(base, 2, 0).Stream(context.Background(), sdk.Request{Messages: []sdk.Message{{Role: sdk.RoleUser, Content: "inspect"}}})
+	stream, err := withEmptyStreamRetry(base, 2, 0).Stream(context.Background(), domain.Request{Messages: []domain.Message{{Role: domain.RoleUser, Content: "inspect"}}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	result, err := sdk.CollectStep(context.Background(), stream)
+	result, err := usecase.CollectStep(context.Background(), stream)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if base.requests != 1 || len(result.ToolCalls) != 1 || result.FinishReason != sdk.FinishToolCalls {
+	if base.requests != 1 || len(result.ToolCalls) != 1 || result.FinishReason != domain.FinishToolCalls {
 		t.Fatalf("result=%+v requests=%d, want one buffered tool call and terminal finish", result, base.requests)
 	}
 }
 
 func TestEmptyStreamRetryDoesNotReplayAfterVisibleOutput(t *testing.T) {
-	base := &emptyRetryTestModel{streams: []sdk.Stream{
-		&emptyRetryTestStream{events: []sdk.Event{{Kind: sdk.EventTextDelta, Text: "partial"}}, err: sdk.ErrIncompleteStream},
-		&emptyRetryTestStream{events: []sdk.Event{{Kind: sdk.EventTextDelta, Text: "duplicate"}, {Kind: sdk.EventFinish, FinishReason: sdk.FinishStop}}},
+	base := &emptyRetryTestModel{streams: []port.Stream{
+		&emptyRetryTestStream{events: []domain.Event{{Kind: domain.EventTextDelta, Text: "partial"}}, err: domain.ErrIncompleteStream},
+		&emptyRetryTestStream{events: []domain.Event{{Kind: domain.EventTextDelta, Text: "duplicate"}, {Kind: domain.EventFinish, FinishReason: domain.FinishStop}}},
 	}}
-	stream, err := withEmptyStreamRetry(base, 2, 0).Stream(context.Background(), sdk.Request{Messages: []sdk.Message{{Role: sdk.RoleUser, Content: "hi"}}})
+	stream, err := withEmptyStreamRetry(base, 2, 0).Stream(context.Background(), domain.Request{Messages: []domain.Message{{Role: domain.RoleUser, Content: "hi"}}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = sdk.CollectStep(context.Background(), stream)
-	if !errors.Is(err, sdk.ErrIncompleteStream) || base.requests != 1 {
+	_, err = usecase.CollectStep(context.Background(), stream)
+	if !errors.Is(err, domain.ErrIncompleteStream) || base.requests != 1 {
 		t.Fatalf("err=%v requests=%d, want incomplete/1", err, base.requests)
 	}
 }
 
 func TestEmptyStreamRetryIsBounded(t *testing.T) {
-	base := &emptyRetryTestModel{streams: []sdk.Stream{
-		&emptyRetryTestStream{events: []sdk.Event{{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop}}},
-		&emptyRetryTestStream{events: []sdk.Event{{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop}}},
-		&emptyRetryTestStream{events: []sdk.Event{{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop}}},
+	base := &emptyRetryTestModel{streams: []port.Stream{
+		&emptyRetryTestStream{events: []domain.Event{{Kind: domain.EventFinish, FinishReason: domain.FinishStop}}},
+		&emptyRetryTestStream{events: []domain.Event{{Kind: domain.EventFinish, FinishReason: domain.FinishStop}}},
+		&emptyRetryTestStream{events: []domain.Event{{Kind: domain.EventFinish, FinishReason: domain.FinishStop}}},
 	}}
-	stream, err := withEmptyStreamRetry(base, 2, 0).Stream(context.Background(), sdk.Request{Messages: []sdk.Message{{Role: sdk.RoleUser, Content: "hi"}}})
+	stream, err := withEmptyStreamRetry(base, 2, 0).Stream(context.Background(), domain.Request{Messages: []domain.Message{{Role: domain.RoleUser, Content: "hi"}}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	result, err := sdk.CollectStep(context.Background(), stream)
+	result, err := usecase.CollectStep(context.Background(), stream)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.Text != "" || result.FinishReason != sdk.FinishStop || base.requests != 3 {
+	if result.Text != "" || result.FinishReason != domain.FinishStop || base.requests != 3 {
 		t.Fatalf("result=%+v requests=%d, want empty stop/3", result, base.requests)
 	}
 }
 
 func TestEmptyStreamRetryDiscardsUsageFromRetriedAttempt(t *testing.T) {
-	base := &emptyRetryTestModel{streams: []sdk.Stream{
-		&emptyRetryTestStream{events: []sdk.Event{
-			{Kind: sdk.EventUsage, Usage: sdk.Usage{InputTokens: 99, OutputTokens: 0, TotalTokens: 99}},
-			{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
+	base := &emptyRetryTestModel{streams: []port.Stream{
+		&emptyRetryTestStream{events: []domain.Event{
+			{Kind: domain.EventUsage, Usage: domain.Usage{InputTokens: 99, OutputTokens: 0, TotalTokens: 99}},
+			{Kind: domain.EventFinish, FinishReason: domain.FinishStop},
 		}},
-		&emptyRetryTestStream{events: []sdk.Event{
-			{Kind: sdk.EventTextDelta, Text: "ok"},
-			{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
+		&emptyRetryTestStream{events: []domain.Event{
+			{Kind: domain.EventTextDelta, Text: "ok"},
+			{Kind: domain.EventFinish, FinishReason: domain.FinishStop},
 		}},
 	}}
-	stream, err := withEmptyStreamRetry(base, 2, 0).Stream(context.Background(), sdk.Request{Messages: []sdk.Message{{Role: sdk.RoleUser, Content: "hi"}}})
+	stream, err := withEmptyStreamRetry(base, 2, 0).Stream(context.Background(), domain.Request{Messages: []domain.Message{{Role: domain.RoleUser, Content: "hi"}}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	result, err := sdk.CollectStep(context.Background(), stream)
+	result, err := usecase.CollectStep(context.Background(), stream)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -366,16 +368,16 @@ func TestEmptyStreamRetryDiscardsUsageFromRetriedAttempt(t *testing.T) {
 }
 
 func TestEmptyStreamRetryHonorsCancellationDuringBackoff(t *testing.T) {
-	base := &emptyRetryTestModel{streams: []sdk.Stream{
-		&emptyRetryTestStream{events: []sdk.Event{{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop}}},
+	base := &emptyRetryTestModel{streams: []port.Stream{
+		&emptyRetryTestStream{events: []domain.Event{{Kind: domain.EventFinish, FinishReason: domain.FinishStop}}},
 	}}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Millisecond)
 	defer cancel()
-	stream, err := withEmptyStreamRetry(base, 2, time.Second).Stream(ctx, sdk.Request{Messages: []sdk.Message{{Role: sdk.RoleUser, Content: "hi"}}})
+	stream, err := withEmptyStreamRetry(base, 2, time.Second).Stream(ctx, domain.Request{Messages: []domain.Message{{Role: domain.RoleUser, Content: "hi"}}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = sdk.CollectStep(ctx, stream)
+	_, err = usecase.CollectStep(ctx, stream)
 	if !errors.Is(err, context.DeadlineExceeded) || base.requests != 1 {
 		t.Fatalf("err=%v requests=%d, want deadline/1", err, base.requests)
 	}
@@ -388,15 +390,15 @@ type noOutputTimeoutTestModel struct {
 
 func (*noOutputTimeoutTestModel) Provider() string { return DefaultOpenCodeName }
 func (*noOutputTimeoutTestModel) ModelID() string  { return "nemotron-3.5-lightning-free" }
-func (*noOutputTimeoutTestModel) Capabilities() sdk.ModelCapabilities {
-	return sdk.ModelCapabilities{Streaming: true, Tools: true}
+func (*noOutputTimeoutTestModel) Capabilities() domain.ModelCapabilities {
+	return domain.ModelCapabilities{Streaming: true, Tools: true}
 }
-func (m *noOutputTimeoutTestModel) Stream(ctx context.Context, _ sdk.Request) (sdk.Stream, error) {
+func (m *noOutputTimeoutTestModel) Stream(ctx context.Context, _ domain.Request) (port.Stream, error) {
 	m.attempts++
 	if m.recoverOn > 0 && m.attempts >= m.recoverOn {
-		return &emptyRetryTestStream{events: []sdk.Event{
-			{Kind: sdk.EventTextDelta, Text: "recovered"},
-			{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
+		return &emptyRetryTestStream{events: []domain.Event{
+			{Kind: domain.EventTextDelta, Text: "recovered"},
+			{Kind: domain.EventFinish, FinishReason: domain.FinishStop},
 		}}, nil
 	}
 	return &contextWaitTestStream{ctx: ctx}, nil
@@ -409,15 +411,15 @@ type openTimeoutRetryTestModel struct {
 
 func (*openTimeoutRetryTestModel) Provider() string { return DefaultOpenCodeName }
 func (*openTimeoutRetryTestModel) ModelID() string  { return "nemotron-3.5-lightning-free" }
-func (*openTimeoutRetryTestModel) Capabilities() sdk.ModelCapabilities {
-	return sdk.ModelCapabilities{Streaming: true}
+func (*openTimeoutRetryTestModel) Capabilities() domain.ModelCapabilities {
+	return domain.ModelCapabilities{Streaming: true}
 }
-func (m *openTimeoutRetryTestModel) Stream(ctx context.Context, _ sdk.Request) (sdk.Stream, error) {
+func (m *openTimeoutRetryTestModel) Stream(ctx context.Context, _ domain.Request) (port.Stream, error) {
 	m.attempts++
 	if m.attempts >= m.recoverOn {
-		return &emptyRetryTestStream{events: []sdk.Event{
-			{Kind: sdk.EventTextDelta, Text: "recovered"},
-			{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
+		return &emptyRetryTestStream{events: []domain.Event{
+			{Kind: domain.EventTextDelta, Text: "recovered"},
+			{Kind: domain.EventFinish, FinishReason: domain.FinishStop},
 		}}, nil
 	}
 	<-ctx.Done()
@@ -427,11 +429,11 @@ func (m *openTimeoutRetryTestModel) Stream(ctx context.Context, _ sdk.Request) (
 func TestStreamRetryRecoversWhenOpeningStreamTimesOut(t *testing.T) {
 	base := &openTimeoutRetryTestModel{recoverOn: 3}
 	model := withStreamRetryPolicy(base, 2, 0, 5*time.Millisecond, 0, 0)
-	stream, err := model.Stream(context.Background(), sdk.Request{Messages: []sdk.Message{{Role: sdk.RoleUser, Content: "hi"}}})
+	stream, err := model.Stream(context.Background(), domain.Request{Messages: []domain.Message{{Role: domain.RoleUser, Content: "hi"}}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	result, err := sdk.CollectStep(context.Background(), stream)
+	result, err := usecase.CollectStep(context.Background(), stream)
 	if err != nil || result.Text != "recovered" || base.attempts != 3 {
 		t.Fatalf("result=%q attempts=%d err=%v, want recovered/3", result.Text, base.attempts, err)
 	}
@@ -441,20 +443,20 @@ type contextWaitTestStream struct {
 	ctx context.Context
 }
 
-func (s *contextWaitTestStream) Next(context.Context) (sdk.Event, error) {
+func (s *contextWaitTestStream) Next(context.Context) (domain.Event, error) {
 	<-s.ctx.Done()
-	return sdk.Event{}, s.ctx.Err()
+	return domain.Event{}, s.ctx.Err()
 }
 func (*contextWaitTestStream) Close() error { return nil }
 
 func TestEmptyStreamRetryRecoversFromNoOutputTimeout(t *testing.T) {
 	base := &noOutputTimeoutTestModel{recoverOn: 2}
 	model := withEmptyStreamRetryPolicy(base, 2, 0, 5*time.Millisecond)
-	stream, err := model.Stream(context.Background(), sdk.Request{Messages: []sdk.Message{{Role: sdk.RoleUser, Content: "hi"}}})
+	stream, err := model.Stream(context.Background(), domain.Request{Messages: []domain.Message{{Role: domain.RoleUser, Content: "hi"}}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	result, err := sdk.CollectStep(context.Background(), stream)
+	result, err := usecase.CollectStep(context.Background(), stream)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -465,50 +467,50 @@ func TestEmptyStreamRetryRecoversFromNoOutputTimeout(t *testing.T) {
 
 type toolThenWaitStream struct {
 	ctx      context.Context
-	toolCall sdk.ToolCall
+	toolCall domain.ToolCall
 	step     int
 }
 
-func (s *toolThenWaitStream) Next(context.Context) (sdk.Event, error) {
+func (s *toolThenWaitStream) Next(context.Context) (domain.Event, error) {
 	s.step++
 	if s.step == 1 {
-		return sdk.Event{Kind: sdk.EventToolCall, ToolCall: s.toolCall}, nil
+		return domain.Event{Kind: domain.EventToolCall, ToolCall: s.toolCall}, nil
 	}
 	<-s.ctx.Done()
-	return sdk.Event{}, s.ctx.Err()
+	return domain.Event{}, s.ctx.Err()
 }
 func (*toolThenWaitStream) Close() error { return nil }
 
 type toolIdleRetryModel struct {
 	attempts int
-	toolCall sdk.ToolCall
+	toolCall domain.ToolCall
 }
 
 func (*toolIdleRetryModel) Provider() string { return DefaultOpenCodeName }
 func (*toolIdleRetryModel) ModelID() string  { return "nemotron-3.5-lightning-free" }
-func (*toolIdleRetryModel) Capabilities() sdk.ModelCapabilities {
-	return sdk.ModelCapabilities{Streaming: true, Tools: true}
+func (*toolIdleRetryModel) Capabilities() domain.ModelCapabilities {
+	return domain.ModelCapabilities{Streaming: true, Tools: true}
 }
-func (m *toolIdleRetryModel) Stream(ctx context.Context, _ sdk.Request) (sdk.Stream, error) {
+func (m *toolIdleRetryModel) Stream(ctx context.Context, _ domain.Request) (port.Stream, error) {
 	m.attempts++
 	if m.attempts == 1 {
 		return &toolThenWaitStream{ctx: ctx, toolCall: m.toolCall}, nil
 	}
-	return &emptyRetryTestStream{events: []sdk.Event{
-		{Kind: sdk.EventToolCall, ToolCall: m.toolCall},
-		{Kind: sdk.EventFinish, FinishReason: sdk.FinishToolCalls},
+	return &emptyRetryTestStream{events: []domain.Event{
+		{Kind: domain.EventToolCall, ToolCall: m.toolCall},
+		{Kind: domain.EventFinish, FinishReason: domain.FinishToolCalls},
 	}}, nil
 }
 
 func TestStreamRetryRecoversFromIdleBufferedToolAttempt(t *testing.T) {
-	call := sdk.ToolCall{ID: "call-idle", Name: "read", Arguments: json.RawMessage(`{"path":"README.md"}`)}
+	call := domain.ToolCall{ID: "call-idle", Name: "read", Arguments: json.RawMessage(`{"path":"README.md"}`)}
 	base := &toolIdleRetryModel{toolCall: call}
 	model := withStreamRetryPolicy(base, 2, 0, 0, 5*time.Millisecond, 0)
-	stream, err := model.Stream(context.Background(), sdk.Request{Messages: []sdk.Message{{Role: sdk.RoleUser, Content: "inspect"}}})
+	stream, err := model.Stream(context.Background(), domain.Request{Messages: []domain.Message{{Role: domain.RoleUser, Content: "inspect"}}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	result, err := sdk.CollectStep(context.Background(), stream)
+	result, err := usecase.CollectStep(context.Background(), stream)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -520,11 +522,11 @@ func TestStreamRetryRecoversFromIdleBufferedToolAttempt(t *testing.T) {
 func TestStreamRetryMaxDurationRecoversReplaySafeAttempt(t *testing.T) {
 	base := &noOutputTimeoutTestModel{recoverOn: 2}
 	model := withStreamRetryPolicy(base, 2, 0, 0, 0, 5*time.Millisecond)
-	stream, err := model.Stream(context.Background(), sdk.Request{Messages: []sdk.Message{{Role: sdk.RoleUser, Content: "hi"}}})
+	stream, err := model.Stream(context.Background(), domain.Request{Messages: []domain.Message{{Role: domain.RoleUser, Content: "hi"}}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	result, err := sdk.CollectStep(context.Background(), stream)
+	result, err := usecase.CollectStep(context.Background(), stream)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -536,12 +538,12 @@ func TestStreamRetryMaxDurationRecoversReplaySafeAttempt(t *testing.T) {
 func TestEmptyStreamRetryNoOutputTimeoutIsBounded(t *testing.T) {
 	base := &noOutputTimeoutTestModel{}
 	model := withEmptyStreamRetryPolicy(base, 2, 0, 5*time.Millisecond)
-	stream, err := model.Stream(context.Background(), sdk.Request{Messages: []sdk.Message{{Role: sdk.RoleUser, Content: "hi"}}})
+	stream, err := model.Stream(context.Background(), domain.Request{Messages: []domain.Message{{Role: domain.RoleUser, Content: "hi"}}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = sdk.CollectStep(context.Background(), stream)
-	if !errors.Is(err, sdk.ErrIncompleteStream) || base.attempts != 3 {
+	_, err = usecase.CollectStep(context.Background(), stream)
+	if !errors.Is(err, domain.ErrIncompleteStream) || base.attempts != 3 {
 		t.Fatalf("err=%v attempts=%d, want incomplete/3", err, base.attempts)
 	}
 }
@@ -550,10 +552,10 @@ type textThenDelayedFinishModel struct{}
 
 func (*textThenDelayedFinishModel) Provider() string { return DefaultOpenCodeName }
 func (*textThenDelayedFinishModel) ModelID() string  { return "nemotron-3.5-lightning-free" }
-func (*textThenDelayedFinishModel) Capabilities() sdk.ModelCapabilities {
-	return sdk.ModelCapabilities{Streaming: true}
+func (*textThenDelayedFinishModel) Capabilities() domain.ModelCapabilities {
+	return domain.ModelCapabilities{Streaming: true}
 }
-func (*textThenDelayedFinishModel) Stream(ctx context.Context, _ sdk.Request) (sdk.Stream, error) {
+func (*textThenDelayedFinishModel) Stream(ctx context.Context, _ domain.Request) (port.Stream, error) {
 	return &textThenDelayedFinishStream{ctx: ctx}, nil
 }
 
@@ -562,16 +564,16 @@ type textThenDelayedFinishStream struct {
 	step int
 }
 
-func (s *textThenDelayedFinishStream) Next(context.Context) (sdk.Event, error) {
+func (s *textThenDelayedFinishStream) Next(context.Context) (domain.Event, error) {
 	s.step++
 	if s.step == 1 {
-		return sdk.Event{Kind: sdk.EventTextDelta, Text: "visible"}, nil
+		return domain.Event{Kind: domain.EventTextDelta, Text: "visible"}, nil
 	}
 	select {
 	case <-s.ctx.Done():
-		return sdk.Event{}, s.ctx.Err()
+		return domain.Event{}, s.ctx.Err()
 	case <-time.After(15 * time.Millisecond):
-		return sdk.Event{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop}, nil
+		return domain.Event{Kind: domain.EventFinish, FinishReason: domain.FinishStop}, nil
 	}
 }
 func (*textThenDelayedFinishStream) Close() error { return nil }
@@ -579,12 +581,12 @@ func (*textThenDelayedFinishStream) Close() error { return nil }
 func TestEmptyStreamRetryStopsNoOutputWatchdogAfterVisibleOutput(t *testing.T) {
 	base := &textThenDelayedFinishModel{}
 	model := withEmptyStreamRetryPolicy(base, 2, 0, 5*time.Millisecond)
-	stream, err := model.Stream(context.Background(), sdk.Request{Messages: []sdk.Message{{Role: sdk.RoleUser, Content: "hi"}}})
+	stream, err := model.Stream(context.Background(), domain.Request{Messages: []domain.Message{{Role: domain.RoleUser, Content: "hi"}}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	result, err := sdk.CollectStep(context.Background(), stream)
-	if err != nil || result.Text != "visible" || result.FinishReason != sdk.FinishStop {
+	result, err := usecase.CollectStep(context.Background(), stream)
+	if err != nil || result.Text != "visible" || result.FinishReason != domain.FinishStop {
 		t.Fatalf("result=%+v err=%v", result, err)
 	}
 }
@@ -592,12 +594,12 @@ func TestEmptyStreamRetryStopsNoOutputWatchdogAfterVisibleOutput(t *testing.T) {
 func TestStreamIdleTimeoutDoesNotBlindReplayCommittedText(t *testing.T) {
 	base := &textThenDelayedFinishModel{}
 	model := withStreamRetryPolicy(base, 2, 0, 0, 5*time.Millisecond, 0)
-	stream, err := model.Stream(context.Background(), sdk.Request{Messages: []sdk.Message{{Role: sdk.RoleUser, Content: "hi"}}})
+	stream, err := model.Stream(context.Background(), domain.Request{Messages: []domain.Message{{Role: domain.RoleUser, Content: "hi"}}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = sdk.CollectStep(context.Background(), stream)
-	if !errors.Is(err, sdk.ErrIncompleteStream) || !strings.Contains(err.Error(), "idle") {
+	_, err = usecase.CollectStep(context.Background(), stream)
+	if !errors.Is(err, domain.ErrIncompleteStream) || !strings.Contains(err.Error(), "idle") {
 		t.Fatalf("err=%v, want committed-text idle timeout without replay", err)
 	}
 }
@@ -683,7 +685,7 @@ func TestLowConcurrencySettingControlsOpenCodeWrapper(t *testing.T) {
 	}
 }
 
-func unwrapRetryModel(model sdk.LanguageModel) sdk.LanguageModel {
+func unwrapRetryModel(model port.LanguageModel) port.LanguageModel {
 	if retry, ok := model.(*emptyStreamRetryModel); ok && retry != nil {
 		return retry.base
 	}
@@ -701,49 +703,49 @@ func TestOpenCodeFreeFactoryUsesOneRetryBudget(t *testing.T) {
 	defer server.Close()
 
 	model := newSDKOpenAILanguageModel(DefaultOpenCodeName, server.URL, "", "nemotron-3.5-lightning-free")
-	_, err := model.Stream(context.Background(), sdk.Request{Messages: []sdk.Message{{Role: sdk.RoleUser, Content: "hi"}}})
+	_, err := model.Stream(context.Background(), domain.Request{Messages: []domain.Message{{Role: domain.RoleUser, Content: "hi"}}})
 	if err == nil || attempts != runtimepolicy.ModelRetryMaxRetries+1 {
 		t.Fatalf("err=%v attempts=%d, want error after %d total attempts", err, attempts, runtimepolicy.ModelRetryMaxRetries+1)
 	}
 }
 
 func TestReplaySafeRetryRecoversFromIncompleteBeforeOutput(t *testing.T) {
-	base := &emptyRetryTestModel{streams: []sdk.Stream{
-		&emptyRetryTestStream{err: sdk.ErrIncompleteStream},
-		&emptyRetryTestStream{events: []sdk.Event{{Kind: sdk.EventTextDelta, Text: "ok"}, {Kind: sdk.EventFinish, FinishReason: sdk.FinishStop}}},
+	base := &emptyRetryTestModel{streams: []port.Stream{
+		&emptyRetryTestStream{err: domain.ErrIncompleteStream},
+		&emptyRetryTestStream{events: []domain.Event{{Kind: domain.EventTextDelta, Text: "ok"}, {Kind: domain.EventFinish, FinishReason: domain.FinishStop}}},
 	}}
 	policy := streamRetryPolicy(0, 0)
-	stream, err := withReplaySafeRetryConfig(base, 2, policy).Stream(context.Background(), sdk.Request{Messages: []sdk.Message{{Role: sdk.RoleUser, Content: "hi"}}})
+	stream, err := withReplaySafeRetryConfig(base, 2, policy).Stream(context.Background(), domain.Request{Messages: []domain.Message{{Role: domain.RoleUser, Content: "hi"}}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	result, err := sdk.CollectStep(context.Background(), stream)
+	result, err := usecase.CollectStep(context.Background(), stream)
 	if err != nil || result.Text != "ok" || base.requests != 2 {
 		t.Fatalf("result=%q requests=%d err=%v, want ok/2", result.Text, base.requests, err)
 	}
 }
 
 func TestReplaySafeRetryDoesNotReplayAfterVisibleText(t *testing.T) {
-	base := &emptyRetryTestModel{streams: []sdk.Stream{
-		&emptyRetryTestStream{events: []sdk.Event{{Kind: sdk.EventTextDelta, Text: "partial"}}, err: sdk.ErrIncompleteStream},
-		&emptyRetryTestStream{events: []sdk.Event{{Kind: sdk.EventTextDelta, Text: "duplicate"}, {Kind: sdk.EventFinish, FinishReason: sdk.FinishStop}}},
+	base := &emptyRetryTestModel{streams: []port.Stream{
+		&emptyRetryTestStream{events: []domain.Event{{Kind: domain.EventTextDelta, Text: "partial"}}, err: domain.ErrIncompleteStream},
+		&emptyRetryTestStream{events: []domain.Event{{Kind: domain.EventTextDelta, Text: "duplicate"}, {Kind: domain.EventFinish, FinishReason: domain.FinishStop}}},
 	}}
 	policy := streamRetryPolicy(0, 0)
-	stream, err := withReplaySafeRetryConfig(base, 2, policy).Stream(context.Background(), sdk.Request{Messages: []sdk.Message{{Role: sdk.RoleUser, Content: "hi"}}})
+	stream, err := withReplaySafeRetryConfig(base, 2, policy).Stream(context.Background(), domain.Request{Messages: []domain.Message{{Role: domain.RoleUser, Content: "hi"}}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = sdk.CollectStep(context.Background(), stream)
-	if !errors.Is(err, sdk.ErrIncompleteStream) || base.requests != 1 {
+	_, err = usecase.CollectStep(context.Background(), stream)
+	if !errors.Is(err, domain.ErrIncompleteStream) || base.requests != 1 {
 		t.Fatalf("err=%v requests=%d, want incomplete/1", err, base.requests)
 	}
 }
 
 func TestReplaySafeRetryDoesNotRetryOpenFailure(t *testing.T) {
-	providerErr := sdk.NewProviderError(DefaultOpenAIName, 0, "ProviderResponseStreamError", "upstream open failed")
+	providerErr := domain.NewProviderError(DefaultOpenAIName, 0, "ProviderResponseStreamError", "upstream open failed")
 	base := &openFailTestModel{err: providerErr}
 	policy := streamRetryPolicy(0, 0)
-	_, err := withReplaySafeRetryConfig(base, 2, policy).Stream(context.Background(), sdk.Request{Messages: []sdk.Message{{Role: sdk.RoleUser, Content: "hi"}}})
+	_, err := withReplaySafeRetryConfig(base, 2, policy).Stream(context.Background(), domain.Request{Messages: []domain.Message{{Role: domain.RoleUser, Content: "hi"}}})
 	if !errors.Is(err, providerErr) || base.requests != 1 {
 		t.Fatalf("err=%v requests=%d, want original open error/1", err, base.requests)
 	}
@@ -756,26 +758,26 @@ type openFailTestModel struct {
 
 func (*openFailTestModel) Provider() string { return DefaultOpenAIName }
 func (*openFailTestModel) ModelID() string  { return "paid-model" }
-func (*openFailTestModel) Capabilities() sdk.ModelCapabilities {
-	return sdk.ModelCapabilities{Streaming: true, Tools: true}
+func (*openFailTestModel) Capabilities() domain.ModelCapabilities {
+	return domain.ModelCapabilities{Streaming: true, Tools: true}
 }
-func (m *openFailTestModel) Stream(context.Context, sdk.Request) (sdk.Stream, error) {
+func (m *openFailTestModel) Stream(context.Context, domain.Request) (port.Stream, error) {
 	m.requests++
 	return nil, m.err
 }
 
 func TestReplaySafeRetryIsBounded(t *testing.T) {
-	base := &emptyRetryTestModel{streams: []sdk.Stream{
-		&emptyRetryTestStream{events: []sdk.Event{{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop}}},
-		&emptyRetryTestStream{events: []sdk.Event{{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop}}},
-		&emptyRetryTestStream{events: []sdk.Event{{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop}}},
+	base := &emptyRetryTestModel{streams: []port.Stream{
+		&emptyRetryTestStream{events: []domain.Event{{Kind: domain.EventFinish, FinishReason: domain.FinishStop}}},
+		&emptyRetryTestStream{events: []domain.Event{{Kind: domain.EventFinish, FinishReason: domain.FinishStop}}},
+		&emptyRetryTestStream{events: []domain.Event{{Kind: domain.EventFinish, FinishReason: domain.FinishStop}}},
 	}}
 	policy := streamRetryPolicy(0, 0)
-	stream, err := withReplaySafeRetryConfig(base, 2, policy).Stream(context.Background(), sdk.Request{Messages: []sdk.Message{{Role: sdk.RoleUser, Content: "hi"}}})
+	stream, err := withReplaySafeRetryConfig(base, 2, policy).Stream(context.Background(), domain.Request{Messages: []domain.Message{{Role: domain.RoleUser, Content: "hi"}}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	result, err := sdk.CollectStep(context.Background(), stream)
+	result, err := usecase.CollectStep(context.Background(), stream)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -820,20 +822,20 @@ func TestGenericFactoryEnablesReplaySafeRetry(t *testing.T) {
 }
 
 func TestEmptyStreamRetryPublishesCountdownMetadata(t *testing.T) {
-	base := &emptyRetryTestModel{streams: []sdk.Stream{
-		&emptyRetryTestStream{err: sdk.ErrIncompleteStream},
-		&emptyRetryTestStream{err: sdk.ErrIncompleteStream},
-		&emptyRetryTestStream{events: []sdk.Event{{Kind: sdk.EventTextDelta, Text: "ok"}, {Kind: sdk.EventFinish, FinishReason: sdk.FinishStop}}},
+	base := &emptyRetryTestModel{streams: []port.Stream{
+		&emptyRetryTestStream{err: domain.ErrIncompleteStream},
+		&emptyRetryTestStream{err: domain.ErrIncompleteStream},
+		&emptyRetryTestStream{events: []domain.Event{{Kind: domain.EventTextDelta, Text: "ok"}, {Kind: domain.EventFinish, FinishReason: domain.FinishStop}}},
 	}}
-	var retries []sdk.RetryEvent
-	ctx := sdk.WithRetryObserver(context.Background(), func(_ context.Context, event sdk.RetryEvent) {
+	var retries []domain.RetryEvent
+	ctx := domain.WithRetryObserver(context.Background(), func(_ context.Context, event domain.RetryEvent) {
 		retries = append(retries, event)
 	})
-	stream, err := withStreamRetryPolicyAndGap(base, 2, 5*time.Millisecond, 10*time.Millisecond, 0, 0, 0).Stream(ctx, sdk.Request{Messages: []sdk.Message{{Role: sdk.RoleUser, Content: "hi"}}})
+	stream, err := withStreamRetryPolicyAndGap(base, 2, 5*time.Millisecond, 10*time.Millisecond, 0, 0, 0).Stream(ctx, domain.Request{Messages: []domain.Message{{Role: domain.RoleUser, Content: "hi"}}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	result, err := sdk.CollectStep(ctx, stream)
+	result, err := usecase.CollectStep(ctx, stream)
 	if err != nil || result.Text != "ok" {
 		t.Fatalf("result=%q err=%v", result.Text, err)
 	}

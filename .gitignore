@@ -59,3 +59,7 @@ scratch/
 # Local datasets
 data/
 .commandcode/
+.protonman/
+.freebuff/
+artifacts/desktop-audit/
+design-qa.md

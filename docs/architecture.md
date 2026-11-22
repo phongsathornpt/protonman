@@ -38,7 +38,7 @@ cmd/protonman/                    composition root and mode selection
                checkpoint/ sandbox/ telemetry/
 
 internal/base/                    dependency-free internal leaf utilities
-proton-sdk/                       provider-neutral model SDK
+pkg/proton-sdk/                       provider-neutral model SDK
 ```
 
 ## 1. Composition Root (`cmd/protonman/`)

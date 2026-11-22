@@ -23,7 +23,6 @@ surfaces remain migration-in-progress until running-window and visual parity
 checks pass. The Gio client now also projects goal/TODO/memory inspectors and
 session runtime controls through the typed ACP extensions. MCP configuration
 uses the same client-owned definitions and explicit reconnect semantics. Gio
-also supervises configured ACP agent profiles, routes each session through its
 owning process, and exposes a progressively disclosed profile editor. Native
 notifications remain a follow-up capability.
 
@@ -31,9 +30,11 @@ notifications remain a follow-up capability.
 
 Protonman Desktop is a focused developer workbench. It uses a modern integrated
 IDE-style layout with docked edge-to-edge panels and 1px hairline dividers
-(`outlineVariant`), replacing isolated floating card islands. The theme follows
-the "Refined Developer Slate" palette with deep charcoal surfaces, GitHub/VSCode-inspired
-syntax and diff highlighting, and Dota-style attribute accents for delegated subagents.
+(`outlineVariant`), replacing isolated floating card islands. The appearance
+selector offers macOS Light/Dark palettes and optional Developer Slate Light/Dark
+palettes. System Default follows the host appearance and uses the macOS palette.
+All themes share semantic color roles, GitHub/VSCode-inspired syntax and diff
+highlighting, and Dota-style attribute accents for delegated subagents.
 
 The following patterns are intentionally rejected:
 
@@ -47,7 +48,9 @@ The following patterns are intentionally rejected:
 
 ## Developer Slate Tokens
 
-The palette uses dark and light charcoal/slate tones optimized for contrast and readability. Light and dark modes share the same semantic roles and guarantee > 4.5:1 contrast for all text pairs.
+These tokens define the optional Slate palette. The macOS Light/Dark themes use
+the corresponding native palette in `internal/adapter/in/desktop/gioui/theme.go`.
+The palettes share semantic roles and retain at least 4.5:1 contrast for text.
 
 | Role | Light | Dark |
 | --- | --- | --- |
@@ -93,44 +96,45 @@ must retain at least 4.5:1 contrast in both themes.
 
 ## Typography
 
-The client requests `Roboto, Arial, sans-serif` through Gio's system-font
-shaper and uses developer-oriented typographic hierarchy:
+The client requests `SF Pro, -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Inter, system-ui, sans-serif`
+through Gio's system-font shaper and uses developer-oriented typographic hierarchy:
 
 - display small: 30sp semibold for empty-state titles;
 - headline small: 20sp semibold for pane and section titles;
-- title medium: 15sp semibold for cards, headers, and tabs;
-- body large: 15sp regular for primary conversation text;
-- body medium: 13sp regular for metadata and supporting content;
+- title medium: 16sp semibold for cards, headers, and tabs;
+- body large: 16sp regular for primary conversation text;
+- body medium: 14sp regular for metadata and supporting content;
 - body small: 12sp regular for diff content, code snippets, and logs;
-- label large: 14sp semibold for buttons; and
+- label large: 14sp semibold for buttons;
+- label medium: 12sp regular for supporting controls; and
 - label small: 11sp semibold for status pills and diff badges.
 
 Long workspace paths and titles use deterministic truncation rather than
 forcing horizontal overflow.
 
-## Workbench Structure & Layout
+## Workbench Structure & Layout (macOS Split-View Paradigm)
 
-The desktop application is structured as a 3-column docked edge-to-edge workbench:
+The desktop application is structured as a native macOS 3-column split-view workbench adhering to Apple Human Interface Guidelines:
 
-1. **Unified Top Bar (44dp)**: Single cohesive title bar combining branding ("Protonman"), left sidebar toggle button, project/session breadcrumbs, active agent selector, connection status pill, and inspector toggle.
-2. **Left Sidebar (260dp, collapsible)**:
-   - Top action row with "New Session" (`Ctrl/Cmd+N`) and search filter input.
-   - Collapsible project directory groups with toggle chevrons (`▾`/`▸`).
-   - Compact 40dp session rows with colored status dots (green = running, grey = idle, red = error) and relative timestamps.
+1. **Unified Top Toolbar (60dp)**: Aligned across panes with the native window titlebar. Contains icon-driven sidebar toggle (`◧`), project/session context, active session title, connection status pill, and inspector toggle (`◨`).
+2. **Left Sidebar (260dp, 220dp below a 900dp window width, full-height and collapsible)**:
+   - Extends the full window height in a quiet `surfaceDim` background.
+   - Top bar with the Protonman brand and a compact new-session icon action, thread search on its own row below, and a Projects section label.
+   - Collapsible project directory groups with toggle chevrons (`▾`/`▸`) and hover `+` quick action to start new threads directly in that workspace. Expanded empty projects display an inline `"No conversations yet"` + `"+ New"` CTA. Pinned sessions sit under their own collapsible group header above projects.
+   - Active thread visual anchoring: prominent 3dp rounded accent indicator bar (`Primary`) on the leading edge of the active session card, filled pill (`primaryContainer` on `onPrimaryContainer`) with an 8dp horizontal gutter, 44dp minimum row height, colored status dots, and relative timestamps. Hover actions (pin, rename, delete) reveal on the active or hovered row. Full arrow key navigation (`UpArrow`/`DownArrow`) traverses between threads and smoothly transitions into search.
 3. **Center Conversation Pane (Flexible width, max 840dp text constraint)**:
-   - Edge-to-edge conversation stream with natural flow.
+   - Clean canvas stream: AI assistant messages flow directly onto the canvas (`surface`) without enclosing card borders.
+   - User prompts rendered as refined rounded speech bubbles (`shapeLarge` / 12-14dp radius) in elevated `secondaryContainer`.
    - Collapsible thinking blocks with 1-click expand/collapse.
    - Color-coded unified git diff cards with `+adds` / `-dels` badges and syntax-colored lines.
    - Non-diff tool executions rendered as compact step pills.
    - Dota-style attribute cards for delegated subagents (STR, AGI, INT) with 3dp left accent stripes.
-   - Floating composer card docked at the bottom with full-width multiline input and a bottom utility bar (model pill, keyboard hints, Send/Stop action).
-4. **Right Inspector Drawer (320dp, collapsible)**:
-   - 3 docked tabs: `[Plan]`, `[Memory]`, `[Settings]`.
-   - `[Plan]` tab: Active goal, session tasks (TODO checklist with status markers and linear progress bar).
-   - `[Memory]` tab: Workspace-local facts and global preferences with confidence ratings.
-   - `[Settings]` tab: Session runtime controls (model, reasoning effort), MCP server integrations, and ACP agent profile configurations.
-   - Automatically switches to `[Settings]` when an MCP or Agent Profile editor is opened.
-5. **Hairline Dividers**: 1px solid dividers (`outlineVariant`) separate columns edge-to-edge.
+   - Floating composer card: elevated container with 16dp corner radius (`shapeExtraLarge`) floating above the bottom, circular Apple-style action button (`↑` send / `■` stop), capsule context chips (Goal, Model), and multiline editor.
+4. **Right Inspector Drawer (336dp, collapsible)**:
+   - Recessed capsule segmented control tab bar (macOS `NSSegmentedControl` style) in `surfaceContainerLow` with an elevated active tab pill (`surface`).
+   - Docked tabs: `[Plan]`, `[Memory]`, and `[Skills]`. General application settings open separately from the sidebar.
+   - Grouped cards: 8dp rounded containers (`shapeMedium`) in `surfaceContainer` for Goal, session tasks (TODO checklist), Memory facts, and runtime settings.
+5. **Hairline Dividers**: 1px subtle dividers (`outlineVariant`) separate columns cleanly.
 
 ## Global Keyboard Shortcuts
 
@@ -170,7 +174,6 @@ conversation timeline, composer, permission panel, and scrollable inspector
 form the current Gio slice. The inspector also contains a progressively
 disclosed MCP integration editor with labeled JSON inputs, runtime-only
 environment resolution, and an explicit ACP reconnect action. The top workspace
-surface owns a keyboard-accessible agent selector; a horizontal, bounded choice
 strip appears only while the selector is open. The inspector adds a profile list
 and a 44dp-minimum editor for agent ID, display name, command, arguments, and
 environment variable names. At narrow widths the inspector is an explicit
@@ -205,30 +208,11 @@ sessions receive standard `mcpServers` fields. Applying changed definitions to
 existing sessions requires the explicit reconnect action, which is refused
 while any session is active.
 
-## ACP agent profiles
+## ACP agent
 
-Gio resolves profiles in this order:
-
-1. `PROTONMAN_ACP_AGENTS_JSON`;
-2. the application-owned `acp.agents.v1` user preference; then
-3. the built-in Protonman `--acp` profile.
-
-Each profile stores an ID, display name, executable, argument vector, and
-environment variable names. Processes start through `acpclient.StartCommand`
-without a shell. Persisted profiles and the editor store names only; values are
-resolved from the Gio process environment at launch and are never persisted.
-The process-level `PROTONMAN_ACP_AGENTS_JSON` override may additionally provide
-`KEY=value` runtime entries; those values remain in memory only and are never
-written to the repository. The override continues to take precedence until it
-is removed.
-
-Every profile has an independent supervised client and reconnect loop. New
-sessions use the selected project default agent, while existing sessions always
-route history, prompts, cancellation, permissions, and ACP events through their
-recorded `AgentID`. Disconnecting one process pauses only its sessions and
-removes only its permission requests. Goal, TODO, Memory, and runtime controls
-remain restricted to Protonman sessions. Profile edits persist immediately but
-apply to process launch on the next Desktop restart.
+Gio drives exactly one supervised ACP process: `protonman --acp`, started
+through `acpclient.StartCommand` without a shell. There is no multi-agent
+selection and no third-party ACP support.
 
 ## Parity matrix
 
@@ -246,7 +230,7 @@ apply to process launch on the next Desktop restart.
 | Runtime controls | In progress | Model, reasoning, low-concurrency, and mutation parity |
 | MCP integrations | In progress | Persistence, ACP payload, busy-session refusal, and visual parity |
 | Native notifications | Pending | Permission, completion, and failure parity |
-| Custom ACP agents/settings | In progress | Persistence, routing, restart, and visual parity |
+| Protonman ACP process | In progress | Supervision, reconnect, and visual parity |
 | Default desktop command | Complete | Gio is the only desktop target; remaining parity checks stay tracked above |
 
 ## Build and run
@@ -268,8 +252,6 @@ make desktop-run
 Environment:
 
 - `PROTONMAN_BINARY`: ACP executable override used by local development.
-- `PROTONMAN_ACP_AGENTS_JSON`: complete ACP profile array override; takes
-  precedence over user configuration for the lifetime of the process.
 - `PROTONMAN_GIO_WORKSPACE`: authoritative existing workspace directory for
   create-session actions; an invalid override fails instead of falling back to
   another directory.

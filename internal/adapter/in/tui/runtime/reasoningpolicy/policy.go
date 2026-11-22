@@ -5,7 +5,7 @@ import (
 
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/core/modelprofile"
-	"github.com/phongsathornpt/protonman/proton-sdk/domain"
+	"github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
 )
 
 func Choices(profile modelprofile.Resolved) []domain.ReasoningEffort {

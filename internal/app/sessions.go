@@ -9,7 +9,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/core/session"
 	tododomain "github.com/phongsathornpt/protonman/internal/core/todo"
 	"github.com/phongsathornpt/protonman/internal/platform/appdirs"
-	"github.com/phongsathornpt/protonman/proton-sdk/domain"
+	"github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
 )
 
 // TodoStoreOpener opens the durable session TODO store behind the core-owned

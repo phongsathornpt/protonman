@@ -7,7 +7,7 @@ import (
 
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	domain "github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
 )
 
 type testRuntimeContextProvider struct {
@@ -62,9 +62,9 @@ func TestLoopInjectsReadyRuntimeContextBeforeRound(t *testing.T) {
 	provider := &testRuntimeContextProvider{ready: []model.Message{{
 		Role: model.RoleUser, Content: "runtime evidence",
 	}}}
-	client := &scriptedClient{streams: []scriptedStreamSpec{{events: []sdk.Event{
-		{Kind: sdk.EventTextDelta, Text: "integrated"},
-		{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
+	client := &scriptedClient{streams: []scriptedStreamSpec{{events: []domain.Event{
+		{Kind: domain.EventTextDelta, Text: "integrated"},
+		{Kind: domain.EventFinish, FinishReason: domain.FinishStop},
 	}}}}
 	loop, _ := newTestLoop(t, client, permission.ActionAllow, WithRuntimeContextProvider(provider))
 	result, err := loop.Run(context.Background(), []model.Message{{Role: model.RoleUser, Content: "inspect"}}, nil)
@@ -103,8 +103,8 @@ func TestLoopDefersFinalTextUntilPendingRuntimeContextArrives(t *testing.T) {
 	provider := &testRuntimeContextProvider{pending: true, await: make(chan []model.Message, 1)}
 	provider.await <- []model.Message{{Role: model.RoleUser, Content: "child result"}}
 	client := &scriptedClient{streams: []scriptedStreamSpec{
-		{events: []sdk.Event{{Kind: sdk.EventTextDelta, Text: "premature"}, {Kind: sdk.EventFinish, FinishReason: sdk.FinishStop}}},
-		{events: []sdk.Event{{Kind: sdk.EventTextDelta, Text: "integrated result"}, {Kind: sdk.EventFinish, FinishReason: sdk.FinishStop}}},
+		{events: []domain.Event{{Kind: domain.EventTextDelta, Text: "premature"}, {Kind: domain.EventFinish, FinishReason: domain.FinishStop}}},
+		{events: []domain.Event{{Kind: domain.EventTextDelta, Text: "integrated result"}, {Kind: domain.EventFinish, FinishReason: domain.FinishStop}}},
 	}}
 	loop, _ := newTestLoop(t, client, permission.ActionAllow, WithRuntimeContextProvider(provider))
 	events := make([]Event, 0)
@@ -169,8 +169,8 @@ func (p *stagedOptionalRuntimeContext) Finalize(context.Context) {
 func TestLoopIntegratesOptionalResultThatBecomesReadyDuringBufferedRound(t *testing.T) {
 	provider := &stagedOptionalRuntimeContext{active: true}
 	client := &scriptedClient{streams: []scriptedStreamSpec{
-		{events: []sdk.Event{{Kind: sdk.EventTextDelta, Text: "premature"}, {Kind: sdk.EventFinish, FinishReason: sdk.FinishStop}}},
-		{events: []sdk.Event{{Kind: sdk.EventTextDelta, Text: "integrated optional"}, {Kind: sdk.EventFinish, FinishReason: sdk.FinishStop}}},
+		{events: []domain.Event{{Kind: domain.EventTextDelta, Text: "premature"}, {Kind: domain.EventFinish, FinishReason: domain.FinishStop}}},
+		{events: []domain.Event{{Kind: domain.EventTextDelta, Text: "integrated optional"}, {Kind: domain.EventFinish, FinishReason: domain.FinishStop}}},
 	}}
 	loop, _ := newTestLoop(t, client, permission.ActionAllow, WithRuntimeContextProvider(provider))
 	events := make([]Event, 0)

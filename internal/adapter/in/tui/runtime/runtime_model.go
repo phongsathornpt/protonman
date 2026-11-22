@@ -31,7 +31,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/feature/agent"
 	"github.com/phongsathornpt/protonman/internal/feature/skill"
 	tododomain "github.com/phongsathornpt/protonman/internal/feature/todo"
-	"github.com/phongsathornpt/protonman/proton-sdk/domain"
+	"github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
 )
 
 const (
@@ -145,27 +145,27 @@ type executionPolicyState struct {
 }
 
 type presentationModelState struct {
-	viewport             viewport.Model
-	spinner              spinner.Model
-	help                 help.Model
-	keys                 bubbleKeyMap
-	planMode             bool
-	reducedMotion        bool
-	icons                tuistyle.IconSet
-	panes                paneState
-	nextID               uint64
-	layout               layoutState
-	viewportViewCache    viewportViewCache
-	liveViewCache        string
-	liveViewCacheValid   bool
-	sessionHeaderCache   sessionHeaderCache
-	keyboardCapability   keyboardCapability
-	transientNotice      string
-	transientNoticeID    uint64
-	promptAnimationPhase int
-	memoryActivities     chan corememory.Activity
-	navMode              bool
-	focusedCellIndex     int
+	viewport           viewport.Model
+	spinner            spinner.Model
+	help               help.Model
+	keys               bubbleKeyMap
+	planMode           bool
+	reducedMotion      bool
+	icons              tuistyle.IconSet
+	panes              paneState
+	mentionCache       workspaceFileCache
+	nextID             uint64
+	layout             layoutState
+	viewportViewCache  viewportViewCache
+	liveViewCache      string
+	liveViewCacheValid bool
+	sessionHeaderCache sessionHeaderCache
+	keyboardCapability keyboardCapability
+	transientNotice    string
+	transientNoticeID  uint64
+	memoryActivities   chan corememory.Activity
+	navMode            bool
+	focusedCellIndex   int
 }
 
 type viewportViewCache struct {

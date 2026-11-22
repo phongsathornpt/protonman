@@ -176,9 +176,7 @@ func (c PatchCell) RenderWidth(width int) []string {
 	}
 
 	out := make([]string, 0, 2)
-	for _, line := range wrapStyledLines(headerLine, width) {
-		out = append(out, line)
-	}
+	out = append(out, wrapStyledLines(headerLine, width)...)
 
 	// Multi-path rendering (if more than 1 path)
 	hiddenPaths := 0
@@ -193,9 +191,7 @@ func (c PatchCell) RenderWidth(width int) []string {
 		}
 	}
 	if hiddenPaths > 0 {
-		for _, line := range wrapStyledLines(tuistyle.ToolFoldStyle.Render(fmt.Sprintf("  … (+%d more files · ctrl+t for full list)", hiddenPaths)), width) {
-			out = append(out, line)
-		}
+		out = append(out, wrapStyledLines(tuistyle.ToolFoldStyle.Render(fmt.Sprintf("  … (+%d more files · ctrl+t for full list)", hiddenPaths)), width)...)
 	}
 
 	// 4. Detail lines:
@@ -217,9 +213,7 @@ func (c PatchCell) RenderWidth(width int) []string {
 		// B. If success, show compact checkpoint token if present
 		cpToken := compactCheckpoint(c.CheckpointID, c.Body)
 		if cpToken != "" {
-			for _, line := range wrapStyledLines(tuistyle.ToolExcerptStyle.Render("  ↳ checkpoint "+cpToken), width) {
-				out = append(out, line)
-			}
+			out = append(out, wrapStyledLines(tuistyle.ToolExcerptStyle.Render("  ↳ checkpoint "+cpToken), width)...)
 		}
 
 		// C. Render syntax-colored diff preview with progressive fold indicator
@@ -249,9 +243,7 @@ func (c PatchCell) RenderWidth(width int) []string {
 				}
 				if remaining > 0 {
 					foldMsg := tuistyle.ToolFoldStyle.Render(fmt.Sprintf("  … (+%d more lines · ctrl+t for full diff)", remaining))
-					for _, line := range wrapStyledLines(foldMsg, width) {
-						out = append(out, line)
-					}
+					out = append(out, wrapStyledLines(foldMsg, width)...)
 				}
 			}
 		}

@@ -8,9 +8,8 @@ import (
 
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/feature/agent"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
-	"github.com/phongsathornpt/protonman/proton-sdk/domain"
-	"github.com/phongsathornpt/protonman/proton-sdk/usecase"
+	"github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
+	"github.com/phongsathornpt/protonman/pkg/proton-sdk/usecase"
 )
 
 type capabilityTestRegistry struct{ handlers map[string]tool.Handler }
@@ -113,7 +112,7 @@ func (h capabilityDefinitionHandler) Execute(context.Context, tool.Call) (tool.R
 	return tool.Result{}, nil
 }
 
-func (r compiledCapabilityTestRegistry) CompiledValidators(name string) (*sdk.ToolSchemaValidator, *sdk.ToolSchemaValidator, bool) {
+func (r compiledCapabilityTestRegistry) CompiledValidators(name string) (*usecase.ToolSchemaValidator, *usecase.ToolSchemaValidator, bool) {
 	handler, ok := r.handlers[name]
 	if !ok {
 		return nil, nil, false
@@ -133,7 +132,7 @@ func TestCapabilityRegistryPreservesCompiledValidatorsForVisibleTools(t *testing
 	}}}
 	reg := NewCapabilityRegistry(base, coord)
 	compiled, ok := reg.(interface {
-		CompiledValidators(string) (*sdk.ToolSchemaValidator, *sdk.ToolSchemaValidator, bool)
+		CompiledValidators(string) (*usecase.ToolSchemaValidator, *usecase.ToolSchemaValidator, bool)
 	})
 	if !ok {
 		t.Fatal("capability registry dropped compiled validator cache")
@@ -180,7 +179,7 @@ func TestCapabilityRegistryNarrowsSubagentValidatorWhenDisabled(t *testing.T) {
 		t.Fatalf("lifecycle schema advertises unavailable actions: %s", encodedSchema)
 	}
 	compiled, ok := reg.(interface {
-		CompiledValidators(string) (*sdk.ToolSchemaValidator, *sdk.ToolSchemaValidator, bool)
+		CompiledValidators(string) (*usecase.ToolSchemaValidator, *usecase.ToolSchemaValidator, bool)
 	})
 	if !ok {
 		t.Fatal("capability registry dropped compiled validator cache")

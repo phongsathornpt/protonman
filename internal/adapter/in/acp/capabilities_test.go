@@ -13,6 +13,7 @@ import (
 
 func TestSessionCapabilitiesIncludeSupportedAdditionalDirectories(t *testing.T) {
 	payload, err := json.Marshal(SessionCapabilities{
+		List:                  &struct{}{},
 		Resume:                &struct{}{},
 		Delete:                &struct{}{},
 		Close:                 &struct{}{},
@@ -22,10 +23,36 @@ func TestSessionCapabilitiesIncludeSupportedAdditionalDirectories(t *testing.T) 
 		t.Fatalf("marshal session capabilities: %v", err)
 	}
 	got := string(payload)
-	for _, capability := range []string{"resume", "delete", "close", "additionalDirectories"} {
+	for _, capability := range []string{"list", "resume", "delete", "close", "additionalDirectories"} {
 		if !strings.Contains(got, `"`+capability+`"`) {
 			t.Fatalf("supported capability %q missing from %s", capability, got)
 		}
+	}
+}
+
+func TestACPInitializeAdvertisesImplementedSessionList(t *testing.T) {
+	server := newTestServer(t, permission.ModeAsk)
+	result, _, err := server.dispatch(context.Background(), RPCRequest{Method: "initialize"}, &bytes.Buffer{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.(InitializeResult).AgentCapabilities.SessionCapabilities.List == nil {
+		t.Fatal("session/list is implemented but not advertised")
+	}
+	payload, err := json.Marshal(result)
+	if err != nil {
+		t.Fatalf("marshal initialize response: %v", err)
+	}
+	var wire struct {
+		AgentCapabilities struct {
+			SessionCapabilities map[string]json.RawMessage `json:"sessionCapabilities"`
+		} `json:"agentCapabilities"`
+	}
+	if err := json.Unmarshal(payload, &wire); err != nil {
+		t.Fatalf("decode initialize response: %v", err)
+	}
+	if _, ok := wire.AgentCapabilities.SessionCapabilities["list"]; !ok {
+		t.Fatalf("initialize wire response omitted sessionCapabilities.list: %s", payload)
 	}
 }
 

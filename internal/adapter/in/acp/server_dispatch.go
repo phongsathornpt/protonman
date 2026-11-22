@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 
 	"github.com/phongsathornpt/protonman/internal/base/buildinfo"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
@@ -15,6 +16,7 @@ import (
 
 func (s *Server) advertisedSessionCapabilities() SessionCapabilities {
 	capabilities := SessionCapabilities{
+		List:   &struct{}{},
 		Resume: &struct{}{},
 		Delete: &struct{}{},
 		Close:  &struct{}{},
@@ -28,6 +30,15 @@ func (s *Server) advertisedSessionCapabilities() SessionCapabilities {
 func (s *Server) dispatch(ctx context.Context, request RPCRequest, output io.Writer) (any, *RPCNotification, error) {
 	switch request.Method {
 	case "initialize":
+		var params InitializeParams
+		if len(request.Params) > 0 {
+			if err := json.Unmarshal(request.Params, &params); err != nil {
+				return nil, nil, fmt.Errorf("decode initialize: %w", err)
+			}
+		}
+		s.mu.Lock()
+		s.clientCapabilities = params.ClientCapabilities
+		s.mu.Unlock()
 		return InitializeResult{
 			ProtocolVersion: ProtocolVersion,
 			AgentCapabilities: AgentCapabilities{
@@ -63,7 +74,7 @@ func (s *Server) dispatch(ctx context.Context, request RPCRequest, output io.Wri
 		s.sessionDirectories[sessionID] = cloneDirectories(directories)
 		s.mu.Unlock()
 		notify := &RPCNotification{JSONRPC: "2.0", Method: "session/update", Params: map[string]any{"sessionId": sessionID, "update": map[string]any{"sessionUpdate": "available_commands_update", "availableCommands": DefaultAvailableCommands()}}}
-		return SessionNewResult{SessionID: sessionID, Modes: DefaultSessionModes(sess.service.Mode().String())}, notify, nil
+		return SessionNewResult{SessionID: sessionID, Modes: DefaultSessionModes(sess.service.Mode().String()), ConfigOptions: s.sessionConfigOptions(ctx, sess)}, notify, nil
 	case "session/load":
 		var params SessionLoadParams
 		if err := json.Unmarshal(request.Params, &params); err != nil {
@@ -80,14 +91,35 @@ func (s *Server) dispatch(ctx context.Context, request RPCRequest, output io.Wri
 		if err := validateMCPServerConfigs(params.MCPServers); err != nil {
 			return nil, nil, fmt.Errorf("session/load MCP servers: %w", err)
 		}
-		sess, err := s.loadOrCreateSession(ctx, params.SessionID, cwd, directories, params.MCPServers)
+		loadStart := time.Now()
+		sess, timings, err := s.loadSession(ctx, params.SessionID, cwd, directories, params.MCPServers)
 		if err != nil {
 			return nil, nil, err
 		}
-		if err := sess.ReplayHistory(func(notification RPCNotification) error { return WriteJSON(output, &s.writeMu, notification) }); err != nil {
+		timings.sessionLoad = time.Since(loadStart)
+		replayStart := time.Now()
+		replayMessages := 0
+		if err := sess.ReplayHistory(func(notification RPCNotification) error {
+			replayMessages++
+			return WriteJSON(output, &s.writeMu, notification)
+		}); err != nil {
 			return nil, nil, err
 		}
-		return nil, nil, nil
+		timings.replay = time.Since(replayStart)
+		timings.replayMessages = replayMessages
+		deferModelDiscovery := sessionLoadDefersModelDiscovery(params.Meta)
+		configStart := time.Now()
+		configOptions := s.sessionConfigOptionsWithModelDiscovery(ctx, sess, !deferModelDiscovery)
+		timings.configOptions = time.Since(configStart)
+		timings.total = time.Since(loadStart)
+		result := SessionLoadResult{
+			Modes:         DefaultSessionModes(sess.service.Mode().String()),
+			ConfigOptions: configOptions,
+		}
+		if timingEnabled() {
+			result.Meta = timings.meta()
+		}
+		return result, nil, nil
 	case "session/resume":
 		var params SessionResumeParams
 		if err := json.Unmarshal(request.Params, &params); err != nil {
@@ -104,8 +136,11 @@ func (s *Server) dispatch(ctx context.Context, request RPCRequest, output io.Wri
 		if err := validateMCPServerConfigs(params.MCPServers); err != nil {
 			return nil, nil, fmt.Errorf("session/resume MCP servers: %w", err)
 		}
-		_, err = s.loadOrCreateSession(ctx, params.SessionID, cwd, directories, params.MCPServers)
-		return nil, nil, err
+		sess, err := s.loadOrCreateSession(ctx, params.SessionID, cwd, directories, params.MCPServers)
+		if err != nil {
+			return nil, nil, err
+		}
+		return SessionResumeResult{Modes: DefaultSessionModes(sess.service.Mode().String()), ConfigOptions: s.sessionConfigOptions(ctx, sess)}, nil, nil
 	case "session/set_mode":
 		var params SessionSetModeParams
 		if err := json.Unmarshal(request.Params, &params); err != nil {
@@ -126,10 +161,20 @@ func (s *Server) dispatch(ctx context.Context, request RPCRequest, output io.Wri
 		if err := sess.service.SetMode(mode); err != nil {
 			return nil, nil, fmt.Errorf("set session mode: %w", err)
 		}
+		sess.agents.SetPermissionMode(mode)
+		sess.mu.Lock()
+		settings := sessionRuntimeForLocked(sess)
+		modeID := mode.String()
+		if mode == permission.ModeDeny {
+			modeID = "plan"
+		}
+		settings.PermissionMode = modeID
+		storeSessionRuntime(sess, settings)
+		sess.mu.Unlock()
 		if err := sess.saveStateDetached(ctx); err != nil {
 			return nil, nil, fmt.Errorf("save session %q: %w", params.SessionID, err)
 		}
-		notify := &RPCNotification{JSONRPC: "2.0", Method: "session/update", Params: map[string]any{"sessionId": params.SessionID, "update": map[string]any{"sessionUpdate": "current_mode_update", "modeId": mode.String()}}}
+		notify := &RPCNotification{JSONRPC: "2.0", Method: "session/update", Params: map[string]any{"sessionId": params.SessionID, "update": map[string]any{"sessionUpdate": "current_mode_update", "modeId": modeID}}}
 		return nil, notify, nil
 	case "session/cancel":
 		var params SessionCancelParams
@@ -192,6 +237,20 @@ func (s *Server) dispatch(ctx context.Context, request RPCRequest, output io.Wri
 		}
 		result, err := s.sessionMemoryForget(ctx, params)
 		return result, nil, err
+	case methodSessionSkills:
+		var params ProtonmanSessionSkillsParams
+		if err := json.Unmarshal(request.Params, &params); err != nil {
+			return nil, nil, fmt.Errorf("decode %s: %w", methodSessionSkills, err)
+		}
+		result, err := s.sessionSkills(ctx, params.SessionID)
+		return result, nil, err
+	case methodSessionSkillsToggle:
+		var params ProtonmanSessionSkillToggleParams
+		if err := json.Unmarshal(request.Params, &params); err != nil {
+			return nil, nil, fmt.Errorf("decode %s: %w", methodSessionSkillsToggle, err)
+		}
+		result, err := s.sessionSkillToggle(ctx, params)
+		return result, nil, err
 	case "session/delete":
 		var params SessionDeleteParams
 		if err := json.Unmarshal(request.Params, &params); err != nil {
@@ -206,6 +265,15 @@ func (s *Server) dispatch(ctx context.Context, request RPCRequest, output io.Wri
 		}
 		return nil, nil, nil
 	default:
-		return nil, nil, fmt.Errorf("method %q is not supported", request.Method)
+		return nil, nil, fmt.Errorf("%w: method %q is not supported", ErrMethodNotSupported, request.Method)
 	}
+}
+
+func sessionLoadDefersModelDiscovery(meta Meta) bool {
+	// The desktop refreshes runtime options asynchronously after transcript load.
+	// Let it opt out of network model discovery on this latency-sensitive request.
+	var options struct {
+		DeferModelDiscovery bool `json:"deferModelDiscovery"`
+	}
+	return json.Unmarshal(meta["protonman"], &options) == nil && options.DeferModelDiscovery
 }

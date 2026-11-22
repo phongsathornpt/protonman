@@ -1,6 +1,9 @@
 package desktop
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 func TestReduceSessionLifecycle(t *testing.T) {
 	state := State{Sessions: []SessionState{{ID: "s1", Status: TaskIdle}}}
@@ -45,6 +48,37 @@ func TestReduceSessionSelectionRequiresKnownSession(t *testing.T) {
 	state = Reduce(state, Event{Kind: EventSessionSelected, SessionID: "known"})
 	if state.ActiveSessionID != "known" {
 		t.Fatalf("active session = %q, want known", state.ActiveSessionID)
+	}
+}
+
+func TestApplyRoutesCollidingSessionIDsByAgent(t *testing.T) {
+	state := State{Sessions: []SessionState{
+		{ID: "shared", AgentID: "protonman", Status: TaskIdle},
+		{ID: "shared", AgentID: "cline", Status: TaskIdle},
+	}}
+
+	Apply(&state, Event{Kind: EventPromptStarted, AgentID: "cline", SessionID: "shared"})
+	Apply(&state, Event{
+		Kind:      EventTimelineAppended,
+		AgentID:   "cline",
+		SessionID: "shared",
+		Item:      TimelineItem{ID: "cline-message", Kind: TimelineAssistant, Text: "cline output"},
+	})
+
+	if state.Sessions[0].Status != TaskIdle || len(state.Sessions[0].Timeline) != 0 {
+		t.Fatalf("other agent session changed: %#v", state.Sessions[0])
+	}
+	if state.Sessions[1].Status != TaskRunning || len(state.Sessions[1].Timeline) != 1 || state.Sessions[1].Timeline[0].Text != "cline output" {
+		t.Fatalf("target agent session was not updated: %#v", state.Sessions[1])
+	}
+
+	Apply(&state, Event{Kind: EventSessionSelected, AgentID: "cline", SessionID: "shared"})
+	if state.ActiveSessionID != "shared" || state.ActiveAgentID != "cline" {
+		t.Fatalf("active session ref = (%q,%q), want (cline,shared)", state.ActiveAgentID, state.ActiveSessionID)
+	}
+	presentation := ClonePresentationState(state)
+	if len(presentation.Sessions[0].Timeline) != 0 || len(presentation.Sessions[1].Timeline) != 1 {
+		t.Fatalf("presentation detached wrong active session: %#v", presentation.Sessions)
 	}
 }
 
@@ -170,6 +204,7 @@ func TestClonePresentationStateDetachesRenderedAndNavigationData(t *testing.T) {
 				ProjectID:             "project",
 				Title:                 "Inactive session",
 				Workspace:             "/inactive",
+				LastActivityAt:        time.Date(2026, 10, 2, 10, 0, 0, 0, time.UTC),
 				Status:                TaskCompleted,
 				HistoryTruncated:      true,
 				AdditionalDirectories: []string{"/inactive-shared"},
@@ -210,7 +245,7 @@ func TestClonePresentationStateDetachesRenderedAndNavigationData(t *testing.T) {
 		original.Integrations[0].Env[0] != "KEY=value" {
 		t.Fatal("ClonePresentationState aliased detached state")
 	}
-	if inactive.ID != "inactive" || inactive.AgentID != "agent" || inactive.ProjectID != "project" || inactive.Title != "Inactive session" || inactive.Status != TaskCompleted {
+	if inactive.ID != "inactive" || inactive.AgentID != "agent" || inactive.ProjectID != "project" || inactive.Title != "Inactive session" || inactive.Status != TaskCompleted || !inactive.LastActivityAt.Equal(time.Date(2026, 10, 2, 10, 0, 0, 0, time.UTC)) {
 		t.Fatalf("inactive navigation metadata = %+v", inactive)
 	}
 	if inactive.AdditionalDirectories != nil || inactive.Timeline != nil || inactive.Subagents != nil ||
@@ -229,22 +264,28 @@ func TestApplyCopiesEventOwnedSlices(t *testing.T) {
 		RequestID: "permission",
 		Options:   []PermissionOption{{ID: "allow", Name: "Allow"}},
 	}
+	providers := []ProviderState{
+		{ID: "protonman", Name: "Protonman"},
+	}
 
 	Apply(&state, Event{Kind: EventSessionContextUpdated, SessionID: "s1", Context: SessionContextState{Todo: todo}})
 	Apply(&state, Event{Kind: EventSessionMemoryUpdated, SessionID: "s1", Memory: memory})
 	Apply(&state, Event{Kind: EventIntegrationsReplaced, Integrations: integrations})
 	Apply(&state, Event{Kind: EventPermissionRequested, SessionID: "s1", Permission: permission})
+	Apply(&state, Event{Kind: EventProvidersUpdated, Providers: providers})
 
 	todo.Items[0].Text = "changed"
 	memory.Workspace[0].Value = "changed"
 	integrations[0].Args[0] = "changed"
 	permission.Options[0].Name = "changed"
+	providers[0].Name = "changed"
 
 	session := state.Sessions[0]
 	if session.Context.Todo.Items[0].Text != "ship" ||
 		session.Context.Memory.Workspace[0].Value != "keep" ||
 		state.Integrations[0].Args[0] != "--stdio" ||
-		state.PermissionInbox[0].Options[0].Name != "Allow" {
+		state.PermissionInbox[0].Options[0].Name != "Allow" ||
+		state.Providers[0].Name != "Protonman" {
 		t.Fatalf("Apply retained event-owned slices: %#v", state)
 	}
 }

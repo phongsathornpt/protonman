@@ -14,7 +14,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/app"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 	"github.com/phongsathornpt/protonman/internal/core/session"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	domain "github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
 )
 
 type mockSessionRepo struct {
@@ -118,8 +118,8 @@ func TestSessionsDetailUseCases(t *testing.T) {
 			ActiveGoal:     "build feature",
 			AgentProfile:   "universal",
 			Messages: []session.Message{
-				{Role: sdk.RoleUser, Content: "hello"},
-				{Role: sdk.RoleAssistant, Content: "world"},
+				{Role: domain.RoleUser, Content: "hello"},
+				{Role: domain.RoleAssistant, Content: "world"},
 			},
 		},
 		exists: true,
@@ -165,8 +165,8 @@ func TestSessionsDetailUseCases(t *testing.T) {
 		WorkspaceKey:   "ws-alpha",
 		PermissionMode: "ask",
 		ActiveGoal:     "updated goal",
-		Messages: []sdk.Message{
-			{Role: sdk.RoleUser, Content: "new user msg"},
+		Messages: []domain.Message{
+			{Role: domain.RoleUser, Content: "new user msg"},
 		},
 	})
 	if err != nil {
@@ -207,7 +207,7 @@ func TestAgentsUseCaseNilSafe(t *testing.T) {
 	// Safe delegate calls with nil coordinator
 	agents.SetLanguageModel(nil)
 	agents.SetPermissionMode(permission.ModeAsk)
-	agents.SetReasoningEffort(sdk.ReasoningDefault)
+	agents.SetReasoningEffort(domain.ReasoningDefault)
 	agents.SetPrompt(nil)
 	agents.SetCallGuard(nil)
 }
@@ -244,7 +244,7 @@ func TestProjectsUseCase(t *testing.T) {
 	if err := projects.SaveMaxToolCalls(tmpDir, 42); err != nil {
 		t.Fatalf("SaveMaxToolCalls error = %v", err)
 	}
-	if err := projects.SaveReasoningEffort(tmpDir, sdk.ReasoningHigh); err != nil {
+	if err := projects.SaveReasoningEffort(tmpDir, domain.ReasoningHigh); err != nil {
 		t.Fatalf("SaveReasoningEffort error = %v", err)
 	}
 	if err := projects.SaveActiveSkills(tmpDir, []string{"alpha-skill"}); err != nil {

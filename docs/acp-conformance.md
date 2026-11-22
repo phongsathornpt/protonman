@@ -27,4 +27,6 @@ The first implementation milestones are:
 - elicitation and authentication;
 - request cancellation and reverse client services where supported.
 
-The project should only claim full ACP v1 coverage once all stable agent-side requirements and all advertised optional capabilities are covered by conformance tests and real-client interoperability tests.
+## Desktop model compat matrix
+
+Desktop drives the Protonman ACP process only. Proton sessions use `protonman/session/runtime` and `protonman/session/set_model {model}`. Missing `session/load` keeps the local transcript and resumes; missing `session/list` uses the local index.

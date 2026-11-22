@@ -3,7 +3,7 @@ package modelconfig
 import (
 	"testing"
 
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	domain "github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
 )
 
 func TestModelConfigTypes(t *testing.T) {
@@ -17,8 +17,8 @@ func TestModelConfigTypes(t *testing.T) {
 		t.Errorf("Selection struct fields mismatch: %+v", selection)
 	}
 
-	route := SubagentRoute{Provider: "openrouter", Model: "openai/gpt-4o", ReasoningEffort: sdk.ReasoningHigh}
-	if route.Model != "openai/gpt-4o" || route.ReasoningEffort != sdk.ReasoningHigh {
+	route := SubagentRoute{Provider: "openrouter", Model: "openai/gpt-4o", ReasoningEffort: domain.ReasoningHigh}
+	if route.Model != "openai/gpt-4o" || route.ReasoningEffort != domain.ReasoningHigh {
 		t.Errorf("SubagentRoute struct fields mismatch: %+v", route)
 	}
 }
@@ -30,33 +30,13 @@ func TestRouteIdentifiersAreDistinctTypes(t *testing.T) {
 	if !provider.Valid() || provider.String() != "anthropic" {
 		t.Fatalf("provider = %q, want valid anthropic", provider)
 	}
-	if !model.Valid() || model.String() != "claude-sonnet" {
-		t.Fatalf("model = %q, want valid claude-sonnet", model)
+	if model.String() != "claude-sonnet" {
+		t.Fatalf("model = %q, want claude-sonnet", model)
 	}
 }
 
-func TestRouteIdentifiersRejectEmptyValues(t *testing.T) {
+func TestRouteIdentifierRejectsEmptyProvider(t *testing.T) {
 	if ProviderName("").Valid() {
 		t.Fatal("empty provider name should be invalid")
-	}
-	if ModelID("").Valid() {
-		t.Fatal("empty model ID should be invalid")
-	}
-}
-
-func TestRouteIdentifiersTrimAndValidateInput(t *testing.T) {
-	provider, err := ParseProviderName("  anthropic ")
-	if err != nil || provider != "anthropic" {
-		t.Fatalf("provider=%q err=%v", provider, err)
-	}
-	model, err := ParseModelID("  claude-sonnet ")
-	if err != nil || model != "claude-sonnet" {
-		t.Fatalf("model=%q err=%v", model, err)
-	}
-	if _, err := ParseProviderName(" "); err == nil {
-		t.Fatal("expected empty provider error")
-	}
-	if _, err := ParseModelID(" "); err == nil {
-		t.Fatal("expected empty model error")
 	}
 }

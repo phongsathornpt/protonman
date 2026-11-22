@@ -33,6 +33,7 @@ func TestTUIViewArchitectureContract(t *testing.T) {
 		"diagnostic":   true,
 		"execview":     true,
 		"history":      true,
+		"mentionview":  true,
 		"pane":         true,
 		"presentation": true,
 		"slashview":    true,
@@ -94,6 +95,26 @@ func TestTUISlashViewDoesNotOwnRuntimeState(t *testing.T) {
 	for _, imported := range pkg.Imports {
 		if strings.HasPrefix(imported, modulePath+"/internal/") && !allowed[imported] {
 			t.Errorf("TUI slashview imports forbidden runtime package %s", imported)
+		}
+	}
+}
+
+func TestTUIMentionViewDoesNotOwnRuntimeState(t *testing.T) {
+	packages := listPackages(t)
+	pkgPath := modulePath + "/internal/adapter/in/tui/view/mentionview"
+	pkg, ok := packages[pkgPath]
+	if !ok {
+		t.Fatalf("package %s not found", pkgPath)
+	}
+	allowed := map[string]bool{
+		modulePath + "/internal/adapter/in/tui/view/style":    true,
+		modulePath + "/internal/adapter/in/tui/view/textview": true,
+		modulePath + "/internal/core/agentprofile":            true,
+		modulePath + "/internal/core/tool":                    true,
+	}
+	for _, imported := range pkg.Imports {
+		if strings.HasPrefix(imported, modulePath+"/internal/") && !allowed[imported] {
+			t.Errorf("TUI mentionview imports forbidden runtime package %s", imported)
 		}
 	}
 }

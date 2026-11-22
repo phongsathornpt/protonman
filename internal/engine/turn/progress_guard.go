@@ -102,13 +102,6 @@ func (g *progressGuard) shouldSynthesize(stalledRound bool) bool {
 	return g.consecutiveStalledRounds >= g.maxConsecutiveStalled
 }
 
-func (g *progressGuard) stalledRoundCount() int {
-	if g == nil {
-		return 0
-	}
-	return g.consecutiveStalledRounds
-}
-
 // observeExternalProgress invalidates exact-call observations when new runtime
 // context arrives. Delegated work can mutate or inspect state outside the parent
 // tool dispatcher, so results observed before that boundary may be stale.
@@ -244,10 +237,6 @@ func shouldTrackNoProgress(semantics tool.CallSemantics, result tool.Result) boo
 
 func advancesProgressEpoch(semantics tool.CallSemantics) bool {
 	return semantics.Mutability != tool.MutabilityReadOnly && semantics.Safety.MutationDomain != tool.MutationDomainTaskState
-}
-
-func potentiallyMutating(definition tool.Definition, call tool.Call) bool {
-	return tool.EffectiveCallMutability(definition, call.Arguments) != tool.MutabilityReadOnly
 }
 
 func semanticCallHash(call tool.Call) ([sha256.Size]byte, error) {

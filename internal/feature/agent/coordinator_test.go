@@ -17,7 +17,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/engine/toolcall"
 	"github.com/phongsathornpt/protonman/internal/engine/turn"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	domain "github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
 )
 
 type mockRunner struct {
@@ -1555,9 +1555,9 @@ func TestTerminalReasonClassifiesKnownFailures(t *testing.T) {
 		want string
 	}{
 		{name: "permission", err: fmt.Errorf("wrapped: %w", toolcall.ErrPermissionDenied), want: "permission denied"},
-		{name: "model unavailable", err: sdk.NewProviderError("openai", 404, "model_not_found", "missing"), want: "model unavailable"},
-		{name: "rate limit", err: sdk.NewProviderError("openai", 429, "rate_limit", "slow down"), want: "rate limited"},
-		{name: "invalid request detail", err: sdk.NewProviderError("openai", 400, "invalid_request", "unsupported tool_choice: required"), want: "invalid model request: unsupported tool_choice: required"},
+		{name: "model unavailable", err: domain.NewProviderError("openai", 404, "model_not_found", "missing"), want: "model unavailable"},
+		{name: "rate limit", err: domain.NewProviderError("openai", 429, "rate_limit", "slow down"), want: "rate limited"},
+		{name: "invalid request detail", err: domain.NewProviderError("openai", 400, "invalid_request", "unsupported tool_choice: required"), want: "invalid model request: unsupported tool_choice: required"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

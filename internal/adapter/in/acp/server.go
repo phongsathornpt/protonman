@@ -15,10 +15,12 @@ import (
 	"github.com/phongsathornpt/protonman/internal/app"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/engine/toolcall"
+	"github.com/phongsathornpt/protonman/internal/feature/skill"
 )
 
 var ErrInvalidServer = errors.New("invalid ACP server")
 var ErrInvalidRequest = errors.New("invalid request")
+var ErrMethodNotSupported = errors.New("method is not supported")
 
 type Option func(*Server)
 type RunnerFactory func(*toolcall.Service) (app.Conversation, error)
@@ -51,11 +53,12 @@ type Server struct {
 	sessionService         *app.Sessions
 	memories               *app.Memories
 	agents                 app.Agents
+	skillRegistry          *skill.Registry
+	skillSaver             SkillSaver
 	mu                     sync.Mutex
 	writeMu                sync.Mutex
 	sessions               map[string]*Session
 	sessionDirectories     map[string][]string
-	nextID                 uint64
 	permissionSeq          uint64
 	// output is the transport used for server-initiated requests such as
 	// session/request_permission. It is set for the duration of Serve.
@@ -63,6 +66,19 @@ type Server struct {
 	// permissions routes client answers to blocked tool calls. It is non-nil
 	// only while Serve is running.
 	permissions *permissionBroker
+	// questions routes client answers to interactive clarifying questions. It is non-nil
+	// only while Serve is running.
+	questions          *questionBroker
+	clientCapabilities ClientCapabilities
+}
+
+func (s *Server) supportsFormElicitation() bool {
+	if s == nil {
+		return false
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.clientCapabilities.Elicitation != nil && s.clientCapabilities.Elicitation.Form != nil
 }
 
 func New(service *toolcall.Service, registry tool.Registry, runner app.Conversation, opts ...Option) (*Server, error) {
@@ -109,25 +125,40 @@ func (s *Server) Serve(ctx context.Context, input io.Reader, output io.Writer) e
 	// client-to-server traffic, so tool calls blocked in ask mode are resolved
 	// by matching inbound responses to the requests this server emitted.
 	broker := newPermissionBroker(s)
+	qBroker := newQuestionBroker(s)
 	s.mu.Lock()
 	s.output = output
 	s.permissions = broker
+	s.questions = qBroker
 	s.mu.Unlock()
 	defer func() {
 		broker.close()
+		qBroker.close()
 		s.mu.Lock()
 		s.output = nil
 		s.permissions = nil
+		s.questions = nil
 		s.mu.Unlock()
 	}()
 
 	scanner := bufio.NewScanner(input)
 	scanner.Buffer(make([]byte, 0, 64*1024), 10*1024*1024)
-	var prompts sync.WaitGroup
-	asyncErrors := make(chan error, 1)
+	serveCtx, cancelServe := context.WithCancel(ctx)
+	defer cancelServe()
+	dispatcher := newRequestDispatcher(serveCtx, s, output)
+	// stop unwinds every admitted request before Serve returns, so no handler
+	// outlives the output/broker state torn down by the deferred cleanup above.
+	stop := func(err error) error {
+		cancelServe()
+		dispatcher.wait()
+		return err
+	}
 	for scanner.Scan() {
 		if err := ctx.Err(); err != nil {
-			return err
+			return stop(err)
+		}
+		if err := dispatcher.failed(); err != nil {
+			return stop(err)
 		}
 		line := bytes.TrimSpace(scanner.Bytes())
 		if len(line) == 0 {
@@ -142,59 +173,54 @@ func (s *Server) Serve(ctx context.Context, input io.Reader, output io.Writer) e
 		request, parseErr := decodeRequest(line)
 		if parseErr != nil {
 			if err := WriteJSON(output, &s.writeMu, parseErr); err != nil {
-				return err
+				return stop(err)
 			}
 			continue
 		}
+		if request.Method == methodCancelRequest {
+			dispatcher.cancelRequest(request.Params)
+			continue
+		}
 		if request.Method != "session/prompt" {
-			if err := s.handleRequest(ctx, request, output); err != nil {
-				return err
+			if err := dispatcher.submit(request); err != nil {
+				return stop(err)
 			}
 			continue
 		}
 		var params SessionPromptParams
 		if err := json.Unmarshal(request.Params, &params); err != nil {
 			if err := s.writeResponse(output, request.ID, nil, nil, fmt.Errorf("%w: %v", ErrInvalidRequest, err)); err != nil {
-				return err
+				return stop(err)
 			}
 			continue
 		}
 		params.SessionID = strings.TrimSpace(params.SessionID)
 		if params.SessionID == "" {
 			if err := s.writeResponse(output, request.ID, nil, nil, errors.New("sessionId is required")); err != nil {
-				return err
+				return stop(err)
 			}
 			continue
 		}
 		sess, ok := s.lookupSession(params.SessionID)
 		if !ok {
 			if err := s.writeResponse(output, request.ID, nil, nil, fmt.Errorf("unknown session %q", params.SessionID)); err != nil {
-				return err
+				return stop(err)
 			}
 			continue
 		}
-		prompts.Add(1)
-		go func(req RPCRequest, sess *Session, blocks []ContentBlock) {
-			defer prompts.Done()
-			notifier := func(notification RPCNotification) error { return WriteJSON(output, &s.writeMu, notification) }
-			result, promptErr := sess.ExecutePrompt(ctx, blocks, notifier)
-			if err := s.writeResponse(output, req.ID, result, nil, promptErr); err != nil {
-				select {
-				case asyncErrors <- err:
-				default:
-				}
-			}
-		}(request, sess, params.Prompt)
+		if err := dispatcher.submitPrompt(request, sess, params.Prompt); err != nil {
+			return stop(err)
+		}
 	}
 	scanErr := scanner.Err()
-	prompts.Wait()
+	// Input ended: requests already admitted run to completion so a piped
+	// script still receives every response.
+	dispatcher.wait()
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	select {
-	case err := <-asyncErrors:
+	if err := dispatcher.failed(); err != nil {
 		return err
-	default:
 	}
 	if scanErr != nil {
 		return fmt.Errorf("read ACP input: %w", scanErr)
@@ -229,18 +255,35 @@ func decodeRequest(line []byte) (RPCRequest, *RPCResponse) {
 	return request, nil
 }
 
-func (s *Server) handleRequest(ctx context.Context, request RPCRequest, output io.Writer) error {
-	if result, handled, err := s.dispatchSessionRuntime(ctx, request); handled {
-		return s.writeResponse(output, request.ID, result, nil, err)
+// route resolves one request to its result, optional trailing notification, and
+// error without writing anything, so callers decide how the outcome is framed.
+func (s *Server) route(ctx context.Context, request RPCRequest, output io.Writer) (any, *RPCNotification, error) {
+	if result, notify, handled, err := s.dispatchSessionConfig(ctx, request); handled {
+		return result, notify, err
 	}
-	result, notify, err := s.dispatch(ctx, request, output)
-	return s.writeResponse(output, request.ID, result, notify, err)
+	if result, handled, err := s.dispatchSessionRuntime(ctx, request); handled {
+		return result, nil, err
+	}
+	if result, handled, err := s.dispatchProviders(ctx, request); handled {
+		return result, nil, err
+	}
+	return s.dispatch(ctx, request, output)
 }
 
 func (s *Server) writeResponse(output io.Writer, id json.RawMessage, result any, notify *RPCNotification, requestErr error) error {
 	if requestErr != nil {
 		if len(id) == 0 || string(id) == "null" {
 			return nil
+		}
+		if errors.Is(requestErr, ErrMethodNotSupported) {
+			return WriteJSON(output, &s.writeMu, RPCResponse{JSONRPC: "2.0", ID: id, Error: &RPCError{Code: CodeMethodNotFound, Message: requestErr.Error()}})
+		}
+		if errors.Is(requestErr, errRequestCancelled) {
+			return WriteJSON(output, &s.writeMu, RPCResponse{JSONRPC: "2.0", ID: id, Error: &RPCError{Code: CodeRequestCancelled, Message: "Request cancelled"}})
+		}
+		var invalid invalidRequestError
+		if errors.As(requestErr, &invalid) {
+			return WriteJSON(output, &s.writeMu, RPCResponse{JSONRPC: "2.0", ID: id, Error: &RPCError{Code: CodeInvalidRequest, Message: invalid.Error()}})
 		}
 		return WriteJSON(output, &s.writeMu, RPCResponse{JSONRPC: "2.0", ID: id, Error: &RPCError{Code: CodeServerError, Message: requestErr.Error()}})
 	}

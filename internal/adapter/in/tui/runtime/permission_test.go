@@ -149,8 +149,7 @@ func TestPermissionCtrlCCancelsTurnInsteadOfDenying(t *testing.T) {
 		canceled = true
 	}
 	model.openPermission(permissionRequest{Request: permission.Request{ToolName: "bash", ToolKind: permission.ToolBash, Detail: "pwd", Arguments: json.RawMessage(`{"command":"pwd"}`)}, Response: response})
-	updated, command := model.Update(testCtrl('c'))
-	model = updated.(*bubbleModel)
+	_, command := model.Update(testCtrl('c'))
 	if command != nil {
 		t.Fatalf("ctrl+c command = %v, want nil while canceling active turn", command)
 	}
@@ -228,8 +227,7 @@ func TestPermissionOptionListEnterAndNumbers(t *testing.T) {
 	}
 	response = make(chan permissionResponse, 1)
 	model.openPermission(permissionRequest{Request: permission.Request{ToolName: "bash", ToolKind: permission.ToolBash, Effect: tool.CommandEffectReadOnly, Risk: tool.CommandRiskNormal}, Response: response})
-	updated, _ = model.Update(testText("3"))
-	model = updated.(*bubbleModel)
+	_, _ = model.Update(testText("3"))
 	select {
 	case result := <-response:
 		if result.Resolution.Action != permission.ActionDeny {

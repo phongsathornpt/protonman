@@ -13,13 +13,14 @@ import (
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/reasoningpolicy"
 	turnmsg "github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/turn"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/slashview"
+	tuistyle "github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/style"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/app"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/feature/skill"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	domain "github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
 )
 
 func TestSlashDropdownFiltersAndTabAccepts(t *testing.T) {
@@ -84,7 +85,7 @@ func TestClearCommandResetsConversationButPreservesSessionControls(t *testing.T)
 	m.activeGoal = "finish compaction"
 	m.activeProvider = "opencode"
 	m.activeModel = "model-x"
-	m.reasoningEffort = sdk.ReasoningHigh
+	m.reasoningEffort = domain.ReasoningHigh
 	m.conversation.SetMessages([]model.Message{{Role: model.RoleUser, Content: "old context"}})
 	m.conversation.Enqueue("queued prompt")
 	m.conversationViewport.tailOnly = true
@@ -97,7 +98,7 @@ func TestClearCommandResetsConversationButPreservesSessionControls(t *testing.T)
 	if len(m.conversation.Messages()) != 0 || m.conversation.QueueLen() != 0 {
 		t.Fatalf("conversation state not cleared: messages=%d queue=%d", len(m.conversation.Messages()), m.conversation.QueueLen())
 	}
-	if m.activeGoal != "finish compaction" || m.activeProvider != "opencode" || m.activeModel != "model-x" || m.reasoningEffort != sdk.ReasoningHigh {
+	if m.activeGoal != "finish compaction" || m.activeProvider != "opencode" || m.activeModel != "model-x" || m.reasoningEffort != domain.ReasoningHigh {
 		t.Fatalf("session controls changed: goal=%q provider=%q model=%q reasoning=%q", m.activeGoal, m.activeProvider, m.activeModel, m.reasoningEffort)
 	}
 	if m.conversationViewport.tailOnly || m.conversationViewport.staleTail || len(m.conversationViewport.lineAnchors) != 0 || !m.conversationViewport.following() {
@@ -153,14 +154,14 @@ func TestUnifiedModelSetupAdjustsThinkingBeforeApply(t *testing.T) {
 	m.modelCatalogs.Set("protonman", []model.RemoteModel{{ID: "gemini-3.8-flash", Name: "Gemini 3.8 Flash"}})
 	m.executeCommand("/model")
 	view := m.panes.bottom.find(modelSetupViewID).(*modelSetupPaneView)
-	if got := view.selectedReasoning(); got != sdk.ReasoningDefault {
+	if got := view.selectedReasoning(); got != domain.ReasoningDefault {
 		t.Fatalf("initial thinking = %q, want auto", got)
 	}
 	handled, _ := m.handlePaneKey(testKey(tea.KeyRight))
-	if !handled || view.selectedReasoning() != sdk.ReasoningLow {
+	if !handled || view.selectedReasoning() != domain.ReasoningLow {
 		t.Fatalf("right did not move thinking to low: %q", view.selectedReasoning())
 	}
-	if m.reasoningEffort != sdk.ReasoningDefault {
+	if m.reasoningEffort != domain.ReasoningDefault {
 		t.Fatalf("pending setup mutated runtime before apply: %q", m.reasoningEffort)
 	}
 }
@@ -191,7 +192,7 @@ func TestInfoViewKeepsIdleChromeEmpty(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, nil)
 	m.resize(100, 30)
 	m.activeModel = "claude-3-7-sonnet"
-	m.reasoningEffort = sdk.ReasoningHigh
+	m.reasoningEffort = domain.ReasoningHigh
 	if got := m.infoView(); got != "" {
 		t.Fatalf("idle infoView = %q, want empty minimal chrome", got)
 	}
@@ -555,7 +556,6 @@ func TestSkillsPickerWindowingLargeList(t *testing.T) {
 	if !model.panes.bottom.has(skillsViewID) {
 		t.Fatal("expected skills picker to be open")
 	}
-	render := model.panes.bottom.renderTop(model)
 	view := model.panes.bottom.find(skillsViewID).(*skillsPaneView)
 	if got := view.picker.GlobalIndex(); got != 0 {
 		t.Fatalf("expected initial selected index 0, got %d", got)
@@ -564,7 +564,7 @@ func TestSkillsPickerWindowingLargeList(t *testing.T) {
 		updated, _ = model.Update(testKey(tea.KeyDown))
 		model = updated.(*bubbleModel)
 	}
-	render = model.panes.bottom.renderTop(model)
+	render := model.panes.bottom.renderTop(model)
 	if got := view.picker.GlobalIndex(); got != 8 {
 		t.Fatalf("expected selected index 8 after navigation, got %d", got)
 	}
@@ -583,8 +583,7 @@ func TestSkillsPickerWrapAround(t *testing.T) {
 	if got := view.picker.GlobalIndex(); got != 4 {
 		t.Fatalf("expected wrap-around index 4, got %d", got)
 	}
-	updated, _ = model.Update(testKey(tea.KeyDown))
-	model = updated.(*bubbleModel)
+	_, _ = model.Update(testKey(tea.KeyDown))
 	if got := view.picker.GlobalIndex(); got != 0 {
 		t.Fatalf("expected wrap-around index 0, got %d", got)
 	}
@@ -611,8 +610,7 @@ func TestSkillsPickerFastNavigation(t *testing.T) {
 	if got := view.picker.GlobalIndex(); got != 0 {
 		t.Fatalf("expected index 0 after g, got %d", got)
 	}
-	updated, _ = model.Update(testText("3"))
-	model = updated.(*bubbleModel)
+	_, _ = model.Update(testText("3"))
 	if got := view.picker.GlobalIndex(); got != 2 {
 		t.Fatalf("expected item 3 after number 3, got: %s", render)
 	}
@@ -733,9 +731,40 @@ func TestSlashAutocompleteUsesBubblesListPresentation(t *testing.T) {
 	view := &slashPaneView{}
 	view.sync(newPaneRenderContext(model))
 	rendered := view.Render(newPaneRenderContext(model))
-	for _, want := range []string{"[ ] skill-01", "[ ] skill-02", "Description for skill 01", "user"} {
+	pending := strings.TrimSpace(tuistyle.UnicodeTodoPending)
+	for _, want := range []string{pending + " skill-01", pending + " skill-02", "Description for skill 01", "user"} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("bubbles slash list missing %q:\n%s", want, rendered)
+		}
+	}
+}
+
+func TestSlashDropdownRowsShareComposerGutter(t *testing.T) {
+	for _, width := range []int{40, 60, 80, 120} {
+		model := newTestSkillsModel(t, 3)
+		model.resize(width, 24)
+		model.panes.bottom.prompt().SetValue("/skills ")
+		if !model.slashOpen() {
+			t.Fatalf("width %d: expected slash open for /skills ", width)
+		}
+		model.syncSlashView()
+		view := model.slashState()
+		if view == nil {
+			t.Fatalf("width %d: expected slash pane state", width)
+		}
+		lines := strings.Split(view.Render(newPaneRenderContext(model)), "\n")
+		if len(lines) < 2 {
+			t.Fatalf("width %d: expected item rows and a help row, got %q", width, lines)
+		}
+		limit := width - 2
+		for i, line := range lines[:len(lines)-1] {
+			if got := ansi.StringWidth(line); got > limit {
+				t.Fatalf("width %d item row %d width = %d, want <= %d: %q", width, i, got, limit, line)
+			}
+		}
+		helpRow := lines[len(lines)-1]
+		if got := ansi.StringWidth(helpRow); got != limit {
+			t.Fatalf("width %d help row width = %d, want %d: %q", width, got, limit, helpRow)
 		}
 	}
 }
@@ -891,8 +920,8 @@ func TestMultilineTextareaDynamicExpansion(t *testing.T) {
 	model.panes.bottom.prompt().SetValue("1\n2\n3\n4\n5\n6\n7\n8")
 	model.requestRelayout()
 	model.reconcileLayout()
-	if model.panes.bottom.prompt().Height() != 6 {
-		t.Fatalf("expected height 6 for 8 lines capped at max height, got %d", model.panes.bottom.prompt().Height())
+	if model.panes.bottom.prompt().Height() != 8 {
+		t.Fatalf("expected height 8 for 8 lines, got %d", model.panes.bottom.prompt().Height())
 	}
 }
 
@@ -906,8 +935,7 @@ func TestSkillsPickerMouseWheelNavigation(t *testing.T) {
 	if got := view.picker.GlobalIndex(); got != 1 {
 		t.Fatalf("expected index 1 after wheel down, got %d", got)
 	}
-	updated, _ = model.Update(tea.MouseWheelMsg{Button: tea.MouseWheelUp})
-	model = updated.(*bubbleModel)
+	_, _ = model.Update(tea.MouseWheelMsg{Button: tea.MouseWheelUp})
 	if got := view.picker.GlobalIndex(); got != 0 {
 		t.Fatalf("expected index 0 after wheel up, got %d", got)
 	}
@@ -922,8 +950,7 @@ func TestLowConcurrencyPickerMouseWheelNavigation(t *testing.T) {
 	if got := view.index; got != 1 {
 		t.Fatalf("expected index 1 after wheel down, got %d", got)
 	}
-	updated, _ = m.Update(tea.MouseWheelMsg{Button: tea.MouseWheelUp})
-	m = updated.(*bubbleModel)
+	_, _ = m.Update(tea.MouseWheelMsg{Button: tea.MouseWheelUp})
 	if got := view.index; got != 0 {
 		t.Fatalf("expected index 0 after wheel up, got %d", got)
 	}
@@ -1448,8 +1475,8 @@ func TestActiveSkillSlashCompletion(t *testing.T) {
 	for _, match := range matches {
 		if match.Name == "golang-code-review" {
 			foundActive = true
-			if match.PrefixTag != "[skill]" {
-				t.Fatalf("expected PrefixTag [skill], got %q", match.PrefixTag)
+			if wantTag := strings.TrimSpace(tuistyle.UnicodeIcons.Skill); match.PrefixTag != wantTag {
+				t.Fatalf("expected skill icon tag %q, got %q", wantTag, match.PrefixTag)
 			}
 			if match.Argument != slashview.ArgumentRest {
 				t.Fatalf("expected ArgumentRest, got %v", match.Argument)

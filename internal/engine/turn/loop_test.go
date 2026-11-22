@@ -22,7 +22,8 @@ import (
 	"github.com/phongsathornpt/protonman/internal/engine/prompt"
 	"github.com/phongsathornpt/protonman/internal/engine/toolcall"
 	"github.com/phongsathornpt/protonman/internal/feature/skill"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	domain "github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
+	port "github.com/phongsathornpt/protonman/pkg/proton-sdk/port"
 )
 
 func TestLoopBuildsEffectiveSystemPromptFromRuntime(t *testing.T) {
@@ -30,9 +31,9 @@ func TestLoopBuildsEffectiveSystemPromptFromRuntime(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(workspace, "AGENTS.md"), []byte("follow project rules"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	client := &scriptedClient{streams: []scriptedStreamSpec{{events: []sdk.Event{
-		{Kind: sdk.EventTextDelta, Text: "done"},
-		{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
+	client := &scriptedClient{streams: []scriptedStreamSpec{{events: []domain.Event{
+		{Kind: domain.EventTextDelta, Text: "done"},
+		{Kind: domain.EventFinish, FinishReason: domain.FinishStop},
 	}}}}
 	loop, _ := newTestLoop(t, client, permission.ActionAllow, WithSystemPromptSpec(prompt.Spec{
 		Role: "Inspect the assigned code carefully.", Profile: "agility", Workspace: workspace,
@@ -71,10 +72,10 @@ func TestLoopBuildsEffectiveSystemPromptFromRuntime(t *testing.T) {
 
 func TestLoopStreamsTextAndCompletes(t *testing.T) {
 	client := &scriptedClient{streams: []scriptedStreamSpec{{
-		events: []sdk.Event{
-			{Kind: sdk.EventTextDelta, Text: "hello"},
-			{Kind: sdk.EventTextDelta, Text: " world"},
-			{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
+		events: []domain.Event{
+			{Kind: domain.EventTextDelta, Text: "hello"},
+			{Kind: domain.EventTextDelta, Text: " world"},
+			{Kind: domain.EventFinish, FinishReason: domain.FinishStop},
 		},
 	}}}
 	loop, _ := newTestLoop(t, client, permission.ActionAllow)
@@ -109,11 +110,11 @@ func TestLoopStreamsTextAndCompletes(t *testing.T) {
 
 func TestLoopStreamsReasoningAndCompletes(t *testing.T) {
 	client := &scriptedClient{streams: []scriptedStreamSpec{{
-		events: []sdk.Event{
-			{Kind: sdk.EventReasoningDelta, ReasoningContent: "thinking step 1"},
-			{Kind: sdk.EventReasoningDelta, ReasoningContent: " and step 2"},
-			{Kind: sdk.EventTextDelta, Text: "the answer"},
-			{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
+		events: []domain.Event{
+			{Kind: domain.EventReasoningDelta, ReasoningContent: "thinking step 1"},
+			{Kind: domain.EventReasoningDelta, ReasoningContent: " and step 2"},
+			{Kind: domain.EventTextDelta, Text: "the answer"},
+			{Kind: domain.EventFinish, FinishReason: domain.FinishStop},
 		},
 	}}}
 	loop, _ := newTestLoop(t, client, permission.ActionAllow)
@@ -142,7 +143,7 @@ func TestLoopStreamsReasoningAndCompletes(t *testing.T) {
 
 func TestLoopRejectsIncompleteModelStream(t *testing.T) {
 	client := &scriptedClient{streams: []scriptedStreamSpec{{
-		events: []sdk.Event{{Kind: sdk.EventTextDelta, Text: "partial"}},
+		events: []domain.Event{{Kind: domain.EventTextDelta, Text: "partial"}},
 	}}}
 	loop, _ := newTestLoop(t, client, permission.ActionAllow)
 	events := make([]Event, 0)
@@ -152,7 +153,7 @@ func TestLoopRejectsIncompleteModelStream(t *testing.T) {
 		[]model.Message{{Role: model.RoleUser, Content: "hello"}},
 		collectEvents(&events),
 	)
-	if !errors.Is(err, sdk.ErrIncompleteStream) {
+	if !errors.Is(err, domain.ErrIncompleteStream) {
 		t.Fatalf("Run() error = %v, want incomplete stream", err)
 	}
 	if got := events[len(events)-1].Kind; got != EventFailed {
@@ -162,11 +163,11 @@ func TestLoopRejectsIncompleteModelStream(t *testing.T) {
 
 func TestLoopPreservesCommittedRoundsWhenLaterStreamFails(t *testing.T) {
 	client := &scriptedClient{streams: []scriptedStreamSpec{
-		{events: []sdk.Event{
-			{Kind: sdk.EventToolCall, ToolCall: model.ToolCall{ID: "read-1", Name: "read", Arguments: json.RawMessage(`{"path":"README.md"}`)}},
-			{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
+		{events: []domain.Event{
+			{Kind: domain.EventToolCall, ToolCall: model.ToolCall{ID: "read-1", Name: "read", Arguments: json.RawMessage(`{"path":"README.md"}`)}},
+			{Kind: domain.EventFinish, FinishReason: domain.FinishStop},
 		}},
-		{events: []sdk.Event{{Kind: sdk.EventTextDelta, Text: "partial synthesis"}}},
+		{events: []domain.Event{{Kind: domain.EventTextDelta, Text: "partial synthesis"}}},
 	}}
 	loop, _ := newTestLoop(t, client, permission.ActionAllow)
 
@@ -175,7 +176,7 @@ func TestLoopPreservesCommittedRoundsWhenLaterStreamFails(t *testing.T) {
 		[]model.Message{{Role: model.RoleUser, Content: "inspect README"}},
 		func(context.Context, Event) error { return nil },
 	)
-	if !errors.Is(err, sdk.ErrIncompleteStream) {
+	if !errors.Is(err, domain.ErrIncompleteStream) {
 		t.Fatalf("Run() error = %v, want incomplete stream", err)
 	}
 	if result.Rounds != 1 {
@@ -197,7 +198,7 @@ func TestLoopPreservesCommittedRoundsWhenLaterStreamFails(t *testing.T) {
 
 func TestLoopRejectsEmptyModelResponse(t *testing.T) {
 	client := &scriptedClient{streams: []scriptedStreamSpec{{
-		events: []sdk.Event{{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop}},
+		events: []domain.Event{{Kind: domain.EventFinish, FinishReason: domain.FinishStop}},
 	}}}
 	loop, _ := newTestLoop(t, client, permission.ActionAllow)
 
@@ -213,18 +214,18 @@ func TestLoopRejectsEmptyModelResponse(t *testing.T) {
 
 func TestLoopRejectsDuplicateToolCallIDs(t *testing.T) {
 	client := &scriptedClient{streams: []scriptedStreamSpec{{
-		events: []sdk.Event{
-			{Kind: sdk.EventToolCall, ToolCall: model.ToolCall{
+		events: []domain.Event{
+			{Kind: domain.EventToolCall, ToolCall: model.ToolCall{
 				ID:        "duplicate",
 				Name:      "read",
 				Arguments: json.RawMessage(`{"path":"a.txt"}`),
 			}},
-			{Kind: sdk.EventToolCall, ToolCall: model.ToolCall{
+			{Kind: domain.EventToolCall, ToolCall: model.ToolCall{
 				ID:        "duplicate",
 				Name:      "read",
 				Arguments: json.RawMessage(`{"path":"b.txt"}`),
 			}},
-			{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
+			{Kind: domain.EventFinish, FinishReason: domain.FinishStop},
 		},
 	}}}
 	loop, handler := newTestLoop(t, client, permission.ActionAllow)
@@ -244,13 +245,13 @@ func TestLoopRejectsDuplicateToolCallIDs(t *testing.T) {
 
 func TestLoopReportsToolCallWhenNoToolsAreAvailable(t *testing.T) {
 	client := &scriptedClient{streams: []scriptedStreamSpec{{
-		events: []sdk.Event{
-			{Kind: sdk.EventToolCall, ToolCall: model.ToolCall{
+		events: []domain.Event{
+			{Kind: domain.EventToolCall, ToolCall: model.ToolCall{
 				ID:        "unavailable-call",
 				Name:      "read",
 				Arguments: json.RawMessage(`{"path":"a.txt"}`),
 			}},
-			{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
+			{Kind: domain.EventFinish, FinishReason: domain.FinishStop},
 		},
 	}}}
 	policy, err := permission.NewPolicy(permission.Config{})
@@ -288,18 +289,18 @@ func TestLoopReportsToolCallWhenNoToolsAreAvailable(t *testing.T) {
 
 func TestLoopStopsWhenToolCallBatchExceedsCumulativeLimit(t *testing.T) {
 	client := &scriptedClient{streams: []scriptedStreamSpec{{
-		events: []sdk.Event{
-			{Kind: sdk.EventToolCall, ToolCall: model.ToolCall{
+		events: []domain.Event{
+			{Kind: domain.EventToolCall, ToolCall: model.ToolCall{
 				ID:        "over-budget-1",
 				Name:      "read",
 				Arguments: json.RawMessage(`{"path":"a.txt"}`),
 			}},
-			{Kind: sdk.EventToolCall, ToolCall: model.ToolCall{
+			{Kind: domain.EventToolCall, ToolCall: model.ToolCall{
 				ID:        "over-budget-2",
 				Name:      "read",
 				Arguments: json.RawMessage(`{"path":"b.txt"}`),
 			}},
-			{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
+			{Kind: domain.EventFinish, FinishReason: domain.FinishStop},
 		},
 	}}}
 	loop, handler := newTestLoop(t, client, permission.ActionAllow, WithMaxToolCalls(1))
@@ -340,9 +341,9 @@ func (h *stagnantFailureHandler) Execute(_ context.Context, call tool.Call) (too
 
 func TestLoopForcesSynthesisAfterUniqueStagnantCalls(t *testing.T) {
 	client := &scriptedClient{streams: []scriptedStreamSpec{
-		{events: []sdk.Event{{Kind: sdk.EventToolCall, ToolCall: model.ToolCall{ID: "stagnant-a", Name: "read", Arguments: json.RawMessage(`{"path":"a.go"}`)}}, {Kind: sdk.EventFinish, FinishReason: sdk.FinishStop}}},
-		{events: []sdk.Event{{Kind: sdk.EventToolCall, ToolCall: model.ToolCall{ID: "stagnant-b", Name: "read", Arguments: json.RawMessage(`{"path":"b.go"}`)}}, {Kind: sdk.EventFinish, FinishReason: sdk.FinishStop}}},
-		{events: []sdk.Event{{Kind: sdk.EventTextDelta, Text: "I could not make further progress."}, {Kind: sdk.EventFinish, FinishReason: sdk.FinishStop}}},
+		{events: []domain.Event{{Kind: domain.EventToolCall, ToolCall: model.ToolCall{ID: "stagnant-a", Name: "read", Arguments: json.RawMessage(`{"path":"a.go"}`)}}, {Kind: domain.EventFinish, FinishReason: domain.FinishStop}}},
+		{events: []domain.Event{{Kind: domain.EventToolCall, ToolCall: model.ToolCall{ID: "stagnant-b", Name: "read", Arguments: json.RawMessage(`{"path":"b.go"}`)}}, {Kind: domain.EventFinish, FinishReason: domain.FinishStop}}},
+		{events: []domain.Event{{Kind: domain.EventTextDelta, Text: "I could not make further progress."}, {Kind: domain.EventFinish, FinishReason: domain.FinishStop}}},
 	}}
 	handler := &stagnantFailureHandler{definition: readFileDefinition()}
 	loop := newLoopForHandler(t, client, handler, permission.ActionAllow, permission.ModeAsk)
@@ -371,13 +372,13 @@ func TestLoopForcesSynthesisAfterUniqueStagnantCalls(t *testing.T) {
 
 func TestLoopAllowsGroundingCallThatReachesSafetyCeiling(t *testing.T) {
 	client := &scriptedClient{streams: []scriptedStreamSpec{
-		{events: []sdk.Event{
-			{Kind: sdk.EventToolCall, ToolCall: model.ToolCall{ID: "grounding-read", Name: "read", Arguments: json.RawMessage(`{"path":"README.md"}`)}},
-			{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
+		{events: []domain.Event{
+			{Kind: domain.EventToolCall, ToolCall: model.ToolCall{ID: "grounding-read", Name: "read", Arguments: json.RawMessage(`{"path":"README.md"}`)}},
+			{Kind: domain.EventFinish, FinishReason: domain.FinishStop},
 		}},
-		{events: []sdk.Event{
-			{Kind: sdk.EventTextDelta, Text: "Grounding completed at the safety boundary."},
-			{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
+		{events: []domain.Event{
+			{Kind: domain.EventTextDelta, Text: "Grounding completed at the safety boundary."},
+			{Kind: domain.EventFinish, FinishReason: domain.FinishStop},
 		}},
 	}}
 	loop, handler := newTestLoop(t, client, permission.ActionAllow, WithGroundingEvidence(tool.EvidenceWorkspace), WithMaxToolCalls(1))
@@ -399,17 +400,17 @@ func TestLoopAllowsGroundingCallThatReachesSafetyCeiling(t *testing.T) {
 
 func TestLoopAppliesCumulativeToolCallLimitAcrossRounds(t *testing.T) {
 	client := &scriptedClient{streams: []scriptedStreamSpec{
-		{events: []sdk.Event{
-			{Kind: sdk.EventToolCall, ToolCall: model.ToolCall{
+		{events: []domain.Event{
+			{Kind: domain.EventToolCall, ToolCall: model.ToolCall{
 				ID:        "budgeted-call",
 				Name:      "read",
 				Arguments: json.RawMessage(`{"path":"a.txt"}`),
 			}},
-			{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
+			{Kind: domain.EventFinish, FinishReason: domain.FinishStop},
 		}},
-		{events: []sdk.Event{
-			{Kind: sdk.EventTextDelta, Text: "The budgeted read completed."},
-			{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
+		{events: []domain.Event{
+			{Kind: domain.EventTextDelta, Text: "The budgeted read completed."},
+			{Kind: domain.EventFinish, FinishReason: domain.FinishStop},
 		}},
 	}}
 	loop, handler := newTestLoop(t, client, permission.ActionAllow, WithMaxToolCalls(1))
@@ -442,20 +443,20 @@ func TestLoopAppliesCumulativeToolCallLimitAcrossRounds(t *testing.T) {
 
 func TestLoopTranslatesToolCallsAndFeedsResultsBack(t *testing.T) {
 	client := &scriptedClient{streams: []scriptedStreamSpec{
-		{events: []sdk.Event{
+		{events: []domain.Event{
 			{
-				Kind: sdk.EventToolCall,
+				Kind: domain.EventToolCall,
 				ToolCall: model.ToolCall{
 					ID:        "call-1",
 					Name:      "read",
 					Arguments: json.RawMessage(`{"path":"README.md"}`),
 				},
 			},
-			{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
+			{Kind: domain.EventFinish, FinishReason: domain.FinishStop},
 		}},
-		{events: []sdk.Event{
-			{Kind: sdk.EventTextDelta, Text: "I found it."},
-			{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
+		{events: []domain.Event{
+			{Kind: domain.EventTextDelta, Text: "I found it."},
+			{Kind: domain.EventFinish, FinishReason: domain.FinishStop},
 		}},
 	}}
 	loop, handler := newTestLoop(t, client, permission.ActionAllow)
@@ -516,20 +517,20 @@ func TestLoopTranslatesToolCallsAndFeedsResultsBack(t *testing.T) {
 
 func TestLoopKeepsPermissionDenialInsideToolConversation(t *testing.T) {
 	client := &scriptedClient{streams: []scriptedStreamSpec{
-		{events: []sdk.Event{
+		{events: []domain.Event{
 			{
-				Kind: sdk.EventToolCall,
+				Kind: domain.EventToolCall,
 				ToolCall: model.ToolCall{
 					ID:        "call-denied",
 					Name:      "read",
 					Arguments: json.RawMessage(`{"path":".env"}`),
 				},
 			},
-			{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
+			{Kind: domain.EventFinish, FinishReason: domain.FinishStop},
 		}},
-		{events: []sdk.Event{
-			{Kind: sdk.EventTextDelta, Text: "I cannot access that file."},
-			{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
+		{events: []domain.Event{
+			{Kind: domain.EventTextDelta, Text: "I cannot access that file."},
+			{Kind: domain.EventFinish, FinishReason: domain.FinishStop},
 		}},
 	}}
 	loop, handler := newTestLoop(t, client, permission.ActionDeny)
@@ -567,48 +568,48 @@ func TestLoopKeepsPermissionDenialInsideToolConversation(t *testing.T) {
 func TestLoopContinuesAcrossMultipleRounds(t *testing.T) {
 	client := &scriptedClient{streams: []scriptedStreamSpec{
 		{
-			events: []sdk.Event{
+			events: []domain.Event{
 				{
-					Kind: sdk.EventToolCall,
+					Kind: domain.EventToolCall,
 					ToolCall: model.ToolCall{
 						ID:        "call-1",
 						Name:      "read",
 						Arguments: json.RawMessage(`{"path":"a.txt"}`),
 					},
 				},
-				{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
+				{Kind: domain.EventFinish, FinishReason: domain.FinishStop},
 			},
 		},
 		{
-			events: []sdk.Event{
+			events: []domain.Event{
 				{
-					Kind: sdk.EventToolCall,
+					Kind: domain.EventToolCall,
 					ToolCall: model.ToolCall{
 						ID:        "call-2",
 						Name:      "read",
 						Arguments: json.RawMessage(`{"path":"b.txt"}`),
 					},
 				},
-				{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
+				{Kind: domain.EventFinish, FinishReason: domain.FinishStop},
 			},
 		},
 		{
-			events: []sdk.Event{
+			events: []domain.Event{
 				{
-					Kind: sdk.EventToolCall,
+					Kind: domain.EventToolCall,
 					ToolCall: model.ToolCall{
 						ID:        "call-3",
 						Name:      "read",
 						Arguments: json.RawMessage(`{"path":"c.txt"}`),
 					},
 				},
-				{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
+				{Kind: domain.EventFinish, FinishReason: domain.FinishStop},
 			},
 		},
 		{
-			events: []sdk.Event{
-				{Kind: sdk.EventTextDelta, Text: "Processed all 3 files unbounded."},
-				{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
+			events: []domain.Event{
+				{Kind: domain.EventTextDelta, Text: "Processed all 3 files unbounded."},
+				{Kind: domain.EventFinish, FinishReason: domain.FinishStop},
 			},
 		},
 	}}
@@ -639,20 +640,20 @@ func TestLoopContinuesAcrossMultipleRounds(t *testing.T) {
 
 func TestLoopTimesOutIndividualToolCall(t *testing.T) {
 	client := &scriptedClient{streams: []scriptedStreamSpec{
-		{events: []sdk.Event{
+		{events: []domain.Event{
 			{
-				Kind: sdk.EventToolCall,
+				Kind: domain.EventToolCall,
 				ToolCall: model.ToolCall{
 					ID:        "call-timeout",
 					Name:      "read",
 					Arguments: json.RawMessage(`{"path":"slow.txt"}`),
 				},
 			},
-			{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
+			{Kind: domain.EventFinish, FinishReason: domain.FinishStop},
 		}},
-		{events: []sdk.Event{
-			{Kind: sdk.EventTextDelta, Text: "timed out safely"},
-			{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
+		{events: []domain.Event{
+			{Kind: domain.EventTextDelta, Text: "timed out safely"},
+			{Kind: domain.EventFinish, FinishReason: domain.FinishStop},
 		}},
 	}}
 	handler := &contextBlockingHandler{
@@ -721,9 +722,9 @@ func TestLoopCancelsModelStreamWithParentContext(t *testing.T) {
 
 func TestLoopRunsApprovedReadCallsWithBoundedConcurrency(t *testing.T) {
 	client := &scriptedClient{streams: []scriptedStreamSpec{
-		{events: []sdk.Event{
+		{events: []domain.Event{
 			{
-				Kind: sdk.EventToolCall,
+				Kind: domain.EventToolCall,
 				ToolCall: model.ToolCall{
 					ID:        "call-read-1",
 					Name:      "read",
@@ -731,18 +732,18 @@ func TestLoopRunsApprovedReadCallsWithBoundedConcurrency(t *testing.T) {
 				},
 			},
 			{
-				Kind: sdk.EventToolCall,
+				Kind: domain.EventToolCall,
 				ToolCall: model.ToolCall{
 					ID:        "call-read-2",
 					Name:      "read",
 					Arguments: json.RawMessage(`{"path":"two.txt"}`),
 				},
 			},
-			{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
+			{Kind: domain.EventFinish, FinishReason: domain.FinishStop},
 		}},
-		{events: []sdk.Event{
-			{Kind: sdk.EventTextDelta, Text: "both read"},
-			{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
+		{events: []domain.Event{
+			{Kind: domain.EventTextDelta, Text: "both read"},
+			{Kind: domain.EventFinish, FinishReason: domain.FinishStop},
 		}},
 	}}
 	handler := &parallelHandler{
@@ -912,69 +913,69 @@ func (r *recordingRegistry) Definitions() []tool.Definition {
 func TestLoopAppliesReasoningEffortFromKnownModelProfile(t *testing.T) {
 	client := &scriptedClient{
 		profile: modelprofile.ResolveBuiltin("gateway", "gemini-3.8-flash", modelprofile.CatalogMetadata{}),
-		streams: []scriptedStreamSpec{{events: []sdk.Event{{Kind: sdk.EventTextDelta, Text: "done"}, {Kind: sdk.EventFinish, FinishReason: sdk.FinishStop}}}},
+		streams: []scriptedStreamSpec{{events: []domain.Event{{Kind: domain.EventTextDelta, Text: "done"}, {Kind: domain.EventFinish, FinishReason: domain.FinishStop}}}},
 	}
-	loop, _ := newTestLoop(t, client, permission.ActionAllow, WithReasoningEffort(sdk.ReasoningHigh))
+	loop, _ := newTestLoop(t, client, permission.ActionAllow, WithReasoningEffort(domain.ReasoningHigh))
 	if _, err := loop.Run(context.Background(), []model.Message{{Role: model.RoleUser, Content: "inspect"}}, nil); err != nil {
 		t.Fatal(err)
 	}
-	if got := client.requests[0].Options.ReasoningEffort; got != sdk.ReasoningHigh {
+	if got := client.requests[0].Options.ReasoningEffort; got != domain.ReasoningHigh {
 		t.Fatalf("ReasoningEffort = %q, want high", got)
 	}
 }
 
 func TestLoopClampsPortableReasoningEffortToKnownLevels(t *testing.T) {
 	client := &scriptedClient{
-		profile: modelprofile.Resolved{Reasoning: modelprofile.Reasoning{Support: modelprofile.SupportYes, Levels: []sdk.ReasoningEffort{sdk.ReasoningLow, sdk.ReasoningMedium}}},
-		streams: []scriptedStreamSpec{{events: []sdk.Event{{Kind: sdk.EventTextDelta, Text: "done"}, {Kind: sdk.EventFinish, FinishReason: sdk.FinishStop}}}},
+		profile: modelprofile.Resolved{Reasoning: modelprofile.Reasoning{Support: modelprofile.SupportYes, Levels: []domain.ReasoningEffort{domain.ReasoningLow, domain.ReasoningMedium}}},
+		streams: []scriptedStreamSpec{{events: []domain.Event{{Kind: domain.EventTextDelta, Text: "done"}, {Kind: domain.EventFinish, FinishReason: domain.FinishStop}}}},
 	}
-	loop, _ := newTestLoop(t, client, permission.ActionAllow, WithReasoningEffort(sdk.ReasoningHigh))
+	loop, _ := newTestLoop(t, client, permission.ActionAllow, WithReasoningEffort(domain.ReasoningHigh))
 	if _, err := loop.Run(context.Background(), []model.Message{{Role: model.RoleUser, Content: "inspect"}}, nil); err != nil {
 		t.Fatal(err)
 	}
-	if got := client.requests[0].Options.ReasoningEffort; got != sdk.ReasoningMedium {
+	if got := client.requests[0].Options.ReasoningEffort; got != domain.ReasoningMedium {
 		t.Fatalf("ReasoningEffort = %q, want medium", got)
 	}
 }
 
 func TestLoopOmitsReasoningForUnknownModelProfile(t *testing.T) {
 	client := &scriptedClient{
-		streams: []scriptedStreamSpec{{events: []sdk.Event{{Kind: sdk.EventTextDelta, Text: "done"}, {Kind: sdk.EventFinish, FinishReason: sdk.FinishStop}}}},
+		streams: []scriptedStreamSpec{{events: []domain.Event{{Kind: domain.EventTextDelta, Text: "done"}, {Kind: domain.EventFinish, FinishReason: domain.FinishStop}}}},
 	}
-	loop, _ := newTestLoop(t, client, permission.ActionAllow, WithReasoningEffort(sdk.ReasoningHigh))
+	loop, _ := newTestLoop(t, client, permission.ActionAllow, WithReasoningEffort(domain.ReasoningHigh))
 	if _, err := loop.Run(context.Background(), []model.Message{{Role: model.RoleUser, Content: "inspect"}}, nil); err != nil {
 		t.Fatal(err)
 	}
-	if got := client.requests[0].Options.ReasoningEffort; got != sdk.ReasoningDefault {
+	if got := client.requests[0].Options.ReasoningEffort; got != domain.ReasoningDefault {
 		t.Fatalf("ReasoningEffort = %q, want provider default", got)
 	}
 }
 
 type scriptedStreamSpec struct {
-	events   []sdk.Event
+	events   []domain.Event
 	closeErr error
 }
 
 type scriptedClient struct {
 	streams  []scriptedStreamSpec
-	requests []sdk.Request
+	requests []domain.Request
 	profile  modelprofile.Resolved
 }
 
 func (*scriptedClient) Provider() string                              { return "test" }
 func (*scriptedClient) ModelID() string                               { return "scripted" }
 func (c *scriptedClient) ResolvedModelProfile() modelprofile.Resolved { return c.profile }
-func (*scriptedClient) Capabilities() sdk.ModelCapabilities {
-	return sdk.ModelCapabilities{Streaming: true, Tools: true}
+func (*scriptedClient) Capabilities() domain.ModelCapabilities {
+	return domain.ModelCapabilities{Streaming: true, Tools: true}
 }
 
-func (c *scriptedClient) Stream(_ context.Context, request sdk.Request) (sdk.Stream, error) {
+func (c *scriptedClient) Stream(_ context.Context, request domain.Request) (port.Stream, error) {
 	if len(c.streams) == 0 {
 		return nil, errors.New("no scripted model stream remains")
 	}
-	c.requests = append(c.requests, sdk.Request{
-		Messages: sdk.CloneMessages(request.Messages),
-		Tools:    append([]sdk.Tool(nil), request.Tools...),
+	c.requests = append(c.requests, domain.Request{
+		Messages: domain.CloneMessages(request.Messages),
+		Tools:    append([]domain.Tool(nil), request.Tools...),
 		Options:  request.Options,
 	})
 	spec := c.streams[0]
@@ -983,17 +984,17 @@ func (c *scriptedClient) Stream(_ context.Context, request sdk.Request) (sdk.Str
 }
 
 type scriptedStream struct {
-	events   []sdk.Event
+	events   []domain.Event
 	index    int
 	closeErr error
 }
 
-func (s *scriptedStream) Next(ctx context.Context) (sdk.Event, error) {
+func (s *scriptedStream) Next(ctx context.Context) (domain.Event, error) {
 	if err := ctx.Err(); err != nil {
-		return sdk.Event{}, err
+		return domain.Event{}, err
 	}
 	if s.index >= len(s.events) {
-		return sdk.Event{}, io.EOF
+		return domain.Event{}, io.EOF
 	}
 	event := s.events[s.index]
 	s.index++
@@ -1006,7 +1007,7 @@ func (s *scriptedStream) Close() error {
 
 func newTestLoop(
 	t *testing.T,
-	client sdk.LanguageModel,
+	client port.LanguageModel,
 	action permission.Action,
 	options ...Option,
 ) (*Loop, *recordingHandler) {
@@ -1025,7 +1026,7 @@ func newTestLoop(
 
 func newLoopForHandler(
 	t *testing.T,
-	client sdk.LanguageModel,
+	client port.LanguageModel,
 	handler tool.Handler,
 	action permission.Action,
 	mode permission.Mode,
@@ -1091,20 +1092,20 @@ type blockingModelClient struct {
 
 func (*blockingModelClient) Provider() string { return "test" }
 func (*blockingModelClient) ModelID() string  { return "blocking" }
-func (*blockingModelClient) Capabilities() sdk.ModelCapabilities {
-	return sdk.ModelCapabilities{Streaming: true}
+func (*blockingModelClient) Capabilities() domain.ModelCapabilities {
+	return domain.ModelCapabilities{Streaming: true}
 }
 
-func (c *blockingModelClient) Stream(context.Context, sdk.Request) (sdk.Stream, error) {
+func (c *blockingModelClient) Stream(context.Context, domain.Request) (port.Stream, error) {
 	c.once.Do(func() { close(c.started) })
 	return blockingModelStream{}, nil
 }
 
 type blockingModelStream struct{}
 
-func (blockingModelStream) Next(ctx context.Context) (sdk.Event, error) {
+func (blockingModelStream) Next(ctx context.Context) (domain.Event, error) {
 	<-ctx.Done()
-	return sdk.Event{}, ctx.Err()
+	return domain.Event{}, ctx.Err()
 }
 
 func (blockingModelStream) Close() error {
@@ -1153,9 +1154,9 @@ func contains(value string, target string) bool {
 
 func TestLoopAugmentsSystemPromptWithSkillCatalog(t *testing.T) {
 	client := &scriptedClient{streams: []scriptedStreamSpec{{
-		events: []sdk.Event{
-			{Kind: sdk.EventTextDelta, Text: "I see the skills"},
-			{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
+		events: []domain.Event{
+			{Kind: domain.EventTextDelta, Text: "I see the skills"},
+			{Kind: domain.EventFinish, FinishReason: domain.FinishStop},
 		},
 	}}}
 	catalog := []skill.CatalogItem{
@@ -1198,9 +1199,9 @@ func TestLoopAugmentsSystemPromptWithSkillCatalog(t *testing.T) {
 
 func TestLoopDoesNotDuplicateSkillCatalogMarker(t *testing.T) {
 	client := &scriptedClient{streams: []scriptedStreamSpec{{
-		events: []sdk.Event{
-			{Kind: sdk.EventTextDelta, Text: "ok"},
-			{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
+		events: []domain.Event{
+			{Kind: domain.EventTextDelta, Text: "ok"},
+			{Kind: domain.EventFinish, FinishReason: domain.FinishStop},
 		},
 	}}}
 	catalog := []skill.CatalogItem{{
@@ -1229,13 +1230,13 @@ func TestLoopDoesNotDuplicateSkillCatalogMarker(t *testing.T) {
 
 func TestLoopDynamicActiveSkillsWithRegistry(t *testing.T) {
 	client := &scriptedClient{streams: []scriptedStreamSpec{
-		{events: []sdk.Event{
-			{Kind: sdk.EventTextDelta, Text: "ok"},
-			{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
+		{events: []domain.Event{
+			{Kind: domain.EventTextDelta, Text: "ok"},
+			{Kind: domain.EventFinish, FinishReason: domain.FinishStop},
 		}},
-		{events: []sdk.Event{
-			{Kind: sdk.EventTextDelta, Text: "ok"},
-			{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
+		{events: []domain.Event{
+			{Kind: domain.EventTextDelta, Text: "ok"},
+			{Kind: domain.EventFinish, FinishReason: domain.FinishStop},
 		}},
 	}}
 
@@ -1310,7 +1311,7 @@ func TestNewLoopUsesProgressSafetyBoundsWhenLegacyLimitsDisabled(t *testing.T) {
 		t.Fatalf("NewService() error = %v", err)
 	}
 	client := &scriptedClient{streams: []scriptedStreamSpec{{
-		events: []sdk.Event{{Kind: sdk.EventTextDelta, Text: "done"}, {Kind: sdk.EventFinish, FinishReason: sdk.FinishStop}},
+		events: []domain.Event{{Kind: domain.EventTextDelta, Text: "done"}, {Kind: domain.EventFinish, FinishReason: domain.FinishStop}},
 	}}}
 	loop, err := NewLoop(client, service, WithMaxToolCalls(0), WithTurnTimeout(0))
 	if err != nil {
@@ -1347,7 +1348,7 @@ func TestLoopWholeTurnTimeoutStopsBlockingModel(t *testing.T) {
 
 func TestLoopAllowsUnboundedCountsWithFiniteTurnTimeout(t *testing.T) {
 	client := &scriptedClient{streams: []scriptedStreamSpec{{
-		events: []sdk.Event{{Kind: sdk.EventTextDelta, Text: "bounded by time"}, {Kind: sdk.EventFinish, FinishReason: sdk.FinishStop}},
+		events: []domain.Event{{Kind: domain.EventTextDelta, Text: "bounded by time"}, {Kind: domain.EventFinish, FinishReason: domain.FinishStop}},
 	}}}
 	loop, _ := newTestLoop(
 		t,
@@ -1402,11 +1403,11 @@ func TestFailUsesBoundedDetachedContextForTerminalEvent(t *testing.T) {
 
 func TestLoopPreservesStructuredToolOutputAsNestedJSON(t *testing.T) {
 	client := &scriptedClient{streams: []scriptedStreamSpec{
-		{events: []sdk.Event{
-			{Kind: sdk.EventToolCall, ToolCall: model.ToolCall{ID: "structured", Name: "read", Arguments: json.RawMessage(`{"path":"TODO.md"}`)}},
-			{Kind: sdk.EventFinish, FinishReason: sdk.FinishToolCalls},
+		{events: []domain.Event{
+			{Kind: domain.EventToolCall, ToolCall: model.ToolCall{ID: "structured", Name: "read", Arguments: json.RawMessage(`{"path":"TODO.md"}`)}},
+			{Kind: domain.EventFinish, FinishReason: domain.FinishToolCalls},
 		}},
-		{events: []sdk.Event{{Kind: sdk.EventTextDelta, Text: "done"}, {Kind: sdk.EventFinish, FinishReason: sdk.FinishStop}}},
+		{events: []domain.Event{{Kind: domain.EventTextDelta, Text: "done"}, {Kind: domain.EventFinish, FinishReason: domain.FinishStop}}},
 	}}
 	loop, handler := newTestLoop(t, client, permission.ActionAllow)
 	handler.output = "task snapshot revision 4 · 1 tasks"
@@ -1430,13 +1431,13 @@ func TestLoopPreservesStructuredToolOutputAsNestedJSON(t *testing.T) {
 
 func TestLoopAppliesAggregateToolResultBudgetBeforeHistory(t *testing.T) {
 	client := &scriptedClient{streams: []scriptedStreamSpec{
-		{events: []sdk.Event{
-			{Kind: sdk.EventToolCall, ToolCall: model.ToolCall{ID: "read-big", Name: "read", Arguments: json.RawMessage(`{"path":"big.txt"}`)}},
-			{Kind: sdk.EventFinish, FinishReason: sdk.FinishToolCalls},
+		{events: []domain.Event{
+			{Kind: domain.EventToolCall, ToolCall: model.ToolCall{ID: "read-big", Name: "read", Arguments: json.RawMessage(`{"path":"big.txt"}`)}},
+			{Kind: domain.EventFinish, FinishReason: domain.FinishToolCalls},
 		}},
-		{events: []sdk.Event{
-			{Kind: sdk.EventTextDelta, Text: "done"},
-			{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
+		{events: []domain.Event{
+			{Kind: domain.EventTextDelta, Text: "done"},
+			{Kind: domain.EventFinish, FinishReason: domain.FinishStop},
 		}},
 	}}
 	loop, handler := newTestLoop(t, client, permission.ActionAllow,
@@ -1460,13 +1461,13 @@ func TestLoopAppliesAggregateToolResultBudgetBeforeHistory(t *testing.T) {
 
 func TestLoopRequiresWorkspaceEvidenceUntilGrounded(t *testing.T) {
 	client := &scriptedClient{streams: []scriptedStreamSpec{
-		{events: []sdk.Event{
-			{Kind: sdk.EventToolCall, ToolCall: model.ToolCall{ID: "ground", Name: "read", Arguments: json.RawMessage(`{"path":"README.md"}`)}},
-			{Kind: sdk.EventFinish, FinishReason: sdk.FinishToolCalls},
+		{events: []domain.Event{
+			{Kind: domain.EventToolCall, ToolCall: model.ToolCall{ID: "ground", Name: "read", Arguments: json.RawMessage(`{"path":"README.md"}`)}},
+			{Kind: domain.EventFinish, FinishReason: domain.FinishToolCalls},
 		}},
-		{events: []sdk.Event{
-			{Kind: sdk.EventTextDelta, Text: "grounded"},
-			{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
+		{events: []domain.Event{
+			{Kind: domain.EventTextDelta, Text: "grounded"},
+			{Kind: domain.EventFinish, FinishReason: domain.FinishStop},
 		}},
 	}}
 	client.profile.Capabilities.ToolChoiceRequired = modelprofile.SupportYes
@@ -1477,20 +1478,20 @@ func TestLoopRequiresWorkspaceEvidenceUntilGrounded(t *testing.T) {
 	if len(client.requests) != 2 {
 		t.Fatalf("requests = %d, want 2", len(client.requests))
 	}
-	if client.requests[0].Options.ToolChoice != sdk.ToolChoiceRequired {
+	if client.requests[0].Options.ToolChoice != domain.ToolChoiceRequired {
 		t.Fatalf("first tool choice = %q, want required", client.requests[0].Options.ToolChoice)
 	}
-	if client.requests[1].Options.ToolChoice != sdk.ToolChoiceAuto {
+	if client.requests[1].Options.ToolChoice != domain.ToolChoiceAuto {
 		t.Fatalf("second tool choice = %q, want auto", client.requests[1].Options.ToolChoice)
 	}
 }
 
 func TestLoopExplicitReasoningRejectsKnownUnsupportedLevel(t *testing.T) {
 	client := &scriptedClient{
-		profile: modelprofile.Resolved{ModelID: "limited", Reasoning: modelprofile.Reasoning{Support: modelprofile.SupportYes, Levels: []sdk.ReasoningEffort{sdk.ReasoningLow, sdk.ReasoningMedium}}},
-		streams: []scriptedStreamSpec{{events: []sdk.Event{{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop}}}},
+		profile: modelprofile.Resolved{ModelID: "limited", Reasoning: modelprofile.Reasoning{Support: modelprofile.SupportYes, Levels: []domain.ReasoningEffort{domain.ReasoningLow, domain.ReasoningMedium}}},
+		streams: []scriptedStreamSpec{{events: []domain.Event{{Kind: domain.EventFinish, FinishReason: domain.FinishStop}}}},
 	}
-	loop, _ := newTestLoop(t, client, permission.ActionAllow, WithExplicitReasoningEffort(sdk.ReasoningHigh))
+	loop, _ := newTestLoop(t, client, permission.ActionAllow, WithExplicitReasoningEffort(domain.ReasoningHigh))
 	_, err := loop.Run(context.Background(), []model.Message{{Role: model.RoleUser, Content: "inspect"}}, nil)
 	if !errors.Is(err, ErrUnsupportedModelCapability) {
 		t.Fatalf("Run() error = %v, want unsupported model capability", err)
@@ -1503,13 +1504,13 @@ func TestLoopExplicitReasoningRejectsKnownUnsupportedLevel(t *testing.T) {
 func TestLoopExplicitReasoningPassesThroughUnknownProfile(t *testing.T) {
 	client := &scriptedClient{
 		profile: modelprofile.Resolved{ModelID: "future", Reasoning: modelprofile.Reasoning{Support: modelprofile.SupportUnknown}},
-		streams: []scriptedStreamSpec{{events: []sdk.Event{{Kind: sdk.EventTextDelta, Text: "done"}, {Kind: sdk.EventFinish, FinishReason: sdk.FinishStop}}}},
+		streams: []scriptedStreamSpec{{events: []domain.Event{{Kind: domain.EventTextDelta, Text: "done"}, {Kind: domain.EventFinish, FinishReason: domain.FinishStop}}}},
 	}
-	loop, _ := newTestLoop(t, client, permission.ActionAllow, WithExplicitReasoningEffort(sdk.ReasoningXHigh))
+	loop, _ := newTestLoop(t, client, permission.ActionAllow, WithExplicitReasoningEffort(domain.ReasoningXHigh))
 	if _, err := loop.Run(context.Background(), []model.Message{{Role: model.RoleUser, Content: "inspect"}}, nil); err != nil {
 		t.Fatal(err)
 	}
-	if got := client.requests[0].Options.ReasoningEffort; got != sdk.ReasoningXHigh {
+	if got := client.requests[0].Options.ReasoningEffort; got != domain.ReasoningXHigh {
 		t.Fatalf("ReasoningEffort = %q, want xhigh", got)
 	}
 }
@@ -1518,11 +1519,11 @@ func TestLoopPublishesProviderSafeMCPAliasAndDispatchesCanonicalName(t *testing.
 	canonical := "mcp.github.issue/search"
 	alias := tool.ProviderSafeName(canonical)
 	client := &scriptedClient{streams: []scriptedStreamSpec{
-		{events: []sdk.Event{
-			{Kind: sdk.EventToolCall, ToolCall: model.ToolCall{ID: "mcp-call", Name: alias, Arguments: json.RawMessage(`{}`)}},
-			{Kind: sdk.EventFinish, FinishReason: sdk.FinishToolCalls},
+		{events: []domain.Event{
+			{Kind: domain.EventToolCall, ToolCall: model.ToolCall{ID: "mcp-call", Name: alias, Arguments: json.RawMessage(`{}`)}},
+			{Kind: domain.EventFinish, FinishReason: domain.FinishToolCalls},
 		}},
-		{events: []sdk.Event{{Kind: sdk.EventTextDelta, Text: "done"}, {Kind: sdk.EventFinish, FinishReason: sdk.FinishStop}}},
+		{events: []domain.Event{{Kind: domain.EventTextDelta, Text: "done"}, {Kind: domain.EventFinish, FinishReason: domain.FinishStop}}},
 	}}
 	handler := &recordingHandler{definition: tool.Definition{
 		Name: canonical, Description: "search issues", Kind: tool.KindMCP,
@@ -1584,7 +1585,7 @@ func TestLoopPublishesUnifiedReadFileSourceSchemaForGemini(t *testing.T) {
 	handler := &recordingHandler{definition: definition}
 	client := &scriptedClient{
 		profile: modelprofile.ResolveBuiltin("gateway", "gemini-3.8-flash", modelprofile.CatalogMetadata{}),
-		streams: []scriptedStreamSpec{{events: []sdk.Event{{Kind: sdk.EventTextDelta, Text: "done"}, {Kind: sdk.EventFinish, FinishReason: sdk.FinishStop}}}},
+		streams: []scriptedStreamSpec{{events: []domain.Event{{Kind: domain.EventTextDelta, Text: "done"}, {Kind: domain.EventFinish, FinishReason: domain.FinishStop}}}},
 	}
 	loop := newLoopForHandler(t, client, handler, permission.ActionAllow, permission.ModeAsk)
 	if _, err := loop.Run(context.Background(), []model.Message{{Role: model.RoleUser, Content: "inspect source"}}, nil); err != nil {
@@ -1616,12 +1617,12 @@ type retryObserverClient struct{}
 
 func (*retryObserverClient) Provider() string { return "test" }
 func (*retryObserverClient) ModelID() string  { return "retry-observer" }
-func (*retryObserverClient) Capabilities() sdk.ModelCapabilities {
-	return sdk.ModelCapabilities{Streaming: true}
+func (*retryObserverClient) Capabilities() domain.ModelCapabilities {
+	return domain.ModelCapabilities{Streaming: true}
 }
-func (*retryObserverClient) Stream(ctx context.Context, _ sdk.Request) (sdk.Stream, error) {
-	sdk.ObserveRetry(ctx, sdk.RetryEvent{Provider: "test", ModelID: "retry-observer", Reason: "overloaded", Attempt: 1, MaxRetries: 2, Delay: time.Second})
-	return &scriptedStream{events: []sdk.Event{{Kind: sdk.EventTextDelta, Text: "ok"}, {Kind: sdk.EventFinish, FinishReason: sdk.FinishStop}}}, nil
+func (*retryObserverClient) Stream(ctx context.Context, _ domain.Request) (port.Stream, error) {
+	domain.ObserveRetry(ctx, domain.RetryEvent{Provider: "test", ModelID: "retry-observer", Reason: "overloaded", Attempt: 1, MaxRetries: 2, Delay: time.Second})
+	return &scriptedStream{events: []domain.Event{{Kind: domain.EventTextDelta, Text: "ok"}, {Kind: domain.EventFinish, FinishReason: domain.FinishStop}}}, nil
 }
 
 func TestLoopForwardsModelRetryLifecycleEvent(t *testing.T) {

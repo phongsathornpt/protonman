@@ -19,41 +19,13 @@ import (
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	applicationturn "github.com/phongsathornpt/protonman/internal/engine/turn"
 	tododomain "github.com/phongsathornpt/protonman/internal/feature/todo"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	domain "github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 )
-
-func TestBrandLockupResponsive(t *testing.T) {
-	wide := ansi.Strip(brandLockup(80))
-	lines := strings.Split(wide, "\n")
-	if len(lines) != 4 {
-		t.Fatalf("wide brand lines = %d, want 4: %q", len(lines), wide)
-	}
-	wantLogo := []string{`   /\`, `  /__\`, ` <____>`, ` /|__|\`}
-	for i, want := range wantLogo {
-		if !strings.HasPrefix(lines[i], want) {
-			t.Fatalf("wide brand line %d = %q, want prefix %q", i, lines[i], want)
-		}
-	}
-	if !strings.Contains(lines[0], "protonMAN") {
-		t.Fatalf("wide brand missing product name: %q", wide)
-	}
-	if got := brandLockupWidth(80); got > 80 {
-		t.Fatalf("wide brand width = %d, terminal width 80", got)
-	}
-
-	narrow := ansi.Strip(brandLockup(20))
-	if strings.Contains(narrow, `/__\`) || !strings.Contains(narrow, "protonMAN") {
-		t.Fatalf("narrow brand = %q, want compact protonMAN fallback", narrow)
-	}
-	if got := brandLockupWidth(20); got > 20 {
-		t.Fatalf("narrow brand width = %d, terminal width 20", got)
-	}
-}
 
 func TestBrandMarkIsSingleCell(t *testing.T) {
 	if got := ansi.StringWidth(glyphBrand); got != 1 {
@@ -1468,22 +1440,11 @@ func TestAppendPaneGroupPreservesOverlappingSlices(t *testing.T) {
 }
 
 func TestPromptPlaceholderReflectsRunnerState(t *testing.T) {
-	if got := promptPlaceholder(false, permission.ModeAsk, false); got != "Message or /command…" {
+	if got := promptPlaceholder(false); got != "Message or /command…" {
 		t.Fatalf("no runner placeholder = %q", got)
 	}
-
-	for _, tc := range []struct {
-		mode permission.Mode
-		plan bool
-	}{
-		{permission.ModeAsk, false},
-		{permission.ModeAlwaysApprove, false},
-		{permission.ModeDeny, false},
-		{permission.ModeAsk, true},
-	} {
-		if got := promptPlaceholder(true, tc.mode, tc.plan); got != "Ask universal to build, test, or type / for commands…" {
-			t.Fatalf("runner placeholder = %q, want contextual guidance", got)
-		}
+	if got := promptPlaceholder(true); got != "Ask universal to build, test, or type / for commands…" {
+		t.Fatalf("runner placeholder = %q, want contextual guidance", got)
 	}
 
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
@@ -1504,7 +1465,7 @@ func TestPromptPlaceholderReflectsRunnerState(t *testing.T) {
 func TestIdleFooterShowsInteractionContextOnly(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAsk, emptyTodoItems())
 	m.activeModel = "nemotron-3.5-lightning-free"
-	m.reasoningEffort = sdk.ReasoningDefault
+	m.reasoningEffort = domain.ReasoningDefault
 	m.resize(80, 24)
 	footer := ansi.Strip(m.idleContextFooter())
 	for _, want := range []string{"? for shortcuts", "auto", "ask"} {
@@ -1519,7 +1480,7 @@ func TestIdleFooterShowsInteractionContextOnly(t *testing.T) {
 
 func TestIdleFooterKeepsShortcutHintInAlwaysApprove(t *testing.T) {
 	m := newTestBubbleModel(t, permission.ModeAlwaysApprove, emptyTodoItems())
-	m.reasoningEffort = sdk.ReasoningDefault
+	m.reasoningEffort = domain.ReasoningDefault
 	m.resize(72, 24)
 	footer := ansi.Strip(m.idleContextFooter())
 	if !strings.Contains(footer, "? for shortcuts") || !strings.Contains(footer, "auto") {
@@ -1539,7 +1500,7 @@ func TestPaneKeyboardHelpStaysSingleLine(t *testing.T) {
 	}
 }
 
-func modelRetryStatus(retry sdk.RetryEvent, now time.Time) (string, string, bool) {
+func modelRetryStatus(retry domain.RetryEvent, now time.Time) (string, string, bool) {
 	activity, metaParts, ok := runtimeui.RetryStatus(retry, now)
 	if !ok {
 		return "", "", false
@@ -1553,7 +1514,7 @@ func modelRetryStatus(retry sdk.RetryEvent, now time.Time) (string, string, bool
 
 func TestModelRetryStatusCountsDownFromRetryDeadline(t *testing.T) {
 	now := time.Now()
-	retry := sdk.RetryEvent{Phase: sdk.RetryPhaseWaiting, Reason: "incomplete_stream", Attempt: 1, MaxRetries: 2, RetryAt: now.Add(2500 * time.Millisecond)}
+	retry := domain.RetryEvent{Phase: domain.RetryPhaseWaiting, Reason: "incomplete_stream", Attempt: 1, MaxRetries: 2, RetryAt: now.Add(2500 * time.Millisecond)}
 	activity, meta, ok := modelRetryStatus(retry, now)
 	if !ok || activity != "retrying in 3s" {
 		t.Fatalf("activity=%q ok=%v, want countdown", activity, ok)
@@ -1569,7 +1530,7 @@ func TestModelRetryStatusCountsDownFromRetryDeadline(t *testing.T) {
 
 func TestModelRetryStatusShowsCooldownAfterFirstRetry(t *testing.T) {
 	now := time.Now()
-	retry := sdk.RetryEvent{Phase: sdk.RetryPhaseCooldown, Reason: "first_event_timeout", Attempt: 2, MaxRetries: 2, RetryAt: now.Add(2 * time.Second)}
+	retry := domain.RetryEvent{Phase: domain.RetryPhaseCooldown, Reason: "first_event_timeout", Attempt: 2, MaxRetries: 2, RetryAt: now.Add(2 * time.Second)}
 	activity, meta, ok := modelRetryStatus(retry, now)
 	if !ok || activity != "cooling down 2s" {
 		t.Fatalf("activity=%q ok=%v, want cooldown countdown", activity, ok)

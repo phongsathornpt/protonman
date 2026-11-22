@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	usecase "github.com/phongsathornpt/protonman/pkg/proton-sdk/usecase"
 )
 
 type overlayTestHandler struct{ name, description string }
@@ -99,7 +99,7 @@ func TestOverlayRegistryPreservesDynamicRegistrar(t *testing.T) {
 
 type overlayCompiledRegistry struct{ overlayTestRegistry }
 
-func (r overlayCompiledRegistry) CompiledValidators(name string) (*sdk.ToolSchemaValidator, *sdk.ToolSchemaValidator, bool) {
+func (r overlayCompiledRegistry) CompiledValidators(name string) (*usecase.ToolSchemaValidator, *usecase.ToolSchemaValidator, bool) {
 	_, ok := r.Lookup(name)
 	return nil, nil, ok
 }
@@ -114,7 +114,7 @@ func TestOverlayRegistryPreservesAndRecompilesOverrideValidators(t *testing.T) {
 		t.Fatal(err)
 	}
 	compiled, ok := reg.(interface {
-		CompiledValidators(string) (*sdk.ToolSchemaValidator, *sdk.ToolSchemaValidator, bool)
+		CompiledValidators(string) (*usecase.ToolSchemaValidator, *usecase.ToolSchemaValidator, bool)
 	})
 	if !ok {
 		t.Fatal("overlay registry dropped compiled validator cache")

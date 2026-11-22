@@ -5,9 +5,9 @@ import (
 	"strings"
 
 	"github.com/phongsathornpt/protonman/internal/core/modelprofile"
-	"github.com/phongsathornpt/protonman/proton-sdk/domain"
-	"github.com/phongsathornpt/protonman/proton-sdk/port"
-	"github.com/phongsathornpt/protonman/proton-sdk/usecase"
+	"github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
+	"github.com/phongsathornpt/protonman/pkg/proton-sdk/port"
+	"github.com/phongsathornpt/protonman/pkg/proton-sdk/usecase"
 )
 
 // Provider-neutral model types and aliases owned by proton-domain.

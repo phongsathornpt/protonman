@@ -8,22 +8,22 @@ import (
 
 	"github.com/phongsathornpt/protonman/internal/core/session"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	domain "github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
 )
 
 func TestToModelMessagesAndFromModelMessages(t *testing.T) {
-	input := []sdk.Message{
-		{Role: sdk.RoleUser, Content: "hello"},
-		{Role: sdk.RoleAssistant, Content: "world"},
+	input := []domain.Message{
+		{Role: domain.RoleUser, Content: "hello"},
+		{Role: domain.RoleAssistant, Content: "world"},
 	}
 	stored := session.FromModelMessages(input)
 	if len(stored) != 2 {
 		t.Fatalf("FromModelMessages returned %d messages, want 2", len(stored))
 	}
-	if stored[0].Role != sdk.RoleUser || stored[0].Content != "hello" {
+	if stored[0].Role != domain.RoleUser || stored[0].Content != "hello" {
 		t.Errorf("stored[0] = %+v", stored[0])
 	}
-	if stored[1].Role != sdk.RoleAssistant || stored[1].Content != "world" {
+	if stored[1].Role != domain.RoleAssistant || stored[1].Content != "world" {
 		t.Errorf("stored[1] = %+v", stored[1])
 	}
 
@@ -31,10 +31,10 @@ func TestToModelMessagesAndFromModelMessages(t *testing.T) {
 	if len(restored) != 2 {
 		t.Fatalf("ToModelMessages returned %d messages, want 2", len(restored))
 	}
-	if restored[0].Role != sdk.RoleUser || restored[0].Content != "hello" {
+	if restored[0].Role != domain.RoleUser || restored[0].Content != "hello" {
 		t.Errorf("restored[0] = %+v", restored[0])
 	}
-	if restored[1].Role != sdk.RoleAssistant || restored[1].Content != "world" {
+	if restored[1].Role != domain.RoleAssistant || restored[1].Content != "world" {
 		t.Errorf("restored[1] = %+v", restored[1])
 	}
 }
@@ -59,18 +59,18 @@ func TestManagedSystemPromptFiltering(t *testing.T) {
 	}
 
 	for _, p := range managedPrompts {
-		stored := session.FromModelMessages([]sdk.Message{{Role: sdk.RoleSystem, Content: p}})
+		stored := session.FromModelMessages([]domain.Message{{Role: domain.RoleSystem, Content: p}})
 		if len(stored) != 0 {
 			t.Errorf("FromModelMessages did not filter managed prompt: %q", p)
 		}
-		restored := session.ToModelMessages([]session.Message{{Role: sdk.RoleSystem, Content: p}})
+		restored := session.ToModelMessages([]session.Message{{Role: domain.RoleSystem, Content: p}})
 		if len(restored) != 0 {
 			t.Errorf("ToModelMessages did not filter managed prompt: %q", p)
 		}
 	}
 
 	customSystem := "custom instructions for project"
-	storedCustom := session.FromModelMessages([]sdk.Message{{Role: sdk.RoleSystem, Content: customSystem}})
+	storedCustom := session.FromModelMessages([]domain.Message{{Role: domain.RoleSystem, Content: customSystem}})
 	if len(storedCustom) != 1 || storedCustom[0].Content != customSystem {
 		t.Errorf("FromModelMessages filtered custom system prompt: %+v", storedCustom)
 	}
@@ -88,13 +88,13 @@ func TestToolCallCompactionInHistory(t *testing.T) {
 	})
 	messages := []session.Message{
 		{
-			Role: sdk.RoleAssistant,
+			Role: domain.RoleAssistant,
 			ToolCalls: []session.ToolCall{
 				{ID: "call-1", Name: "read"},
 			},
 		},
 		{
-			Role:       sdk.RoleTool,
+			Role:       domain.RoleTool,
 			ToolCallID: "call-1",
 			ToolName:   "read",
 			Content:    string(rawResult),
@@ -104,7 +104,7 @@ func TestToolCallCompactionInHistory(t *testing.T) {
 	if len(restored) != 1 {
 		t.Fatalf("restored length = %d, want 1", len(restored))
 	}
-	if restored[0].Role != sdk.RoleAssistant {
+	if restored[0].Role != domain.RoleAssistant {
 		t.Errorf("restored role = %s, want assistant", restored[0].Role)
 	}
 	if !strings.Contains(restored[0].Content, "package main") {
@@ -153,7 +153,7 @@ func TestNormalizeLoadedState(t *testing.T) {
 		ReasoningEffort: "high",
 		UpdatedAt:       now,
 		Messages: []session.Message{
-			{Role: sdk.RoleUser, Content: "test message"},
+			{Role: domain.RoleUser, Content: "test message"},
 		},
 	}
 	normalized, err := session.NormalizeLoadedState("workspace-target-123", validState)
@@ -177,7 +177,7 @@ func TestPrepareStateForSave(t *testing.T) {
 		PermissionMode:  "always-approve",
 		ReasoningEffort: "medium",
 		Messages: []session.Message{
-			{Role: sdk.RoleUser, Content: "save me"},
+			{Role: domain.RoleUser, Content: "save me"},
 		},
 	}
 	existing := &session.State{
@@ -212,20 +212,20 @@ func TestPreview(t *testing.T) {
 	}
 
 	messages := []session.Message{
-		{Role: sdk.RoleSystem, Content: "system instruction"},
-		{Role: sdk.RoleAssistant, Content: "assistant reply"},
+		{Role: domain.RoleSystem, Content: "system instruction"},
+		{Role: domain.RoleAssistant, Content: "assistant reply"},
 	}
 	if got := session.Preview(messages); got != "" {
 		t.Errorf("Preview(non-user) = %q, want empty", got)
 	}
 
-	messages = append(messages, session.Message{Role: sdk.RoleUser, Content: "  build   the app   "})
+	messages = append(messages, session.Message{Role: domain.RoleUser, Content: "  build   the app   "})
 	if got := session.Preview(messages); got != "build the app" {
 		t.Errorf("Preview = %q, want 'build the app'", got)
 	}
 
 	longText := strings.Repeat("a", 150)
-	messages = []session.Message{{Role: sdk.RoleUser, Content: longText}}
+	messages = []session.Message{{Role: domain.RoleUser, Content: longText}}
 	got := session.Preview(messages)
 	if len([]rune(got)) != 100 {
 		t.Errorf("len(runes) = %d, want 100", len([]rune(got)))

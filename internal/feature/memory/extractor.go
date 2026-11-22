@@ -10,7 +10,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/base/runtimepolicy"
 	corememory "github.com/phongsathornpt/protonman/internal/core/memory"
 	"github.com/phongsathornpt/protonman/internal/core/session"
-	"github.com/phongsathornpt/protonman/proton-sdk/port"
+	"github.com/phongsathornpt/protonman/pkg/proton-sdk/port"
 )
 
 const minExtractionConfidence = 0.65

@@ -9,9 +9,9 @@ import (
 	"time"
 
 	"github.com/phongsathornpt/protonman/internal/base/runtimepolicy"
-	"github.com/phongsathornpt/protonman/proton-sdk/domain"
-	"github.com/phongsathornpt/protonman/proton-sdk/port"
-	"github.com/phongsathornpt/protonman/proton-sdk/usecase"
+	"github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
+	"github.com/phongsathornpt/protonman/pkg/proton-sdk/port"
+	"github.com/phongsathornpt/protonman/pkg/proton-sdk/usecase"
 )
 
 type lowConcurrencyOutcome uint8

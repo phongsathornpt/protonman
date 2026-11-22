@@ -5,13 +5,13 @@ import (
 	"testing"
 	"time"
 
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	domain "github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
 )
 
 func TestFromModelMessagesPreservesCanonicalToolNames(t *testing.T) {
-	messages := []sdk.Message{
-		{Role: sdk.RoleAssistant, ToolCalls: []sdk.ToolCall{{ID: "call-1", Name: "read"}}},
-		{Role: sdk.RoleTool, ToolCallID: "call-1", ToolName: "read", Content: "legacy output"},
+	messages := []domain.Message{
+		{Role: domain.RoleAssistant, ToolCalls: []domain.ToolCall{{ID: "call-1", Name: "read"}}},
+		{Role: domain.RoleTool, ToolCallID: "call-1", ToolName: "read", Content: "legacy output"},
 	}
 	persisted := FromModelMessages(messages)
 	if len(persisted) != 1 {
@@ -23,7 +23,7 @@ func TestFromModelMessagesPreservesCanonicalToolNames(t *testing.T) {
 }
 
 func TestMessageIdentitySurvivesSessionConversion(t *testing.T) {
-	input := []sdk.Message{{ID: "msg_keep", Role: sdk.RoleUser, Content: "hello"}}
+	input := []domain.Message{{ID: "msg_keep", Role: domain.RoleUser, Content: "hello"}}
 	stored := FromModelMessages(input)
 	if len(stored) != 1 || stored[0].ID != "msg_keep" {
 		t.Fatalf("stored messages = %+v", stored)
@@ -35,7 +35,7 @@ func TestMessageIdentitySurvivesSessionConversion(t *testing.T) {
 }
 
 func TestLegacySessionMessagesReceiveStableIdentity(t *testing.T) {
-	stored := FromModelMessages([]sdk.Message{{Role: sdk.RoleUser, Content: "legacy"}})
+	stored := FromModelMessages([]domain.Message{{Role: domain.RoleUser, Content: "legacy"}})
 	if len(stored) != 1 || stored[0].ID == "" {
 		t.Fatalf("legacy stored message id = %q", stored[0].ID)
 	}

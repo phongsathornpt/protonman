@@ -10,7 +10,9 @@ import (
 	"charm.land/bubbles/v2/textarea"
 	tea "charm.land/bubbletea/v2"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/cmdpolicy"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/composer"
 	tuiconv "github.com/phongsathornpt/protonman/internal/adapter/in/tui/runtime/conversation"
+	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/mentionview"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/view/slashview"
 )
 
@@ -95,9 +97,9 @@ func (m *bubbleModel) composerInput() tuiconv.QueuedInput {
 		return tuiconv.QueuedInput{}
 	}
 	prompt := m.panes.bottom.prompt()
-	attachments := m.panes.bottom.composer.attachments.snapshot(prompt)
+	attachments := m.panes.bottom.composer.attachments.Snapshot(prompt)
 	return tuiconv.QueuedInput{
-		Text:        stripAttachmentPlaceholders(prompt.Value(), attachments),
+		Text:        composer.StripPlaceholders(prompt.Value(), attachments),
 		Attachments: attachments,
 	}
 }
@@ -147,6 +149,22 @@ func (m *bubbleModel) submit() tea.Cmd {
 		}
 		return m.dispatch(input.Text)
 	}
+	if !m.isCommandLine(input.Text) {
+		expanded, err := mentionview.ExpandMentions(input.Text, m.workDir)
+		if err != nil {
+			m.appendError(err.Error())
+			m.refreshViewport()
+			return nil
+		}
+		if len(expanded.ImagePaths) > 0 {
+			for _, imgPath := range expanded.ImagePaths {
+				m.panes.bottom.composer.attachments.Attach(&m.panes.bottom.composer.input, imgPath)
+			}
+			input = m.composerInput()
+		}
+		input.Text = expanded.TurnPrompt
+		input.DisplayText = expanded.DisplayText
+	}
 	if len(input.Attachments) > 0 && !m.currentModelAcceptsImageInput() {
 		m.appendError(m.imageInputsNotSupportedMessage())
 		m.refreshViewport()
@@ -157,18 +175,20 @@ func (m *bubbleModel) submit() tea.Cmd {
 			return nil
 		}
 		if len(input.Attachments) > 0 {
-			m.panes.bottom.composer.attachments.release()
+			m.panes.bottom.composer.attachments.Release()
 		}
 		m.resetPrompt()
 		m.panes.bottom.remove(slashViewID)
+		m.panes.bottom.remove(mentionViewID)
 		m.refreshViewport()
 		return nil
 	}
 	if len(input.Attachments) > 0 {
-		m.panes.bottom.composer.attachments.release()
+		m.panes.bottom.composer.attachments.Release()
 	}
 	m.resetPrompt()
 	m.panes.bottom.remove(slashViewID)
+	m.panes.bottom.remove(mentionViewID)
 	return m.dispatchInput(input)
 }
 

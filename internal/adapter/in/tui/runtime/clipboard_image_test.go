@@ -44,7 +44,7 @@ func TestClipboardImageShortcutStartsAsyncRead(t *testing.T) {
 	if command == nil {
 		t.Fatal("ctrl+v did not start clipboard image read")
 	}
-	if got := len(m.panes.bottom.composer.attachments.localImages); got != 0 {
+	if got := m.panes.bottom.composer.attachments.Len(); got != 0 {
 		t.Fatalf("attachments before async result = %d, want 0", got)
 	}
 }
@@ -59,8 +59,8 @@ func TestClipboardImageResultAttachesToMatchingDraftAndResetCleansTemp(t *testin
 	m.updateClipboardImageLoaded(clipboardImageLoadedMsg{
 		draftText: "inspect", path: path, width: 2, height: 2,
 	})
-	images := m.panes.bottom.composer.attachments.localImages
-	if len(images) != 1 || images[0].path != path || !images[0].temporary {
+	images := m.panes.bottom.composer.attachments.Snapshot(nil)
+	if len(images) != 1 || images[0].Path != path || !images[0].Temporary {
 		t.Fatalf("clipboard attachment = %+v", images)
 	}
 	if _, err := os.Stat(path); err != nil {
@@ -80,7 +80,7 @@ func TestClipboardImageStaleDraftDeletesTemp(t *testing.T) {
 		t.Fatal(err)
 	}
 	m.updateClipboardImageLoaded(clipboardImageLoadedMsg{draftText: "old draft", path: path})
-	if got := len(m.panes.bottom.composer.attachments.localImages); got != 0 {
+	if got := m.panes.bottom.composer.attachments.Len(); got != 0 {
 		t.Fatalf("stale clipboard result attached %d images", got)
 	}
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
@@ -97,14 +97,14 @@ func TestClipboardTempOwnershipTransfersIntoQueue(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	m.panes.bottom.composer.attachments.attachTemporaryImage(prompt, path)
+	m.panes.bottom.composer.attachments.AttachTemporary(prompt, path)
 	_ = m.submit()
 
 	queued := m.conversation.QueuedInputs()
 	if len(queued) != 1 || len(queued[0].Attachments) != 1 || !queued[0].Attachments[0].Temporary {
 		t.Fatalf("queued input = %+v", queued)
 	}
-	if got := len(m.panes.bottom.composer.attachments.localImages); got != 0 {
+	if got := m.panes.bottom.composer.attachments.Len(); got != 0 {
 		t.Fatalf("composer retained %d transferred attachments", got)
 	}
 	if _, err := os.Stat(path); err != nil {

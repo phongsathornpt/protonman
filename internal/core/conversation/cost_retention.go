@@ -3,7 +3,7 @@ package conversation
 import (
 	"fmt"
 
-	"github.com/phongsathornpt/protonman/proton-sdk/domain"
+	"github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
 )
 
 // CostEstimator measures model-facing cost for a candidate message slice.

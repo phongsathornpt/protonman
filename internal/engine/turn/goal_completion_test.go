@@ -10,7 +10,8 @@ import (
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/engine/prompt"
 	"github.com/phongsathornpt/protonman/internal/engine/toolcall"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	domain "github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
+	port "github.com/phongsathornpt/protonman/pkg/proton-sdk/port"
 )
 
 type goalTodoHandler struct {
@@ -27,7 +28,7 @@ func (h *goalTodoHandler) Execute(_ context.Context, call tool.Call) (tool.Resul
 	return tool.Result{CallID: call.ID, ToolName: call.Name, Output: "task snapshot", StructuredOutput: append(json.RawMessage(nil), h.payload...)}, nil
 }
 
-func newGoalTodoLoop(t *testing.T, client sdk.LanguageModel, payload string) (*Loop, *goalTodoHandler) {
+func newGoalTodoLoop(t *testing.T, client port.LanguageModel, payload string) (*Loop, *goalTodoHandler) {
 	t.Helper()
 	handler := &goalTodoHandler{payload: json.RawMessage(payload)}
 	policy, err := permission.NewPolicy(permission.Config{Rules: []permission.Rule{{Action: permission.ActionAllow, Tool: permission.ToolTask}}})
@@ -47,11 +48,11 @@ func newGoalTodoLoop(t *testing.T, client sdk.LanguageModel, payload string) (*L
 
 func TestLoopKeepsActiveGoalOpenWhenTrackedPlanIsIncomplete(t *testing.T) {
 	client := &scriptedClient{streams: []scriptedStreamSpec{
-		{events: []sdk.Event{{Kind: sdk.EventToolCall, ToolCall: sdk.ToolCall{ID: "todo-1", Name: tool.NameTodo, Arguments: json.RawMessage(`{"action":"get"}`)}}, {Kind: sdk.EventFinish, FinishReason: sdk.FinishStop}}},
-		{events: []sdk.Event{{Kind: sdk.EventTextDelta, Text: "I need another turn."}, {Kind: sdk.EventFinish, FinishReason: sdk.FinishStop}}},
+		{events: []domain.Event{{Kind: domain.EventToolCall, ToolCall: domain.ToolCall{ID: "todo-1", Name: tool.NameTodo, Arguments: json.RawMessage(`{"action":"get"}`)}}, {Kind: domain.EventFinish, FinishReason: domain.FinishStop}}},
+		{events: []domain.Event{{Kind: domain.EventTextDelta, Text: "I need another turn."}, {Kind: domain.EventFinish, FinishReason: domain.FinishStop}}},
 	}}
 	loop, _ := newGoalTodoLoop(t, client, `{"revision":3,"items":[{"id":"a","text":"first","status":"completed"},{"id":"b","text":"second","status":"pending"}]}`)
-	result, err := loop.Run(context.Background(), []sdk.Message{{Role: sdk.RoleUser, Content: "continue"}}, nil)
+	result, err := loop.Run(context.Background(), []domain.Message{{Role: domain.RoleUser, Content: "continue"}}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -61,7 +62,7 @@ func TestLoopKeepsActiveGoalOpenWhenTrackedPlanIsIncomplete(t *testing.T) {
 	request := client.requests[1]
 	found := false
 	for _, message := range request.Messages {
-		if message.Role == sdk.RoleSystem && strings.Contains(message.Content, "ACTIVE GOAL PROGRESS") && strings.Contains(message.Content, "1 pending") {
+		if message.Role == domain.RoleSystem && strings.Contains(message.Content, "ACTIVE GOAL PROGRESS") && strings.Contains(message.Content, "1 pending") {
 			found = true
 		}
 	}
@@ -72,11 +73,11 @@ func TestLoopKeepsActiveGoalOpenWhenTrackedPlanIsIncomplete(t *testing.T) {
 
 func TestLoopCompletesActiveGoalWhenTrackedPlanIsComplete(t *testing.T) {
 	client := &scriptedClient{streams: []scriptedStreamSpec{
-		{events: []sdk.Event{{Kind: sdk.EventToolCall, ToolCall: sdk.ToolCall{ID: "todo-1", Name: tool.NameTodo, Arguments: json.RawMessage(`{"action":"get"}`)}}, {Kind: sdk.EventFinish, FinishReason: sdk.FinishStop}}},
-		{events: []sdk.Event{{Kind: sdk.EventTextDelta, Text: "Done."}, {Kind: sdk.EventFinish, FinishReason: sdk.FinishStop}}},
+		{events: []domain.Event{{Kind: domain.EventToolCall, ToolCall: domain.ToolCall{ID: "todo-1", Name: tool.NameTodo, Arguments: json.RawMessage(`{"action":"get"}`)}}, {Kind: domain.EventFinish, FinishReason: domain.FinishStop}}},
+		{events: []domain.Event{{Kind: domain.EventTextDelta, Text: "Done."}, {Kind: domain.EventFinish, FinishReason: domain.FinishStop}}},
 	}}
 	loop, _ := newGoalTodoLoop(t, client, `{"revision":4,"items":[{"id":"a","text":"first","status":"completed"}]}`)
-	result, err := loop.Run(context.Background(), []sdk.Message{{Role: sdk.RoleUser, Content: "finish"}}, nil)
+	result, err := loop.Run(context.Background(), []domain.Message{{Role: domain.RoleUser, Content: "finish"}}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,10 +88,10 @@ func TestLoopCompletesActiveGoalWhenTrackedPlanIsComplete(t *testing.T) {
 
 func TestLoopCompletesActiveGoalFromInitialCompletedTaskPlanWithoutCallingTodo(t *testing.T) {
 	client := &scriptedClient{streams: []scriptedStreamSpec{
-		{events: []sdk.Event{{Kind: sdk.EventTextDelta, Text: "Done."}, {Kind: sdk.EventFinish, FinishReason: sdk.FinishStop}}},
+		{events: []domain.Event{{Kind: domain.EventTextDelta, Text: "Done."}, {Kind: domain.EventFinish, FinishReason: domain.FinishStop}}},
 	}}
 	loop, _ := newGoalTodoLoop(t, client, `{"revision":4,"items":[{"id":"a","text":"first","status":"completed"}]}`)
-	result, err := loop.Run(context.Background(), []sdk.Message{{Role: sdk.RoleUser, Content: "finish"}}, nil)
+	result, err := loop.Run(context.Background(), []domain.Message{{Role: domain.RoleUser, Content: "finish"}}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

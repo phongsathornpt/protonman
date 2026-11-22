@@ -55,9 +55,6 @@ const (
 // ErrRevisionConflict signals an optimistic-concurrency failure (core contract).
 var ErrRevisionConflict = tododomain.ErrRevisionConflict
 
-// ValidID reports whether the id matches the durable task-id vocabulary.
-func ValidID(id string) bool { return tododomain.ValidID(id) }
-
 // ValidateItems enforces the durable task-plan invariants.
 func ValidateItems(items []Item) error { return tododomain.ValidateItems(items) }
 

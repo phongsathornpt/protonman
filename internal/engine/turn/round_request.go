@@ -11,9 +11,9 @@ import (
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/engine/prompt"
 	"github.com/phongsathornpt/protonman/internal/feature/imageprep"
-	"github.com/phongsathornpt/protonman/proton-sdk/domain"
-	"github.com/phongsathornpt/protonman/proton-sdk/port"
-	"github.com/phongsathornpt/protonman/proton-sdk/usecase"
+	"github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
+	"github.com/phongsathornpt/protonman/pkg/proton-sdk/port"
+	"github.com/phongsathornpt/protonman/pkg/proton-sdk/usecase"
 )
 
 type resolvedModelState struct {

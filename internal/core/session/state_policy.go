@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/phongsathornpt/protonman/internal/core/permission"
-	"github.com/phongsathornpt/protonman/proton-sdk/domain"
+	"github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
 )
 
 // ValidateID rejects session identifiers that could escape a persistence root.

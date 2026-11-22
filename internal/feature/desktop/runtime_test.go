@@ -4,9 +4,9 @@ import "testing"
 
 func TestReduceUpdatesSessionRuntime(t *testing.T) {
 	state := State{Sessions: []SessionState{{ID: "s1"}}}
-	next := Reduce(state, Event{Kind: EventSessionRuntimeUpdated, SessionID: "s1", Runtime: RuntimeSettingsState{Provider: "protonman", Model: "qwen3.8-27b", Reasoning: "high", LowConcurrency: "on"}})
+	next := Reduce(state, Event{Kind: EventSessionRuntimeUpdated, SessionID: "s1", Runtime: RuntimeSettingsState{Provider: "protonman", Model: "qwen3.8-27b", Reasoning: "high", LowConcurrency: "on", PermissionMode: "plan"}})
 	got := next.Sessions[0].Runtime
-	if got.Provider != "protonman" || got.Model != "qwen3.8-27b" || got.Reasoning != "high" || got.LowConcurrency != "on" {
+	if got.Provider != "protonman" || got.Model != "qwen3.8-27b" || got.Reasoning != "high" || got.LowConcurrency != "on" || got.PermissionMode != "plan" {
 		t.Fatalf("runtime = %#v", got)
 	}
 }

@@ -176,7 +176,7 @@ func TestSummarizeWebFetchJSON(t *testing.T) {
 
 func TestSummarizeReadFile(t *testing.T) {
 	content := "line 1\nline 2\nline 3\nline 4\nline 5\n"
-	summary := summarizeReadFile(content, false)
+	summary := summarizeReadFileTarget("", content, false)
 	if !strings.Contains(summary, "6 lines") {
 		t.Fatalf("expected line count in summary, got: %s", summary)
 	}

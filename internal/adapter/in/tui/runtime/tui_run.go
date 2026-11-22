@@ -142,7 +142,6 @@ func (ui *BubbleTeaUI) Run(ctx context.Context) error {
 			ui.finalMessages = modelState.conversation.SnapshotMessages()
 			ui.finalAgentProfile = modelState.agentProfile
 			ui.finalReasoningEffort = modelState.reasoningEffort
-			currentMessages = modelState.conversation.SnapshotMessages()
 			slog.DebugContext(ctx, "tui program returned",
 				"duration_ms", time.Since(startedAt).Milliseconds(),
 				"message_count", len(modelState.conversation.Messages()),

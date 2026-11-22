@@ -4,45 +4,47 @@ import (
 	"context"
 	"testing"
 
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	"github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
+	"github.com/phongsathornpt/protonman/pkg/proton-sdk/port"
+	"github.com/phongsathornpt/protonman/pkg/proton-sdk/usecase"
 )
 
 var (
-	_ = sdk.Request{}
-	_ = sdk.RequestRequirements{}
-	_ = sdk.Response{}
-	_ = sdk.ResponseAccumulator{}
-	_ = sdk.Message{}
-	_ = sdk.Tool{}
-	_ = sdk.Event{}
-	_ = sdk.Usage{}
-	_ = sdk.ModelMetadata{}
+	_ = domain.Request{}
+	_ = domain.RequestRequirements{}
+	_ = domain.Response{}
+	_ = usecase.ResponseAccumulator{}
+	_ = domain.Message{}
+	_ = domain.Tool{}
+	_ = domain.Event{}
+	_ = domain.Usage{}
+	_ = domain.ModelMetadata{}
 
-	_ = sdk.Collect
-	_ = sdk.AppendAssistantResponse
+	_ = usecase.Collect
+	_ = usecase.AppendAssistantResponse
 
 	// Compatibility surfaces remain intentionally available until a planned
 	// breaking release removes them.
-	_ = sdk.StepResult{}
-	_ = sdk.CollectStep
-	_ = sdk.AppendAssistantStep
+	_ = domain.StepResult{}
+	_ = usecase.CollectStep
+	_ = usecase.AppendAssistantStep
 )
 
 type architectureMetadataModel struct{}
 
 func (architectureMetadataModel) Provider() string { return "architecture-test" }
 func (architectureMetadataModel) ModelID() string  { return "architecture-test" }
-func (architectureMetadataModel) Capabilities() sdk.ModelCapabilities {
-	return sdk.ModelCapabilities{Streaming: true}
+func (architectureMetadataModel) Capabilities() domain.ModelCapabilities {
+	return domain.ModelCapabilities{Streaming: true}
 }
-func (architectureMetadataModel) Metadata() sdk.ModelMetadata { return sdk.ModelMetadata{} }
-func (architectureMetadataModel) Stream(context.Context, sdk.Request) (sdk.Stream, error) {
+func (architectureMetadataModel) Metadata() domain.ModelMetadata { return domain.ModelMetadata{} }
+func (architectureMetadataModel) Stream(context.Context, domain.Request) (port.Stream, error) {
 	return nil, nil
 }
 
 func TestCanonicalSDKMetadataContract(t *testing.T) {
-	var model sdk.LanguageModel = architectureMetadataModel{}
-	metadataModel, ok := model.(sdk.MetadataModel)
+	var model port.LanguageModel = architectureMetadataModel{}
+	metadataModel, ok := model.(port.MetadataModel)
 	if !ok {
 		t.Fatal("canonical SDK model must support MetadataModel in this contract fixture")
 	}
@@ -50,12 +52,12 @@ func TestCanonicalSDKMetadataContract(t *testing.T) {
 }
 
 func TestCanonicalSDKRequestRequirementContract(t *testing.T) {
-	request := sdk.Request{Messages: []sdk.Message{{Role: sdk.RoleUser, Content: "hello"}}}
+	request := domain.Request{Messages: []domain.Message{{Role: domain.RoleUser, Content: "hello"}}}
 	requirements := request.Requirements()
 	if !requirements.Streaming {
 		t.Fatal("Go SDK requests must require the streaming execution contract")
 	}
-	if !(sdk.ModelCapabilities{Streaming: true}).Satisfies(requirements) {
+	if !(domain.ModelCapabilities{Streaming: true}).Satisfies(requirements) {
 		t.Fatal("streaming model should satisfy a text-only canonical request")
 	}
 }

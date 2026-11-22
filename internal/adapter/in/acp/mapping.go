@@ -143,6 +143,8 @@ func DefaultAvailableCommands() []AvailableCommand {
 func DefaultSessionModes(current string) *SessionModeState {
 	if current == "" {
 		current = "ask"
+	} else if current == "deny" {
+		current = "plan"
 	}
 	return &SessionModeState{
 		CurrentModeID: current,

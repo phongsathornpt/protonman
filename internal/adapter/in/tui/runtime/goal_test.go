@@ -14,32 +14,33 @@ import (
 	"github.com/phongsathornpt/protonman/internal/engine/prompt"
 	"github.com/phongsathornpt/protonman/internal/engine/turn"
 	tododomain "github.com/phongsathornpt/protonman/internal/feature/todo"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	domain "github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
+	port "github.com/phongsathornpt/protonman/pkg/proton-sdk/port"
 )
 
 type goalTestModel struct{}
 
 func (*goalTestModel) Provider() string { return "test" }
 func (*goalTestModel) ModelID() string  { return "goal-test" }
-func (*goalTestModel) Capabilities() sdk.ModelCapabilities {
-	return sdk.ModelCapabilities{Streaming: true, Tools: true}
+func (*goalTestModel) Capabilities() domain.ModelCapabilities {
+	return domain.ModelCapabilities{Streaming: true, Tools: true}
 }
-func (*goalTestModel) Stream(context.Context, sdk.Request) (sdk.Stream, error) {
+func (*goalTestModel) Stream(context.Context, domain.Request) (port.Stream, error) {
 	return &goalTestStream{}, nil
 }
 
 type goalTestStream struct{ index int }
 
-func (s *goalTestStream) Next(context.Context) (sdk.Event, error) {
+func (s *goalTestStream) Next(context.Context) (domain.Event, error) {
 	switch s.index {
 	case 0:
 		s.index++
-		return sdk.Event{Kind: sdk.EventTextDelta, Text: "done"}, nil
+		return domain.Event{Kind: domain.EventTextDelta, Text: "done"}, nil
 	case 1:
 		s.index++
-		return sdk.Event{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop}, nil
+		return domain.Event{Kind: domain.EventFinish, FinishReason: domain.FinishStop}, nil
 	default:
-		return sdk.Event{}, io.EOF
+		return domain.Event{}, io.EOF
 	}
 }
 func (*goalTestStream) Close() error { return nil }

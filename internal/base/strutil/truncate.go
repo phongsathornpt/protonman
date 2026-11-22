@@ -5,21 +5,6 @@ import (
 	"unicode/utf8"
 )
 
-// TruncateBytes truncates value to at most maxBytes, ensuring the result is valid UTF-8.
-func TruncateBytes(value string, maxBytes int) string {
-	if maxBytes <= 0 {
-		return ""
-	}
-	if len(value) <= maxBytes {
-		return value
-	}
-	value = value[:maxBytes]
-	for len(value) > 0 && !utf8.ValidString(value) {
-		value = value[:len(value)-1]
-	}
-	return value
-}
-
 // TruncateBytesWithMarker truncates value to at most maxBytes (including marker).
 // Trailing newlines before marker are trimmed and a newline separates content and marker.
 func TruncateBytesWithMarker(value string, maxBytes int, marker string) string {

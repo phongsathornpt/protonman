@@ -14,8 +14,8 @@ import (
 	"github.com/phongsathornpt/protonman/internal/core/workspace"
 	"github.com/phongsathornpt/protonman/internal/platform/checkpoint"
 	"github.com/phongsathornpt/protonman/internal/platform/sandbox"
-	"github.com/phongsathornpt/protonman/proton-sdk/domain"
-	"github.com/phongsathornpt/protonman/proton-sdk/usecase"
+	"github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
+	"github.com/phongsathornpt/protonman/pkg/proton-sdk/usecase"
 )
 
 // ErrDuplicateTool indicates that a name is already registered.

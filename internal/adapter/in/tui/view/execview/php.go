@@ -17,16 +17,16 @@ func isPHPExecutable(name string) bool {
 }
 
 func phpAction(args []string) string {
-	for i, arg := range args {
-		switch arg {
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
 		case "-r":
 			return "eval"
 		case "-l":
 			return "lint"
 		case "-d":
-			if i+1 < len(args) {
-				i++
-			}
+			// -d consumes a "key=value" argument; skip it so it is not
+			// mistaken for the script path by firstNonFlagArg.
+			i++
 		}
 	}
 	return firstNonFlagArg(args)

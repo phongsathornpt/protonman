@@ -10,7 +10,8 @@ import (
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/engine/toolcall"
 	"github.com/phongsathornpt/protonman/internal/feature/agent"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	domain "github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
+	port "github.com/phongsathornpt/protonman/pkg/proton-sdk/port"
 )
 
 type emptyToolRegistry struct{}
@@ -33,23 +34,25 @@ func testToolService(t *testing.T) *toolcall.Service {
 
 type recordingModel struct {
 	id       string
-	requests []sdk.Request
+	requests []domain.Request
 }
 
 func (m *recordingModel) Provider() string { return "test" }
 func (m *recordingModel) ModelID() string  { return m.id }
-func (m *recordingModel) Capabilities() sdk.ModelCapabilities {
-	return sdk.ModelCapabilities{Streaming: true}
+func (m *recordingModel) Capabilities() domain.ModelCapabilities {
+	return domain.ModelCapabilities{Streaming: true}
 }
-func (m *recordingModel) Stream(ctx context.Context, request sdk.Request) (sdk.Stream, error) {
+func (m *recordingModel) Stream(ctx context.Context, request domain.Request) (port.Stream, error) {
 	m.requests = append(m.requests, request)
 	return closedStream{}, nil
 }
 
 type closedStream struct{}
 
-func (closedStream) Next(context.Context) (sdk.Event, error) { return sdk.Event{}, context.Canceled }
-func (closedStream) Close() error                            { return nil }
+func (closedStream) Next(context.Context) (domain.Event, error) {
+	return domain.Event{}, context.Canceled
+}
+func (closedStream) Close() error { return nil }
 
 // decoratingFactory mimics a root-only model decorator (such as durable memory)
 // that exposes its undecorated base factory for subagent admission.
@@ -60,7 +63,7 @@ type decoratingFactory struct {
 
 func (f *decoratingFactory) BaseFactory() LanguageModelFactory { return f.base }
 
-func (f *decoratingFactory) Build(request LanguageModelRequest) sdk.LanguageModel {
+func (f *decoratingFactory) Build(request LanguageModelRequest) port.LanguageModel {
 	// The decorator builds the base once and returns a decorated wrapper; the
 	// base instance is what subagents must receive instead.
 	_ = f.base.Build(request)
@@ -71,7 +74,7 @@ func (f *decoratingFactory) Build(request LanguageModelRequest) sdk.LanguageMode
 
 type staticFactory struct{ model *recordingModel }
 
-func (f staticFactory) Build(LanguageModelRequest) sdk.LanguageModel { return f.model }
+func (f staticFactory) Build(LanguageModelRequest) port.LanguageModel { return f.model }
 
 // TestBuildConversationGivesSubagentsTheUndecoratedBaseModel locks the invariant
 // that a root-only model decorator does not leak into subagent admission. The
@@ -97,8 +100,8 @@ func TestBuildConversationGivesSubagentsTheUndecoratedBaseModel(t *testing.T) {
 			t.Fatalf("coordinator inherited %q, want undecorated base", recording.id)
 		}
 		// The model handed to children must not carry memory decoration.
-		stream, err := got.Stream(context.Background(), sdk.Request{Messages: []sdk.Message{
-			{ID: "u", Role: sdk.RoleUser, Content: "please run test verification"},
+		stream, err := got.Stream(context.Background(), domain.Request{Messages: []domain.Message{
+			{ID: "u", Role: domain.RoleUser, Content: "please run test verification"},
 		}})
 		if err != nil {
 			t.Fatal(err)
@@ -124,7 +127,7 @@ func TestBuildConversationKeepsDecoratorForPlainFactory(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if got := coord.LanguageModel(); got != sdk.LanguageModel(model) {
+	if got := coord.LanguageModel(); got != port.LanguageModel(model) {
 		t.Fatalf("coordinator model = %#v, want the same instance", got)
 	}
 }

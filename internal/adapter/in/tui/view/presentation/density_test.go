@@ -6,20 +6,6 @@ import (
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 )
 
-func TestMinimalPolicySuppressesRoutineAndDebugDetail(t *testing.T) {
-	policy := MinimalPolicy()
-	if policy.ShowRoutineDetail() || policy.ShowDebugDetail() {
-		t.Fatalf("minimal policy unexpectedly enables detail: %+v", policy)
-	}
-}
-
-func TestDebugPolicyShowsAllDetail(t *testing.T) {
-	policy := Policy{Density: DensityDebug}
-	if !policy.ShowRoutineDetail() || !policy.ShowDebugDetail() {
-		t.Fatalf("debug policy should enable all detail: %+v", policy)
-	}
-}
-
 func TestMinimalPolicyKeepsMaterialToolDetail(t *testing.T) {
 	policy := MinimalPolicy()
 	if got := policy.ToolDetail(tool.KindRead, false, false); got != DetailSummary {

@@ -32,7 +32,44 @@ func (e *RPCError) Error() string {
 	if e == nil {
 		return ""
 	}
-	return fmt.Sprintf("ACP error %d: %s", e.Code, e.Message)
+	message := fmt.Sprintf("ACP error %d: %s", e.Code, e.Message)
+	if detail := e.detail(); detail != "" {
+		message += ": " + detail
+	}
+	return message
+}
+
+// detail returns a bounded human-readable diagnostic without dumping arbitrary
+// error.data into logs or UI. ACP leaves data implementation-defined; Cline
+// uses a details field for errors that otherwise collapse to "Internal error".
+func (e *RPCError) detail() string {
+	if e == nil || len(e.Data) == 0 {
+		return ""
+	}
+	var data struct {
+		Details string `json:"details"`
+		Message string `json:"message"`
+	}
+	if err := json.Unmarshal(e.Data, &data); err != nil {
+		return ""
+	}
+	detail := data.Details
+	if strings.TrimSpace(detail) == "" {
+		detail = data.Message
+	}
+	detail = strings.Join(strings.Fields(detail), " ")
+	if detail == "" {
+		return ""
+	}
+	if detail == strings.TrimSpace(e.Message) {
+		return ""
+	}
+	const maxDetailRunes = 512
+	runes := []rune(detail)
+	if len(runes) > maxDetailRunes {
+		return string(runes[:maxDetailRunes-1]) + "…"
+	}
+	return detail
 }
 
 type Event struct {
@@ -81,6 +118,11 @@ type Client struct {
 	// uses it to avoid reporting a partial stderr tail while the drain is still
 	// reading the last bytes of a dead process.
 	stderrDone chan struct{}
+	// waitDone is non-nil only for clients started by StartCommand. readLoop
+	// checks it when encountering EOF to report the actual process exit or
+	// termination signal rather than a bare EOF.
+	waitDone chan struct{}
+	waitErr  error
 }
 
 const (
@@ -171,10 +213,6 @@ type envelope struct {
 	Error   *RPCError       `json:"error,omitempty"`
 }
 
-func Start(ctx context.Context, binary string, onEvent func(Event)) (*Client, error) {
-	return StartCommand(ctx, CommandSpec{Path: binary, Args: []string{"--acp"}}, onEvent)
-}
-
 // StartCommand starts an ACP agent using the supplied executable and argument
 // vector. This is the generic entry point used by Desktop integrations whose
 // launcher does not accept Protonman's --acp flag.
@@ -195,15 +233,21 @@ func StartCommand(ctx context.Context, spec CommandSpec, onEvent func(Event)) (*
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		cancel()
+		_ = stdin.Close()
 		return nil, fmt.Errorf("open ACP stdout: %w", err)
 	}
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
 		cancel()
+		_ = stdin.Close()
+		_ = stdout.Close()
 		return nil, fmt.Errorf("open ACP stderr: %w", err)
 	}
 	if err := cmd.Start(); err != nil {
 		cancel()
+		_ = stdin.Close()
+		_ = stdout.Close()
+		_ = stderr.Close()
 		return nil, fmt.Errorf("start ACP agent %s: %w", spec.Path, err)
 	}
 
@@ -212,6 +256,7 @@ func StartCommand(ctx context.Context, spec CommandSpec, onEvent func(Event)) (*
 		pending: make(map[uint64]chan response), requests: make(chan incomingRequest, incomingRequestQueueCapacity),
 		closed:     make(chan struct{}),
 		stderrDone: make(chan struct{}),
+		waitDone:   make(chan struct{}),
 	}
 	for range incomingRequestWorkers {
 		go client.requestLoop()
@@ -223,6 +268,8 @@ func StartCommand(ctx context.Context, spec CommandSpec, onEvent func(Event)) (*
 	}()
 	go func() {
 		err := cmd.Wait()
+		client.waitErr = err
+		close(client.waitDone)
 		// Wait() closes the stderr pipe, but the drain may not have consumed the
 		// final chunk yet. Block briefly so the reported tail is complete.
 		client.waitForStderrDrain()
@@ -273,6 +320,11 @@ func (c *Client) Call(ctx context.Context, method string, params any, result any
 	select {
 	case <-ctx.Done():
 		c.removePending(id)
+		_ = c.write(envelope{
+			JSONRPC: "2.0",
+			Method:  "$/cancel_request",
+			Params:  json.RawMessage(fmt.Sprintf(`{"requestId":%d}`, id)),
+		})
 		return ctx.Err()
 	case <-c.closed:
 		return ErrClosed
@@ -292,7 +344,7 @@ func (c *Client) Call(ctx context.Context, method string, params any, result any
 
 func (c *Client) Close() error {
 	c.shutdown(ErrClosed)
-	if c.cmd.Process != nil {
+	if c.cmd != nil && c.cmd.Process != nil {
 		_ = c.cmd.Process.Kill()
 	}
 	return nil
@@ -318,72 +370,118 @@ func (c *Client) write(v any) error {
 }
 
 func (c *Client) readLoop(r io.Reader) {
-	scanner := bufio.NewScanner(r)
-	scanner.Buffer(make([]byte, 0, 64*1024), 10*1024*1024)
-	for scanner.Scan() {
-		var msg envelope
-		if err := json.Unmarshal(scanner.Bytes(), &msg); err != nil {
-			continue
-		}
-		if msg.Method != "" {
-			if len(msg.ID) > 0 && !(len(msg.ID) == len("null") && string(msg.ID) == "null") {
-				request := incomingRequest{}
-				if len(msg.ID) > maxIncomingRequestID {
-					request.request.ID = json.RawMessage("null")
-					request.errorCode = -32600
-					request.errorText = "ACP request ID exceeds the supported size"
-				} else {
-					request.request.ID = append(json.RawMessage(nil), msg.ID...)
-					if len(msg.Method) > maxIncomingRequestMethod {
+	reader := bufio.NewReaderSize(r, 64*1024)
+	for {
+		line, oversized, err := readBoundedLine(reader, maxACPMessageBytes)
+		if len(line) > 0 && !oversized {
+			var msg envelope
+			if jerr := json.Unmarshal(line, &msg); jerr != nil {
+				continue
+			}
+			if serr := checkEnvelopeSizes(&msg); serr != nil {
+				continue
+			}
+			if msg.Method != "" {
+				if len(msg.ID) > 0 && !(len(msg.ID) == len("null") && string(msg.ID) == "null") {
+					request := incomingRequest{}
+					if len(msg.ID) > maxIncomingRequestID {
+						request.request.ID = json.RawMessage("null")
 						request.errorCode = -32600
-						request.errorText = "ACP request method exceeds the supported size"
+						request.errorText = "ACP request ID exceeds the supported size"
 					} else {
-						request.request.Method = strings.Clone(msg.Method)
+						request.request.ID = append(json.RawMessage(nil), msg.ID...)
+						if len(msg.Method) > maxIncomingRequestMethod {
+							request.errorCode = -32600
+							request.errorText = "ACP request method exceeds the supported size"
+						} else {
+							request.request.Method = strings.Clone(msg.Method)
+						}
 					}
+					if request.errorCode == 0 && len(msg.Params) > maxIncomingRequestParams {
+						request.errorCode = -32600
+						request.errorText = "ACP request parameters exceed the supported size"
+					} else if request.errorCode == 0 {
+						request.request.Params = append(json.RawMessage(nil), msg.Params...)
+					}
+					select {
+					case c.requests <- request:
+					default:
+						c.shutdown(errIncomingRequestQueueFull)
+						return
+					}
+					continue
 				}
-				if request.errorCode == 0 && len(msg.Params) > maxIncomingRequestParams {
-					request.errorCode = -32600
-					request.errorText = "ACP request parameters exceed the supported size"
-				} else if request.errorCode == 0 {
-					request.request.Params = append(json.RawMessage(nil), msg.Params...)
-				}
-				select {
-				case c.requests <- request:
-				default:
-					c.shutdown(errIncomingRequestQueueFull)
-					return
+				if c.onEvent != nil {
+					c.onEvent(Event{Method: msg.Method, Params: append(json.RawMessage(nil), msg.Params...)})
 				}
 				continue
 			}
-			if c.onEvent != nil {
-				c.onEvent(Event{Method: msg.Method, Params: append(json.RawMessage(nil), msg.Params...)})
+			var id uint64
+			if len(msg.ID) == 0 || json.Unmarshal(msg.ID, &id) != nil {
+				continue
 			}
-			continue
+			c.mu.Lock()
+			ch := c.pending[id]
+			delete(c.pending, id)
+			c.mu.Unlock()
+			if ch == nil {
+				continue
+			}
+			if msg.Error != nil {
+				ch <- response{err: msg.Error}
+			} else {
+				ch <- response{result: msg.Result}
+			}
 		}
-		var id uint64
-		if len(msg.ID) == 0 || json.Unmarshal(msg.ID, &id) != nil {
-			continue
-		}
-		c.mu.Lock()
-		ch := c.pending[id]
-		delete(c.pending, id)
-		c.mu.Unlock()
-		if ch == nil {
-			continue
-		}
-		if msg.Error != nil {
-			ch <- response{err: msg.Error}
-		} else {
-			ch <- response{result: msg.Result}
+		if err != nil {
+			c.waitForStderrDrain()
+			cause := err
+			if errors.Is(err, io.EOF) {
+				if c.waitDone != nil {
+					select {
+					case <-c.waitDone:
+						if c.waitErr != nil {
+							cause = c.waitErr
+						}
+					case <-time.After(200 * time.Millisecond):
+					}
+				}
+			} else {
+				cause = fmt.Errorf("read ACP stream: %w", err)
+			}
+			c.shutdown(cause)
+			return
 		}
 	}
-	if err := scanner.Err(); err != nil {
-		c.waitForStderrDrain()
-		c.shutdown(fmt.Errorf("read ACP stream: %w", err))
-	} else {
-		c.waitForStderrDrain()
-		c.shutdown(io.EOF)
+}
+
+const maxACPMessageBytes = 64 * 1024 * 1024
+
+// readBoundedLine reads one newline-delimited ACP message without retaining
+// more than max bytes. Once a message exceeds the limit, the rest of that line
+// is discarded so the caller can safely resume at the next message boundary.
+func readBoundedLine(reader *bufio.Reader, max int) (line []byte, oversized bool, err error) {
+	for {
+		fragment, readErr := reader.ReadSlice('\n')
+		if !oversized {
+			if len(fragment) > max-len(line) {
+				line = nil
+				oversized = true
+			} else {
+				line = append(line, fragment...)
+			}
+		}
+		if readErr == nil || !errors.Is(readErr, bufio.ErrBufferFull) {
+			return line, oversized, readErr
+		}
 	}
+}
+
+func checkEnvelopeSizes(msg *envelope) error {
+	if len(msg.Params)+len(msg.Result) > maxACPMessageBytes {
+		return errors.New("ACP message exceeds the supported size")
+	}
+	return nil
 }
 
 func (c *Client) requestLoop() {
@@ -455,8 +553,12 @@ func (c *Client) removePending(id uint64) {
 
 func (c *Client) shutdown(cause error) {
 	c.once.Do(func() {
-		c.cancel()
-		_ = c.stdin.Close()
+		if c.cancel != nil {
+			c.cancel()
+		}
+		if c.stdin != nil {
+			_ = c.stdin.Close()
+		}
 		if cause == nil {
 			cause = ErrClosed
 		}
@@ -473,6 +575,8 @@ func (c *Client) shutdown(cause error) {
 		for _, ch := range pending {
 			ch <- response{err: cause}
 		}
-		close(c.closed)
+		if c.closed != nil {
+			close(c.closed)
+		}
 	})
 }

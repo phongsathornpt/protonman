@@ -7,7 +7,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/adapter/out/config"
 	"github.com/phongsathornpt/protonman/internal/core/modelclient"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	port "github.com/phongsathornpt/protonman/pkg/proton-sdk/port"
 )
 
 // bindingTestFactory records root-memory session bindings requested by the TUI.
@@ -16,7 +16,7 @@ type bindingTestFactory struct {
 	bindings [][2]string
 }
 
-func (f *bindingTestFactory) Build(modelclient.Request) sdk.LanguageModel { return nil }
+func (f *bindingTestFactory) Build(modelclient.Request) port.LanguageModel { return nil }
 
 func (f *bindingTestFactory) BindSession(sessionID, workspaceKey string) {
 	f.mu.Lock()

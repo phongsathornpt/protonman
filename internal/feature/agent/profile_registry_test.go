@@ -8,7 +8,7 @@ import (
 
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/engine/prompt"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	domain "github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
 )
 
 type dummyHandler struct {
@@ -121,7 +121,7 @@ func TestParseProfileRejectsOldNames(t *testing.T) {
 }
 
 func TestDefaultSystemPromptGroundsCodingToolUse(t *testing.T) {
-	prompt := DefaultSystemPrompt()
+	rendered := prompt.Render(prompt.Spec{})
 	for _, marker := range []string{
 		"UNIVERSAL",
 		"primary software engineering agent",
@@ -132,8 +132,8 @@ func TestDefaultSystemPromptGroundsCodingToolUse(t *testing.T) {
 		"never prefix, rename, qualify, or invent",
 		"verify the result",
 	} {
-		if !strings.Contains(prompt, marker) {
-			t.Fatalf("default system prompt missing %q:\n%s", marker, prompt)
+		if !strings.Contains(rendered, marker) {
+			t.Fatalf("default system prompt missing %q:\n%s", marker, rendered)
 		}
 	}
 }
@@ -148,11 +148,11 @@ func TestProfilePromptsIncludeSharedToolContract(t *testing.T) {
 }
 
 func TestProfileSpecsDeclarePortableReasoningEffort(t *testing.T) {
-	want := map[Profile]sdk.ReasoningEffort{
-		ProfileUniversal:    sdk.ReasoningMedium,
-		ProfileStrength:     sdk.ReasoningMedium,
-		ProfileAgility:      sdk.ReasoningMedium,
-		ProfileIntelligence: sdk.ReasoningHigh,
+	want := map[Profile]domain.ReasoningEffort{
+		ProfileUniversal:    domain.ReasoningMedium,
+		ProfileStrength:     domain.ReasoningMedium,
+		ProfileAgility:      domain.ReasoningMedium,
+		ProfileIntelligence: domain.ReasoningHigh,
 	}
 	for profile, effort := range want {
 		spec, ok := SpecForProfile(profile)

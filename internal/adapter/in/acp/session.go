@@ -22,8 +22,9 @@ import (
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/engine/toolcall"
 	"github.com/phongsathornpt/protonman/internal/feature/agent"
+	"github.com/phongsathornpt/protonman/internal/feature/skill"
 	"github.com/phongsathornpt/protonman/internal/platform/appdirs"
-	"github.com/phongsathornpt/protonman/proton-sdk/domain"
+	"github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
 )
 
 const sessionPersistenceTimeout = runtimepolicy.SessionPersistenceTimeout
@@ -44,6 +45,7 @@ type Session struct {
 	retention       conversation.RetentionPolicy
 	mcpServers      []MCPServerConfig
 	resource        io.Closer
+	skillRegistry   *skill.Registry
 
 	mu           sync.Mutex
 	messages     []model.Message
@@ -118,6 +120,30 @@ func (s *Session) SetReasoningEffort(effort domain.ReasoningEffort) error {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	clone, err := app.CloneConversationWithReasoning(s.runner, effort, effort != domain.ReasoningDefault)
+	if err != nil {
+		return err
+	}
+	s.runner = clone
+	s.reasoningEffort = effort
+	return nil
+}
+
+// restoreReasoningEffort records persisted reasoning without failing session
+// load when no cloneable runner exists yet (for example, startup without a
+// configured model leaves a nil runner). When a runner is present it behaves
+// like SetReasoningEffort; otherwise the effort is retained and applied on
+// the next runtime rebuild.
+func (s *Session) restoreReasoningEffort(effort domain.ReasoningEffort) error {
+	if !effort.Valid() {
+		return fmt.Errorf("invalid reasoning effort %q", effort)
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.runner == nil {
+		s.reasoningEffort = effort
+		return nil
+	}
 	clone, err := app.CloneConversationWithReasoning(s.runner, effort, effort != domain.ReasoningDefault)
 	if err != nil {
 		return err
@@ -289,6 +315,34 @@ func (s *Session) ExecutePrompt(
 				delete(pendingToolCalls, callID)
 			}
 
+		case app.EventUsage:
+			used := event.Usage.TotalTokens
+			if used <= 0 {
+				used = event.Usage.InputTokens + event.Usage.OutputTokens
+			}
+			size := 0
+			s.mu.Lock()
+			runner := s.runner
+			s.mu.Unlock()
+			if runner != nil {
+				size = app.ModelContextWindow(runner)
+			}
+			if size <= 0 {
+				size = 128000
+			}
+			return notifier(RPCNotification{
+				JSONRPC: "2.0",
+				Method:  "session/update",
+				Params: map[string]any{
+					"sessionId": s.id,
+					"update": map[string]any{
+						"sessionUpdate": "usage_update",
+						"used":          used,
+						"size":          size,
+					},
+				},
+			})
+
 		case app.EventCompleted:
 			if event.Message.ToolCalls != nil || event.Text != "" {
 				turnMessages = append(turnMessages, event.Message)
@@ -340,6 +394,23 @@ func (s *Session) ExecutePrompt(
 	if saveErr != nil {
 		return SessionPromptResult{}, fmt.Errorf("save session %q: %w", s.id, saveErr)
 	}
+
+	messages := s.Messages()
+	preview := session.Preview(session.FromModelMessages(messages))
+	title := sessionListTitle(s.id, s.workspaceName, preview)
+	updatedAt := time.Now().UTC().Format(time.RFC3339Nano)
+	_ = notifier(RPCNotification{
+		JSONRPC: "2.0",
+		Method:  "session/update",
+		Params: map[string]any{
+			"sessionId": s.id,
+			"update": map[string]any{
+				"sessionUpdate": "session_info_update",
+				"title":         title,
+				"updatedAt":     updatedAt,
+			},
+		},
+	})
 
 	return SessionPromptResult{StopReason: StopReasonEndTurn}, nil
 }
@@ -777,6 +848,10 @@ func (s *Session) saveState(ctx context.Context) error {
 		reasoningSetting = string(reasoningEffort)
 	}
 	runtimeSettings := sessionRuntimeFor(s)
+	var activeSkills []string
+	if s.skillRegistry != nil {
+		activeSkills = s.skillRegistry.ActivatedList()
+	}
 
 	err := s.sessionService.Save(ctx, s.id, session.State{
 		SessionID:          s.id,
@@ -784,6 +859,7 @@ func (s *Session) saveState(ctx context.Context) error {
 		WorkspaceKey:       s.workspaceKey,
 		WorkspaceName:      s.workspaceName,
 		PermissionMode:     s.service.Mode().String(),
+		ActiveSkills:       activeSkills,
 		ModelProvider:      runtimeSettings.Provider,
 		ModelID:            runtimeSettings.Model,
 		ReasoningEffort:    reasoningSetting,

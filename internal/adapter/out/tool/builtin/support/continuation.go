@@ -1,7 +1,6 @@
 package support
 
 import (
-	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -27,21 +26,6 @@ func ContinuationToken(toolName string, query any, snapshot string) (string, err
 
 func FileSnapshot(info os.FileInfo) string {
 	return fmt.Sprintf("%d:%d:%d", info.Size(), info.ModTime().UnixNano(), uint32(info.Mode()))
-}
-
-func DirectorySnapshot(ctx context.Context, root string, entries []os.DirEntry) (string, error) {
-	hash := sha256.New()
-	for _, entry := range entries {
-		if err := ctx.Err(); err != nil {
-			return "", err
-		}
-		info, err := entry.Info()
-		if err != nil {
-			return "", fmt.Errorf("stat directory entry %q: %w", entry.Name(), err)
-		}
-		_, _ = fmt.Fprintf(hash, "%s\x00%d\x00%d\x00%d\n", entry.Name(), info.Size(), info.ModTime().UnixNano(), uint32(info.Mode()))
-	}
-	return hex.EncodeToString(hash.Sum(nil)), nil
 }
 
 func PaginationState(truncated bool, kind string, nextOffset *int64, nextLine *int, continuation string) *tool.Pagination {

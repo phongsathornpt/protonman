@@ -9,16 +9,16 @@ import (
 	"github.com/phongsathornpt/protonman/internal/adapter/out/tool/builtin/readfile"
 	"github.com/phongsathornpt/protonman/internal/core/modelprofile"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	domain "github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
 )
 
 func TestLoopPublishesCanonicalReadSchemaForGemini(t *testing.T) {
 	handler := &recordingHandler{definition: readfile.New(nil).Definition()}
 	client := &scriptedClient{
 		profile: modelprofile.ResolveBuiltin("gateway", "gemini-3.8-flash", modelprofile.CatalogMetadata{}),
-		streams: []scriptedStreamSpec{{events: []sdk.Event{
-			{Kind: sdk.EventTextDelta, Text: "done"},
-			{Kind: sdk.EventFinish, FinishReason: sdk.FinishStop},
+		streams: []scriptedStreamSpec{{events: []domain.Event{
+			{Kind: domain.EventTextDelta, Text: "done"},
+			{Kind: domain.EventFinish, FinishReason: domain.FinishStop},
 		}}},
 	}
 	loop := newLoopForHandler(t, client, handler, permission.ActionAllow, permission.ModeAsk)

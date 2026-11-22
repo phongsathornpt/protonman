@@ -12,7 +12,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/core/permission"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
 	"github.com/phongsathornpt/protonman/internal/core/workspace"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	usecase "github.com/phongsathornpt/protonman/pkg/proton-sdk/usecase"
 )
 
 type fakeHandler struct {
@@ -107,7 +107,7 @@ func (r *refreshingValidatorRegistry) LookupSnapshot(name string) (tool.HandlerS
 	return snapshot, true
 }
 
-func (r *refreshingValidatorRegistry) CompiledValidators(name string) (*sdk.ToolSchemaValidator, *sdk.ToolSchemaValidator, bool) {
+func (r *refreshingValidatorRegistry) CompiledValidators(name string) (*usecase.ToolSchemaValidator, *usecase.ToolSchemaValidator, bool) {
 	r.validatorLookups++
 	if r.handler == nil || r.handler.definition.Name != name {
 		return nil, nil, false
@@ -134,7 +134,7 @@ func (r cachedValidatorRegistry) Definitions() []tool.Definition {
 	return []tool.Definition{r.handler.definition}
 }
 
-func (r cachedValidatorRegistry) CompiledValidators(string) (*sdk.ToolSchemaValidator, *sdk.ToolSchemaValidator, bool) {
+func (r cachedValidatorRegistry) CompiledValidators(string) (*usecase.ToolSchemaValidator, *usecase.ToolSchemaValidator, bool) {
 	return nil, nil, true
 }
 

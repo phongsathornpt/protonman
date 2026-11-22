@@ -44,9 +44,6 @@ type Snapshot struct {
 
 var validIDPattern = regexp.MustCompile(`^[A-Za-z0-9._:-]{1,128}$`)
 
-// ValidID reports whether the id matches the durable task-id vocabulary.
-func ValidID(id string) bool { return validIDPattern.MatchString(id) }
-
 // Valid reports whether the status is one of the canonical values.
 func (s Status) Valid() bool {
 	return s == StatusPending || s == StatusInProgress || s == StatusCompleted

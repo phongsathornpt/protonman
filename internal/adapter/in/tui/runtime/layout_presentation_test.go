@@ -8,7 +8,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/phongsathornpt/protonman/internal/adapter/in/tui/state/runtimeui"
 	"github.com/phongsathornpt/protonman/internal/core/permission"
-	sdk "github.com/phongsathornpt/protonman/proton-sdk"
+	domain "github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
 )
 
 func TestSessionHeaderUsesSharedLayoutProfile(t *testing.T) {
@@ -98,7 +98,7 @@ func TestRuntimeStatusProjectionRetryOutranksToolWork(t *testing.T) {
 	now := time.Now()
 	m.historyState.StartTool("read")
 	m.activity = "running read"
-	m.turnProgress.Retry = sdk.RetryEvent{
+	m.turnProgress.Retry = domain.RetryEvent{
 		Attempt:    2,
 		MaxRetries: 4,
 		Reason:     "idle_event_timeout",

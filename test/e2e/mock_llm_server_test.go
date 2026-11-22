@@ -168,10 +168,6 @@ func (m *mockLLMServer) AddErrorResponse(status int, body string, contentType st
 	})
 }
 
-func (m *mockLLMServer) AddPersistentErrorResponse(status int, body string, contentType string) {
-	m.AddPersistentErrorResponseWithHeaders(status, body, contentType, nil)
-}
-
 func (m *mockLLMServer) AddPersistentErrorResponseWithHeaders(status int, body string, contentType string, headers map[string]string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()

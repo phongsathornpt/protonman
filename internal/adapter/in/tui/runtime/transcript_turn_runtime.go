@@ -13,7 +13,7 @@ import (
 	"github.com/phongsathornpt/protonman/internal/app"
 	corememory "github.com/phongsathornpt/protonman/internal/core/memory"
 	"github.com/phongsathornpt/protonman/internal/core/tool"
-	"github.com/phongsathornpt/protonman/proton-sdk/domain"
+	"github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
 )
 
 func (m *bubbleModel) applyTurnEvents(events []app.Event) {
@@ -212,10 +212,7 @@ func (m *bubbleModel) loadInitialMessages(messages []model.Message) {
 		switch message.Role {
 		case model.RoleUser:
 			if text != "" {
-				cleanText := text
-				if strings.HasPrefix(cleanText, "[x] ") {
-					cleanText = strings.TrimPrefix(cleanText, "[x] ")
-				}
+				cleanText := strings.TrimPrefix(text, "[x] ")
 				if strings.HasPrefix(cleanText, "Activated skill ") {
 					if idx := strings.Index(text, "\n"); idx != -1 {
 						text = text[:idx]

@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/phongsathornpt/protonman/proton-sdk/domain"
+	"github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
 )
 
 type Support uint8

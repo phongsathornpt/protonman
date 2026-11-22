@@ -4,12 +4,17 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/phongsathornpt/protonman/internal/adapter/in/acp"
 	"github.com/phongsathornpt/protonman/internal/adapter/out/model"
 	"github.com/phongsathornpt/protonman/internal/app"
+	"github.com/phongsathornpt/protonman/internal/base/modelcatalogpolicy"
+	"github.com/phongsathornpt/protonman/internal/core/modelcatalog"
+	"github.com/phongsathornpt/protonman/internal/core/modelconfig"
 	"github.com/phongsathornpt/protonman/internal/engine/toolcall"
-	"github.com/phongsathornpt/protonman/proton-sdk/domain"
+	"github.com/phongsathornpt/protonman/pkg/proton-sdk/domain"
 )
 
 func acpSessionRuntimeOption(runtimeState *appRuntime) acp.Option {
@@ -32,14 +37,41 @@ func acpSessionRuntimeOption(runtimeState *appRuntime) acp.Option {
 		settings acp.SessionRuntimeSettings,
 	) (app.Conversation, error) {
 		providerName := strings.ToLower(strings.TrimSpace(settings.Provider))
+		if providerName == "" {
+			providerName = strings.ToLower(strings.TrimSpace(runtimeState.config.Model.Provider))
+		}
+		if providerName == "" {
+			providerName = "protonman"
+		}
 		provider, ok := runtimeState.config.Providers[providerName]
 		if !ok {
-			return nil, fmt.Errorf("provider %q is not configured", settings.Provider)
+			if preset := model.LookupPreset(providerName); preset != nil {
+				provider = modelconfig.Provider{
+					Name:    preset.ID,
+					Type:    string(preset.Protocol),
+					BaseURL: preset.BaseURL,
+				}
+				ok = true
+			}
+		}
+		if !ok {
+			defaultProvider := strings.ToLower(strings.TrimSpace(runtimeState.config.Model.Provider))
+			if defaultProvider != "" && defaultProvider != providerName {
+				if p, fallbackOK := runtimeState.config.Providers[defaultProvider]; fallbackOK {
+					provider = p
+					providerName = defaultProvider
+					ok = true
+				}
+			}
+			if !ok {
+				return nil, fmt.Errorf("provider %q is not configured", settings.Provider)
+			}
 		}
 		modelID := strings.TrimSpace(settings.Model)
 		if modelID == "" {
 			return nil, fmt.Errorf("model is required")
 		}
+		_ = runtimeState.application.Providers.Activate(providerName, modelID)
 		effort, err := domain.ParseReasoningEffort(settings.Reasoning)
 		if err != nil {
 			return nil, err
@@ -79,4 +111,310 @@ func acpSessionRuntimeOption(runtimeState *appRuntime) acp.Option {
 			LowConcurrency:  low,
 		})
 	})
+}
+
+func acpSessionModelOptionsProvider(runtimeState *appRuntime) acp.SessionModelOptionsProvider {
+	var mu sync.Mutex
+	type cachedModels struct {
+		options   []acp.SessionConfigSelectOption
+		fetchedAt time.Time
+	}
+	cache := make(map[string]cachedModels)
+	const cacheTTL = 5 * time.Minute
+
+	return func(ctx context.Context, settings acp.SessionRuntimeSettings) ([]acp.SessionConfigSelectOption, error) {
+		providerName := strings.ToLower(strings.TrimSpace(settings.Provider))
+		if providerName == "" {
+			providerName = strings.ToLower(strings.TrimSpace(runtimeState.config.Model.Provider))
+		}
+		if providerName == "" {
+			providerName = "protonman"
+		}
+
+		mu.Lock()
+		if entry, ok := cache[providerName]; ok && time.Since(entry.fetchedAt) < cacheTTL {
+			cached := append([]acp.SessionConfigSelectOption(nil), entry.options...)
+			mu.Unlock()
+			return cached, nil
+		}
+		mu.Unlock()
+
+		provider, hasProvider := runtimeState.config.Providers[providerName]
+		var remoteModels []modelcatalog.RemoteModel
+		var discoverErr error
+
+		if hasProvider && runtimeState.application.Models != (app.Models{}) {
+			discCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+			remoteModels, discoverErr = runtimeState.application.Models.Discover(discCtx, app.ModelDiscoveryRequest{
+				ProviderName: providerName,
+				ProviderType: provider.Type,
+				BaseURL:      provider.BaseURL,
+				APIKey:       provider.APIKey,
+				Timeout:      3 * time.Second,
+			})
+			cancel()
+		}
+
+		options := make([]acp.SessionConfigSelectOption, 0, len(remoteModels)+5)
+		seen := make(map[string]bool)
+		for _, m := range remoteModels {
+			id := strings.TrimSpace(m.ID)
+			if id == "" || seen[id] {
+				continue
+			}
+			seen[id] = true
+			name := strings.TrimSpace(m.Name)
+			if name == "" {
+				name = id
+			}
+			options = append(options, acp.SessionConfigSelectOption{
+				Value: id,
+				Name:  name,
+			})
+		}
+
+		if len(options) == 0 {
+			fallback := providerFallbackModels(providerName)
+			for _, item := range fallback {
+				if !seen[item.Value] {
+					seen[item.Value] = true
+					options = append(options, item)
+				}
+			}
+		}
+
+		currentModel := strings.TrimSpace(settings.Model)
+		if currentModel != "" && !seen[currentModel] {
+			options = append([]acp.SessionConfigSelectOption{{Value: currentModel, Name: currentModel}}, options...)
+		}
+
+		mu.Lock()
+		cache[providerName] = cachedModels{
+			options:   append([]acp.SessionConfigSelectOption(nil), options...),
+			fetchedAt: time.Now(),
+		}
+		mu.Unlock()
+		if len(options) > 0 {
+			return options, nil
+		}
+		return options, discoverErr
+	}
+}
+
+func providerFallbackModels(provider string) []acp.SessionConfigSelectOption {
+	presets := modelcatalogpolicy.LabeledModels(provider)
+	options := make([]acp.SessionConfigSelectOption, 0, len(presets))
+	for _, preset := range presets {
+		options = append(options, acp.SessionConfigSelectOption{Value: preset.Model, Name: preset.Name})
+	}
+	return options
+}
+
+func acpProvidersControl(runtimeState *appRuntime) acp.ProvidersControl {
+	return acp.ProvidersControl{
+		List: func(ctx context.Context) (acp.ProtonmanProvidersListResult, error) {
+			activeProvider := strings.ToLower(strings.TrimSpace(runtimeState.config.Model.Provider))
+			activeModel := strings.TrimSpace(runtimeState.config.Model.Default)
+
+			configuredMap := make(map[string]bool)
+			providers := make([]acp.ProviderInfo, 0, len(model.SupportedPresets)+len(runtimeState.config.Providers))
+
+			// Add supported presets
+			for _, preset := range model.SupportedPresets {
+				idLower := strings.ToLower(preset.ID)
+				configuredMap[idLower] = true
+				cfg, isConfigured := runtimeState.config.Providers[idLower]
+				baseURL := preset.BaseURL
+				hasKey := false
+				defaultModel := ""
+				if isConfigured {
+					if cfg.BaseURL != "" {
+						baseURL = cfg.BaseURL
+					}
+					hasKey = strings.TrimSpace(cfg.APIKey) != ""
+				}
+				if idLower == activeProvider {
+					defaultModel = activeModel
+				}
+				providers = append(providers, acp.ProviderInfo{
+					ID:           preset.ID,
+					Name:         preset.Name,
+					Protocol:     string(preset.Protocol),
+					BaseURL:      baseURL,
+					RequiresKey:  preset.RequiresKey,
+					IsConfigured: isConfigured,
+					IsActive:     idLower == activeProvider,
+					IsFree:       !preset.RequiresKey,
+					HasKey:       hasKey,
+					DefaultModel: defaultModel,
+				})
+			}
+
+			// Add custom configured providers
+			for name, cfg := range runtimeState.config.Providers {
+				idLower := strings.ToLower(name)
+				if configuredMap[idLower] {
+					continue
+				}
+				configuredMap[idLower] = true
+				proto := cfg.Type
+				if proto == "" {
+					proto = string(model.ProviderProtocolOpenAI)
+				}
+				defaultModel := ""
+				if idLower == activeProvider {
+					defaultModel = activeModel
+				}
+				providers = append(providers, acp.ProviderInfo{
+					ID:           name,
+					Name:         name,
+					Protocol:     proto,
+					BaseURL:      cfg.BaseURL,
+					RequiresKey:  true,
+					IsConfigured: true,
+					IsActive:     idLower == activeProvider,
+					IsFree:       false,
+					HasKey:       strings.TrimSpace(cfg.APIKey) != "",
+					DefaultModel: defaultModel,
+				})
+			}
+
+			return acp.ProtonmanProvidersListResult{
+				ActiveProvider: activeProvider,
+				ActiveModel:    activeModel,
+				Providers:      providers,
+			}, nil
+		},
+
+		Save: func(ctx context.Context, params acp.ProtonmanProvidersSaveParams) (acp.ProtonmanProvidersSaveResult, error) {
+			pName := strings.TrimSpace(params.ProviderName)
+			pType := strings.TrimSpace(params.ProviderType)
+			if pType == "" {
+				if preset := model.LookupPreset(pName); preset != nil {
+					pType = string(preset.Protocol)
+				} else {
+					pType = string(model.ProviderProtocolOpenAI)
+				}
+			}
+			baseURL := model.ResolveProviderBaseURLForProtocol(pName, pType, params.BaseURL)
+			saveReq := app.ProviderSaveRequest{
+				Provider: modelconfig.Provider{
+					Name:    pName,
+					Type:    pType,
+					BaseURL: baseURL,
+					APIKey:  strings.TrimSpace(params.APIKey),
+				},
+				DefaultModel: strings.TrimSpace(params.DefaultModel),
+				PreviousName: strings.TrimSpace(params.PreviousName),
+				Activate:     params.Activate,
+			}
+			if err := runtimeState.application.Providers.Save(saveReq); err != nil {
+				return acp.ProtonmanProvidersSaveResult{}, err
+			}
+
+			if runtimeState.config.Providers == nil {
+				runtimeState.config.Providers = make(map[string]modelconfig.Provider)
+			}
+			runtimeState.config.Providers[strings.ToLower(pName)] = saveReq.Provider
+			if saveReq.PreviousName != "" && !strings.EqualFold(saveReq.PreviousName, pName) {
+				delete(runtimeState.config.Providers, strings.ToLower(saveReq.PreviousName))
+			}
+			if params.Activate {
+				runtimeState.config.Model.Provider = pName
+				if params.DefaultModel != "" {
+					runtimeState.config.Model.Default = params.DefaultModel
+				}
+			}
+			return acp.ProtonmanProvidersSaveResult{
+				Success:        true,
+				ActiveProvider: runtimeState.config.Model.Provider,
+				ActiveModel:    runtimeState.config.Model.Default,
+			}, nil
+		},
+
+		Delete: func(ctx context.Context, providerName string) error {
+			cleanName := strings.TrimSpace(providerName)
+			if err := runtimeState.application.Providers.Delete(cleanName); err != nil {
+				return err
+			}
+			delete(runtimeState.config.Providers, strings.ToLower(cleanName))
+			return nil
+		},
+
+		Models: func(ctx context.Context, params acp.ProtonmanProvidersModelsParams) ([]acp.SessionModelOption, error) {
+			pName := strings.TrimSpace(params.ProviderName)
+			pType := strings.TrimSpace(params.ProviderType)
+			baseURL := strings.TrimSpace(params.BaseURL)
+			apiKey := strings.TrimSpace(params.APIKey)
+
+			if cfg, ok := runtimeState.config.Providers[strings.ToLower(pName)]; ok {
+				if pType == "" {
+					pType = cfg.Type
+				}
+				if baseURL == "" {
+					baseURL = cfg.BaseURL
+				}
+				if apiKey == "" {
+					apiKey = cfg.APIKey
+				}
+			}
+			if preset := model.LookupPreset(pName); preset != nil {
+				if pType == "" {
+					pType = string(preset.Protocol)
+				}
+				if baseURL == "" {
+					baseURL = preset.BaseURL
+				}
+			}
+			baseURL = model.ResolveProviderBaseURLForProtocol(pName, pType, baseURL)
+
+			var remoteModels []modelcatalog.RemoteModel
+			var discoverErr error
+			if runtimeState.application.Models != (app.Models{}) {
+				discCtx, cancel := context.WithTimeout(ctx, 4*time.Second)
+				remoteModels, discoverErr = runtimeState.application.Models.Discover(discCtx, app.ModelDiscoveryRequest{
+					ProviderName: pName,
+					ProviderType: pType,
+					BaseURL:      baseURL,
+					APIKey:       apiKey,
+					Timeout:      4 * time.Second,
+				})
+				cancel()
+			}
+
+			options := make([]acp.SessionModelOption, 0, len(remoteModels)+5)
+			seen := make(map[string]bool)
+			for _, m := range remoteModels {
+				id := strings.TrimSpace(m.ID)
+				if id == "" || seen[id] {
+					continue
+				}
+				seen[id] = true
+				name := strings.TrimSpace(m.Name)
+				if name == "" {
+					name = id
+				}
+				options = append(options, acp.SessionModelOption{
+					ID:   id,
+					Name: name,
+				})
+			}
+
+			if len(options) == 0 {
+				for _, fb := range providerFallbackModels(pName) {
+					if !seen[fb.Value] {
+						seen[fb.Value] = true
+						options = append(options, acp.SessionModelOption{
+							ID:   fb.Value,
+							Name: fb.Name,
+						})
+					}
+				}
+			}
+			if len(options) > 0 {
+				return options, nil
+			}
+			return options, discoverErr
+		},
+	}
 }
